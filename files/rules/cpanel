@@ -1,0 +1,14 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+# TRIG="10"
+
+# file must exist for rule to be active
+REQ="/usr/local/cpanel/logs/login_log"
+
+if [ -f "$REQ" ]; then
+ LP="/usr/local/cpanel/logs/login_log"
+ TLOG_TF="cpanel"
+
+ ## whm, cpanel, webmaild
+ ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed -n -e '/FAILED LOGIN/s/\([^ ]*\) \(.*\)- \([^ ]*\).*/\1:\3/p'`
+fi

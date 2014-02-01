@@ -1,0 +1,20 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="10"
+
+if [ -f "/usr/local/apache/logs/error_log" ]; then
+        FILE="/usr/local/apache/logs/error_log"
+        TLOG_TF="httpd.modsec"
+        # old rule
+        #ARG_VAL=`$TLOG_PATH $FILE $TLOG_TF | grep "ModSecurity: Access denied" | sed -n -e '/tag/s/.*\[tag "\(.*\)"\] \[hostname "\([^ ]*\)"\].*/\1:\2:\0/p' | tr ':[]' ' '| awk '{print$12":"$1}' | tr '[:upper:]' '[:lower:]' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'`
+
+        ARG_VAL=`$TLOG_PATH $FILE $TLOG_TF | grep "ModSecurity: Access denied" | awk '{ for (k=1;k<=NF;++k){ if ($k ~ /\[id/) {y=k} }; gsub("[\\\[\\\]\"]", ""); x=NF - 4; print $8":"$(y+1)":"$x}' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'`
+elif [ -f "/var/log/httpd/error_log" ]; then
+        FILE="/var/log/httpd/error_log"
+        TLOG_TF="httpd.modsec"
+        # old rule
+        #ARG_VAL=`$TLOG_PATH $FILE $TLOG_TF | grep "ModSecurity: Access denied" | sed -n -e '/tag/s/.*\[tag "\(.*\)"\] \[hostname "\([^ ]*\)"\].*/\1:\2:\0/p' | tr ':[]' ' '| awk '{print$12":"$1}' | tr '[:upper:]' '[:lower:]' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'`
+
+        ARG_VAL=`$TLOG_PATH $FILE $TLOG_TF | grep "ModSecurity: Access denied" | awk '{ for (k=1;k<=NF;++k){ if ($k ~ /\[id/) {y=k} }; gsub("[\\\[\\\]\"]", ""); x=NF - 4; print $8":"$(y+1)":"$x}' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'`
+fi
+

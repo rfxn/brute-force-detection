@@ -1,0 +1,6 @@
+/var/log/bfd_log {
+    missingok
+    postrotate
+    endscript
+}
+

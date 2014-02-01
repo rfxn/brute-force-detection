@@ -1,0 +1,15 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+# TRIG="10"
+
+# file must exist for rule to be active
+REQ="/usr/sbin/asterisk"
+
+if [ -f "$REQ" ]; then
+	LP="/var/log/asterisk/full"
+	TLOG_TF="asterisk.iax"
+	TMP="/usr/local/bfd/tmp"
+
+	## ASTERISK: IAX2 auth failed
+	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | grep -i "failed MD5 authentication" | grep chan_iax2 | awk '{NF=NF-8} {print $NF}'`
+fi

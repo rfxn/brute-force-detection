@@ -1,0 +1,297 @@
+#!/bin/bash
+#
+# Brute Force Detection 1.5-1 <bfd@rfxn.com>
+###
+# Copyright (C) 1999-2014, R-fx Networks <proj@r-fx.org>
+# Copyright (C) 2014, Ryan MacDonald <ryan@r-fx.org>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+###
+#
+INSTALL_PATH="/usr/local/bfd"
+CNF="$INSTALL_PATH/conf.bfd"
+V="1.5-1"
+APPN="BFD"
+UTIME=`date +"%s"`
+
+vhead() {
+	echo "Brute Force Detection v$V <bfd@r-fx.org>"
+	echo "	(C) 1999-2014, R-fx Networks <proj@r-fx.org>"
+	echo "	(C) 2014, Ryan MacDonald <ryan@r-fx.org>"
+	echo "This program may be freely redistributed under the terms of the GNU GPL"
+	echo ""
+}
+
+if [ ! -f "$CNF" ]; then
+	vhead
+        echo "could not find \$CNF, aborting."
+        exit 1
+else
+        . $CNF
+	GLOB_TRIG=$TRIG
+fi
+
+eout() {
+arg=$1
+val=$2
+        if [ ! "$arg" == "" ]; then
+                echo "$(date +"%b %e %H:%M:%S") $(hostname -s) bfd($$): $arg"
+		if [ "$val" == "le" ]; then
+	                echo "$(date +"%b %e %H:%M:%S") $(hostname -s) bfd($$): $arg" >> $BFD_LOG_PATH
+		fi
+                if [ "$OUTPUT_SYSLOG" == "1" ] && [ "$val" == "le" ]; then
+                        echo "$(date +"%b %e %H:%M:%S") $(hostname -s) bfd($$): $arg" >> $OUTPUT_SYSLOG_FILE
+                fi
+        fi
+}
+
+pre() {
+if [ ! -f "$TLOG_PATH" ]; then
+	eout "could not locate \$TLOG_PATH, aborting."
+	exit 1
+fi
+if [ ! -d "$RULES_PATH" ]; then
+	eout "could not locate \$RULES_PATH, aborting."
+	exit 1
+fi
+if [ ! -f "$BFD_LOG_PATH" ]; then
+	touch $BFD_LOG_PATH
+	chmod 600 $BFD_LOG_PATH
+fi	
+
+if [ ! -d "$INSTALL_PATH/stats" ]; then
+	mkdir -p $INSTALL_PATH/stats
+	chmod 750 $INSTALL_PATH
+fi
+
+APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+if [ -f "$APOOL_LIST" ]; then 
+	chmod 600 $APOOL_LIST
+else
+	touch $APOOL_LIST
+	chmod 600 $APOOL_LIST
+fi
+
+BAN_LIST="$INSTALL_PATH/tmp/ban.list"
+if [ ! -f "$BAN_LIST" ]; then
+	touch $BAN_LIST
+	chmod 600 $BAN_LIST
+fi
+
+LO_HOSTS="$INSTALL_PATH/ignore.hosts.local"
+/sbin/ip addr list | grep -w inet | tr '/' ' ' | awk '{print$2}' > $LO_HOSTS
+}
+
+get_state() {
+if [ -f "$LOCK_FILE" ]; then
+        OVAL=`cat $LOCK_FILE`
+        DIFF=$[TIME_UNIX-OVAL]
+        if [ "$DIFF" -gt "$LOCK_FILE_TIMEOUT" ]; then
+                echo "$TIME_UNIX" > $LOCK_FILE
+                eout "cleared stale lock file file."
+        else
+                eout "locked subsystem, already running ? ($LOCK_FILE is $DIFF seconds old), aborting."
+                exit 1
+        fi
+else
+        echo "$TIME_UNIX" > $LOCK_FILE
+fi
+}
+
+alert() {
+if [ "$EMAIL_ALERTS" == "1" ]; then
+ . $EMAIL_TEMPLATE | mail -s "$EMAIL_SUBJECT" "$EMAIL_ADDRESS"
+fi
+}
+
+
+check() {
+	for str in `ls $RULES_PATH`; do
+		eout "processing rule file $str"
+		TRIG=""
+		ARG_VAL=""
+		. $RULES_PATH/$str
+		if [ "$TRIG" == "" ]; then
+			TRIG=$GLOB_TRIG
+		fi
+		MOD="$str"
+		if [ ! "$ARG_VAL" == "" ]; then
+		for ahost in `echo $ARG_VAL | tr ' ' '\n' | tr ':' ' ' | awk '{print$1}' | sort -n | uniq`; do
+			 ATTACK_HOST=`echo $ahost | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | tr -d '\\&;|[[:alpha:]]'`
+			 HOST_IGNORE=0
+			 if [ -f "$IGNORE_HOST_FILES" ]; then
+				for file in `cat $IGNORE_HOST_FILES | grep -v "#"`; do
+					if [ -f "$file" ]; then
+						CHKHOST_IGNORE=`cat $file | grep -v "#" | grep -w $ATTACK_HOST`
+						if [ ! "$CHKHOST_IGNORE" == "" ]; then
+							HOST_IGNORE="1"
+						fi
+					fi
+				done
+			 fi
+			 if [ "$HOST_IGNORE" == "0" ]; then
+				ATTACK_COUNT=`echo $ARG_VAL | tr ' ' '\n' | tr ':' ' '  | awk '{print$1}' | sort -n | grep -w $ATTACK_HOST | wc -l`
+				echo "$ATTACK_HOST $ATTACK_COUNT $MOD" >> $INSTALL_PATH/tmp/track.attack
+				if [ "$ATTACK_COUNT" -lt "$TRIG" ]; then
+					MAX_LINES=50
+					CUR_LINES=`wc -l $INSTALL_PATH/tmp/track.attack | awk '{print$1}'`
+					if [ "$CUR_LINES" -gt "$MAX_LINES" ]; then
+						tail -n $MAX_LINES $INSTALL_PATH/tmp/track.attack > $INSTALL_PATH/tmp/track.attack.new
+						mv $INSTALL_PATH/tmp/track.attack.new $INSTALL_PATH/tmp/track.attack
+					fi
+					RET_COUNT=0
+					for i in `cat $INSTALL_PATH/tmp/track.attack | grep -w $ATTACK_HOST | awk '{print$2}'`; do
+                                              if [ ! "$i" == "" ]; then
+                                                RET_COUNT=$[RET_COUNT+i]
+                                              fi
+					done
+					ATTACK_COUNT=$[RET_COUNT+ATTACK_COUNT]
+				fi
+			 fi
+                         if [ -z "$ATTACK_COUNT" ]; then
+                                ATTACK_COUNT=0
+                         fi
+	                 if [ "$ATTACK_COUNT" -gt "$TRIG" ] || [ "$ATTACK_COUNT" -eq "$TRIG" ] && [ "$HOST_IGNORE" == "0" ]; then
+					SKIP=0
+
+                                        MAX_LINES=50
+					tail -n $MAX_LINES $BAN_LIST > $BAN_LIST.new ; mv $BAN_LIST.new $BAN_LIST
+					CHKSKIP=`grep -w $ATTACK_HOST $BAN_LIST`
+					if [ -z "$CHKSKIP" ]; then
+						echo "$ATTACK_HOST" >> $BAN_LIST
+					fi
+
+					if [ "$SKIP" == "0" ]; then
+					 SKIP_BAN="0"
+					 for localnet in `/sbin/ip addr list | tr '/' ' ' | grep inet | awk '{print$2}'`; do
+						if [ "$ATTACK_HOST" == "$localnet" ]; then
+							eout "{$MOD} $ATTACK_HOST is equal to a local address." le
+							SKIP_BAN="1"
+						fi
+					 done
+
+					 if [ "$SKIP_BAN" == "0" ] && [ ! "$LAST_HOST" == "$ATTACK_HOST" ]; then
+			                        echo "$UTIME $ATTACK_HOST $MOD" >> $APOOL_LIST
+			                        LAST_HOST=$ATTACK_HOST
+						. $CNF
+						BAN_COMMAND=`echo $BAN_COMMAND | tr -d '\\&;|'`
+					        eout "{$MOD} $ATTACK_HOST exceeded login failures; executed ban command '$BAN_COMMAND'." le
+						rm -f /usr/local/bfd/tmp/.cmd ; touch /usr/local/bfd/tmp/.cmd ; chmod 600 /usr/local/bfd/tmp/.cmd
+						echo $BAN_COMMAND > /usr/local/bfd/tmp/.cmd
+						sh /usr/local/bfd/tmp/.cmd >> /dev/null 2>&1
+						rm -f /usr/local/bfd/tmp/.cmd
+						alert
+					 elif [ "$SKIP_BAN" == "1" ] && [ ! "$LAST" == "$ATTACK_HOST" ]; then
+			                        echo "$UTIME $ATTACK_HOST $MOD" >> $APOOL_LIST
+			                        LAST=$ATTACK_HOST
+						. $CNF
+						eout "{$MOD} $ATTACK_HOST exceeded maximum login failures; host already banned or ignored." le
+					 fi
+					fi
+			 fi
+			done
+		fi
+	done 
+}
+
+apool_list() {
+	ahost=$1
+	atmp=$INSTALL_PATH/tmp/.alist.$$
+	tz=`date +"%z"`
+	if [ "$ahost" ]; then
+         WAPOOL_LIST="$INSTALL_PATH/tmp/.weekly.apool.$$"
+         find $APOOL_LIST* -type f -mtime -7 | xargs -I{} cat {} > $WAPOOL_LIST
+         #af_ctime=`date -d @$(cat $WAPOOL_LIST | awk '{print$1}' | sort -n | head -n1) "%D %H:%M:%S $tz"`
+
+         echo "[+] Events for search string \"$ahost\"" && echo
+         echo "#TRIGS|IP|FIRST_SEEN|LAST_SEEN|RULES" > $atmp
+         for aip in `grep -E "$ahost" $WAPOOL_LIST | awk '{print$2}' | sort -n | uniq -c | sort -n | tail -n25 | tac | awk '{print$2}'`; do
+                # aip
+                cnt=`grep -cw $aip $WAPOOL_LIST`
+                mods=`grep -w $aip $WAPOOL_LIST | awk '{print$3}' | sort | uniq | sort | tr '\n' ' ' | sed '$s/.$//'`
+                first_seen=`grep -w $aip $WAPOOL_LIST | awk '{print$1}' | sort -n -k1 | head -n 1`
+                first_seen=`date -d @${first_seen} +"%D %H:%M:%S"`
+                last_seen=`grep -w $aip $WAPOOL_LIST | awk '{print$1}' | sort -n -k1 | tail -n 1`
+                last_seen=`date -d @${last_seen} +"%D %H:%M:%S"`
+                echo "$cnt|$aip|$first_seen|$last_seen|$mods" >> $atmp
+         done
+         cat $atmp | column -s '|' -t
+         rm -f $atmp $WAPOOL_LIST
+	elif [ -f "$APOOL_LIST" ]; then
+         #af_ctime=`stat -c '%x' $APOOL_LIST  | tr '.' ' ' | awk '{print$1,$2,$4}'`
+	 #af_ctime=`date -d @$(date -d "$af_ctime" +"%s") +"%D %H:%M:%S $tz"`
+         echo "[+] Top 25 brute force attackers today" && echo
+	 echo "#TRIGS|IP|FIRST_SEEN|LAST_SEEN|RULES" > $atmp
+	 for aip in `cat $APOOL_LIST | awk '{print$2}' | sort -n | uniq -c | sort -n | tail -n25 | tac | awk '{print$2}'`; do
+		# aip
+		cnt=`grep -cw $aip $APOOL_LIST`
+		mods=`grep -w $aip $APOOL_LIST | awk '{print$3}' | sort | uniq | sort | tr '\n' ' ' | sed '$s/.$//'`
+		first_seen=`grep -w $aip $APOOL_LIST | awk '{print$1}' | sort -n -k1 | head -n 1`
+		first_seen=`date -d @${first_seen} +"%D %H:%M:%S"`
+		last_seen=`grep -w $aip $APOOL_LIST | awk '{print$1}' | sort -n -k1 | tail -n 1`
+		last_seen=`date -d @${last_seen} +"%D %H:%M:%S"`
+		echo "$cnt|$aip|$first_seen|$last_seen|$mods" >> $atmp
+	 done
+	 cat $atmp | column -s '|' -t
+	 echo
+	 WAPOOL_LIST="$INSTALL_PATH/tmp/.weekly.apool.$$"
+	 find $APOOL_LIST* -type f -mtime -7 | xargs -I{} cat {} > $WAPOOL_LIST
+	 #af_ctime=`date -d @$(cat $WAPOOL_LIST | awk '{print$1}' | sort -n | head -n1) "%D %H:%M:%S $tz"`
+
+         echo "[+] Top 25 brute force attackers this week" && echo
+         echo "#TRIGS|IP|FIRST_SEEN|LAST_SEEN|RULES" > $atmp
+         for aip in `cat $WAPOOL_LIST | awk '{print$2}' | sort -n | uniq -c | sort -n | tail -n25 | tac | awk '{print$2}'`; do
+                # aip
+                cnt=`grep -cw $aip $WAPOOL_LIST`
+                mods=`grep -w $aip $WAPOOL_LIST | awk '{print$3}' | sort | uniq | sort | tr '\n' ' ' | sed '$s/.$//'`
+                first_seen=`grep -w $aip $WAPOOL_LIST | awk '{print$1}' | sort -n -k1 | head -n 1`
+                first_seen=`date -d @${first_seen} +"%D %H:%M:%S"`
+                last_seen=`grep -w $aip $WAPOOL_LIST | awk '{print$1}' | sort -n -k1 | tail -n 1`
+                last_seen=`date -d @${last_seen} +"%D %H:%M:%S"`
+                echo "$cnt|$aip|$first_seen|$last_seen|$mods" >> $atmp
+         done
+         cat $atmp | column -s '|' -t
+	 rm -f $atmp $WAPOOL_LIST
+        fi
+}
+
+case "$1" in
+-s|--standard)
+	vhead
+	pre
+	get_state
+	check
+	rm -f $LOCK_FILE
+	;;
+-q|--quiet)
+	verbose=0
+	$0 -s >> /dev/null 2>&1
+	;;
+-a|--attackpool)
+	if [ "$2" ]; then
+		ahost=$2
+	fi
+	vhead
+	pre
+	apool_list $ahost
+	;;
+*)
+	vhead
+	echo "usage: $0 [OPTION]"
+	echo "-s|--standard .............. run standard with output"
+	echo "-q|--quiet ................. run quiet with output hidden"
+	echo "-a|--attackpool [STRING] ... list addresses that have attacked this host"
+esac
+exit 0

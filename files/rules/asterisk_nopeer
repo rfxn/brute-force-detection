@@ -1,0 +1,15 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+# TRIG="10"
+
+# file must exist for rule to be active
+REQ="/usr/sbin/asterisk"
+
+if [ -f "$REQ" ]; then
+	LP="/var/log/asterisk/full"
+	TLOG_TF="asterisk_nopeer"
+	TMP="/usr/local/bfd/tmp"
+
+	## ASTERISK NOPEER
+	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | grep -i "No matching peer found" | grep chan_sip | awk '{NF=NF-5} {print $NF}'| tr -d '\'\'`
+fi

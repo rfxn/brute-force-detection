@@ -1,0 +1,22 @@
+EB=0
+if [ "$EMAIL_LOGLINES" == "" ]; then
+	EMAIL_LOGLINES=50
+fi
+EV=`nice -n 19 tail -n 5000 $LP | grep $ATTACK_HOST | tail -n $EMAIL_LOGLINES`
+cat <<EOF
+
+The following is a summary event for exceeded login failures on $HOSTNAME:
+
+SOURCE ADDRESS: $ATTACK_HOST
+TARGET SERVICE: $MOD
+FAILED LOGINS: $ATTACK_COUNT
+EXECUTED COMMAND: $BAN_COMMAND
+
+SOURCE LOGS FROM SERVICE '$MOD' (GMT $TIME_ZONE):
+
+$EV
+
+-----------------------------------------------
+BFD (Brute Force Detection) 1.5-1 < bfd@rfxn.com >
+
+EOF

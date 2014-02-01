@@ -1,0 +1,15 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+# TRIG="10"
+
+# file must exist for rule to be active
+REQ="/usr/sbin/asterisk"
+
+if [ -f "$REQ" ]; then
+	LP="/var/log/asterisk/full"
+	TLOG_TF="asterisk"
+	TMP="/usr/local/bfd/tmp"
+
+	## ASTERISK BADAUTH
+	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF |grep "Wrong password" /var/log/asterisk/full | awk '{NF=NF-3} { print $NF}'| tr -d '\'\' `
+fi

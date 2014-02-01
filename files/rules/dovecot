@@ -1,0 +1,14 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="15"
+
+# file must exist for rule to be active
+REQ="/usr/sbin/dovecot"
+
+if [ -f "$REQ" ]; then
+	LP="/var/log/maillog"
+	TLOG_TF="dovecot_imap"
+
+	## DOVECOT IMAP/POP3
+	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | grep dovecot | grep -w "failed" | grep auth | grep -o -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'`
+fi

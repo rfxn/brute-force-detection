@@ -1,0 +1,4 @@
+
+LOG="/var/log/maillog"
+$TLOG_PATH $LOG dovecot_popimap | grep -E "imap-login|pop3-login" $LOG | grep -vE "Disconnected|Aborted|cpanel__service__auth" | tr '=' ' ' | awk '{print$13,$9}' | tr -d '<>,'
+

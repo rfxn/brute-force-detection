@@ -1,0 +1,14 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+# TRIG="10"
+
+# file must exist for rule to be active
+REQ="/usr/sbin/proftpd"
+
+if [ -f "$REQ" ]; then
+ LP="$AUTH_LOG_PATH"
+ TLOG_TF="proftpd"
+
+ ## PROFTPD
+ ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr -d ':' | sed -n -e '/proftpd/s/.*USER \(.*\) no such user found from \([^ ]*\).*/\2:\1/p'`
+fi

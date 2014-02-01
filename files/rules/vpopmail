@@ -1,0 +1,14 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+# TRIG="10"
+
+# file must exist for rule to be active
+REQ="/var/qmail/bin/qmail-pop3d"
+
+if [ -f "$REQ" ]; then
+ LP="/var/log/maillog"
+ TLOG_TF="vpopmail"
+
+ ## vpopmail [qmail]
+ ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed -n -e '/vchkpw-pop3: password fail/s/.*password fail \([^ ]*\)\(.*\):\([^ ]*\).*/\3:\1/p' -e '/vchkpw-pop3: system user not found/s/.*system user not found \([^ ]*\)\(.*\):\([^ ]*\).*/\3:\1/p' -e '/vchkpw-pop3: vpopmail user not found/s/.*vpopmail user not found \([^ ]*\)\(.*\):\([^ ]*\).*/\3:\1/p'` 
+fi

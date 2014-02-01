@@ -1,0 +1,119 @@
+BFD (Brute Force Detection) 1.5-1 [bfdr-fx.org]
+ Copyright (C) 1999-2008, R-fx Networks <proj@r-fx.org>
+ Copyright (C) 2008, Ryan MacDonald <ryan@r-fx.org>
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+1) Introduction:
+BFD is a modular shell script for parsing application logs and checking for
+authentication failures. It does this using a rules system where application
+specific options are stored including regular expressions for each unique auth
+format. The regular expressions are parsed against logs using the 'sed' tool
+(stream editor) which allows for vastly superior performance as opposed to
+perl based regular expressions or using other tools such as grep/egrep.
+
+Although some will argue that perl based stream processing is far more flexible
+than unix tools, I argue that perl is a bloated framework to depend upon and unix
+tools such as sed are universal across *nix. Further, perl is only more flexible
+with regular expression based stream 'editing', such as in place editing etc..,
+if you are only processing a data stream (as bfd does) then sed wins hands down.
+
+In addition to the benefits of parsing logs in a single stream, BFD also uses a
+log tracking system so logs are only parsed from the point which they were last
+read. This greatly assists in extending the performance of BFD even further as
+we are not constantly reading the same log data. The log tracking system is
+compatible with syslog/logrotate style log rotations which allows it to detect
+when rotations have happened and grab log tails from both the new log file and
+the rotated log file.
+
+You can also leverage BFD to block attackers using any number of tools such as
+APF, Shorewall, raw iptables, ip route or execute any custom command. There is 
+also a fully customizable e-mail alerting system with an e-mail template that
+is well suited for every day use or you can open it up and modify it.
+
+The attacker tracking in BFD is handled using simple flat text files that are
+size-controlled to prevent space constraints over time, ideal for disk less
+devices. There is also an attack pool where trending data is stored on all hosts
+hat have been blocked including which rule the block was triggered by.
+
+In the execution process, there is simply a cron job that executes BFD once
+every 3 minutes by default. An embedded lock file system makes sure that no
+two instances ever run at the same time, preventing messy and potentially load
+heavy results. The cronjob can be run more frequently for those that desire it
+and doing so will not cause any performance issues (no less than once a minute).
+
+2) Installation:
+The included install.sh script does as it says, it will install bfd to the
+'/usr/local/bfd' path and place a 3-minute cronjob in '/etc/cron.d/bfd'. The
+setup script will also execute an included 'importconf' script if you have a
+previous version of bfd installed, which will import your previous settings.
+
+Although it is supported to customize the default installation layout of BFD,
+it is not something I recommend or have done much testing with so do so as
+you see fit :-)
+
+3) Configuration:
+The configuration file for BFD is located at '/usr/local/bfd/conf.bfd', it is
+very straight forward and the comments explain themself as to what each option
+is for. The most important option is the TRIG="" value in conf.bfd as this
+controls how many failed logins before an address is blocked. You should also
+make sure to configure an email address and to turn on email alerting to stay
+informed on any bans that are placed.
+
+An ignore file is present at '/usr/loca/bfd/ignore.hosts', this is a line
+spaced file to place IP Addr's into that you would like to be ignored for
+authentication failures. An internal function will attempt to fetch all local
+IP's bound on the installed system and ignore any events appearing to source
+from those local addresses (but still send an alert).
+
+The application rule files are located under '/usr/local/bfd/rules/' and
+they use a simple check feature to auto-enable them self based on the existence
+of specific application files. As an example, if the file '/usr/sbin/exim' is
+found to exist then the exim rule will be enabled for processing.
+
+You may wish to set unique trigger values for each application and this can be
+done by opening the rule in question (i.e: /usr/local/bfd/rules/exim) and set
+the TRIG="" value to whatever amount of failed authentications you would like a
+ban to be issued at.
+
+If you would like to have BFD place bans via a facility other than the default
+configured APF ban command, you can do so by editing the BAN_COMMAND option in
+conf.bfd. As an example you can use a generic system route reject to drop hosts
+like so:
+
+BAN_COMMAND="route add -host $ATTACK_HOST reject"
+
+4) License:
+BFD is developed and supported on a volunteer basis by Ryan MacDonald
+[ryan@r-fx.org]
+
+BFD (Brute Force Detection) is distributed under the GNU General Public
+License (GPL) without restrictions on usage or redistribution. The BFD
+copyright statement, and GNU GPL, "COPYING.GPL" are included in the top-level
+directory of the distribution. Credit must be given for derivative works as
+required under GNU GPL.
+
+5) Support:
+If you require any assistance with BFD you may refer to the R-fx Networks
+community forums located at http://forums.rfxnetworks.com. You may also send
+an e-mail to support@r-fx.org.
+
+The offical home page for BFD is located at:
+http://www.rfxnetworks.com/bfd.php
+
+All bugs or feature requests should be sent to ryan@r-fx.org and please be sure
+to include as much information as possible or conceptual ideas of how you think
+a new feature should work.
+

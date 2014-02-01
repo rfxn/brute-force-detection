@@ -1,0 +1,14 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="50"
+
+# file must exist for rule to be active
+REQ="/usr/sbin/exim"
+
+if [ -f "$REQ" ]; then
+ LP="/var/log/exim_mainlog"
+ TLOG_TF="exim"
+
+ ## EXIM dictionary attacks
+ ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | grep -iwE "no such address here|No such person at this address" | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr -d '<>:' | sed -n -e '/rejected RCPT/s/.*\[\(.*\)] F=\(.*\) rejected RCPT \([^ ]*\).*/\1:\3/p'`
+fi

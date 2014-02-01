@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+# BFD 1.5-1 importconf [bfd_ic@r-fx.org]
+###
+# Copyright (C) 1999-2008, R-fx Networks <proj@r-fx.org>
+# Copyright (C) 2008, Ryan MacDonald <ryan@r-fx.org>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+###
+#
+INSTALL_PATH="/usr/local/bfd"
+DEF=".ca.def"
+DOUT=".conf.bfd"
+
+if [ -d "/usr/local/bfd.bk.last" ]; then
+# get all the vars from current release
+. /usr/local/bfd/conf.bfd
+# replace with any vars old release had
+. /usr/local/bfd.bk.last/conf.bfd
+# generate new conf
+. $DEF
+
+cp -f $INSTALL_PATH/conf.bfd $INSTALL_PATH/conf.bfd.orig
+cp -f $DOUT $INSTALL_PATH/conf.bfd
+cp -f /usr/local/bfd.bk.last/ignore.hosts $INSTALL_PATH >> /dev/null 2>&1
+cp -f /usr/local/bfd.bk.last/tmp/* $INSTALL_PATH/tmp >> /dev/null 2>&1
+rm -f $INSTALL_PATH/tmp/*
+
+OV=`tac /usr/local/bfd.bk.last/conf.bfd  | tail -n 3 | grep BFD | awk '{print$3}'`
+NV=`tac /usr/local/bfd/conf.bfd  | tail -n 3 | grep BFD | awk '{print$3}'`
+        echo "  Imported tracking and options from BFD $OV to $NV."
+fi

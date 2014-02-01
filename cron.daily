@@ -1,0 +1,4 @@
+#!/bin/bash
+dstamp=`date +"%m%d%y.%H%M"`
+mv -f /usr/local/bfd/stats/attack.pool /usr/local/bfd/stats/attack.pool.$dstamp
+rm -f /usr/local/bfd/tmp/*

@@ -1,0 +1,134 @@
+1.5-1:
+[Change] modified handling of attack host variable to remove cidr scoping, if present,
+         in case of forged syslog data.
+[Note] thanks to rack911.com for input validation testing and feedback
+
+1.5: 
+[New] added mod_security rule
+[New] added asterisk rules; thanks to shellvatore.us & seanmsiegel.com
+[New] added vsftpd2 rule for systems with vsftpd.log files
+[New] added a new postfix rule based on shellvatore.us's BFD rules
+[Change] small code cleanups to improve BFD performance
+[Change] modified pop3/imap rules and added dovecot only rule for better results
+[Fix] ATTACK_COUNT value was causing integer expression error in certain situations
+[Fix] added exim2 rule for specific attack cases missed by exim rule
+
+1.4:
+[Fix] properly sanitized vars passed to the command line
+[Fix] ignore.hosts is now updated with system addresses on each bfd run
+[Note] thanks to jpetersen@webhostsecurity.com for input validation testing and feedback
+[Fix] escaped backticks in config import template
+[Fix] corrected INSTALL_PATH variable in installer on migrating tmp/ data
+
+1.3:
+[Fix] expanded sed regexp on sshd rule to catch events for existing users
+[Fix] reformated the pure-ftpd sed regexp rule for better performance
+
+1.2:
+[Change] changed interpreter definition from /bin/sh to /bin/bash
+[Fix] issue with proftpd regexp corrected
+[New] added courier rule for courier imap/pop3
+[New] added cpanel rule for cpanel/whm/webmail
+[New] added vpopmail rule for qmail pop3
+[Fix] importconf was creating a broken symlink to old install path backups
+[Change] the alert template has been rewritten for mobile friendly e-mail alerts
+[Change] tlog now uses stat -c to grab file lengths instead of ls; both use
+         st_size to grab file lengths but stat just does it faster
+[Change] rewrite of all existing rules using sed + regexp
+[New] all variables in conf.bfd have been renamed for better consistency
+[New] all attacking hosts are tracked in bfd/tmp/track.attack and file is kept
+      at no more than 2500 lines
+[Change] removed the use of grep based pattern.* files for the more efficent
+         use of sed based regexp checks
+[Change] README file has been updated
+[New] many changes and cleanups to the internals of bfd, far more than could
+      be listed
+
+0.9:
+[Change] created apool_rgen function to update attack pool based on IPs
+         currently banned and/or removed
+[Fix] importconf template has escape errors on backticks
+[Fix] modified sendmail rule; error in colum selection - 13 to 10
+[Change] modified importconf to merge log tracking data upon updates
+[Change] cleaned some repeated operations in bfd main check() function
+[New] added importconf script to merge custom conf vars from previous install
+[Change] moved exim rule back to standard path and increased trigger to 50
+[Change] modified alert function to better handle and not send alerts for
+         duplicate events
+[Change] modified alert function to send less but more acurate logs with alerts
+[New] added sendmail RCPT REJECT rule
+[Change] added a test operation to all rules to determine if service exists
+         on local system; if not rule is not processed at all
+[Fix] altered the ban command execution style to be more compliant with options
+      other than apf such as tcpwrappers
+[Change] modified alert.bfd template
+[Fix] corrected check() loop error that caused bfd to run untill killed on some
+      systems
+ 
+0.8:
+[Fix] modified rh_imap/rh_pop3 rule to accomidate for events with no hostname
+[Change] modified install.sh to setup 644 instead of 755 perms on cronjob
+[Fix] modified tlog to better handle rotation events
+[Change] small modifications to rules to more implicitly check for ip's
+	 opposed to hostnames
+
+0.7:
+[Change] revised sshd rule again, reverted to parsing /var/log/secure, no
+	 rhost logs are parsed anymore.
+[Fix] used sed to remove traces of ipv6 from sshd logs (:::ffff::)
+[Change] modified check() with more granular error checking on IP addresses
+[Change] modified alert.bfd, added more conditional output
+
+0.6:
+[New] pure-ftpd rule added
+[New] exim rule added
+[Change] changed default permissions on installation files
+
+0.5:
+[Fix] modified sshd rule; handle rhost style logs
+[Fix] modified imap rule; handle rhost style logs
+[Fix] modified pop3 rule; handle rhost style logs
+[Change] added various pattern entries to pattern.auth
+[Change] modified alert() function, correct null entry log output
+(rev:2)
+[Change] added definition of module for triggered events in logs
+
+0.4:
+[Fix] used variables not being nulled properly between rule execution
+[Fix] ip exclude/ignore routine imporperly excluding certian ip's
+[Fix] sshd rule improperly handling 'illegal user' notices
+[New] added example to check multiple log files [ensim]; apache rule
+[Fix] 'stat' command not compatible with debian, replaced with use of 'ls'
+(rev:2)
+[Fix] LP variable not redefined during loop for vhost logs; apache rule
+[Fix] missing '-d' from if operation; apache rule
+(rev:3)
+[Fix] minor revision made to sshd rule; was not properly parsing logs
+
+0.3:
+[New] rh_pop3 bfd-rule
+[New] rh_imap bfd-rule
+[New] added tlog script; log length  tracker
+[New] added get_state(); - lockfile function
+[Change] revised rule file formats
+[New] added exclude.files; list of files containing hosts to ignore
+[New] added local-ip precheck routine; ensure no local ip is banned
+[Change] renamed $HOST var to $ATT_HOST
+[Change] revised cronjob from 5 to 8 minute execution cycle
+[New] added uninstall.sh / copies to $INSPATH
+[Change] revised alert.bfd
+[New] added apache rule; validates against HTTP AUTH failures in CLF
+      apache error_log's
+
+0.2:
+[Change] removed deprecated conf.bfd options
+[Change] replaced FWRST/FWRULES with BCMD/FWFILE
+[Change] restructured logic of check() function
+[Change] error checking routines revised
+[New] added contents to README file
+[Change] revised all comment headers
+[Change] exported alert e-mail to alert.bfd file
+[New] added host ignore file; ignore.hosts
+
+0.1:
+[New] Inital release

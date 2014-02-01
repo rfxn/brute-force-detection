@@ -1,0 +1,14 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+# TRIG="10"
+
+# file must exist for rule to be active
+REQ="/usr/lib/courier-imap/libexec/couriertcpd"
+
+if [ -f "$REQ" ]; then
+ LP="/var/log/maillog"
+ TLOG_TF="courier"
+
+ ## courier imap|pop3
+ ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr '=' ' ' | sed -n -e '/LOGIN FAILED/s/.*user \([^ ]*\)\(.*\) \([^ ]*\).*/\3:\1/p' | tr -d '[],'`
+fi

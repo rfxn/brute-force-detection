@@ -1,0 +1,1 @@
+*/3 * * * * root /usr/local/sbin/bfd -q
