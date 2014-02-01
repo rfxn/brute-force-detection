@@ -1,6 +1,9 @@
 # failed logins from a single address before ban
 # uncomment to override conf.bfd trig value
-TRIG="10"
+# TRIG="10"
+
+# uncomment to disable alerting for this rule 
+# SKIP_ALERT="1"
 
 if [ -f "/usr/local/apache/logs/error_log" ]; then
         FILE="/usr/local/apache/logs/error_log"

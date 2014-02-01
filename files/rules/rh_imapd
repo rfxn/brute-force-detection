@@ -2,6 +2,9 @@
 # uncomment to override conf.bfd trig value
 # TRIG="10"
 
+# uncomment to disable alerting for this rule 
+# SKIP_ALERT="1"
+
 # file must exist for rule to be active
 REQ="/usr/sbin/imapd"
 

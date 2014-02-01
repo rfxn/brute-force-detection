@@ -163,19 +163,17 @@ check() {
                          if [ -z "$ATTACK_COUNT" ]; then
                                 ATTACK_COUNT=0
                          fi
-	                 if [ "$ATTACK_COUNT" -gt "$TRIG" ] || [ "$ATTACK_COUNT" -eq "$TRIG" ] && [ "$HOST_IGNORE" == "0" ]; then
-					SKIP=0
-
-                                        MAX_LINES=50
-					tail -n $MAX_LINES $BAN_LIST > $BAN_LIST.new ; mv $BAN_LIST.new $BAN_LIST
-					CHKSKIP=`grep -w $ATTACK_HOST $BAN_LIST`
-					if [ -z "$CHKSKIP" ]; then
-						echo "$ATTACK_HOST" >> $BAN_LIST
-					fi
-
+	                 if [ "$ATTACK_COUNT" -ge "$TRIG" ] && [ "$HOST_IGNORE" == "0" ]; then
+						SKIP=0                  
+						MAX_LINES=50
+						tail -n $MAX_LINES $BAN_LIST > $BAN_LIST.new ; mv $BAN_LIST.new $BAN_LIST
+						CHKSKIP=`grep -w $ATTACK_HOST $BAN_LIST`
+						if [ -z "$CHKSKIP" ]; then
+							echo "$ATTACK_HOST" >> $BAN_LIST
+						fi
 					if [ "$SKIP" == "0" ]; then
 					 SKIP_BAN="0"
-					 for localnet in `/sbin/ip addr list | tr '/' ' ' | grep inet | awk '{print$2}'`; do
+					 for localnet in `cat $LO_HOSTS`; do
 						if [ "$ATTACK_HOST" == "$localnet" ]; then
 							eout "{$MOD} $ATTACK_HOST is equal to a local address." le
 							SKIP_BAN="1"
@@ -192,7 +190,10 @@ check() {
 						echo $BAN_COMMAND > /usr/local/bfd/tmp/.cmd
 						sh /usr/local/bfd/tmp/.cmd >> /dev/null 2>&1
 						rm -f /usr/local/bfd/tmp/.cmd
-						alert
+						if [ ! "$SKIP_ALERT" == "1" ]; then
+							alert
+							unset SKIP_ALERT
+						fi
 					 elif [ "$SKIP_BAN" == "1" ] && [ ! "$LAST" == "$ATTACK_HOST" ]; then
 			                        echo "$UTIME $ATTACK_HOST $MOD" >> $APOOL_LIST
 			                        LAST=$ATTACK_HOST

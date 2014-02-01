@@ -1,6 +1,9 @@
 # failed logins from a single address before ban
 # uncomment to override conf.bfd trig value
-TRIG="50"
+# TRIG="50"
+
+# uncomment to disable alerting for this rule 
+# SKIP_ALERT="1"
 
 # file must exist for rule to be active
 REQ="/etc/init.d/sendmail"
