@@ -9,6 +9,7 @@
 REQ="/usr/lib/courier-imap/libexec/couriertcpd"
 
 if [ -f "$REQ" ]; then
+ PORTS="110,143,993,995"
  LP="/var/log/maillog"
  TLOG_TF="courier"
 

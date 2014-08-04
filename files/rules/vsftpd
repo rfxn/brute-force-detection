@@ -9,6 +9,7 @@
 REQ="/usr/sbin/vsftpd"
 
 if [ -f "$REQ" ]; then
+ PORTS="20,21"
  LP="$AUTH_LOG_PATH"
  TLOG_TF="vsftpd"
 

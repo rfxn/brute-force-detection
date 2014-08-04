@@ -8,6 +8,7 @@
 # file must exist for rule to be active
 REQ="/usr/sbin/vsftpd"
 if [ -f "$REQ" ]; then
+	PORTS="20,21"
 	LP="/var/log/vsftpd.log"
 	TLOG_TF="vsftpd"
 

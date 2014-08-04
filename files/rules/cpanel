@@ -9,6 +9,7 @@
 REQ="/usr/local/cpanel/logs/login_log"
 
 if [ -f "$REQ" ]; then
+ PORTS="2082,2083,2086,2087"
  LP="/usr/local/cpanel/logs/login_log"
  TLOG_TF="cpanel"
 

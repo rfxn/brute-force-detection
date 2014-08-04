@@ -9,9 +9,10 @@ TRIG="15"
 REQ="/usr/sbin/dovecot"
 
 if [ -f "$REQ" ]; then
+	PORTS="110,143,993,995"
 	LP="/var/log/maillog"
-	TLOG_TF="dovecot_imap"
+	TLOG_TF="dovecot"
 
 	## DOVECOT IMAP/POP3
-	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | grep dovecot | grep -w "failed" | grep auth | grep -o -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'`
+	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | egrep '(imap|pop3)-login.*(Authentication failure|auth failed|Aborted login|ried to use disabled)' | egrep -v 'no auth attempts' | sed -n -e '/auth failed/s/.*user=<\(.*\)>.*rip=\([^ ]*\),.*/\2:\1/p' | egrep '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:.*$'`
 fi

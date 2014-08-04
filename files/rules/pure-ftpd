@@ -8,7 +8,9 @@
 # file must exist for rule to be active
 REQ="/usr/sbin/pure-ftpd"
 
+
 if [ -f "$REQ" ]; then
+ PORTS="20,21"
  LP="$KERNEL_LOG_PATH"
  TLOG_TF="pure-ftpd" 
 

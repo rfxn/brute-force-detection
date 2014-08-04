@@ -9,6 +9,7 @@
 REQ="/usr/sbin/ipop3d"
 
 if [ -f "$REQ" ]; then
+ PORTS="110,143,993,995"
  LP="$KERNEL_LOG_PATH"
  TLOG_TF="rh_ipop3"
 

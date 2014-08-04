@@ -9,6 +9,7 @@
 REQ="/etc/init.d/sendmail"
 
 if [ -f "$REQ" ]; then
+ PORTS="25,26,587"
  LP="/var/log/maillog"
  TLOG_TF="sendmail"
 

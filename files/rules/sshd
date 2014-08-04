@@ -9,6 +9,7 @@
 REQ="/usr/sbin/sshd"
 
 if [ -f "$REQ" ]; then
+ PORTS="22"
  LP="$AUTH_LOG_PATH"
  TLOG_TF="sshd"
  TMP="/usr/local/bfd/tmp"

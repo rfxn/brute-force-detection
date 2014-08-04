@@ -9,6 +9,7 @@
 REQ="/usr/local/openvpn_as/sbin/openvpn"
 
 if [ -f "$REQ" ]; then
+	PORTS="843,943,1043,1194"
 	LP="/var/log/openvpnas.log"
 	TLOG_TF="openvpnas"
 

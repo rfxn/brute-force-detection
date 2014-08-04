@@ -6,6 +6,7 @@ TRIG="50"
 REQ="/usr/sbin/postfix"
 
 if [ -f "$REQ" ]; then
+	PORTS="25,26"
 	LP="/var/log/mail.log"
 	TLOG_TF="postfix"
 

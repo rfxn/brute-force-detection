@@ -9,6 +9,7 @@
 REQ="/var/qmail/bin/qmail-pop3d"
 
 if [ -f "$REQ" ]; then
+ PORTS="110,143,993,995"
  LP="/var/log/maillog"
  TLOG_TF="vpopmail"
 

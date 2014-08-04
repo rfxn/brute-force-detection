@@ -9,6 +9,7 @@ TRIG="30"
 REQ="/usr/sbin/exim"
 
 if [ -f "$REQ" ]; then
+	PORTS="25,26,465"
 	LP="/var/log/exim_mainlog"
 	TLOG_TF="exim2"
 
