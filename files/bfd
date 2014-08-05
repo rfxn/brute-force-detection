@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Brute Force Detection 1.5-1 <bfd@rfxn.com>
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
 ###
 # Copyright (C) 1999-2014, R-fx Networks <proj@r-fx.org>
 # Copyright (C) 2014, Ryan MacDonald <ryan@r-fx.org>
@@ -22,7 +22,7 @@
 #
 INSTALL_PATH="/usr/local/bfd"
 CNF="$INSTALL_PATH/conf.bfd"
-V="1.5-1"
+V="1.5-2"
 APPN="BFD"
 UTIME=`date +"%s"`
 

@@ -17,6 +17,6 @@ SOURCE LOGS FROM SERVICE '$MOD' (GMT $TIME_ZONE):
 $EV
 
 -----------------------------------------------
-BFD (Brute Force Detection) 1.5-1 < bfd@rfxn.com >
+BFD (Brute Force Detection) 1.5-2 < bfd@rfxn.com >
 
 EOF

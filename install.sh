@@ -1,5 +1,5 @@
 #!/bin/bash
-# BFD 1.5-1 <bfd@rfxn.com>
+# BFD 1.5-2 <bfd@rfxn.com>
 ###
 # Copyright (C) 1999-2008 R-fx Networks <proj@r-fx.org>
 # Copyright (C) 2008, Ryan MacDonald <ryan@r-fx.org>

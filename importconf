@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# BFD 1.5-1 importconf [bfd_ic@r-fx.org]
+# BFD 1.5-2 importconf [bfd_ic@r-fx.org]
 ###
 # Copyright (C) 1999-2008, R-fx Networks <proj@r-fx.org>
 # Copyright (C) 2008, Ryan MacDonald <ryan@r-fx.org>
