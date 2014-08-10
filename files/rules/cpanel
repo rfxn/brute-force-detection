@@ -14,5 +14,5 @@ if [ -f "$REQ" ]; then
  TLOG_TF="cpanel"
 
  ## whm, cpanel, webmaild
- ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed -n -e '/FAILED LOGIN/s/\([^ ]*\) \(.*\)- \([^ ]*\).*/\1:\3/p'`
+ ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | egrep '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed -n -e '/FAILED LOGIN/s/\([^ ]*\) \(.*\)- \([^ ]*\).*/\1:\3/p'`
 fi

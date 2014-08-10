@@ -13,9 +13,6 @@ if [ -f "$REQ" ]; then
  LP="/var/log/maillog"
  TLOG_TF="sendmail"
 
- # Max logs to process at one time for this rule
- MLOG=1500
-
  ## SENDMAIL
- ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | grep -iv "IP name lookup" | grep -iE "sendmail|check_rcpt|relaying denied" | sed -e 's/::ffff://' | awk '{print$10}' | tr -d '[],' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tail -n $MLOG | sort -n`
+ ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | egrep -v "IP name lookup" | egrep 'sendmail|check_rcpt|relaying denied' | sed -e 's/::ffff://' | awk '{print$10}' | tr -d '[],' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sort -n`
 fi

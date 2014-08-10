@@ -14,5 +14,5 @@ if [ -f "$REQ" ]; then
 	TMP="/usr/local/bfd/tmp"
 
 	## ASTERISK: IAX2 auth failed
-	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | grep -i "failed MD5 authentication" | grep chan_iax2 | awk '{NF=NF-8} {print $NF}'`
+	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | egrep 'failed MD5 authentication' | egrep chan_iax2 | awk '{NF=NF-8} {print $NF}'`
 fi

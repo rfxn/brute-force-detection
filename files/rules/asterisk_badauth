@@ -14,5 +14,5 @@ if [ -f "$REQ" ]; then
 	TMP="/usr/local/bfd/tmp"
 
 	## ASTERISK BADAUTH
-	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF |grep "Wrong password" /var/log/asterisk/full | awk '{NF=NF-3} { print $NF}'| tr -d '\'\' `
+	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | egrep 'Wrong password' | awk '{NF=NF-3} { print $NF}'| tr -d '\'\' `
 fi

@@ -1,6 +1,6 @@
 # failed logins from a single address before ban
 # uncomment to override conf.bfd trig value
-TRIG="15"
+# TRIG="30"
 
 # uncomment to disable alerting for this rule 
 # SKIP_ALERT="1"

@@ -14,5 +14,5 @@ if [ -f "$REQ" ]; then
 	TMP="/usr/local/bfd/tmp"
 
 	## ASTERISK NOPEER
-	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | grep -i "No matching peer found" | grep chan_sip | awk '{NF=NF-5} {print $NF}'| tr -d '\'\'`
+	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | egrep 'No matching peer found' | egrep chan_sip | awk '{NF=NF-5} {print $NF}'| tr -d '\'\'`
 fi

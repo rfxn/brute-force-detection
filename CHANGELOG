@@ -2,6 +2,7 @@
 [Change] simplified dovecot rule regex matching
 [Change] simplified exim rule regex matching
 [Change] separated exim rule into exim_nxuser and exim_authfail rules
+[Change] removed use of case insensitive (e)greps where not needed to improve performance
 
 1.5-1:
 [Change] modified handling of attack host variable to remove cidr scoping, if present,
