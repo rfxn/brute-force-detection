@@ -1,0 +1,93 @@
+1.6-1:
+[New] validate_ip() function for strict octet 0-255 IP validation using BASH_REMATCH
+[New] sanitize_mod() function restricts rule names to alphanumeric, underscore, hyphen
+[New] safe_source() validates root ownership and non-world-writable before sourcing files
+[New] cleanup trap on EXIT/INT/TERM releases lock files and flock FD
+[Fix] eliminated command injection in BAN_COMMAND execution; removed temp file
+      approach and config re-sourcing from hot loop
+[Fix] secured temp files with mktemp replacing predictable PID-based names
+[Fix] atomic locking with flock replacing TOCTOU check-then-act race condition
+[Fix] tlog gunzip/gzip race replaced with zcat read-only approach
+[Fix] alert.bfd variable quoting and grep -Fw for literal IP matching
+[Change] backtick command substitution replaced with $() in bfd and alert.bfd
+[Change] deprecated $[expr] arithmetic replaced with $((expr)) in get_state
+[New] detect_log_paths() auto-detects AUTH, KERNEL, MAIL log paths for
+      cross-distro compatibility (RHEL/Debian/Ubuntu)
+[New] MAIL_LOG_PATH config variable for mail log path detection
+[New] format_table() wrapper with column fallback to tr for minimal systems
+[New] get_file_size() wrapper in tlog with stat fallback to wc -c
+[Change] hardcoded /sbin/ip replaced with command -v discovery and hostname -I
+         fallback
+[Change] egrep replaced with grep -E across all rule files
+[Change] hardcoded mail log paths replaced with $MAIL_LOG_PATH in 5 rules
+         (dovecot, sendmail, courier, vpopmail, postfix)
+[Change] sendmail rule REQ changed from /etc/init.d/sendmail to /usr/sbin/sendmail
+[Change] added firewall examples in conf.bfd (iptables, firewalld, nftables,
+         ip route) with BAN_COMMAND binary existence warning
+[Fix] deprecated $[expr] arithmetic replaced with $((expr)) in check()
+[Fix] BAN_COMMAND template now extracted raw from conf.bfd to prevent
+      premature $ATTACK_HOST/$MOD expansion at source time
+[Change] systematic variable quoting across bfd, tlog, conf.bfd,
+         importconf, install.sh, uninstall.sh, cron.daily
+[Change] backtick command substitution replaced with $() across all
+         remaining files (tlog, conf.bfd, importconf, cron.daily,
+         install.sh, and 18 rule files)
+[Change] for-cat and for-ls antipatterns replaced with while-read loops
+         and process substitution in bfd
+[New] validate_config() function validates TRIG, EMAIL_ALERTS,
+      LOCK_FILE_TIMEOUT, BAN_COMMAND, INSTALL_PATH at startup
+[New] meaningful exit codes (EXIT_OK, EXIT_CONFIG_ERROR, EXIT_LOCK_ERROR,
+      EXIT_PREREQ_ERROR) replace bare exit 1 throughout bfd
+[Change] eout() refactored with local variables and single timestamp
+[Change] apool_list() refactored with _apool_report() helper eliminating
+         tripled code
+[Fix] uninitialized LAST_HOST, LAST, SKIP_ALERT variables now initialized
+[Fix] -a without argument no longer causes unbound variable error
+[Fix] install.sh: added root check, set -eu, explicit mkdir tmp/,
+      quoting, backtick replacement
+[Change] tlog expr arithmetic replaced with $(()) throughout
+[Change] copyright years updated to 2026 across all modified files
+[Change] _apool_report() rewritten with single-pass awk replacing
+         4 greps per IP (100 greps per report reduced to 1 awk pass)
+[Change] ARG_VAL tr/awk/sort pipeline processed once per rule instead
+         of N+1 times (once per unique host + once for iteration)
+[New] bfd.lib.sh function library extracted for testability
+      (validate_ip, sanitize_mod, eout, safe_source, validate_config,
+      detect_log_paths, format_table)
+[New] test suite with 58 tests (test_validate_ip, test_detect_log_paths,
+      test_config_validation) using simple assert framework
+[New] -d|--dryrun flag runs detection without executing ban commands
+[New] -v|--version and -h|--help CLI flags
+[New] systemd bfd.service and bfd.timer for optional systemd scheduling
+[Change] install.sh conditionally installs systemd timer when systemd
+         is available; cron remains primary scheduler
+[Change] uninstall.sh cleans up systemd timer and cron.daily
+[New] .shellcheckrc and full shellcheck compliance across all scripts
+[New] .github/workflows/ci.yml for shellcheck and test automation
+[Change] README updated with supported distro matrix, firewall examples,
+         dry-run usage, rule customization, and troubleshooting
+[Fix] tlog log rotation bug: duplicate output when log rotates; remainder
+      from rotated file plus entire current file caused repeated lines
+[Fix] tlog line 57 misplaced redirection on TSIZE assignment
+[Fix] -q flag no longer spawns redundant subprocess; uses exec
+      redirection to suppress output in-process
+[Change] .ca.def and .conf.bfd importconf templates updated to 1.6-1
+         with new copyrights, $() syntax, MAIL_LOG_PATH, firewall
+         examples, EMAIL_LOGLINES, LOCK_FILE_TIMEOUT=300
+[Fix] alert.bfd: removed dead EB variable (set but never read)
+[New] EMAIL_LOGLINES config variable exposed in conf.bfd (default 50)
+[Fix] modsec rule: FILE variable renamed to LP for alert compatibility;
+      added Debian /var/log/apache2/error.log path detection;
+      deduplicated ARG_VAL pipeline across if/elif branches
+[Fix] vsftpd rule: removed redundant duplicate sed/grep pipeline pass
+[Change] removed unused TMP variable from sshd, asterisk_badauth,
+         asterisk_iax, asterisk_nopeer rules
+[Change] quoted $TLOG_PATH, $LP, $TLOG_TF in ARG_VAL pipelines across
+         all 20 rule files
+[New] PORTS defined for asterisk_badauth (5060,5061), asterisk_iax
+      (4569), asterisk_nopeer (5060,5061)
+[New] test suite expanded from 58 to 99 tests: added test_eout (11),
+      test_safe_source (11), test_format_table (10), test_tlog (9)
+[Change] tlog BASERUN now overridable via environment for testability
+[Change] normalized rule file indentation to tabs and removed trailing
+         whitespace across all 20 rule files

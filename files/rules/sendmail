@@ -2,17 +2,17 @@
 # uncomment to override conf.bfd trig value
 # TRIG="50"
 
-# uncomment to disable alerting for this rule 
+# uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
 
 # file must exist for rule to be active
-REQ="/etc/init.d/sendmail"
+REQ="/usr/sbin/sendmail"
 
 if [ -f "$REQ" ]; then
- PORTS="25,26,587"
- LP="/var/log/maillog"
- TLOG_TF="sendmail"
+	PORTS="25,26,587"
+	LP="$MAIL_LOG_PATH"
+	TLOG_TF="sendmail"
 
- ## SENDMAIL
- ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | egrep -v "IP name lookup" | egrep 'sendmail|check_rcpt|relaying denied' | sed -e 's/::ffff://' | awk '{print$10}' | tr -d '[],' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sort -n`
+	## SENDMAIL
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | grep -Ev "IP name lookup" | grep -E 'sendmail|check_rcpt|relaying denied' | sed -e 's/::ffff://' | awk '{print$10}' | tr -d '[],' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sort -n)
 fi

@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [master, '**']
+  pull_request:
+    branches: [master]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+      - name: Shellcheck main scripts
+        run: |
+          shellcheck files/bfd files/bfd.lib.sh files/tlog
+          shellcheck install.sh uninstall.sh importconf cron.daily
+      - name: Run tests
+        run: |
+          for t in tests/test_*.sh; do
+            echo "--- Running $t ---"
+            bash "$t" || exit 1
+          done

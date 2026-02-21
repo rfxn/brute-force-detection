@@ -2,17 +2,17 @@
 # uncomment to override conf.bfd trig value
 # TRIG="10"
 
-# uncomment to disable alerting for this rule 
+# uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
 
 # file must exist for rule to be active
 REQ="/usr/sbin/asterisk"
 
 if [ -f "$REQ" ]; then
+	PORTS="5060,5061"
 	LP="/var/log/asterisk/full"
 	TLOG_TF="asterisk_nopeer"
-	TMP="/usr/local/bfd/tmp"
 
 	## ASTERISK NOPEER
-	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | egrep 'No matching peer found' | egrep chan_sip | awk '{NF=NF-5} {print $NF}'| tr -d '\'\'`
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | grep -E 'No matching peer found' | grep -E chan_sip | awk '{NF=NF-5} {print $NF}'| tr -d '\'')
 fi

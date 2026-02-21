@@ -1,8 +1,8 @@
 #!/bin/bash
-# BFD 0.4 <bfd@rfxn.com>
+# Brute Force Detection 1.6-1 <bfd@rfxn.com>
 ###
-# Copyright (C) 1999-2008, R-fx Networks <proj@r-fx.org>
-# Copyright (C) 2008, Ryan MacDonald <ryan@r-fx.org>
+# Copyright (C) 1999-2026, R-fx Networks <proj@r-fx.org>
+# Copyright (C) 2026, Ryan MacDonald <ryan@r-fx.org>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -26,10 +26,17 @@ APPN="BFD"
 uninstall(){
 echo "Remove $APPN from this system; are you sure ?"
 echo "Press any key to continue or ^C to abort."
-read val
+read -r _
 
 if [ -d "$INSPATH" ]; then
-	rm -rf $INSPATH $BINPATH /etc/cron.d/bfd /etc/logrotate.d/bfd /var/log/bfd_log
+	# clean up systemd timer if present
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl stop bfd.timer 2>/dev/null || true
+		systemctl disable bfd.timer 2>/dev/null || true
+		rm -f /etc/systemd/system/bfd.service /etc/systemd/system/bfd.timer
+		systemctl daemon-reload 2>/dev/null || true
+	fi
+	rm -rf "$INSPATH" "$BINPATH" /etc/cron.d/bfd /etc/cron.daily/bfd /etc/logrotate.d/bfd /var/log/bfd_log
 	echo "$APPN has been uninstalled."
 else
 	echo "$APPN does not appear to be installed."

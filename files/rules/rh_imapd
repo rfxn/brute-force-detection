@@ -2,17 +2,17 @@
 # uncomment to override conf.bfd trig value
 # TRIG="10"
 
-# uncomment to disable alerting for this rule 
+# uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
 
 # file must exist for rule to be active
 REQ="/usr/sbin/imapd"
 
 if [ -f "$REQ" ]; then
- PORTS="110,143,993,995"
- LP="$KERNEL_LOG_PATH"
- TLOG_TF="rh_imapd"
+	PORTS="110,143,993,995"
+	LP="$KERNEL_LOG_PATH"
+	TLOG_TF="rh_imapd"
 
- ## imapd
- ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr '=' ' ' | sed -n -e '/imapd/s/.*user \([^ ]*\)\(.*\) \([^ ]*\).*/\3:\1/p' | tr -d '[]'`
+	## imapd
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr '=' ' ' | sed -n -e '/imapd/s/.*user \([^ ]*\)\(.*\) \([^ ]*\).*/\3:\1/p' | tr -d '[]')
 fi

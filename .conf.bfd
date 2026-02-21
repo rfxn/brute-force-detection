@@ -15,7 +15,7 @@
 TRIG="15"
 
 # send email alerts for all events [0 = off; 1 = on]
-EMAIL_ALERTS="0" 
+EMAIL_ALERTS="0"
 
 # local user or email address alerts are sent to (separate multiple with comma)
 EMAIL_ADDRESS="root"

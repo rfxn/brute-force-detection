@@ -1,0 +1,161 @@
+#!/bin/bash
+#
+# Brute Force Detection 1.6-1 - Function Library
+###
+# Copyright (C) 1999-2026, R-fx Networks <proj@r-fx.org>
+# Copyright (C) 2026, Ryan MacDonald <ryan@r-fx.org>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+###
+#
+# This file is sourced by bfd and test scripts.
+# Functions here are defined but not called; callers invoke as needed.
+
+# exit codes (used by bfd, exported for callers)
+# shellcheck disable=SC2034
+EXIT_OK=0
+EXIT_CONFIG_ERROR=1
+# shellcheck disable=SC2034
+EXIT_LOCK_ERROR=2
+# shellcheck disable=SC2034
+EXIT_PREREQ_ERROR=3
+
+validate_ip() {
+	local ip="$1"
+	local ip_pattern='^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$'
+	if [[ "$ip" =~ $ip_pattern ]]; then
+		local i
+		for i in 1 2 3 4; do
+			if [ "${BASH_REMATCH[$i]}" -gt 255 ]; then
+				return 1
+			fi
+		done
+		echo "$ip"
+		return 0
+	fi
+	return 1
+}
+
+sanitize_mod() {
+	local mod="$1"
+	local mod_pattern='^[a-zA-Z0-9_-]+$'
+	if [[ "$mod" =~ $mod_pattern ]]; then
+		echo "$mod"
+		return 0
+	fi
+	return 1
+}
+
+# eout requires: BFD_LOG_PATH, OUTPUT_SYSLOG, OUTPUT_SYSLOG_FILE
+eout() {
+	local arg="${1:-}"
+	local val="${2:-}"
+	if [ -n "$arg" ]; then
+		local ts
+		ts=$(date +"%b %e %H:%M:%S")
+		local host
+		host=$(hostname -s)
+		echo "$ts $host bfd($$): $arg"
+		if [ "$val" == "le" ]; then
+			echo "$ts $host bfd($$): $arg" >> "$BFD_LOG_PATH"
+		fi
+		if [ "$OUTPUT_SYSLOG" == "1" ] && [ "$val" == "le" ]; then
+			echo "$ts $host bfd($$): $arg" >> "$OUTPUT_SYSLOG_FILE"
+		fi
+	fi
+}
+
+# safe_source requires: eout() to be functional
+safe_source() {
+	local file="$1"
+	local label="${2:-$file}"
+	if [ ! -f "$file" ]; then
+		eout "safe_source: $label does not exist." le
+		return 1
+	fi
+	local fowner
+	fowner=$(stat -c '%u' "$file")
+	if [ "$fowner" != "0" ]; then
+		eout "safe_source: $label is not owned by root (uid=$fowner)." le
+		return 1
+	fi
+	local fperms
+	fperms=$(stat -c '%a' "$file")
+	# check world-writable: last digit has write bit (2, 3, 6, 7)
+	local world_digit="${fperms: -1}"
+	if [ "$((world_digit & 2))" -ne 0 ]; then
+		eout "safe_source: $label is world-writable (perms=$fperms)." le
+		return 1
+	fi
+	# shellcheck disable=SC1090
+	. "$file"
+}
+
+# validate_config requires: TRIG, EMAIL_ALERTS, LOCK_FILE_TIMEOUT,
+#   BAN_COMMAND_TEMPLATE, INSTALL_PATH, EXIT_CONFIG_ERROR
+validate_config() {
+	local int_pattern='^[0-9]+$'
+	if ! [[ "$TRIG" =~ $int_pattern ]] || [ "$TRIG" -eq 0 ]; then
+		echo "error: TRIG must be a positive integer (got '$TRIG')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if [ "$EMAIL_ALERTS" != "0" ] && [ "$EMAIL_ALERTS" != "1" ]; then
+		echo "error: EMAIL_ALERTS must be 0 or 1 (got '$EMAIL_ALERTS')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "$LOCK_FILE_TIMEOUT" =~ $int_pattern ]] || [ "$LOCK_FILE_TIMEOUT" -eq 0 ]; then
+		echo "error: LOCK_FILE_TIMEOUT must be a positive integer (got '$LOCK_FILE_TIMEOUT')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if [ -z "$BAN_COMMAND_TEMPLATE" ]; then
+		echo "error: BAN_COMMAND must not be empty."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if [ ! -d "$INSTALL_PATH" ]; then
+		echo "error: INSTALL_PATH '$INSTALL_PATH' does not exist."
+		exit $EXIT_CONFIG_ERROR
+	fi
+}
+
+# detect_log_paths requires: AUTH_LOG_PATH, KERNEL_LOG_PATH, MAIL_LOG_PATH,
+#   OUTPUT_SYSLOG_FILE
+detect_log_paths() {
+	# auto-detect log paths if configured paths don't exist
+	# user overrides in conf.bfd always take priority
+	if [ ! -f "$AUTH_LOG_PATH" ]; then
+		if [ -f "/var/log/auth.log" ]; then
+			AUTH_LOG_PATH="/var/log/auth.log"
+		fi
+	fi
+	if [ ! -f "$KERNEL_LOG_PATH" ]; then
+		if [ -f "/var/log/syslog" ]; then
+			KERNEL_LOG_PATH="/var/log/syslog"
+			OUTPUT_SYSLOG_FILE="$KERNEL_LOG_PATH"
+		fi
+	fi
+	if [ ! -f "$MAIL_LOG_PATH" ]; then
+		if [ -f "/var/log/mail.log" ]; then
+			MAIL_LOG_PATH="/var/log/mail.log"
+		fi
+	fi
+}
+
+format_table() {
+	if command -v column >/dev/null 2>&1; then
+		column -s '|' -t
+	else
+		tr '|' '\t'
+	fi
+}
