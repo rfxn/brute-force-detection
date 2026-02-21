@@ -47,3 +47,7 @@
       quoting, backtick replacement
 [Change] tlog expr arithmetic replaced with $(()) throughout
 [Change] copyright years updated to 2026 across all modified files
+[Change] _apool_report() rewritten with single-pass awk replacing
+         4 greps per IP (100 greps per report reduced to 1 awk pass)
+[Change] ARG_VAL tr/awk/sort pipeline processed once per rule instead
+         of N+1 times (once per unique host + once for iteration)

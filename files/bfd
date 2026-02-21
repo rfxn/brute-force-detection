@@ -296,6 +296,8 @@ check() {
 		fi
 		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
 		if [ -n "$ARG_VAL" ]; then
+		# process ARG_VAL pipeline once; reuse for iteration and counting
+		HOSTS_PARSED=$(echo "$ARG_VAL" | tr ' ' '\n' | tr ':' ' ' | awk '{print$1}' | sort -n)
 		while IFS= read -r ahost; do
 			 [ -z "$ahost" ] && continue
 			 ATTACK_HOST=$(validate_ip "$ahost") || continue
@@ -312,7 +314,7 @@ check() {
 				done < <(grep -v "#" "$IGNORE_HOST_FILES")
 			 fi
 			 if [ "$HOST_IGNORE" == "0" ]; then
-				ATTACK_COUNT=$(echo "$ARG_VAL" | tr ' ' '\n' | tr ':' ' ' | awk '{print$1}' | sort -n | grep -Fw "$ATTACK_HOST" | wc -l)
+				ATTACK_COUNT=$(echo "$HOSTS_PARSED" | grep -Fw "$ATTACK_HOST" | wc -l)
 				echo "$ATTACK_HOST $ATTACK_COUNT $MOD" >> "$INSTALL_PATH/tmp/track.attack"
 				if [ "$ATTACK_COUNT" -lt "$TRIG" ]; then
 					MAX_LINES=50
@@ -372,7 +374,7 @@ check() {
 				 fi
 				fi
 			 fi
-		done < <(echo "$ARG_VAL" | tr ' ' '\n' | tr ':' ' ' | awk '{print$1}' | sort -n | uniq)
+		done < <(echo "$HOSTS_PARSED" | uniq)
 		fi
 	done
 }
@@ -385,22 +387,29 @@ _apool_report() {
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.alist.XXXXXX")
 	echo "[+] $title" && echo
 	echo "#TRIGS|IP|FIRST_SEEN|LAST_SEEN|RULES" > "$atmp"
-	local aip cnt mods first_seen last_seen
-	while IFS= read -r aip; do
-		[ -z "$aip" ] && continue
-		cnt=$(grep -cFw "$aip" "$source_file")
-		mods=$(grep -Fw "$aip" "$source_file" | awk '{print$3}' | sort | uniq | tr '\n' ' ' | sed '$s/.$//')
-		first_seen=$(grep -Fw "$aip" "$source_file" | awk '{print$1}' | sort -n | head -n 1)
-		first_seen=$(date -d "@${first_seen}" +"%D %H:%M:%S")
-		last_seen=$(grep -Fw "$aip" "$source_file" | awk '{print$1}' | sort -n | tail -n 1)
-		last_seen=$(date -d "@${last_seen}" +"%D %H:%M:%S")
-		echo "$cnt|$aip|$first_seen|$last_seen|$mods" >> "$atmp"
+	local cnt aip first_ts last_ts mods first_fmt last_fmt
+	while IFS='|' read -r cnt aip first_ts last_ts mods; do
+		[ -z "$cnt" ] && continue
+		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S")
+		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S")
+		echo "$cnt|$aip|$first_fmt|$last_fmt|$mods" >> "$atmp"
 	done < <(
 		if [ -n "$search" ]; then
-			grep -E "$search" "$source_file" | awk '{print$2}' | sort -n | uniq -c | sort -n | tail -n25 | tac | awk '{print$2}'
+			grep -E "$search" "$source_file"
 		else
-			awk '{print$2}' "$source_file" | sort -n | uniq -c | sort -n | tail -n25 | tac | awk '{print$2}'
-		fi
+			cat "$source_file"
+		fi | awk '{
+			ip = $2; ts = $1 + 0; rule = $3
+			count[ip]++
+			if (!(ip in first) || ts < first[ip]) first[ip] = ts
+			if (!(ip in last) || ts > last[ip]) last[ip] = ts
+			if (rules[ip] == "") rules[ip] = rule
+			else if (index(rules[ip], rule) == 0) rules[ip] = rules[ip] "," rule
+		}
+		END {
+			for (ip in count)
+				print count[ip] "|" ip "|" first[ip] "|" last[ip] "|" rules[ip]
+		}' | sort -t'|' -k1 -nr | head -n 25
 	)
 	cat "$atmp" | format_table
 	rm -f "$atmp"
