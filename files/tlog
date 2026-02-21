@@ -76,10 +76,8 @@ if [ -f "$FILE.1" ]; then
         RTSIZE=`stat -c %s $FILE.1`
         tail -c `expr $RTSIZE - $SIZE` $FILE.1
 elif [ -f "$FILE.1.gz" ]; then
-	gunzip $FILE.1.gz
-        RTSIZE=`stat -c %s $FILE.1`
-        tail -c `expr $RTSIZE - $SIZE` $FILE.1
-	gzip $FILE.1
+        RTSIZE=$(zcat "$FILE.1.gz" | wc -c)
+        zcat "$FILE.1.gz" | tail -c $(expr $RTSIZE - $SIZE)
 fi
 	SIZE=0
 	echo "$NEWSIZE" > $BASERUN/$TLOG

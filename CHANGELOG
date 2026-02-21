@@ -1,3 +1,17 @@
+1.6-1:
+[New] validate_ip() function for strict octet 0-255 IP validation using BASH_REMATCH
+[New] sanitize_mod() function restricts rule names to alphanumeric, underscore, hyphen
+[New] safe_source() validates root ownership and non-world-writable before sourcing files
+[New] cleanup trap on EXIT/INT/TERM releases lock files and flock FD
+[Fix] eliminated command injection in BAN_COMMAND execution; removed temp file
+      approach and config re-sourcing from hot loop
+[Fix] secured temp files with mktemp replacing predictable PID-based names
+[Fix] atomic locking with flock replacing TOCTOU check-then-act race condition
+[Fix] tlog gunzip/gzip race replaced with zcat read-only approach
+[Fix] alert.bfd variable quoting and grep -Fw for literal IP matching
+[Change] backtick command substitution replaced with $() in bfd and alert.bfd
+[Change] deprecated $[expr] arithmetic replaced with $((expr)) in get_state
+
 1.5-2:
 [Change] simplified dovecot rule regex matching
 [Change] simplified exim rule regex matching

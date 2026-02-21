@@ -22,9 +22,65 @@
 #
 INSTALL_PATH="/usr/local/bfd"
 CNF="$INSTALL_PATH/conf.bfd"
-V="1.5-2"
+V="1.6-1"
 APPN="BFD"
-UTIME=`date +"%s"`
+UTIME=$(date +"%s")
+
+validate_ip() {
+	local ip="$1"
+	local ip_pattern='^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$'
+	if [[ "$ip" =~ $ip_pattern ]]; then
+		local i
+		for i in 1 2 3 4; do
+			if [ "${BASH_REMATCH[$i]}" -gt 255 ]; then
+				return 1
+			fi
+		done
+		echo "$ip"
+		return 0
+	fi
+	return 1
+}
+
+sanitize_mod() {
+	local mod="$1"
+	local mod_pattern='^[a-zA-Z0-9_-]+$'
+	if [[ "$mod" =~ $mod_pattern ]]; then
+		echo "$mod"
+		return 0
+	fi
+	return 1
+}
+
+cleanup() {
+	rm -f "$LOCK_FILE"
+	eval "exec $LOCK_FD>&-" 2>/dev/null
+}
+trap cleanup EXIT INT TERM
+
+safe_source() {
+	local file="$1"
+	local label="${2:-$file}"
+	if [ ! -f "$file" ]; then
+		eout "safe_source: $label does not exist." le
+		return 1
+	fi
+	local fowner
+	fowner=$(stat -c '%u' "$file")
+	if [ "$fowner" != "0" ]; then
+		eout "safe_source: $label is not owned by root (uid=$fowner)." le
+		return 1
+	fi
+	local fperms
+	fperms=$(stat -c '%a' "$file")
+	# check world-writable: last digit has write bit (2, 3, 6, 7)
+	local world_digit="${fperms: -1}"
+	if [ "$((world_digit & 2))" -ne 0 ]; then
+		eout "safe_source: $label is world-writable (perms=$fperms)." le
+		return 1
+	fi
+	. "$file"
+}
 
 vhead() {
 	echo "Brute Force Detection v$V <bfd@r-fx.org>"
@@ -38,10 +94,19 @@ if [ ! -f "$CNF" ]; then
 	vhead
         echo "could not find \$CNF, aborting."
         exit 1
-else
-        . $CNF
-	GLOB_TRIG=$TRIG
 fi
+# validate config file safety before sourcing
+_cnf_owner=$(stat -c '%u' "$CNF")
+_cnf_perms=$(stat -c '%a' "$CNF")
+_cnf_world="${_cnf_perms: -1}"
+if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
+	vhead
+	echo "conf.bfd has unsafe ownership (uid=$_cnf_owner) or permissions ($_cnf_perms), aborting."
+	exit 1
+fi
+. "$CNF"
+GLOB_TRIG=$TRIG
+BAN_COMMAND_TEMPLATE="$BAN_COMMAND"
 
 eout() {
 arg=$1
@@ -94,20 +159,31 @@ LO_HOSTS="$INSTALL_PATH/ignore.hosts.local"
 /sbin/ip addr list | grep -w inet | tr '/' ' ' | awk '{print$2}' > $LO_HOSTS
 }
 
+LOCK_FD=9
+
 get_state() {
-if [ -f "$LOCK_FILE" ]; then
-        OVAL=`cat $LOCK_FILE`
-        DIFF=$[TIME_UNIX-OVAL]
-        if [ "$DIFF" -gt "$LOCK_FILE_TIMEOUT" ]; then
-                echo "$TIME_UNIX" > $LOCK_FILE
-                eout "cleared stale lock file file."
-        else
-                eout "locked subsystem, already running ? ($LOCK_FILE is $DIFF seconds old), aborting."
-                exit 1
-        fi
-else
-        echo "$TIME_UNIX" > $LOCK_FILE
+eval "exec $LOCK_FD>\"$LOCK_FILE\""
+if ! flock -n $LOCK_FD; then
+	# flock failed — check for stale lock as secondary safety net
+	if [ -f "$LOCK_FILE" ]; then
+		OVAL=$(cat "$LOCK_FILE")
+		DIFF=$((UTIME - OVAL))
+		if [ "$DIFF" -gt "$LOCK_FILE_TIMEOUT" ]; then
+			eout "cleared stale lock file (flock held by dead process)."
+			# force-acquire by removing and re-opening
+			rm -f "$LOCK_FILE"
+			eval "exec $LOCK_FD>\"$LOCK_FILE\""
+			flock -n $LOCK_FD || { eout "unable to acquire lock after stale cleanup, aborting."; exit 1; }
+		else
+			eout "locked subsystem, already running ? ($LOCK_FILE is $DIFF seconds old), aborting."
+			exit 1
+		fi
+	else
+		eout "unable to acquire lock, aborting."
+		exit 1
+	fi
 fi
+echo "$UTIME" > "$LOCK_FILE"
 }
 
 alert() {
@@ -122,14 +198,14 @@ check() {
 		eout "processing rule file $str"
 		TRIG=""
 		ARG_VAL=""
-		. $RULES_PATH/$str
+		safe_source "$RULES_PATH/$str" "rule:$str" || continue
 		if [ "$TRIG" == "" ]; then
 			TRIG=$GLOB_TRIG
 		fi
-		MOD="$str"
+		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
 		if [ ! "$ARG_VAL" == "" ]; then
 		for ahost in `echo $ARG_VAL | tr ' ' '\n' | tr ':' ' ' | awk '{print$1}' | sort -n | uniq`; do
-			 ATTACK_HOST=`echo $ahost | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | tr -d '\\&;|[[:alpha:]]'`
+			 ATTACK_HOST=$(validate_ip "$ahost") || continue
 			 HOST_IGNORE=0
 			 if [ -f "$IGNORE_HOST_FILES" ]; then
 				for file in `cat $IGNORE_HOST_FILES | grep -v "#"`; do
@@ -181,23 +257,22 @@ check() {
 					 done
 
 					 if [ "$SKIP_BAN" == "0" ] && [ ! "$LAST_HOST" == "$ATTACK_HOST" ]; then
-			                        echo "$UTIME $ATTACK_HOST $MOD" >> $APOOL_LIST
+			                        echo "$UTIME $ATTACK_HOST $MOD" >> "$APOOL_LIST"
 			                        LAST_HOST=$ATTACK_HOST
-						. $CNF
-						BAN_COMMAND=`echo $BAN_COMMAND | tr -d '\\&;|'`
+						BAN_COMMAND="$BAN_COMMAND_TEMPLATE"
 					        eout "{$MOD} $ATTACK_HOST exceeded login failures; executed ban command '$BAN_COMMAND'." le
-						rm -f /usr/local/bfd/tmp/.cmd ; touch /usr/local/bfd/tmp/.cmd ; chmod 600 /usr/local/bfd/tmp/.cmd
-						echo $BAN_COMMAND > /usr/local/bfd/tmp/.cmd
-						sh /usr/local/bfd/tmp/.cmd >> /dev/null 2>&1
-						rm -f /usr/local/bfd/tmp/.cmd
+						eval "$BAN_COMMAND" >/dev/null 2>&1
+						ban_rc=$?
+						if [ "$ban_rc" -ne 0 ]; then
+							eout "{$MOD} ban command for $ATTACK_HOST exited with code $ban_rc." le
+						fi
 						if [ ! "$SKIP_ALERT" == "1" ]; then
 							alert
 							unset SKIP_ALERT
 						fi
 					 elif [ "$SKIP_BAN" == "1" ] && [ ! "$LAST" == "$ATTACK_HOST" ]; then
-			                        echo "$UTIME $ATTACK_HOST $MOD" >> $APOOL_LIST
+			                        echo "$UTIME $ATTACK_HOST $MOD" >> "$APOOL_LIST"
 			                        LAST=$ATTACK_HOST
-						. $CNF
 						eout "{$MOD} $ATTACK_HOST exceeded maximum login failures; host already banned or ignored." le
 					 fi
 					fi
@@ -209,10 +284,10 @@ check() {
 
 apool_list() {
 	ahost=$1
-	atmp=$INSTALL_PATH/tmp/.alist.$$
-	tz=`date +"%z"`
+	atmp=$(mktemp "$INSTALL_PATH/tmp/.alist.XXXXXX")
+	tz=$(date +"%z")
 	if [ "$ahost" ]; then
-         WAPOOL_LIST="$INSTALL_PATH/tmp/.weekly.apool.$$"
+         WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
          find $APOOL_LIST* -type f -mtime -7 | xargs -I{} cat {} > $WAPOOL_LIST
          #af_ctime=`date -d @$(cat $WAPOOL_LIST | awk '{print$1}' | sort -n | head -n1) "%D %H:%M:%S $tz"`
 
@@ -247,7 +322,7 @@ apool_list() {
 	 done
 	 cat $atmp | column -s '|' -t
 	 echo
-	 WAPOOL_LIST="$INSTALL_PATH/tmp/.weekly.apool.$$"
+	 WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
 	 find $APOOL_LIST* -type f -mtime -7 | xargs -I{} cat {} > $WAPOOL_LIST
 	 #af_ctime=`date -d @$(cat $WAPOOL_LIST | awk '{print$1}' | sort -n | head -n1) "%D %H:%M:%S $tz"`
 
@@ -274,7 +349,6 @@ case "$1" in
 	pre
 	get_state
 	check
-	rm -f $LOCK_FILE
 	;;
 -q|--quiet)
 	verbose=0
