@@ -1,0 +1,18 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+# TRIG="30"
+
+# uncomment to disable alerting for this rule 
+# SKIP_ALERT="1"
+
+# file must exist for rule to be active
+REQ="/usr/sbin/exim"
+
+if [ -f "$REQ" ]; then
+ PORTS="25,26,465"
+ LP="/var/log/exim_mainlog"
+ TLOG_TF="exim_nxuser"
+
+ ## EXIM non-existing users
+ ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -n -e '/No such person at this address/s/.*\[\([^ ]*\)\]:.*rejected RCPT <\(.*\)>.*/\1:\2/p' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'`
+fi

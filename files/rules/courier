@@ -10,9 +10,9 @@ REQ="/usr/lib/courier-imap/libexec/couriertcpd"
 
 if [ -f "$REQ" ]; then
  PORTS="110,143,993,995"
- LP="/var/log/maillog"
+ LP="$MAIL_LOG_PATH"
  TLOG_TF="courier"
 
  ## courier imap|pop3
- ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | egrep '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr '=' ' ' | sed -n -e '/LOGIN FAILED/s/.*user \([^ ]*\)\(.*\) \([^ ]*\).*/\3:\1/p' | tr -d '[],'`
+ ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr '=' ' ' | sed -n -e '/LOGIN FAILED/s/.*user \([^ ]*\)\(.*\) \([^ ]*\).*/\3:\1/p' | tr -d '[],'`
 fi

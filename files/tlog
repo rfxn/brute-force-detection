@@ -45,6 +45,11 @@ elif [ ! -d "$BASERUN" ]; then
 	exit 1
 fi
 
+get_file_size() {
+	local file="$1"
+	stat -c %s "$file" 2>/dev/null || wc -c < "$file"
+}
+
 if [ ! -f "$BASERUN/$TLOG" ]; then
 	echo "0" > $BASERUN/$TLOG
 fi
@@ -53,16 +58,16 @@ TSIZE=`cat $BASERUN/$TLOG` >> /dev/null 2>&1
 
 getsize() {
 if [ ! -f "$BASERUN/$TLOG" ]; then
-	SIZE=`stat -c %s $FILE`
-	echo $SIZE > $BASERUN/$TLOG
-        NEWSIZE=`stat -c %s $FILE`
+	SIZE=$(get_file_size "$FILE")
+	echo "$SIZE" > "$BASERUN/$TLOG"
+        NEWSIZE=$(get_file_size "$FILE")
 elif [ -f "$BASERUN/$TLOG" ] && [ "$TSIZE" == "0" ]; then
-        SIZE=`stat -c %s $FILE`
-        echo $SIZE > $BASERUN/$TLOG
-        NEWSIZE=`stat -c %s $FILE`
+        SIZE=$(get_file_size "$FILE")
+        echo "$SIZE" > "$BASERUN/$TLOG"
+        NEWSIZE=$(get_file_size "$FILE")
 else
-	SIZE=`cat $BASERUN/$TLOG`
-	NEWSIZE=`stat -c %s $FILE`
+	SIZE=$(cat "$BASERUN/$TLOG")
+	NEWSIZE=$(get_file_size "$FILE")
 fi
 }
 
@@ -73,8 +78,8 @@ if [ ! "$NEWSIZE" -lt "$SIZE" ] && [ "$NEWSIZE" -ne "$SIZE" ]; then
 	echo $NEWSIZE > $BASERUN/$TLOG
 elif [ "$NEWSIZE" -lt "$SIZE" ]; then 
 if [ -f "$FILE.1" ]; then
-        RTSIZE=`stat -c %s $FILE.1`
-        tail -c `expr $RTSIZE - $SIZE` $FILE.1
+        RTSIZE=$(get_file_size "$FILE.1")
+        tail -c $(expr $RTSIZE - $SIZE) "$FILE.1"
 elif [ -f "$FILE.1.gz" ]; then
         RTSIZE=$(zcat "$FILE.1.gz" | wc -c)
         zcat "$FILE.1.gz" | tail -c $(expr $RTSIZE - $SIZE)

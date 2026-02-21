@@ -108,6 +108,42 @@ fi
 GLOB_TRIG=$TRIG
 BAN_COMMAND_TEMPLATE="$BAN_COMMAND"
 
+detect_log_paths() {
+	# auto-detect log paths if configured paths don't exist
+	# user overrides in conf.bfd always take priority
+	if [ ! -f "$AUTH_LOG_PATH" ]; then
+		if [ -f "/var/log/auth.log" ]; then
+			AUTH_LOG_PATH="/var/log/auth.log"
+		fi
+	fi
+	if [ ! -f "$KERNEL_LOG_PATH" ]; then
+		if [ -f "/var/log/syslog" ]; then
+			KERNEL_LOG_PATH="/var/log/syslog"
+			OUTPUT_SYSLOG_FILE="$KERNEL_LOG_PATH"
+		fi
+	fi
+	if [ ! -f "$MAIL_LOG_PATH" ]; then
+		if [ -f "/var/log/mail.log" ]; then
+			MAIL_LOG_PATH="/var/log/mail.log"
+		fi
+	fi
+}
+detect_log_paths
+
+# warn if BAN_COMMAND binary not found
+BAN_CMD_BIN=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
+if [ -n "$BAN_CMD_BIN" ] && [ ! -x "$BAN_CMD_BIN" ]; then
+	echo "warning: BAN_COMMAND binary '$BAN_CMD_BIN' not found or not executable."
+fi
+
+format_table() {
+	if command -v column >/dev/null 2>&1; then
+		column -s '|' -t
+	else
+		tr '|' '\t'
+	fi
+}
+
 eout() {
 arg=$1
 val=$2
@@ -156,7 +192,20 @@ if [ ! -f "$BAN_LIST" ]; then
 fi
 
 LO_HOSTS="$INSTALL_PATH/ignore.hosts.local"
-/sbin/ip addr list | grep -w inet | tr '/' ' ' | awk '{print$2}' > $LO_HOSTS
+IP_BIN=$(command -v ip 2>/dev/null)
+if [ -z "$IP_BIN" ]; then
+	for _p in /sbin/ip /usr/sbin/ip /usr/bin/ip /bin/ip; do
+		if [ -x "$_p" ]; then
+			IP_BIN="$_p"
+			break
+		fi
+	done
+fi
+if [ -n "$IP_BIN" ]; then
+	"$IP_BIN" addr list | grep -w inet | tr '/' ' ' | awk '{print$2}' > "$LO_HOSTS"
+else
+	hostname -I | tr ' ' '\n' > "$LO_HOSTS"
+fi
 }
 
 LOCK_FD=9
@@ -230,10 +279,10 @@ check() {
 					RET_COUNT=0
 					for i in `cat $INSTALL_PATH/tmp/track.attack | grep -w $ATTACK_HOST | awk '{print$2}'`; do
                                               if [ ! "$i" == "" ]; then
-                                                RET_COUNT=$[RET_COUNT+i]
+                                                RET_COUNT=$((RET_COUNT + i))
                                               fi
 					done
-					ATTACK_COUNT=$[RET_COUNT+ATTACK_COUNT]
+					ATTACK_COUNT=$((RET_COUNT + ATTACK_COUNT))
 				fi
 			 fi
                          if [ -z "$ATTACK_COUNT" ]; then
@@ -303,7 +352,7 @@ apool_list() {
                 last_seen=`date -d @${last_seen} +"%D %H:%M:%S"`
                 echo "$cnt|$aip|$first_seen|$last_seen|$mods" >> $atmp
          done
-         cat $atmp | column -s '|' -t
+         cat "$atmp" | format_table
          rm -f $atmp $WAPOOL_LIST
 	elif [ -f "$APOOL_LIST" ]; then
          #af_ctime=`stat -c '%x' $APOOL_LIST  | tr '.' ' ' | awk '{print$1,$2,$4}'`
@@ -320,7 +369,7 @@ apool_list() {
 		last_seen=`date -d @${last_seen} +"%D %H:%M:%S"`
 		echo "$cnt|$aip|$first_seen|$last_seen|$mods" >> $atmp
 	 done
-	 cat $atmp | column -s '|' -t
+	 cat "$atmp" | format_table
 	 echo
 	 WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
 	 find $APOOL_LIST* -type f -mtime -7 | xargs -I{} cat {} > $WAPOOL_LIST
@@ -338,7 +387,7 @@ apool_list() {
                 last_seen=`date -d @${last_seen} +"%D %H:%M:%S"`
                 echo "$cnt|$aip|$first_seen|$last_seen|$mods" >> $atmp
          done
-         cat $atmp | column -s '|' -t
+         cat "$atmp" | format_table
 	 rm -f $atmp $WAPOOL_LIST
         fi
 }

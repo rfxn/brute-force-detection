@@ -11,3 +11,17 @@
 [Fix] alert.bfd variable quoting and grep -Fw for literal IP matching
 [Change] backtick command substitution replaced with $() in bfd and alert.bfd
 [Change] deprecated $[expr] arithmetic replaced with $((expr)) in get_state
+[New] detect_log_paths() auto-detects AUTH, KERNEL, MAIL log paths for
+      cross-distro compatibility (RHEL/Debian/Ubuntu)
+[New] MAIL_LOG_PATH config variable for mail log path detection
+[New] format_table() wrapper with column fallback to tr for minimal systems
+[New] get_file_size() wrapper in tlog with stat fallback to wc -c
+[Change] hardcoded /sbin/ip replaced with command -v discovery and hostname -I
+         fallback
+[Change] egrep replaced with grep -E across all rule files
+[Change] hardcoded mail log paths replaced with $MAIL_LOG_PATH in 5 rules
+         (dovecot, sendmail, courier, vpopmail, postfix)
+[Change] sendmail rule REQ changed from /etc/init.d/sendmail to /usr/sbin/sendmail
+[Change] added firewall examples in conf.bfd (iptables, firewalld, nftables,
+         ip route) with BAN_COMMAND binary existence warning
+[Fix] deprecated $[expr] arithmetic replaced with $((expr)) in check()

@@ -24,7 +24,16 @@ EMAIL_ADDRESS="root"
 EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
 
 # executable command to block attacking hosts
+# APF (default):
 BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
+# iptables (CentOS 6/7, Ubuntu 14-20):
+#BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP"
+# firewalld (Rocky 8+, CentOS 7):
+#BAN_COMMAND="/usr/bin/firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
+# nftables (Rocky 9+, Debian 12, Ubuntu 22+):
+#BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST drop"
+# ip route null-route (all distros):
+#BAN_COMMAND="/sbin/ip route add blackhole $ATTACK_HOST/32"
 
 ######
 # You should not need to edit any options below this line
@@ -44,6 +53,9 @@ KERNEL_LOG_PATH="/var/log/messages"
 
 # syslog auth log path
 AUTH_LOG_PATH="/var/log/secure"
+
+# syslog mail log path
+MAIL_LOG_PATH="/var/log/maillog"
 
 # bfd application log path
 BFD_LOG_PATH="/var/log/bfd_log"
