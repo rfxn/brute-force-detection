@@ -15,5 +15,5 @@ if [ -f "$REQ" ]; then
  TMP="/usr/local/bfd/tmp"
 
  ## SSHD
- ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed -n -e '/sshd/s/.*user \(.*\) from \([^ ]*\).*/\2:\1/p' -e '/sshd/s/.*Failed password for \(.*\) from \([^ ]*\).*/\2:\1/p' -e '/DenyUsers/s/.*User \(.*\) from \([^ ]*\).*/\2:\1/p'`
+ ARG_VAL=$($TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed -n -e '/sshd/s/.*user \(.*\) from \([^ ]*\).*/\2:\1/p' -e '/sshd/s/.*Failed password for \(.*\) from \([^ ]*\).*/\2:\1/p' -e '/DenyUsers/s/.*User \(.*\) from \([^ ]*\).*/\2:\1/p')
 fi

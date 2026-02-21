@@ -14,5 +14,5 @@ if [ -f "$REQ" ]; then
  TLOG_TF="exim_nxuser"
 
  ## EXIM non-existing users
- ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -n -e '/No such person at this address/s/.*\[\([^ ]*\)\]:.*rejected RCPT <\(.*\)>.*/\1:\2/p' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'`
+ ARG_VAL=$($TLOG_PATH $LP $TLOG_TF | sed -n -e '/No such person at this address/s/.*\[\([^ ]*\)\]:.*rejected RCPT <\(.*\)>.*/\1:\2/p' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
 fi

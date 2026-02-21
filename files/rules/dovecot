@@ -14,5 +14,5 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="dovecot"
 
 	## DOVECOT IMAP/POP3
-	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | grep -E '(imap|pop3)-login.*(Authentication failure|auth failed|Aborted login|ried to use disabled)' | grep -Ev 'no auth attempts' | sed -n -e '/auth failed/s/.*user=<\(.*\)>.*rip=\([^ ]*\),.*/\2:\1/p' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:.*$'`
+	ARG_VAL=$($TLOG_PATH $LP $TLOG_TF | grep -E '(imap|pop3)-login.*(Authentication failure|auth failed|Aborted login|ried to use disabled)' | grep -Ev 'no auth attempts' | sed -n -e '/auth failed/s/.*user=<\(.*\)>.*rip=\([^ ]*\),.*/\2:\1/p' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:.*$')
 fi

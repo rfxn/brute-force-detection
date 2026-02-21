@@ -11,5 +11,5 @@ if [ -f "$REQ" ]; then
  TLOG_TF="proftpd"
 
  ## PROFTPD
- ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr -d ':' | sed -n -e '/proftpd/s/.*USER \(.*\) no such user found from \([^ ]*\).*/\2:\1/p'`
+ ARG_VAL=$($TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr -d ':' | sed -n -e '/proftpd/s/.*USER \(.*\) no such user found from \([^ ]*\).*/\2:\1/p')
 fi

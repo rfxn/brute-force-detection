@@ -25,3 +25,25 @@
 [Change] added firewall examples in conf.bfd (iptables, firewalld, nftables,
          ip route) with BAN_COMMAND binary existence warning
 [Fix] deprecated $[expr] arithmetic replaced with $((expr)) in check()
+[Fix] BAN_COMMAND template now extracted raw from conf.bfd to prevent
+      premature $ATTACK_HOST/$MOD expansion at source time
+[Change] systematic variable quoting across bfd, tlog, conf.bfd,
+         importconf, install.sh, uninstall.sh, cron.daily
+[Change] backtick command substitution replaced with $() across all
+         remaining files (tlog, conf.bfd, importconf, cron.daily,
+         install.sh, and 18 rule files)
+[Change] for-cat and for-ls antipatterns replaced with while-read loops
+         and process substitution in bfd
+[New] validate_config() function validates TRIG, EMAIL_ALERTS,
+      LOCK_FILE_TIMEOUT, BAN_COMMAND, INSTALL_PATH at startup
+[New] meaningful exit codes (EXIT_OK, EXIT_CONFIG_ERROR, EXIT_LOCK_ERROR,
+      EXIT_PREREQ_ERROR) replace bare exit 1 throughout bfd
+[Change] eout() refactored with local variables and single timestamp
+[Change] apool_list() refactored with _apool_report() helper eliminating
+         tripled code
+[Fix] uninitialized LAST_HOST, LAST, SKIP_ALERT variables now initialized
+[Fix] -a without argument no longer causes unbound variable error
+[Fix] install.sh: added root check, set -eu, explicit mkdir tmp/,
+      quoting, backtick replacement
+[Change] tlog expr arithmetic replaced with $(()) throughout
+[Change] copyright years updated to 2026 across all modified files

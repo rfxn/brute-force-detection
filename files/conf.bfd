@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# BFD 1.5-2 <bfd@rfxn.com>
-# Copyright (C) 1999-2014, R-fx Networks <proj@r-fx.org>
-# Copyright (C) 2014, Ryan MacDonald <ryan@r-fx.org>
+# Brute Force Detection 1.6-1 <bfd@rfxn.com>
+# Copyright (C) 1999-2026, R-fx Networks <proj@r-fx.org>
+# Copyright (C) 2026, Ryan MacDonald <ryan@r-fx.org>
 # This program may be freely redistributed under the terms of the GNU GPL
 #
 # NOTE: This file should be edited with word/line wrapping off,
@@ -73,10 +73,10 @@ EMAIL_TEMPLATE="$INSTALL_PATH/alert.bfd"
 IGNORE_HOST_FILES="$INSTALL_PATH/exclude.files"
 
 # grab the local time zone
-TIME_ZONE=`date +"%z"`
+TIME_ZONE=$(date +"%z")
 
 # grab the local unix time
-TIME_UNIX=`date +"%s"`
+TIME_UNIX=$(date +"%s")
 
 # lock file path
 LOCK_FILE="$INSTALL_PATH/lock.utime"

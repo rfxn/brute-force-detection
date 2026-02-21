@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# BFD 1.5-2 importconf [bfd_ic@r-fx.org]
+# Brute Force Detection 1.6-1 importconf [bfd_ic@r-fx.org]
 ###
-# Copyright (C) 1999-2008, R-fx Networks <proj@r-fx.org>
-# Copyright (C) 2008, Ryan MacDonald <ryan@r-fx.org>
+# Copyright (C) 1999-2026, R-fx Networks <proj@r-fx.org>
+# Copyright (C) 2026, Ryan MacDonald <ryan@r-fx.org>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -30,15 +30,15 @@ if [ -d "/usr/local/bfd.bk.last" ]; then
 # replace with any vars old release had
 . /usr/local/bfd.bk.last/conf.bfd
 # generate new conf
-. $DEF
+. "$DEF"
 
-cp -f $INSTALL_PATH/conf.bfd $INSTALL_PATH/conf.bfd.orig
-cp -f $DOUT $INSTALL_PATH/conf.bfd
-cp -f /usr/local/bfd.bk.last/ignore.hosts $INSTALL_PATH >> /dev/null 2>&1
-cp -f /usr/local/bfd.bk.last/tmp/* $INSTALL_PATH/tmp >> /dev/null 2>&1
-rm -f $INSTALL_PATH/tmp/*
+cp -f "$INSTALL_PATH/conf.bfd" "$INSTALL_PATH/conf.bfd.orig"
+cp -f "$DOUT" "$INSTALL_PATH/conf.bfd"
+cp -f /usr/local/bfd.bk.last/ignore.hosts "$INSTALL_PATH" >> /dev/null 2>&1
+cp -f /usr/local/bfd.bk.last/tmp/* "$INSTALL_PATH/tmp" >> /dev/null 2>&1
+rm -f "$INSTALL_PATH/tmp/"*
 
-OV=`tac /usr/local/bfd.bk.last/conf.bfd  | tail -n 3 | grep BFD | awk '{print$3}'`
-NV=`tac /usr/local/bfd/conf.bfd  | tail -n 3 | grep BFD | awk '{print$3}'`
+OV=$(tac /usr/local/bfd.bk.last/conf.bfd | tail -n 3 | grep BFD | awk '{print$3}')
+NV=$(tac /usr/local/bfd/conf.bfd | tail -n 3 | grep BFD | awk '{print$3}')
         echo "  Imported tracking and options from BFD $OV to $NV."
 fi
