@@ -1,6 +1,6 @@
-BFD (Brute Force Detection) 1.6-1 <bfd@rfxn.com>
- Copyright (C) 1999-2026, R-fx Networks <proj@r-fx.org>
- Copyright (C) 2026, Ryan MacDonald <ryan@r-fx.org>
+BFD (Brute Force Detection) 2.0.1 <bfd@rfxn.com>
+ Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
+ Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -131,7 +131,7 @@ BFD automatically detects local IP addresses and excludes them from bans.
 
 10) License:
 BFD is developed and supported on a volunteer basis by Ryan MacDonald
-[ryan@r-fx.org]
+[ryan@rfxn.com]
 
 BFD (Brute Force Detection) is distributed under the GNU General Public
 License (GPL) without restrictions on usage or redistribution. The BFD
@@ -140,13 +140,11 @@ directory of the distribution. Credit must be given for derivative works as
 required under GNU GPL.
 
 11) Support:
-If you require any assistance with BFD you may refer to the R-fx Networks
-community forums located at http://forums.rfxnetworks.com. You may also send
-an e-mail to support@r-fx.org.
-
 The official home page for BFD is located at:
-http://www.rfxnetworks.com/bfd.php
+https://rfxn.com
 
-All bugs or feature requests should be sent to ryan@r-fx.org and please be
-sure to include as much information as possible or conceptual ideas of how
-you think a new feature should work.
+All bugs, feature requests, and community support are handled through GitHub:
+https://github.com/rfxn/bfd
+
+Please include as much information as possible when reporting issues, or
+conceptual ideas of how you think a new feature should work.

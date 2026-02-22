@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# Brute Force Detection 1.6-1 - Function Library
+# Brute Force Detection 2.0.1 - Function Library
 ###
-# Copyright (C) 1999-2026, R-fx Networks <proj@r-fx.org>
-# Copyright (C) 2026, Ryan MacDonald <ryan@r-fx.org>
+# Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
+# Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
