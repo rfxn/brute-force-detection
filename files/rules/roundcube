@@ -1,0 +1,27 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="5"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# detect roundcube log path
+if [ -f "/var/log/roundcube/errors.log" ]; then
+	LP="/var/log/roundcube/errors.log"
+elif [ -f "/var/log/roundcubemail/errors.log" ]; then
+	LP="/var/log/roundcubemail/errors.log"
+elif [ -f "/var/log/roundcube/errors" ]; then
+	LP="/var/log/roundcube/errors"
+fi
+
+# file must exist for rule to be active
+REQ="${LP:-}"
+if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+	PORTS="80,443"
+	TLOG_TF="roundcube"
+
+	## Roundcube webmail authentication failures
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"Login failed for .+ from <HOST>" \
+		"Failed login for .+ from <HOST>")
+fi

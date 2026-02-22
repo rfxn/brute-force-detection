@@ -1,0 +1,26 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# detect nginx error log path
+if [ -f "/var/log/nginx/error.log" ]; then
+	LP="/var/log/nginx/error.log"
+elif [ -f "/usr/local/nginx/logs/error.log" ]; then
+	LP="/usr/local/nginx/logs/error.log"
+fi
+
+# file must exist for rule to be active
+REQ="${LP:-}"
+if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+	PORTS="80,443"
+	TLOG_TF="nginx.auth"
+
+	## nginx HTTP authentication failures
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"password mismatch, client: <HOST>" \
+		"was not found in .*, client: <HOST>" \
+		"no user/password was provided.*, client: <HOST>")
+fi

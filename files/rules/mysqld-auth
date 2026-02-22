@@ -1,0 +1,26 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="5"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# detect mysql error log path
+if [ -f "/var/log/mysqld.log" ]; then
+	LP="/var/log/mysqld.log"
+elif [ -f "/var/log/mysql/error.log" ]; then
+	LP="/var/log/mysql/error.log"
+elif [ -f "/var/log/mariadb/mariadb.log" ]; then
+	LP="/var/log/mariadb/mariadb.log"
+fi
+
+# file must exist for rule to be active
+REQ="${LP:-}"
+if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+	PORTS="3306"
+	TLOG_TF="mysqld.auth"
+
+	## MySQL/MariaDB authentication failures
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"Access denied for user '[^']+'@'<HOST>'")
+fi

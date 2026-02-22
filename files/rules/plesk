@@ -1,0 +1,19 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="5"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# file must exist for rule to be active
+REQ="/usr/local/psa/admin/bin/panel"
+
+if [ -f "$REQ" ]; then
+	PORTS="8443,8880"
+	LP="/var/log/plesk/panel.log"
+	TLOG_TF="plesk"
+
+	## Plesk panel authentication failures
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"Failed login attempt .* from IP <HOST>")
+fi

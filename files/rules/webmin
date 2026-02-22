@@ -1,0 +1,20 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="5"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# file must exist for rule to be active
+REQ="/usr/share/webmin/miniserv.pl"
+
+if [ -f "$REQ" ]; then
+	PORTS="10000,20000"
+	LP="$AUTH_LOG_PATH"
+	TLOG_TF="webmin"
+
+	## Webmin authentication failures
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"webmin.*Invalid login as .* from <HOST>" \
+		"webmin.*Non-existent login as .* from <HOST>")
+fi

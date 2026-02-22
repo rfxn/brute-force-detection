@@ -1,0 +1,27 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# detect apache error log path
+if [ -f "/usr/local/apache/logs/error_log" ]; then
+	LP="/usr/local/apache/logs/error_log"
+elif [ -f "/var/log/httpd/error_log" ]; then
+	LP="/var/log/httpd/error_log"
+elif [ -f "/var/log/apache2/error.log" ]; then
+	LP="/var/log/apache2/error.log"
+fi
+
+# file must exist for rule to be active
+REQ="${LP:-}"
+if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+	PORTS="80,443"
+	TLOG_TF="httpd.auth"
+
+	## Apache HTTP authentication failures (2.4 + 2.2)
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"\[client <HOST>.*AH0161[78]" \
+		"\[client <HOST>\].*authentication failure")
+fi

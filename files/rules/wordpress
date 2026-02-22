@@ -1,0 +1,22 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="5"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# file must exist for rule to be active
+# requires wp-fail2ban plugin (logs to AUTH_LOG_PATH via syslog)
+REQ="$AUTH_LOG_PATH"
+
+if [ -f "$REQ" ]; then
+	PORTS="80,443"
+	LP="$AUTH_LOG_PATH"
+	TLOG_TF="wordpress"
+
+	## WordPress authentication failures (via wp-fail2ban plugin)
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"wordpress.*Authentication failure .* from <HOST>" \
+		"wordpress.*Blocked authentication attempt .* from <HOST>" \
+		"wordpress.*XML-RPC authentication .* from <HOST>")
+fi

@@ -1,0 +1,19 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# file must exist for rule to be active
+REQ="/usr/lib/cyrus-imapd/imapd"
+
+if [ -f "$REQ" ]; then
+	PORTS="143,993,110,995"
+	LP="$MAIL_LOG_PATH"
+	TLOG_TF="cyrus"
+
+	## Cyrus IMAP authentication failures
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"badlogin:.*\[<HOST>\].*SASL")
+fi
