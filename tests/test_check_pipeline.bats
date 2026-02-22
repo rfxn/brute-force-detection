@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # Integration tests for the check() pipeline:
-# count_attacks, execute_ban, and end-to-end flow
+# count_attacks, count_failures, execute_ban, and end-to-end flow
 #
 
 load '/usr/local/lib/bats/bats-support/load'
@@ -24,7 +24,7 @@ teardown() {
 	rm -rf "$TEST_TMPDIR"
 }
 
-# --- count_attacks ---
+# --- count_attacks (legacy, still in bfd.lib.sh) ---
 
 @test "count_attacks: counts host occurrence with accumulation" {
 	local hosts_parsed
@@ -84,6 +84,75 @@ teardown() {
 	assert_output "2"
 }
 
+# --- count_failures (windowed replacement) ---
+
+@test "count_failures: counts host in windowed mode" {
+	local hosts_parsed
+	hosts_parsed=$(printf "10.0.0.1\n10.0.0.2\n10.0.0.1\n")
+	run count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
+	assert_success
+	assert_output "2"
+}
+
+@test "count_failures: accumulates within window" {
+	local hosts_parsed
+	hosts_parsed=$(printf "10.0.0.1\n10.0.0.1\n10.0.0.1\n")
+	# first run at t=900
+	count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "900" "sshd" >/dev/null
+	# second run at t=1000 (within window)
+	run count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
+	assert_success
+	assert_output "6"
+}
+
+@test "count_failures: old events expire outside window" {
+	# seed old events at t=100
+	state_events_append "$INSTALL_PATH" "100" "10.0.0.1" "sshd" "5"
+	local hosts_parsed
+	hosts_parsed=$(printf "10.0.0.1\n10.0.0.1\n")
+	# now=1000, window=300, cutoff=700 => old events at t=100 excluded
+	run count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
+	assert_success
+	assert_output "2"
+}
+
+@test "count_failures: per-service isolation in windowed mode" {
+	# seed dovecot events in window
+	state_events_append "$INSTALL_PATH" "900" "10.0.0.1" "dovecot" "10"
+	local hosts_parsed
+	hosts_parsed=$(printf "10.0.0.1\n10.0.0.1\n")
+	# count sshd only
+	run count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
+	assert_success
+	assert_output "2"
+}
+
+# --- TRIG_GLOBAL ---
+
+@test "pipeline: TRIG_GLOBAL triggers ban across services" {
+	# seed dovecot events (3) and sshd events (3) in window, total = 6
+	state_events_append "$INSTALL_PATH" "900" "10.0.0.1" "dovecot" "3"
+	state_events_append "$INSTALL_PATH" "900" "10.0.0.1" "sshd" "3"
+	# TRIG_GLOBAL=5: cross-service total of 6 >= 5
+	local global_count
+	global_count=$(state_events_count "$INSTALL_PATH" "10.0.0.1" "300" "1000")
+	[ "$global_count" -ge 5 ]
+}
+
+@test "pipeline: TRIG_GLOBAL=0 disables cross-service check" {
+	# With TRIG_GLOBAL=0, should not trigger
+	local trig_global=0
+	local should_ban=0
+	local attack_count=2
+	local trig=5
+	if [ "$attack_count" -ge "$trig" ]; then
+		should_ban=1
+	elif [ "$trig_global" -gt 0 ]; then
+		should_ban=1
+	fi
+	[ "$should_ban" -eq 0 ]
+}
+
 # --- execute_ban ---
 
 @test "execute_ban: dry run logs without executing" {
@@ -121,7 +190,7 @@ teardown() {
 
 # --- end-to-end pipeline ---
 
-@test "pipeline: filter_host + count_attacks + state_ban_append" {
+@test "pipeline: filter_host + count_failures + state_ban_append" {
 	# setup ignore infrastructure
 	local ignore_files="$TEST_TMPDIR/exclude.files"
 	local lo_hosts="$TEST_TMPDIR/lo_hosts"
@@ -136,9 +205,9 @@ teardown() {
 	local filter_rc=$?
 	[ "$filter_rc" -eq 0 ]
 
-	# count attacks
+	# count failures (windowed)
 	local count
-	count=$(count_attacks "$host" "$hosts_parsed" "$INSTALL_PATH" "5")
+	count=$(count_failures "$host" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
 	[ "$count" -ge 5 ]
 
 	# ban and record

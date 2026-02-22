@@ -1,4 +1,10 @@
 2.0.1:
+[Change] check() uses count_failures() with time-windowed counting instead
+         of count_attacks(); events pruned once per run before iterating rules
+[New] TRIG_GLOBAL cross-service check in check(): when per-rule threshold
+      not met but aggregate failures across all services exceed TRIG_GLOBAL
+[Change] test_check_pipeline.bats updated with count_failures tests, TRIG_GLOBAL
+         tests, and windowed pipeline integration tests (21 total)
 [New] state_events_append() appends timestamped failure events to events.dat
 [New] state_events_count() counts events for a host within a time window,
       with optional per-service filtering using mawk-compatible awk

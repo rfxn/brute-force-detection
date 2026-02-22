@@ -167,6 +167,9 @@ fi
 
 
 check() {
+	# prune expired events once per run, before iterating rules
+	state_events_prune "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME"
+
 	for str in "$RULES_PATH"/*; do
 		str=$(basename "$str")
 		eout "processing rule file $str"
@@ -191,11 +194,21 @@ check() {
 			if [ "$filter_rc" -eq 1 ]; then
 				continue
 			fi
-			ATTACK_COUNT=$(count_attacks "$ATTACK_HOST" "$HOSTS_PARSED" "$INSTALL_PATH" "$TRIG")
+			ATTACK_COUNT=$(count_failures "$ATTACK_HOST" "$HOSTS_PARSED" "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME" "$MOD")
 			if [ -z "$ATTACK_COUNT" ]; then
 				ATTACK_COUNT=0
 			fi
+			local should_ban=0
 			if [ "$ATTACK_COUNT" -ge "$TRIG" ]; then
+				should_ban=1
+			elif [ "$TRIG_GLOBAL" -gt 0 ]; then
+				local global_count
+				global_count=$(state_events_count "$INSTALL_PATH" "$ATTACK_HOST" "$TRIG_WINDOW" "$UTIME")
+				if [ "$global_count" -ge "$TRIG_GLOBAL" ]; then
+					should_ban=1
+				fi
+			fi
+			if [ "$should_ban" -eq 1 ]; then
 				SKIP=0
 				state_ban_append "$INSTALL_PATH" "$ATTACK_HOST" 50
 				if [ "$SKIP" == "0" ]; then
