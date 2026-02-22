@@ -1,4 +1,4 @@
-1.6-1:
+2.0.1:
 [New] validate_ip() function for strict octet 0-255 IP validation using BASH_REMATCH
 [New] sanitize_mod() function restricts rule names to alphanumeric, underscore, hyphen
 [New] safe_source() validates root ownership and non-world-writable before sourcing files
@@ -71,7 +71,7 @@
 [Fix] tlog line 57 misplaced redirection on TSIZE assignment
 [Fix] -q flag no longer spawns redundant subprocess; uses exec
       redirection to suppress output in-process
-[Change] .ca.def and .conf.bfd importconf templates updated to 1.6-1
+[Change] .ca.def and .conf.bfd importconf templates updated to 2.0.1
          with new copyrights, $() syntax, MAIL_LOG_PATH, firewall
          examples, EMAIL_LOGLINES, LOCK_FILE_TIMEOUT=300
 [Fix] alert.bfd: removed dead EB variable (set but never read)
@@ -91,6 +91,8 @@
 [Change] tlog BASERUN now overridable via environment for testability
 [Change] normalized rule file indentation to tabs and removed trailing
          whitespace across all 20 rule files
+[Change] version renamed from 1.6-1 to 2.0.1 across all files
+[Change] project domain normalized to rfxn.com (replaced r-fx.org)
 
 1.5-2:
 [Change] simplified dovecot rule regex matching
