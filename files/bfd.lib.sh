@@ -48,6 +48,44 @@ validate_ip() {
 	return 1
 }
 
+validate_ip6() {
+	local ip="$1"
+	ip="${ip%%\%*}"                          # strip zone ID (%eth0)
+	[ -z "$ip" ] && return 1
+	local valid='^[0-9a-fA-F:]+$'
+	[[ "$ip" =~ $valid ]] || return 1        # only hex+colon
+	[[ "$ip" == *:* ]] || return 1           # must have colon
+	[[ "$ip" == *:::* ]] && return 1         # no triple colon
+	# reject leading/trailing single colon (not part of ::)
+	[[ "$ip" == :* ]] && [[ "$ip" != ::* ]] && return 1
+	[[ "$ip" == *: ]] && [[ "$ip" != *:: ]] && return 1
+	# at most one ::
+	local no_dc="${ip/::}"
+	[[ "$no_dc" == *::* ]] && return 1
+	# split into groups, count and validate
+	local has_dc=0
+	[[ "$ip" == *::* ]] && has_dc=1
+	IFS=':' read -ra groups <<< "$ip"
+	local non_empty=0 g
+	for g in "${groups[@]}"; do
+		[ -z "$g" ] && continue
+		non_empty=$((non_empty + 1))
+		[ "${#g}" -gt 4 ] && return 1        # max 4 hex per group
+	done
+	if [ "$has_dc" -eq 1 ]; then
+		[ "$non_empty" -gt 7 ] && return 1   # :: must replace ≥1 group
+	else
+		[ "$non_empty" -ne 8 ] && return 1   # no :: → exactly 8 groups
+	fi
+	echo "$ip"
+	return 0
+}
+
+validate_ip_any() {
+	validate_ip "$1" 2>/dev/null && return 0
+	validate_ip6 "$1" 2>/dev/null
+}
+
 sanitize_mod() {
 	local mod="$1"
 	local mod_pattern='^[a-zA-Z0-9_-]+$'
