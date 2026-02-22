@@ -1,4 +1,9 @@
 2.0.1:
+[New] tlog_read() in bfd.lib.sh implements tlog byte-offset tracking as a
+      library function, avoiding subprocess overhead per rule
+[Change] files/tlog delegates to tlog_read() when bfd.lib.sh is loaded,
+         with standalone fallback for backward compatibility
+[New] 7 additional tlog_read tests in tests/test_tlog.bats (14 total)
 [New] validate_rule() in bfd.lib.sh verifies LP, TLOG_TF, ARG_VAL after
       rule sourcing; returns 1 with diagnostic on skip
 [New] tests/test_validate_rule.bats with 9 tests for rule validation

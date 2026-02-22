@@ -160,6 +160,65 @@ format_table() {
 	fi
 }
 
+# tlog_read file tlog_name baserun — read new content from a log file
+# Implements the same byte-offset tracking as files/tlog but as a function,
+# avoiding subprocess overhead when called from bfd.
+# Outputs new content to stdout; returns 0 on success, 1 on error.
+tlog_read() {
+	local file="$1" tlog_name="$2" baserun="$3"
+	if [ ! -f "$file" ]; then
+		echo "$file is not a valid file, aborting" >&2
+		return 1
+	fi
+	if [ ! -d "$baserun" ]; then
+		echo "$baserun is not a valid operating path, aborting." >&2
+		return 1
+	fi
+	local tsize size newsize
+	if [ -f "$baserun/$tlog_name" ]; then
+		tsize=$(cat "$baserun/$tlog_name" 2>/dev/null)
+	else
+		tsize=""
+	fi
+	local _tlog_file_size
+	_tlog_file_size() { stat -c %s "$1" 2>/dev/null || wc -c < "$1"; }
+	if [ -z "$tsize" ] || [ "$tsize" = "0" ]; then
+		# first run or reset — record current size, output nothing
+		size=$(_tlog_file_size "$file")
+		echo "$size" > "$baserun/$tlog_name"
+		return 0
+	fi
+	size="$tsize"
+	newsize=$(_tlog_file_size "$file")
+	if [ "$newsize" -gt "$size" ]; then
+		# file grew — output new content
+		tail -c $((newsize - size)) "$file"
+		echo "$newsize" > "$baserun/$tlog_name"
+	elif [ "$newsize" -lt "$size" ]; then
+		# log rotated — output remainder from old file
+		if [ -f "$file.1" ]; then
+			local rtsize
+			rtsize=$(_tlog_file_size "$file.1")
+			if [ "$rtsize" -ge "$size" ]; then
+				tail -c $((rtsize - size)) "$file.1"
+			fi
+		elif [ -f "$file.1.gz" ]; then
+			local rtsize
+			rtsize=$(zcat "$file.1.gz" | wc -c)
+			if [ "$rtsize" -ge "$size" ]; then
+				zcat "$file.1.gz" | tail -c $((rtsize - size))
+			fi
+		fi
+		# output all of current file (new content since rotation)
+		if [ "$newsize" -gt 0 ]; then
+			cat "$file"
+		fi
+		echo "$newsize" > "$baserun/$tlog_name"
+	fi
+	# newsize == size — no change, output nothing
+	return 0
+}
+
 # validate_rule rule_name — check that a sourced rule set required variables
 # requires: LP, TLOG_TF, ARG_VAL to be set by the rule file
 # returns 0 on success, 1 on skip
