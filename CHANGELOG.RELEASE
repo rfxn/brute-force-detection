@@ -66,3 +66,28 @@
 [New] .github/workflows/ci.yml for shellcheck and test automation
 [Change] README updated with supported distro matrix, firewall examples,
          dry-run usage, rule customization, and troubleshooting
+[Fix] tlog log rotation bug: duplicate output when log rotates; remainder
+      from rotated file plus entire current file caused repeated lines
+[Fix] tlog line 57 misplaced redirection on TSIZE assignment
+[Fix] -q flag no longer spawns redundant subprocess; uses exec
+      redirection to suppress output in-process
+[Change] .ca.def and .conf.bfd importconf templates updated to 1.6-1
+         with new copyrights, $() syntax, MAIL_LOG_PATH, firewall
+         examples, EMAIL_LOGLINES, LOCK_FILE_TIMEOUT=300
+[Fix] alert.bfd: removed dead EB variable (set but never read)
+[New] EMAIL_LOGLINES config variable exposed in conf.bfd (default 50)
+[Fix] modsec rule: FILE variable renamed to LP for alert compatibility;
+      added Debian /var/log/apache2/error.log path detection;
+      deduplicated ARG_VAL pipeline across if/elif branches
+[Fix] vsftpd rule: removed redundant duplicate sed/grep pipeline pass
+[Change] removed unused TMP variable from sshd, asterisk_badauth,
+         asterisk_iax, asterisk_nopeer rules
+[Change] quoted $TLOG_PATH, $LP, $TLOG_TF in ARG_VAL pipelines across
+         all 20 rule files
+[New] PORTS defined for asterisk_badauth (5060,5061), asterisk_iax
+      (4569), asterisk_nopeer (5060,5061)
+[New] test suite expanded from 58 to 99 tests: added test_eout (11),
+      test_safe_source (11), test_format_table (10), test_tlog (9)
+[Change] tlog BASERUN now overridable via environment for testability
+[Change] normalized rule file indentation to tabs and removed trailing
+         whitespace across all 20 rule files

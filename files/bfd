@@ -329,7 +329,10 @@ case "$1" in
 	check
 	;;
 -q|--quiet)
-	"$0" -s >/dev/null 2>&1
+	exec >/dev/null 2>&1
+	pre
+	get_state
+	check
 	;;
 -d|--dryrun)
 	DRY_RUN=1

@@ -6,10 +6,10 @@
 REQ="/usr/sbin/proftpd"
 
 if [ -f "$REQ" ]; then
- PORTS="20,21"
- LP="$AUTH_LOG_PATH"
- TLOG_TF="proftpd"
+	PORTS="20,21"
+	LP="$AUTH_LOG_PATH"
+	TLOG_TF="proftpd"
 
- ## PROFTPD
- ARG_VAL=$($TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr -d ':' | sed -n -e '/proftpd/s/.*USER \(.*\) no such user found from \([^ ]*\).*/\2:\1/p')
+	## PROFTPD
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr -d ':' | sed -n -e '/proftpd/s/.*USER \(.*\) no such user found from \([^ ]*\).*/\2:\1/p')
 fi

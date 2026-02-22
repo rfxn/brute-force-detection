@@ -1,4 +1,3 @@
-EB=0
 if [ "$EMAIL_LOGLINES" == "" ]; then
 	EMAIL_LOGLINES=50
 fi

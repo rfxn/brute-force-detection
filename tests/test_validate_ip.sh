@@ -68,9 +68,11 @@ assert_eq "too many octets" "" "$(validate_ip "1.2.3.4.5")"
 assert_eq "trailing dot" "" "$(validate_ip "1.2.3.4.")"
 assert_eq "leading dot" "" "$(validate_ip ".1.2.3.4")"
 
-# injection attempts
+# injection attempts (single quotes intentional — literal $, backtick)
 assert_eq "injection semicolon" "" "$(validate_ip "1.2.3.4;rm -rf /")"
+# shellcheck disable=SC2016
 assert_eq "injection dollar" "" "$(validate_ip '1.2.3.4$(whoami)')"
+# shellcheck disable=SC2016
 assert_eq "injection backtick" "" "$(validate_ip '1.2.3.4`id`')"
 assert_eq "injection pipe" "" "$(validate_ip "1.2.3.4|cat /etc/passwd")"
 assert_eq "injection newline" "" "$(validate_ip "1.2.3.4
@@ -92,6 +94,7 @@ assert_rc "valid mod returns 0" 0 sanitize_mod "sshd"
 assert_eq "invalid mod semicolon" "" "$(sanitize_mod "sshd;evil")"
 assert_eq "invalid mod space" "" "$(sanitize_mod "sshd evil")"
 assert_eq "invalid mod slash" "" "$(sanitize_mod "../etc/passwd")"
+# shellcheck disable=SC2016
 assert_eq "invalid mod dollar" "" "$(sanitize_mod 'sshd$x')"
 assert_eq "invalid mod empty" "" "$(sanitize_mod "")"
 
