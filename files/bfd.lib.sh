@@ -242,6 +242,72 @@ validate_rule() {
 	return 0
 }
 
+# filter_host host ignore_host_files lo_hosts — check if host should be processed
+# returns 0 if host should be processed, 1 if ignored
+filter_host() {
+	local host="$1" ignore_host_files="$2" lo_hosts="$3"
+	# check ignore lists
+	if [ -f "$ignore_host_files" ]; then
+		local file
+		while IFS= read -r file; do
+			[ -z "$file" ] && continue
+			if [ -f "$file" ]; then
+				if grep -v "#" "$file" | grep -qFw "$host"; then
+					return 1
+				fi
+			fi
+		done < <(grep -v "#" "$ignore_host_files")
+	fi
+	# check local addresses
+	if [ -f "$lo_hosts" ]; then
+		local localnet
+		while IFS= read -r localnet; do
+			[ -z "$localnet" ] && continue
+			if [ "$host" = "$localnet" ]; then
+				return 2
+			fi
+		done < "$lo_hosts"
+	fi
+	return 0
+}
+
+# count_attacks host hosts_parsed install_path trig — count attacks for host
+# Counts occurrences in hosts_parsed, appends to track.attack, and if under
+# trig threshold, adds accumulated track.attack counts. Outputs total to stdout.
+count_attacks() {
+	local host="$1" hosts_parsed="$2" install_path="$3" trig="$4"
+	local count
+	count=$(echo "$hosts_parsed" | grep -cFw "$host")
+	state_track_append "$install_path" "$host" "$count" "${MOD:-unknown}"
+	if [ "$count" -lt "$trig" ]; then
+		state_track_trim "$install_path" 50
+		local accumulated
+		accumulated=$(state_track_count "$install_path" "$host")
+		count=$((accumulated + count))
+	fi
+	echo "$count"
+}
+
+# execute_ban host mod ban_cmd_template dry_run — execute or log ban command
+# returns 0 on success, ban command exit code on failure
+execute_ban() {
+	local host="$1" mod="$2" ban_cmd_template="$3" dry_run="$4"
+	# set globals needed by alert.bfd template
+	ATTACK_HOST="$host"
+	BAN_COMMAND="$ban_cmd_template"
+	if [ "$dry_run" = "1" ]; then
+		eout "{$mod} [dry-run] would ban $host with command '$BAN_COMMAND'." le
+		return 0
+	fi
+	eout "{$mod} $host exceeded login failures; executed ban command '$BAN_COMMAND'." le
+	eval "$BAN_COMMAND" >/dev/null 2>&1
+	local ban_rc=$?
+	if [ "$ban_rc" -ne 0 ]; then
+		eout "{$mod} ban command for $host exited with code $ban_rc." le
+	fi
+	return $ban_rc
+}
+
 # --- State file I/O functions ---
 # State file formats:
 #   track.attack: "IP COUNT MOD" — per-run failure accumulator, line-capped

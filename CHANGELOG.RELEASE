@@ -1,4 +1,12 @@
 2.0.1:
+[New] filter_host() in bfd.lib.sh checks ignore lists and local addresses;
+      returns 0 (process), 1 (ignored), or 2 (local address)
+[New] count_attacks() in bfd.lib.sh counts host occurrences and accumulates
+      track.attack history using state_track_* functions
+[New] execute_ban() in bfd.lib.sh executes or dry-run logs ban commands
+[Change] check() in bfd decomposed from 99 to 40 lines; delegates to
+         filter_host, count_attacks, execute_ban, validate_rule,
+         state_ban_append, state_pool_append
 [New] tlog_read() in bfd.lib.sh implements tlog byte-offset tracking as a
       library function, avoiding subprocess overhead per rule
 [Change] files/tlog delegates to tlog_read() when bfd.lib.sh is loaded,
