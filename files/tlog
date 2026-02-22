@@ -37,7 +37,7 @@ else
 	TLOG="$2"
 fi
 
-# Journal fallback: if file missing and journal mode possible
+# Journal fallback: use journal when file is missing (auto or journal mode)
 if [ "${LOG_SOURCE:-auto}" != "file" ] && [ ! -f "$FILE" ]; then
 	_LIB="${INSTALL_PATH:-/usr/local/bfd}/bfd.lib.sh"
 	if [ -f "$_LIB" ]; then
@@ -45,18 +45,6 @@ if [ "${LOG_SOURCE:-auto}" != "file" ] && [ ! -f "$FILE" ]; then
 		. "$_LIB"
 		if tlog_journal_read "$TLOG" "$BASERUN" 2>/dev/null; then
 			exit 0
-		fi
-	fi
-fi
-# Forced journal mode
-if [ "${LOG_SOURCE:-}" = "journal" ]; then
-	_LIB="${INSTALL_PATH:-/usr/local/bfd}/bfd.lib.sh"
-	if [ -f "$_LIB" ]; then
-		# shellcheck disable=SC1090
-		. "$_LIB"
-		if tlog_journal_filter "$TLOG" >/dev/null 2>&1; then
-			tlog_journal_read "$TLOG" "$BASERUN"
-			exit $?
 		fi
 	fi
 fi

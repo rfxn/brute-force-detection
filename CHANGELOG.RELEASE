@@ -1,4 +1,16 @@
 2.0.1:
+[Fix] tlog_journal_filter: rh_ipop3d case key mismatched TLOG_TF="rh_ipop3"
+      set by the rh_ipop3d rule file; journal fallback silently failed for
+      POP3 rules; corrected to rh_ipop3
+[Fix] tlog_read/tlog journal dispatch: LOG_SOURCE=journal bypassed existing
+      log files, hijacking rules like vsftpd2 whose TLOG_TF matched journal
+      mappings but whose LP pointed to application-specific logs; dispatch
+      now requires file to be missing regardless of LOG_SOURCE setting
+[Fix] cron.daily: .cursor and .jts files accumulated in tmp/ without cleanup;
+      added rm -f for *.cursor and *.jts during daily rotation
+[New] tlog_journal_filter test for rh_ipop3 → ipop3d mapping
+[Change] tlog_read forced-journal test updated to expect file mode when file
+         exists (matches simplified dispatch logic); full suite now 449 tests
 [New] systemd journal reader with transparent fallback: when a rule's flat
       log file is missing but journalctl is available, BFD reads from the
       systemd journal instead; 15 of 30 rules are journal-capable (sshd,

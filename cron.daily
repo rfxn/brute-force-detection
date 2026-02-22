@@ -6,6 +6,8 @@ rm -f /usr/local/bfd/tmp/track.attack
 rm -f /usr/local/bfd/tmp/ban.list
 rm -f /usr/local/bfd/tmp/.alist.*
 rm -f /usr/local/bfd/tmp/.weekly.apool.*
+rm -f /usr/local/bfd/tmp/*.cursor
+rm -f /usr/local/bfd/tmp/*.jts
 # rotate bans.history (append-only, rotated daily)
 if [ -f /usr/local/bfd/tmp/bans.history ]; then
 	mv -f /usr/local/bfd/tmp/bans.history "/usr/local/bfd/tmp/bans.history.$(date +%m%d%y)"

@@ -133,6 +133,12 @@ MOCK
 	assert_output "SYSLOG_IDENTIFIER=imapd"
 }
 
+@test "tlog_journal_filter: rh_ipop3 maps to ipop3d" {
+	run tlog_journal_filter "rh_ipop3"
+	assert_success
+	assert_output "SYSLOG_IDENTIFIER=ipop3d"
+}
+
 @test "tlog_journal_filter: unknown identifier returns failure" {
 	run tlog_journal_filter "apache-auth"
 	assert_failure
@@ -261,14 +267,14 @@ MOCK
 	[ ! -f "$BASERUN/sshd.cursor" ]
 }
 
-@test "tlog_read: LOG_SOURCE=journal + journal-capable uses journal even if file exists" {
+@test "tlog_read: LOG_SOURCE=journal + file exists uses file mode" {
 	echo "log line" > "$TEST_TMPDIR/test.log"
 	LOG_SOURCE="journal"
 	run tlog_read "$TEST_TMPDIR/test.log" "sshd" "$BASERUN"
 	assert_success
-	# should have used journal mode
-	[ -f "$BASERUN/sshd.cursor" ]
-	[ ! -f "$BASERUN/sshd" ]
+	# file exists, so file mode is used regardless of LOG_SOURCE
+	[ -f "$BASERUN/sshd" ]
+	[ ! -f "$BASERUN/sshd.cursor" ]
 }
 
 # --- validate_rule() journal awareness tests ---

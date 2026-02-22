@@ -235,9 +235,8 @@ format_table() {
 # Outputs new content to stdout; returns 0 on success, 1 on error.
 tlog_read() {
 	local file="$1" tlog_name="$2" baserun="$3"
-	# Journal dispatch: file missing or forced journal mode
-	if [ "${LOG_SOURCE:-auto}" = "journal" ] || \
-	   { [ "${LOG_SOURCE:-auto}" = "auto" ] && [ ! -f "$file" ]; }; then
+	# Journal dispatch: use journal when file is missing (auto or journal mode)
+	if [ "${LOG_SOURCE:-auto}" != "file" ] && [ ! -f "$file" ]; then
 		if command -v journalctl >/dev/null 2>&1 && \
 		   tlog_journal_filter "$tlog_name" >/dev/null 2>&1; then
 			tlog_journal_read "$tlog_name" "$baserun"
@@ -316,7 +315,7 @@ tlog_journal_filter() {
 		webmin)     echo "SYSLOG_IDENTIFIER=webmin" ;;
 		wordpress)  echo "SYSLOG_IDENTIFIER=wordpress" ;;
 		rh_imapd)   echo "SYSLOG_IDENTIFIER=imapd" ;;
-		rh_ipop3d)  echo "SYSLOG_IDENTIFIER=ipop3d" ;;
+		rh_ipop3)   echo "SYSLOG_IDENTIFIER=ipop3d" ;;
 		*) return 1 ;;
 	esac
 	return 0
