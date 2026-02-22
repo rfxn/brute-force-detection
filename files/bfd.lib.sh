@@ -348,7 +348,9 @@ state_init() {
 		mkdir -p "$install_path/stats"
 	fi
 	local f
-	for f in "$install_path/tmp/track.attack" "$install_path/tmp/ban.list" "$install_path/tmp/events.dat"; do
+	for f in "$install_path/tmp/track.attack" "$install_path/tmp/ban.list" \
+		 "$install_path/tmp/events.dat" "$install_path/tmp/bans.active" \
+		 "$install_path/tmp/bans.history"; do
 		if [ ! -f "$f" ]; then
 			touch "$f"
 			chmod 600 "$f"
@@ -417,6 +419,94 @@ state_ban_append() {
 state_pool_append() {
 	local install_path="$1" utime="$2" host="$3" mod="$4"
 	echo "$utime $host $mod" >> "$install_path/stats/attack.pool"
+}
+
+# --- Ban state I/O functions ---
+# State file formats:
+#   bans.active:  "TIMESTAMP EXPIRY IP MOD PORTS" — currently active bans
+#   bans.history: "TIMESTAMP EXPIRY IP MOD ACTION" — append-only ban event log
+
+# state_bans_active_append install_path timestamp expiry host mod ports
+# Append ban entry to bans.active. Skips if host already has active entry.
+state_bans_active_append() {
+	local install_path="$1" timestamp="$2" expiry="$3"
+	local host="$4" mod="$5" ports="$6"
+	local bans_file="$install_path/tmp/bans.active"
+	if grep -qFw "$host" "$bans_file" 2>/dev/null; then
+		return 0
+	fi
+	echo "$timestamp $expiry $host $mod $ports" >> "$bans_file"
+}
+
+# state_bans_active_remove install_path host — remove all entries for host
+state_bans_active_remove() {
+	local install_path="$1" host="$2"
+	local bans_file="$install_path/tmp/bans.active"
+	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
+		return 0
+	fi
+	grep -vFw "$host" "$bans_file" > "$bans_file.new" || true
+	mv "$bans_file.new" "$bans_file"
+}
+
+# state_bans_active_check install_path host — return 0 if host has active ban
+state_bans_active_check() {
+	local install_path="$1" host="$2"
+	if grep -qFw "$host" "$install_path/tmp/bans.active" 2>/dev/null; then
+		return 0
+	fi
+	return 1
+}
+
+# state_bans_active_list install_path — output formatted active ban lines
+state_bans_active_list() {
+	local install_path="$1"
+	local bans_file="$install_path/tmp/bans.active"
+	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
+		return 0
+	fi
+	local ts expiry host mod ports banned_fmt expiry_fmt
+	while IFS=' ' read -r ts expiry host mod ports; do
+		[ -z "$ts" ] && continue
+		banned_fmt=$(date -d "@${ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$ts")
+		if [ "$expiry" = "0" ]; then
+			expiry_fmt="permanent"
+		else
+			expiry_fmt=$(date -d "@${expiry}" +"%D %H:%M:%S" 2>/dev/null || echo "$expiry")
+		fi
+		echo "$host|$mod|$ports|$banned_fmt|$expiry_fmt"
+	done < "$bans_file"
+}
+
+# state_bans_active_expired install_path now — output entries where EXPIRY>0 and EXPIRY<=now
+state_bans_active_expired() {
+	local install_path="$1" now="$2"
+	local bans_file="$install_path/tmp/bans.active"
+	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
+		return 0
+	fi
+	awk -v now="$now" '$2+0 > 0 && $2+0 <= now+0' "$bans_file"
+}
+
+# state_bans_history_append install_path timestamp expiry host mod action
+state_bans_history_append() {
+	local install_path="$1" timestamp="$2" expiry="$3"
+	local host="$4" mod="$5" action="$6"
+	echo "$timestamp $expiry $host $mod $action" >> "$install_path/tmp/bans.history"
+}
+
+# state_bans_count_recent install_path host window now — count ban/escalate events in window
+state_bans_count_recent() {
+	local install_path="$1" host="$2" window="$3" now="$4"
+	local history_file="$install_path/tmp/bans.history"
+	local cutoff=$((now - window))
+	if [ ! -f "$history_file" ] || [ ! -s "$history_file" ]; then
+		echo "0"
+		return 0
+	fi
+	awk -v cutoff="$cutoff" -v host="$host" \
+		'$1+0 >= cutoff && $3 == host && ($5 == "ban" || $5 == "escalate") { c++ } END { print c+0 }' \
+		"$history_file"
 }
 
 # --- Event state I/O functions ---
