@@ -14,5 +14,6 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="asterisk"
 
 	## ASTERISK BADAUTH
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | grep -E 'Wrong password' | awk '{NF=NF-3} { print $NF}'| tr -d '\'' )
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"Wrong password.*'<HOST>'")
 fi
