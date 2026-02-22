@@ -15,6 +15,15 @@ cat > .conf.bfd <<EOF
 # you can override this on a per rule basis in /usr/local/bfd/rules/
 TRIG="15"
 
+# sliding window in seconds for counting failures (default 5 min)
+# only failures within this window count toward the trigger threshold
+TRIG_WINDOW="$TRIG_WINDOW"
+
+# cross-service aggregate threshold (0 = disabled)
+# when enabled, failures from ALL services count toward this threshold
+# regardless of per-rule TRIG values
+TRIG_GLOBAL="$TRIG_GLOBAL"
+
 # send email alerts for all events [0 = off; 1 = on]
 EMAIL_ALERTS="$EMAIL_ALERTS"
 

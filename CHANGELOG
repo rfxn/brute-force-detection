@@ -1,4 +1,32 @@
 2.0.1:
+[Change] per-service TRIG thresholds enabled in all 20 rule files: sshd=5,
+         dovecot=10, postfix=10, vsftpd/vsftpd2=10, proftpd=10, pure-ftpd=10,
+         exim_authfail=10, exim_nxuser=15, modsec=10, asterisk_badauth=5,
+         asterisk_iax=5, asterisk_nopeer=5, openvpnas=5, cpanel=5, courier=10,
+         vpopmail=10, rh_imapd=10, rh_ipop3d=10, sendmail=10
+[Change] check() uses count_failures() with time-windowed counting instead
+         of count_attacks(); events pruned once per run before iterating rules
+[New] TRIG_GLOBAL cross-service check in check(): when per-rule threshold
+      not met but aggregate failures across all services exceed TRIG_GLOBAL
+[Change] test_check_pipeline.bats updated with count_failures tests, TRIG_GLOBAL
+         tests, and windowed pipeline integration tests (21 total)
+[New] state_events_append() appends timestamped failure events to events.dat
+[New] state_events_count() counts events for a host within a time window,
+      with optional per-service filtering using mawk-compatible awk
+[New] state_events_prune() removes expired events with safety cap (default 5000)
+[New] count_failures() replaces count_attacks() with time-windowed counting;
+      appends timestamped events and returns per-service windowed count
+[Change] state_init() now creates events.dat alongside track.attack and ban.list
+[New] tests/test_events.bats with 24 tests covering state_events_append,
+      state_events_count, state_events_prune, count_failures, and state_init
+[New] TRIG_WINDOW config variable (default 300s) for time-windowed failure
+      counting; only failures within this window count toward threshold
+[New] TRIG_GLOBAL config variable (default 0/disabled) for cross-service
+      aggregate threshold regardless of per-rule TRIG values
+[Change] validate_config() validates TRIG_WINDOW (positive integer) and
+         TRIG_GLOBAL (non-negative integer)
+[New] 8 tests for TRIG_WINDOW and TRIG_GLOBAL validation in
+      test_config_validation.bats (24 total)
 [New] tests/test_filter_host.bats with 12 tests for ignore list and local
       address filtering
 [New] tests/test_check_pipeline.bats with 15 integration tests for
