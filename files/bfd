@@ -296,7 +296,7 @@ _apool_report() {
 		echo "$cnt|$aip|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
 	done < <(
 		if [ -n "$search" ]; then
-			grep -E "$search" "$source_file"
+			grep -F "$search" "$source_file"
 		else
 			cat "$source_file"
 		fi | awk '{
@@ -321,7 +321,7 @@ _apool_ban_status() {
 	local aip="$1"
 	local bans_active="$INSTALL_PATH/tmp/bans.active"
 	local bans_history="$INSTALL_PATH/tmp/bans.history"
-	if grep -qFw "$aip" "$bans_active" 2>/dev/null; then
+	if awk -v ip="$aip" '$3 == ip {found=1; exit} END {exit !found}' "$bans_active" 2>/dev/null; then
 		local ban_expiry
 		ban_expiry=$(awk -v ip="$aip" '$3 == ip {print $2; exit}' "$bans_active")
 		if [ "$ban_expiry" = "0" ]; then

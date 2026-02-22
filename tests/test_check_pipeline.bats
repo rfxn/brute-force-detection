@@ -703,3 +703,89 @@ EOF
 	[ -n "$elapsed" ]
 	[ "$elapsed" -ge 0 ]
 }
+
+# --- IPv6 exact-match tests for ban state functions ---
+
+@test "state_bans_active: IPv6 does not false-match prefix" {
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "2001:db8::1" "sshd" "22"
+	# 2001:db8::10 must NOT match — it is a different address
+	run state_bans_active_check "$INSTALL_PATH" "2001:db8::10"
+	assert_failure
+}
+
+@test "state_bans_active: IPv6 exact match works" {
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "2001:db8::1" "sshd" "22"
+	run state_bans_active_check "$INSTALL_PATH" "2001:db8::1"
+	assert_success
+}
+
+@test "state_bans_active: IPv6 remove does not remove prefix match" {
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "2001:db8::1" "sshd" "22"
+	state_bans_active_append "$INSTALL_PATH" "1001" "0" "2001:db8::10" "dovecot" "143"
+	# removing ::10 must not remove ::1
+	state_bans_active_remove "$INSTALL_PATH" "2001:db8::10"
+	run state_bans_active_check "$INSTALL_PATH" "2001:db8::1"
+	assert_success
+	run state_bans_active_check "$INSTALL_PATH" "2001:db8::10"
+	assert_failure
+}
+
+@test "state_bans_active: IPv6 append dedup exact match" {
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "2001:db8::1" "sshd" "22"
+	# appending same IP again should be a no-op (dedup)
+	state_bans_active_append "$INSTALL_PATH" "1001" "0" "2001:db8::1" "dovecot" "143"
+	local count
+	count=$(grep -c "2001:db8::1" "$INSTALL_PATH/tmp/bans.active")
+	[ "$count" -eq 1 ]
+}
+
+@test "state_ban_check: IPv6 does not false-match prefix in ban.list" {
+	echo "2001:db8::1" >> "$INSTALL_PATH/tmp/ban.list"
+	# 2001:db8::10 is a different address
+	run state_ban_check "$INSTALL_PATH" "2001:db8::10"
+	assert_failure
+	# exact match should work
+	run state_ban_check "$INSTALL_PATH" "2001:db8::1"
+	assert_success
+}
+
+@test "filter_host: IPv6 does not false-match prefix in ignore list" {
+	local ignore_files="$TEST_TMPDIR/exclude.files"
+	local hosts_file="$TEST_TMPDIR/ignore.hosts"
+	echo "$hosts_file" > "$ignore_files"
+	echo "2001:db8::1" > "$hosts_file"
+	local lo_hosts="$TEST_TMPDIR/lo_hosts"
+	touch "$lo_hosts"
+	# 2001:db8::10 should NOT be ignored
+	run filter_host "2001:db8::10" "$ignore_files" "$lo_hosts"
+	assert_success
+	# 2001:db8::1 should be ignored
+	run filter_host "2001:db8::1" "$ignore_files" "$lo_hosts"
+	assert_failure
+}
+
+@test "check_recidivism: works with IPv6 addresses" {
+	local i
+	for i in 1 2 3 4 5; do
+		state_bans_history_append "$INSTALL_PATH" "$((800 + i))" "1100" "2001:db8::1" "sshd" "ban"
+	done
+	run check_recidivism "$INSTALL_PATH" "2001:db8::1" "500" "1000" "5"
+	assert_success
+}
+
+@test "pipeline: ban → record → expire → unban flow with IPv6" {
+	execute_ban "2001:db8::1" "sshd" "true" "0" >/dev/null
+	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "2001:db8::1" "sshd" "22"
+	state_bans_history_append "$INSTALL_PATH" "1000" "1300" "2001:db8::1" "sshd" "ban"
+	# verify active
+	run state_bans_active_check "$INSTALL_PATH" "2001:db8::1"
+	assert_success
+	# process unbans at time past expiry
+	process_unbans "$INSTALL_PATH" "1400" "" >/dev/null
+	# verify removed
+	run state_bans_active_check "$INSTALL_PATH" "2001:db8::1"
+	assert_failure
+	# verify unban recorded
+	run cat "$INSTALL_PATH/tmp/bans.history"
+	assert_output --partial "unban"
+}

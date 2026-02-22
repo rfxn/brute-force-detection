@@ -134,3 +134,39 @@ teardown() {
 	assert_success
 	assert_output --partial "BANNED(perm)"
 }
+
+# --- IPv6 exact-match tests for attack pool ---
+
+@test "ban status: IPv6 BANNED(perm) exact match" {
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "2001:db8::1" "sshd" "22"
+	run _apool_ban_status "2001:db8::1"
+	assert_success
+	assert_output "BANNED(perm)"
+}
+
+@test "ban status: IPv6 does not false-match prefix" {
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "2001:db8::1" "sshd" "22"
+	# 2001:db8::10 must NOT match
+	run _apool_ban_status "2001:db8::10"
+	assert_success
+	assert_output ""
+}
+
+@test "ban status: IPv6 prev:N from history" {
+	state_bans_history_append "$INSTALL_PATH" "900" "1200" "2001:db8::1" "sshd" "ban"
+	state_bans_history_append "$INSTALL_PATH" "1300" "1600" "2001:db8::1" "sshd" "ban"
+	run _apool_ban_status "2001:db8::1"
+	assert_success
+	assert_output "prev:2"
+}
+
+@test "apool report: search uses literal matching not regex" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	echo "1000 10.0.0.1 sshd" >> "$pool"
+	echo "1001 10x0x0x1 sshd" >> "$pool"
+	# search for literal "10.0.0.1" — dots should NOT match "x"
+	run _apool_report "$pool" "Test" "10.0.0.1"
+	assert_success
+	assert_output --partial "10.0.0.1"
+	refute_output --partial "10x0x0x1"
+}
