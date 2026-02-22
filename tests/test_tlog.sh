@@ -2,28 +2,10 @@
 #
 # Test suite for tlog (track log)
 #
-PASS=0
-FAIL=0
-
-assert_eq() {
-	local desc="$1" expected="$2" actual="$3"
-	if [ "$expected" = "$actual" ]; then
-		PASS=$((PASS + 1))
-	else
-		FAIL=$((FAIL + 1))
-		echo "FAIL: $desc (expected '$expected', got '$actual')"
-	fi
-}
-
-summary() {
-	echo "---"
-	echo "$0: Passed=$PASS Failed=$FAIL"
-	if [ "$FAIL" -gt 0 ]; then
-		exit 1
-	fi
-}
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=tests/test_helpers.sh
+. "$SCRIPT_DIR/test_helpers.sh"
+
 TLOG="$SCRIPT_DIR/../files/tlog"
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT

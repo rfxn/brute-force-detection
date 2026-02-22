@@ -1,4 +1,8 @@
 2.0.1:
+[New] tests/test_helpers.sh shared assert framework (assert_eq, assert_rc,
+      assert_match, summary) eliminates 154 lines of duplication across 7 tests
+[New] tests/run_tests.sh runner discovers and runs all test_*.sh with totals
+[Change] all 7 test files refactored to source shared test_helpers.sh
 [New] validate_ip() function for strict octet 0-255 IP validation using BASH_REMATCH
 [New] sanitize_mod() function restricts rule names to alphanumeric, underscore, hyphen
 [New] safe_source() validates root ownership and non-world-writable before sourcing files
