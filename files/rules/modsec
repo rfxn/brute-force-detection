@@ -21,5 +21,6 @@ if [ -n "$REQ" ] && [ -f "$REQ" ]; then
 	TLOG_TF="httpd.modsec"
 
 	## ModSecurity
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | grep "ModSecurity: Access denied" | awk '{ for (k=1;k<=NF;++k){ if ($k ~ /\[id/) {y=k} }; gsub("[\\\[\\\]\"]", ""); x=NF - 4; print $8":"$(y+1)":"$x}' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"\[client <HOST>.*ModSecurity: Access denied")
 fi
