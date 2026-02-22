@@ -1,4 +1,9 @@
 2.0.1:
+[Change] per-service TRIG thresholds enabled in all 20 rule files: sshd=5,
+         dovecot=10, postfix=10, vsftpd/vsftpd2=10, proftpd=10, pure-ftpd=10,
+         exim_authfail=10, exim_nxuser=15, modsec=10, asterisk_badauth=5,
+         asterisk_iax=5, asterisk_nopeer=5, openvpnas=5, cpanel=5, courier=10,
+         vpopmail=10, rh_imapd=10, rh_ipop3d=10, sendmail=10
 [Change] check() uses count_failures() with time-windowed counting instead
          of count_attacks(); events pruned once per run before iterating rules
 [New] TRIG_GLOBAL cross-service check in check(): when per-rule threshold
