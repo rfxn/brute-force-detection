@@ -178,6 +178,9 @@ fi
 
 
 check() {
+	local run_start rules_count=0 events_count=0 bans_count=0
+	run_start=$(date +"%s")
+
 	# prune expired events once per run, before iterating rules
 	state_events_prune "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME"
 
@@ -195,8 +198,13 @@ check() {
 		fi
 		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
 		validate_rule "$str" || continue
+		rules_count=$((rules_count + 1))
 		# process ARG_VAL pipeline once; reuse for iteration and counting
 		HOSTS_PARSED=$(echo "$ARG_VAL" | tr ' ' '\n' | sort)
+		# count events (raw IP occurrences including duplicates)
+		local host_lines
+		host_lines=$(echo "$HOSTS_PARSED" | grep -c . 2>/dev/null || echo 0)
+		events_count=$((events_count + host_lines))
 		while IFS= read -r ahost; do
 			[ -z "$ahost" ] && continue
 			ATTACK_HOST=$(validate_ip_any "$ahost") || continue
@@ -237,6 +245,7 @@ check() {
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
 					LAST_HOST="$ATTACK_HOST"
 					if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN" "${PORTS:-all}" "${BAN_COMMAND_V6_TEMPLATE:-}"; then
+						bans_count=$((bans_count + 1))
 						if [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							alert
 							SKIP_ALERT=""
@@ -263,6 +272,11 @@ check() {
 			fi
 		done < <(echo "$HOSTS_PARSED" | uniq)
 	done
+
+	local run_end run_elapsed
+	run_end=$(date +"%s")
+	run_elapsed=$((run_end - run_start))
+	eout "run complete: $rules_count rules checked, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" le
 }
 
 _apool_report() {

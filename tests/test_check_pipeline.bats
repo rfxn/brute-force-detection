@@ -586,3 +586,120 @@ teardown() {
 	assert_success
 	assert_output --partial "unbanned"
 }
+
+# --- run statistics (Phase 13A) ---
+
+# Source check() function from bfd (defined there, not in bfd.lib.sh)
+eval "$(awk '/^check\(\)/ { p=1 } p { print; if (/^\}$/) exit }' "$PROJECT_ROOT/files/bfd")"
+
+# Helper to run check() with controlled rules dir and capture output
+_run_check_with_stats() {
+	local rules_dir="$1"
+	# set up minimal environment for check()
+	RULES_PATH="$rules_dir"
+	GLOB_TRIG="5"
+	TRIG_WINDOW="300"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	BAN_COMMAND_TEMPLATE="true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="1"
+	BAN_DURATION="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	LAST_HOST=""
+	LAST=""
+	SKIP_ALERT=""
+	check
+}
+
+@test "run stats: summary line appears after check()" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	run _run_check_with_stats "$rules_dir"
+	assert_success
+	assert_output --partial "run complete:"
+	assert_output --partial "rules checked"
+	assert_output --partial "events parsed"
+	assert_output --partial "bans executed"
+}
+
+@test "run stats: rules count matches valid rules" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	# create 2 valid rule files with REQ that exists, LP pointing to a real file
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	cat > "$rules_dir/testrule1" <<EOF
+TRIG="5"
+REQ="/bin/sh"
+LP="$logfile"
+TLOG_TF="testrule1"
+ARG_VAL=""
+EOF
+	cat > "$rules_dir/testrule2" <<EOF
+TRIG="5"
+REQ="/bin/sh"
+LP="$logfile"
+TLOG_TF="testrule2"
+ARG_VAL=""
+EOF
+	# create 1 rule that will fail validate_rule (no ARG_VAL, LP missing)
+	cat > "$rules_dir/badrule" <<EOF
+TRIG="5"
+REQ="/bin/sh"
+LP="/nonexistent/log"
+TLOG_TF="badrule"
+ARG_VAL=""
+EOF
+	run _run_check_with_stats "$rules_dir"
+	assert_success
+	# badrule has LP that doesn't exist, so validate_rule skips it
+	# testrule1 and testrule2 pass validate_rule but have empty ARG_VAL so
+	# validate_rule returns 1 for empty ARG_VAL — 0 valid rules
+	assert_output --partial "0 rules checked"
+}
+
+@test "run stats: counts events from HOSTS_PARSED" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	# create a rule that produces 3 events via ARG_VAL
+	cat > "$rules_dir/testrule" <<'RULEEOF'
+TRIG="100"
+REQ="/bin/sh"
+RULEEOF
+	cat >> "$rules_dir/testrule" <<EOF
+LP="$logfile"
+TLOG_TF="testrule"
+ARG_VAL="10.0.0.1 10.0.0.2 10.0.0.1"
+EOF
+	run _run_check_with_stats "$rules_dir"
+	assert_success
+	assert_output --partial "1 rules checked"
+	assert_output --partial "3 events parsed"
+}
+
+@test "run stats: zero events when no log activity" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	run _run_check_with_stats "$rules_dir"
+	assert_success
+	assert_output --partial "0 rules checked, 0 events parsed, 0 bans executed"
+}
+
+@test "run stats: elapsed time is non-negative integer" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	run _run_check_with_stats "$rules_dir"
+	assert_success
+	# extract elapsed from "(...s)"
+	local elapsed
+	elapsed=$(echo "$output" | grep -o '([0-9]*s)' | tr -dc '0-9')
+	[ -n "$elapsed" ]
+	[ "$elapsed" -ge 0 ]
+}
