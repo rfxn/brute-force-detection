@@ -379,6 +379,61 @@ check_recidivism() {
 	return 1
 }
 
+# list_bans install_path — display formatted active ban list
+list_bans() {
+	local install_path="$1"
+	state_init "$install_path"
+	local listing
+	listing=$(state_bans_active_list "$install_path")
+	if [ -z "$listing" ]; then
+		echo "No active bans."
+		return 0
+	fi
+	echo "[+] Active bans" && echo
+	echo "IP|SERVICE|PORTS|BANNED|EXPIRES" | format_table
+	echo "$listing" | format_table
+}
+
+# manual_unban install_path ip utime unban_cmd_template — manually unban an IP
+manual_unban() {
+	local install_path="$1" ip="$2" utime="$3" unban_cmd_template="$4"
+	ip=$(validate_ip "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
+	state_init "$install_path"
+	if ! state_bans_active_check "$install_path" "$ip"; then
+		echo "error: $ip is not in the active ban list."
+		return 1
+	fi
+	local ban_mod
+	ban_mod=$(grep -Fw "$ip" "$install_path/tmp/bans.active" | awk '{print $4}' | head -1)
+	if [ -n "$unban_cmd_template" ]; then
+		execute_unban "$ip" "${ban_mod:-unknown}" "$unban_cmd_template"
+	fi
+	state_bans_active_remove "$install_path" "$ip"
+	state_bans_history_append "$install_path" "$utime" "0" "$ip" "${ban_mod:-unknown}" "unban"
+	echo "$ip unbanned successfully."
+}
+
+# manual_ban install_path ip utime ban_cmd_template [mod] — manually ban an IP
+manual_ban() {
+	local install_path="$1" ip="$2" utime="$3" ban_cmd_template="$4"
+	local mod="${5:-manual}"
+	ip=$(validate_ip "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
+	if [ -n "$mod" ]; then
+		mod=$(sanitize_mod "$mod") || { echo "error: invalid service name '$mod'."; return 1; }
+	else
+		mod="manual"
+	fi
+	state_init "$install_path"
+	if state_bans_active_check "$install_path" "$ip"; then
+		echo "error: $ip is already banned."
+		return 1
+	fi
+	execute_ban "$ip" "$mod" "$ban_cmd_template" "0"
+	state_bans_active_append "$install_path" "$utime" "0" "$ip" "$mod" "all"
+	state_bans_history_append "$install_path" "$utime" "0" "$ip" "$mod" "ban"
+	echo "$ip banned permanently."
+}
+
 # --- State file I/O functions ---
 # State file formats:
 #   track.attack: "IP COUNT MOD" — per-run failure accumulator, line-capped

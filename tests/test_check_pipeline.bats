@@ -353,3 +353,37 @@ teardown() {
 	run cat "$INSTALL_PATH/tmp/bans.history"
 	assert_output --partial "unban"
 }
+
+# --- manual_ban / manual_unban ---
+
+@test "manual_ban: bans IP and records in state" {
+	manual_ban "$INSTALL_PATH" "10.0.0.1" "1000" "true" "sshd" >/dev/null
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	assert_success
+	run cat "$INSTALL_PATH/tmp/bans.history"
+	assert_output --partial "10.0.0.1"
+	assert_output --partial "ban"
+}
+
+@test "manual_ban: rejects already banned IP" {
+	state_bans_active_append "$INSTALL_PATH" "900" "0" "10.0.0.1" "sshd" "22"
+	run manual_ban "$INSTALL_PATH" "10.0.0.1" "1000" "true" "sshd"
+	assert_failure
+	assert_output --partial "already banned"
+}
+
+@test "manual_unban: unbans IP and records in history" {
+	state_bans_active_append "$INSTALL_PATH" "900" "0" "10.0.0.1" "sshd" "22"
+	run manual_unban "$INSTALL_PATH" "10.0.0.1" "1000" ""
+	assert_success
+	assert_output --partial "unbanned"
+	# verify removed from active
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	assert_failure
+}
+
+@test "manual_unban: rejects IP not in ban list" {
+	run manual_unban "$INSTALL_PATH" "10.0.0.99" "1000" ""
+	assert_failure
+	assert_output --partial "not in the active ban list"
+}
