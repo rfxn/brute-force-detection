@@ -1,4 +1,43 @@
 2.0.1:
+[New] systemd journal reader with transparent fallback: when a rule's flat
+      log file is missing but journalctl is available, BFD reads from the
+      systemd journal instead; 15 of 30 rules are journal-capable (sshd,
+      dropbear, dovecot, postfix, courier, sendmail, vpopmail, cyrus,
+      pure-ftpd, proftpd, vsftpd, webmin, wordpress, rh_imapd, rh_ipop3d)
+[New] LOG_SOURCE config variable: auto (default, journal fallback), file
+      (flat files only, for CentOS 6), or journal (prefer journal for
+      syslog-based rules)
+[New] tlog_journal_filter() maps TLOG_TF names to SYSLOG_IDENTIFIER
+      journalctl filters via case statement with 15 service mappings
+[New] tlog_journal_read() reads new journal entries with cursor-based
+      tracking (primary) and Unix timestamp fallback; first run saves
+      cursor and outputs nothing (matches tlog first-run behavior);
+      invalid cursors (journal vacuumed) fall back to timestamp; all
+      journalctl calls wrapped with timeout 30
+[Change] tlog_read() adds journal dispatch: when LOG_SOURCE=journal or
+         file is missing in auto mode, delegates to tlog_journal_read()
+         for journal-capable rules before falling back to file error
+[Change] validate_rule() relaxes LP file check: allows rules where LP is
+         missing if journalctl is available and TLOG_TF has a journal
+         mapping (unless LOG_SOURCE=file)
+[Change] validate_config() validates LOG_SOURCE (must be auto, file, or
+         journal)
+[Change] health_check() adds journalctl availability status, LOG_SOURCE
+         setting display, and journal-aware rule scan that shows
+         "active via journal" for rules using journal fallback
+[Change] files/tlog adds journal dispatch: sources bfd.lib.sh lazily
+         only in the journal path; no performance impact on file-based
+         systems
+[Change] files/bfd exports LOG_SOURCE in pre() for tlog subprocess access
+[New] tests/test_tlog_journal.bats with 27 tests: tlog_journal_filter
+      mappings (7), tlog_journal_read cursor/timestamp/fallback (8),
+      tlog_read dispatch logic (6), validate_rule journal awareness (4),
+      validate_config LOG_SOURCE validation (2); mocked journalctl
+[Fix] test_validate_rule.bats: LP-missing test now sets LOG_SOURCE=file
+      to prevent journal fallback on systems with journalctl
+[Note] zero modifications to any of the 30 rule files; journal output
+       format (--output=short) is syslog-compatible with existing
+       extract_hosts() patterns; full suite now 448 tests
 [Change] importconf rewritten: grep/awk-based config merge replaces
          source+heredoc approach; user values (including template variables
          like $ATTACK_HOST) preserved as raw text without shell expansion;

@@ -91,6 +91,7 @@ if [ -n "$BAN_COMMAND_V6_TEMPLATE" ]; then
 fi
 
 pre() {
+export LOG_SOURCE
 if [ ! -f "$TLOG_PATH" ]; then
 	eout "could not locate \$TLOG_PATH, aborting."
 	exit $EXIT_PREREQ_ERROR

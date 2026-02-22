@@ -109,6 +109,12 @@ RULES_PATH="$INSTALL_PATH/rules"
 # track log script path
 TLOG_PATH="$INSTALL_PATH/tlog"
 
+# log source mode: auto, file, or journal
+# auto (default): use flat log files when available, fall back to journalctl
+# file: flat log files only (original behavior, required for CentOS 6)
+# journal: prefer journalctl for syslog-based rules (app-log rules still use files)
+LOG_SOURCE="auto"
+
 # syslog kernel log path
 KERNEL_LOG_PATH="/var/log/messages"
 

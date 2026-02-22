@@ -52,6 +52,7 @@ teardown() {
 	LP="$TEST_TMPDIR/nonexistent.log"
 	TLOG_TF="sshd"
 	ARG_VAL="10.0.0.1:user"
+	LOG_SOURCE="file"
 	run validate_rule "sshd"
 	assert_failure
 	assert_output --partial "does not exist"
