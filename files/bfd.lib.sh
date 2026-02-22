@@ -159,3 +159,90 @@ format_table() {
 		tr '|' '\t'
 	fi
 }
+
+# --- State file I/O functions ---
+# State file formats:
+#   track.attack: "IP COUNT MOD" — per-run failure accumulator, line-capped
+#   ban.list:     "IP" — recently banned IPs for dedup, line-capped
+#   attack.pool:  "UTIME IP MOD" — persistent attack history
+
+# state_init install_path — ensure state dirs/files exist with correct perms
+state_init() {
+	local install_path="$1"
+	if [ ! -d "$install_path/tmp" ]; then
+		mkdir -p "$install_path/tmp"
+	fi
+	if [ ! -d "$install_path/stats" ]; then
+		mkdir -p "$install_path/stats"
+	fi
+	local f
+	for f in "$install_path/tmp/track.attack" "$install_path/tmp/ban.list"; do
+		if [ ! -f "$f" ]; then
+			touch "$f"
+			chmod 600 "$f"
+		fi
+	done
+	if [ ! -f "$install_path/stats/attack.pool" ]; then
+		touch "$install_path/stats/attack.pool"
+		chmod 600 "$install_path/stats/attack.pool"
+	fi
+}
+
+# state_track_append install_path host count mod — append to track.attack
+state_track_append() {
+	local install_path="$1" host="$2" count="$3" mod="$4"
+	echo "$host $count $mod" >> "$install_path/tmp/track.attack"
+}
+
+# state_track_count install_path host — sum counts for host in track.attack
+# outputs the total count to stdout
+state_track_count() {
+	local install_path="$1" host="$2"
+	local total=0
+	local i
+	while IFS= read -r i; do
+		if [ -n "$i" ]; then
+			total=$((total + i))
+		fi
+	done < <(grep -Fw "$host" "$install_path/tmp/track.attack" 2>/dev/null | awk '{print$2}')
+	echo "$total"
+}
+
+# state_track_trim install_path max_lines — trim track.attack to max_lines
+state_track_trim() {
+	local install_path="$1" max_lines="$2"
+	local track_file="$install_path/tmp/track.attack"
+	local cur_lines
+	cur_lines=$(wc -l < "$track_file" 2>/dev/null || echo "0")
+	if [ "$cur_lines" -gt "$max_lines" ]; then
+		tail -n "$max_lines" "$track_file" > "$track_file.new"
+		mv "$track_file.new" "$track_file"
+	fi
+}
+
+# state_ban_check install_path host — return 0 if host is in ban.list, 1 if not
+state_ban_check() {
+	local install_path="$1" host="$2"
+	if grep -qFw "$host" "$install_path/tmp/ban.list" 2>/dev/null; then
+		return 0
+	fi
+	return 1
+}
+
+# state_ban_append install_path host max_lines — append host to ban.list, trim
+state_ban_append() {
+	local install_path="$1" host="$2" max_lines="$3"
+	local ban_file="$install_path/tmp/ban.list"
+	# trim before appending
+	tail -n "$max_lines" "$ban_file" > "$ban_file.new"
+	mv "$ban_file.new" "$ban_file"
+	if ! grep -qFw "$host" "$ban_file" 2>/dev/null; then
+		echo "$host" >> "$ban_file"
+	fi
+}
+
+# state_pool_append install_path utime host mod — append to attack.pool
+state_pool_append() {
+	local install_path="$1" utime="$2" host="$3" mod="$4"
+	echo "$utime $host $mod" >> "$install_path/stats/attack.pool"
+}

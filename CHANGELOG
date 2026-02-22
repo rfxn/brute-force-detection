@@ -1,4 +1,8 @@
 2.0.1:
+[New] state file I/O functions in bfd.lib.sh: state_init, state_track_append,
+      state_track_count, state_track_trim, state_ban_check, state_ban_append,
+      state_pool_append
+[New] tests/test_state_io.bats with 20 tests for state file I/O functions
 [Change] test suite migrated from custom assert framework to BATS 1.11.0
          with bats-support 0.3.0 and bats-assert 2.1.0
 [New] 9 Dockerfiles for multi-OS test execution (Debian 12, CentOS 6/7,
