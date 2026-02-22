@@ -37,13 +37,6 @@ else
 	TLOG="$2"
 fi
 
-# Use tlog_read() from bfd.lib.sh if available, otherwise standalone logic
-LIBPATH="${INSTALL_PATH:-/usr/local/bfd}/bfd.lib.sh"
-if [ -f "$LIBPATH" ] && type tlog_read >/dev/null 2>&1; then
-	tlog_read "$FILE" "$TLOG" "$BASERUN"
-	exit $?
-fi
-
 if [ ! -f "$FILE" ]; then
 	echo "$FILE is not a valid file, aborting"
 	exit 1

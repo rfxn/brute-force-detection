@@ -216,21 +216,19 @@ check() {
 				if state_bans_active_check "$INSTALL_PATH" "$ATTACK_HOST"; then
 					continue
 				fi
-				SKIP=0
 				state_ban_append "$INSTALL_PATH" "$ATTACK_HOST" 50
-				if [ "$SKIP" == "0" ]; then
-					if [ "$filter_rc" -eq 2 ]; then
-						# local address
-						eout "{$MOD} $ATTACK_HOST is equal to a local address." le
-						if [ "$LAST" != "$ATTACK_HOST" ]; then
-							state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
-							LAST="$ATTACK_HOST"
-							eout "{$MOD} $ATTACK_HOST exceeded maximum login failures; host already banned or ignored." le
-						fi
-					elif [ "$LAST_HOST" != "$ATTACK_HOST" ]; then
+				if [ "$filter_rc" -eq 2 ]; then
+					# local address
+					eout "{$MOD} $ATTACK_HOST is equal to a local address." le
+					if [ "$LAST" != "$ATTACK_HOST" ]; then
 						state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
-						LAST_HOST="$ATTACK_HOST"
-						if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN"; then
+						LAST="$ATTACK_HOST"
+						eout "{$MOD} $ATTACK_HOST exceeded maximum login failures; host already banned or ignored." le
+					fi
+				elif [ "$LAST_HOST" != "$ATTACK_HOST" ]; then
+					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
+					LAST_HOST="$ATTACK_HOST"
+					if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN" "${PORTS:-all}"; then
 						if [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							alert
 							SKIP_ALERT=""
@@ -252,7 +250,6 @@ check() {
 							ban_action="escalate"
 						fi
 						state_bans_history_append "$INSTALL_PATH" "$UTIME" "$ban_expiry" "$ATTACK_HOST" "$MOD" "$ban_action"
-					fi
 					fi
 				fi
 			fi
@@ -344,6 +341,7 @@ case "$1" in
 -u|--unban)     vhead; pre; manual_unban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" ;;
 -b|--ban)       vhead; pre; manual_ban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$BAN_COMMAND_TEMPLATE" "${3:-}" ;;
 -v|--version)   vhead ;;
--h|--help|*)    vhead; usage ;;
+-h|--help)      vhead; usage ;;
+*)              vhead; echo "error: unknown option '$1'"; echo; usage; exit $EXIT_CONFIG_ERROR ;;
 esac
 exit $EXIT_OK
