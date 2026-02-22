@@ -1,4 +1,8 @@
 2.0.1:
+[New] run() function in bfd consolidates pre/get_state/check dispatch
+[New] usage() function extracted from inline case statement help text
+[Change] case statement simplified: -s/-q/-d branches call run() instead of
+         duplicating pre; get_state; check
 [New] tests/test_helpers.sh shared assert framework (assert_eq, assert_rc,
       assert_match, summary) eliminates 154 lines of duplication across 7 tests
 [New] tests/run_tests.sh runner discovers and runs all test_*.sh with totals

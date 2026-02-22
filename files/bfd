@@ -321,36 +321,13 @@ apool_list() {
 	fi
 }
 
-case "$1" in
--s|--standard)
-	vhead
+run() {
 	pre
 	get_state
 	check
-	;;
--q|--quiet)
-	exec >/dev/null 2>&1
-	pre
-	get_state
-	check
-	;;
--d|--dryrun)
-	DRY_RUN=1
-	vhead
-	pre
-	get_state
-	check
-	;;
--a|--attackpool)
-	vhead
-	pre
-	apool_list "${2:-}"
-	;;
--v|--version)
-	vhead
-	;;
--h|--help|*)
-	vhead
+}
+
+usage() {
 	echo "usage: $0 [OPTION]"
 	echo "-s|--standard .............. run standard with output"
 	echo "-q|--quiet ................. run quiet with output hidden"
@@ -358,5 +335,14 @@ case "$1" in
 	echo "-a|--attackpool [STRING] ... list addresses that have attacked this host"
 	echo "-v|--version ............... display version"
 	echo "-h|--help .................. display this help"
+}
+
+case "$1" in
+-s|--standard)  vhead; run ;;
+-q|--quiet)     exec >/dev/null 2>&1; run ;;
+-d|--dryrun)    DRY_RUN=1; vhead; run ;;
+-a|--attackpool) vhead; pre; apool_list "${2:-}" ;;
+-v|--version)   vhead ;;
+-h|--help|*)    vhead; usage ;;
 esac
 exit $EXIT_OK
