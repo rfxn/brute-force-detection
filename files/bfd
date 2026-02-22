@@ -115,6 +115,8 @@ if [ ! -f "$BAN_LIST" ]; then
 	chmod 600 "$BAN_LIST"
 fi
 
+state_init "$INSTALL_PATH"
+
 LO_HOSTS="$INSTALL_PATH/ignore.hosts.local"
 IP_BIN=$(command -v ip 2>/dev/null)
 if [ -z "$IP_BIN" ]; then
@@ -228,7 +230,7 @@ check() {
 					elif [ "$LAST_HOST" != "$ATTACK_HOST" ]; then
 						state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
 						LAST_HOST="$ATTACK_HOST"
-						execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN"
+						if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN"; then
 						if [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							alert
 							SKIP_ALERT=""
@@ -250,6 +252,7 @@ check() {
 							ban_action="escalate"
 						fi
 						state_bans_history_append "$INSTALL_PATH" "$UTIME" "$ban_expiry" "$ATTACK_HOST" "$MOD" "$ban_action"
+					fi
 					fi
 				fi
 			fi

@@ -188,6 +188,18 @@ teardown() {
 	assert_output --partial "exited with code"
 }
 
+@test "execute_ban: failed ban skips lifecycle recording" {
+	# execute_ban with a command that fails
+	run execute_ban "10.0.0.1" "sshd" "false" "0"
+	[ "$status" -ne 0 ]
+
+	# bans.active and bans.history must remain empty
+	run cat "$INSTALL_PATH/tmp/bans.active"
+	assert_output ""
+	run cat "$INSTALL_PATH/tmp/bans.history"
+	assert_output ""
+}
+
 # --- end-to-end pipeline ---
 
 @test "pipeline: filter_host + count_failures + state_ban_append" {

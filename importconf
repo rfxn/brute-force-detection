@@ -39,7 +39,11 @@ cp -f "$INSTALL_PATH/conf.bfd" "$INSTALL_PATH/conf.bfd.orig"
 cp -f "$DOUT" "$INSTALL_PATH/conf.bfd"
 cp -f /usr/local/bfd.bk.last/ignore.hosts "$INSTALL_PATH" >> /dev/null 2>&1
 cp -f /usr/local/bfd.bk.last/tmp/* "$INSTALL_PATH/tmp" >> /dev/null 2>&1
-rm -f "$INSTALL_PATH/tmp/"*
+# clear transient state but preserve ban tracking and event data
+rm -f "$INSTALL_PATH/tmp/track.attack"
+rm -f "$INSTALL_PATH/tmp/ban.list"
+rm -f "$INSTALL_PATH/tmp/.alist."*
+rm -f "$INSTALL_PATH/tmp/.weekly.apool."*
 
 OV=$(tac /usr/local/bfd.bk.last/conf.bfd | tail -n 3 | grep BFD | awk '{print$3}')
 NV=$(tac /usr/local/bfd/conf.bfd | tail -n 3 | grep BFD | awk '{print$3}')

@@ -1,4 +1,12 @@
 2.0.1:
+[Fix] importconf targeted cleanup preserves ban lifecycle state (bans.active,
+      bans.history, events.dat) during upgrades instead of rm -f tmp/*
+[Fix] state_init() called in pre() so state files are created with 600
+      permissions before first use, preventing world-readable state
+[Fix] check() verifies execute_ban return code; failed bans no longer
+      recorded in bans.active/bans.history (phantom ban prevention)
+[New] test for failed ban command skipping lifecycle recording
+      (test_check_pipeline.bats, 36 total); full suite now 239 tests
 [New] BAN_DURATION config variable (default 300s) for temporary bans with
       auto-expiry; 0 = permanent ban (legacy behavior)
 [New] BAN_PERMANENT_AFTER config variable (default 5) for recidivism
@@ -33,9 +41,9 @@
          existing state files
 [New] tests/test_ban_lifecycle.bats with 26 tests for ban state functions
 [New] 14 tests for ban lifecycle integration and CLI in
-      test_check_pipeline.bats (35 total)
+      test_check_pipeline.bats
 [New] 10 tests for ban config validation in test_config_validation.bats
-      (34 total); full suite now 238 tests
+      (34 total)
 [Change] per-service TRIG thresholds enabled in all 20 rule files: sshd=5,
          dovecot=10, postfix=10, vsftpd/vsftpd2=10, proftpd=10, pure-ftpd=10,
          exim_authfail=10, exim_nxuser=15, modsec=10, asterisk_badauth=5,
