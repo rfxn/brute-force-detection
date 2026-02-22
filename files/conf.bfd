@@ -78,6 +78,24 @@ UNBAN_COMMAND=""
 # iptables with port-specific unblocking:
 #UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -p tcp -m multiport --dports $PORTS -j DROP"
 
+# IPv6 ban command (leave empty to use BAN_COMMAND for both IPv4 and IPv6)
+# when empty, BAN_COMMAND is used for all addresses — works with tools that
+# handle both protocols (nft with inet family, APF, ip route)
+BAN_COMMAND_V6=""
+# ip6tables:
+#BAN_COMMAND_V6="/sbin/ip6tables -I INPUT -s $ATTACK_HOST -j DROP"
+# nftables (inet family handles both, but use ip6 for v6-only):
+#BAN_COMMAND_V6="/usr/sbin/nft add rule inet filter input ip6 saddr $ATTACK_HOST drop"
+# ip route null-route:
+#BAN_COMMAND_V6="/sbin/ip route add blackhole $ATTACK_HOST/128"
+
+# IPv6 unban command (leave empty to use UNBAN_COMMAND for both)
+UNBAN_COMMAND_V6=""
+# ip6tables:
+#UNBAN_COMMAND_V6="/sbin/ip6tables -D INPUT -s $ATTACK_HOST -j DROP"
+# ip route:
+#UNBAN_COMMAND_V6="/sbin/ip route del blackhole $ATTACK_HOST/128"
+
 ######
 # You should not need to edit any options below this line
 ######

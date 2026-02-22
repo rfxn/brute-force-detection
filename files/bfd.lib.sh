@@ -389,11 +389,16 @@ count_attacks() {
 	echo "$count"
 }
 
-# execute_ban host mod ban_cmd_template dry_run [ports] — execute or log ban command
+# execute_ban host mod ban_cmd_template dry_run [ports] [ban_cmd_v6_template]
+# execute or log ban command; selects V6 template for IPv6 hosts
 # returns 0 on success, ban command exit code on failure
 execute_ban() {
 	local host="$1" mod="$2" ban_cmd_template="$3" dry_run="$4"
-	local ports="${5:-all}"
+	local ports="${5:-all}" ban_cmd_v6="${6:-}"
+	# select V6 command for IPv6 hosts when available
+	if [ -n "$ban_cmd_v6" ] && [[ "$host" == *:* ]]; then
+		ban_cmd_template="$ban_cmd_v6"
+	fi
 	# set globals needed by alert.bfd template and command expansion
 	ATTACK_HOST="$host"
 	MOD="$mod"
@@ -412,11 +417,16 @@ execute_ban() {
 	return $ban_rc
 }
 
-# execute_unban host mod unban_cmd_template [ports] — execute unban command
+# execute_unban host mod unban_cmd_template [ports] [unban_cmd_v6_template]
+# execute unban command; selects V6 template for IPv6 hosts
 # returns 0 on success, unban command exit code on failure
 execute_unban() {
 	local host="$1" mod="$2" unban_cmd_template="$3"
-	local ports="${4:-all}"
+	local ports="${4:-all}" unban_cmd_v6="${5:-}"
+	# select V6 command for IPv6 hosts when available
+	if [ -n "$unban_cmd_v6" ] && [[ "$host" == *:* ]]; then
+		unban_cmd_template="$unban_cmd_v6"
+	fi
 	ATTACK_HOST="$host"
 	MOD="$mod"
 	PORTS="$ports"
@@ -429,14 +439,15 @@ execute_unban() {
 	return $unban_rc
 }
 
-# process_unbans install_path now unban_cmd_template — unban expired entries
+# process_unbans install_path now unban_cmd_template [unban_cmd_v6_template]
 process_unbans() {
 	local install_path="$1" now="$2" unban_cmd_template="$3"
+	local unban_cmd_v6="${4:-}"
 	local expired_line ts expiry host mod ports
 	while IFS=' ' read -r ts expiry host mod ports; do
 		[ -z "$ts" ] && continue
 		if [ -n "$unban_cmd_template" ]; then
-			execute_unban "$host" "$mod" "$unban_cmd_template" "$ports"
+			execute_unban "$host" "$mod" "$unban_cmd_template" "$ports" "$unban_cmd_v6"
 		else
 			eout "{$mod} $host ban expired; no UNBAN_COMMAND configured, removing state only." le
 		fi
@@ -475,10 +486,11 @@ list_bans() {
 	printf "IP|SERVICE|PORTS|BANNED|EXPIRES\n%s\n" "$listing" | format_table
 }
 
-# manual_unban install_path ip utime unban_cmd_template — manually unban an IP
+# manual_unban install_path ip utime unban_cmd_template [unban_cmd_v6_template]
 manual_unban() {
 	local install_path="$1" ip="$2" utime="$3" unban_cmd_template="$4"
-	ip=$(validate_ip "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
+	local unban_cmd_v6="${5:-}"
+	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
 	state_init "$install_path"
 	if ! state_bans_active_check "$install_path" "$ip"; then
 		echo "error: $ip is not in the active ban list."
@@ -488,26 +500,26 @@ manual_unban() {
 	ban_mod=$(grep -Fw "$ip" "$install_path/tmp/bans.active" | awk '{print $4}' | head -1)
 	ban_ports=$(grep -Fw "$ip" "$install_path/tmp/bans.active" | awk '{print $5}' | head -1)
 	if [ -n "$unban_cmd_template" ]; then
-		execute_unban "$ip" "${ban_mod:-unknown}" "$unban_cmd_template" "${ban_ports:-all}"
+		execute_unban "$ip" "${ban_mod:-unknown}" "$unban_cmd_template" "${ban_ports:-all}" "$unban_cmd_v6"
 	fi
 	state_bans_active_remove "$install_path" "$ip"
 	state_bans_history_append "$install_path" "$utime" "0" "$ip" "${ban_mod:-unknown}" "unban"
 	echo "$ip unbanned successfully."
 }
 
-# manual_ban install_path ip utime ban_cmd_template [mod] [ports] — manually ban an IP
+# manual_ban install_path ip utime ban_cmd_template [mod] [ports] [ban_cmd_v6_template]
 manual_ban() {
 	local install_path="$1" ip="$2" utime="$3" ban_cmd_template="$4"
 	local mod="${5:-manual}"
-	local ports="${6:-all}"
-	ip=$(validate_ip "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
+	local ports="${6:-all}" ban_cmd_v6="${7:-}"
+	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
 	mod=$(sanitize_mod "$mod") || { echo "error: invalid service name '$mod'."; return 1; }
 	state_init "$install_path"
 	if state_bans_active_check "$install_path" "$ip"; then
 		echo "error: $ip is already banned."
 		return 1
 	fi
-	execute_ban "$ip" "$mod" "$ban_cmd_template" "0" "$ports"
+	execute_ban "$ip" "$mod" "$ban_cmd_template" "0" "$ports" "$ban_cmd_v6"
 	state_bans_active_append "$install_path" "$utime" "0" "$ip" "$mod" "$ports"
 	state_bans_history_append "$install_path" "$utime" "0" "$ip" "$mod" "ban"
 	echo "$ip banned permanently."

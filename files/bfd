@@ -72,6 +72,8 @@ GLOB_TRIG="$TRIG"
 # extract BAN_COMMAND template without shell expansion of $ATTACK_HOST/$MOD
 BAN_COMMAND_TEMPLATE=$(grep '^BAN_COMMAND=' "$CNF" | tail -1 | sed "s/^BAN_COMMAND=//;s/^\"//;s/\"$//")
 UNBAN_COMMAND_TEMPLATE=$(grep '^UNBAN_COMMAND=' "$CNF" | tail -1 | sed "s/^UNBAN_COMMAND=//;s/^\"//;s/\"$//")
+BAN_COMMAND_V6_TEMPLATE=$(grep '^BAN_COMMAND_V6=' "$CNF" | tail -1 | sed "s/^BAN_COMMAND_V6=//;s/^\"//;s/\"$//" 2>/dev/null)
+UNBAN_COMMAND_V6_TEMPLATE=$(grep '^UNBAN_COMMAND_V6=' "$CNF" | tail -1 | sed "s/^UNBAN_COMMAND_V6=//;s/^\"//;s/\"$//" 2>/dev/null)
 
 validate_config
 detect_log_paths
@@ -80,6 +82,12 @@ detect_log_paths
 BAN_CMD_BIN=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
 if [ -n "$BAN_CMD_BIN" ] && [ ! -x "$BAN_CMD_BIN" ]; then
 	echo "warning: BAN_COMMAND binary '$BAN_CMD_BIN' not found or not executable."
+fi
+if [ -n "$BAN_COMMAND_V6_TEMPLATE" ]; then
+	BAN_CMD_V6_BIN=$(echo "$BAN_COMMAND_V6_TEMPLATE" | awk '{print $1}')
+	if [ -n "$BAN_CMD_V6_BIN" ] && [ ! -x "$BAN_CMD_V6_BIN" ]; then
+		echo "warning: BAN_COMMAND_V6 binary '$BAN_CMD_V6_BIN' not found or not executable."
+	fi
 fi
 
 pre() {
@@ -128,7 +136,7 @@ if [ -z "$IP_BIN" ]; then
 	done
 fi
 if [ -n "$IP_BIN" ]; then
-	"$IP_BIN" addr list | grep -w inet | tr '/' ' ' | awk '{print$2}' > "$LO_HOSTS"
+	"$IP_BIN" addr list | grep -Ew 'inet6? ' | tr '/' ' ' | awk '{print$2}' > "$LO_HOSTS"
 else
 	hostname -I | tr ' ' '\n' > "$LO_HOSTS"
 fi
@@ -228,7 +236,7 @@ check() {
 				elif [ "$LAST_HOST" != "$ATTACK_HOST" ]; then
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
 					LAST_HOST="$ATTACK_HOST"
-					if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN" "${PORTS:-all}"; then
+					if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN" "${PORTS:-all}" "${BAN_COMMAND_V6_TEMPLATE:-}"; then
 						if [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							alert
 							SKIP_ALERT=""
@@ -315,7 +323,7 @@ apool_list() {
 run() {
 	pre
 	get_state
-	process_unbans "$INSTALL_PATH" "$UTIME" "$UNBAN_COMMAND_TEMPLATE"
+	process_unbans "$INSTALL_PATH" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}"
 	check
 }
 
@@ -338,8 +346,8 @@ case "$1" in
 -d|--dryrun)    DRY_RUN=1; vhead; run ;;
 -a|--attackpool) vhead; pre; apool_list "${2:-}" ;;
 -l|--list)      vhead; pre; list_bans "$INSTALL_PATH" ;;
--u|--unban)     vhead; pre; manual_unban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" ;;
--b|--ban)       vhead; pre; manual_ban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$BAN_COMMAND_TEMPLATE" "${3:-}" ;;
+-u|--unban)     vhead; pre; manual_unban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}" ;;
+-b|--ban)       vhead; pre; manual_ban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$BAN_COMMAND_TEMPLATE" "${3:-manual}" "all" "${BAN_COMMAND_V6_TEMPLATE:-}" ;;
 -v|--version)   vhead ;;
 -h|--help)      vhead; usage ;;
 *)              vhead; echo "error: unknown option '$1'"; echo; usage; exit $EXIT_CONFIG_ERROR ;;

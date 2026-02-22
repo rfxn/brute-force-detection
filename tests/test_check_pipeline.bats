@@ -508,3 +508,81 @@ teardown() {
 	v6_count=$(count_failures "2001:db8::1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
 	[ "$v6_count" -eq 2 ]
 }
+
+# --- IPv6 ban command selection ---
+
+@test "execute_ban: selects V6 command for IPv6 host" {
+	local marker_v4="$TEST_TMPDIR/ban_v4"
+	local marker_v6="$TEST_TMPDIR/ban_v6"
+	execute_ban "2001:db8::1" "sshd" "touch $marker_v4" "0" "22" "touch $marker_v6" >/dev/null
+	# V6 command should have run, not V4
+	[ -f "$marker_v6" ]
+	[ ! -f "$marker_v4" ]
+}
+
+@test "execute_ban: uses standard command for IPv4 even when V6 set" {
+	local marker_v4="$TEST_TMPDIR/ban_v4"
+	local marker_v6="$TEST_TMPDIR/ban_v6"
+	execute_ban "10.0.0.1" "sshd" "touch $marker_v4" "0" "22" "touch $marker_v6" >/dev/null
+	# V4 command should have run, not V6
+	[ -f "$marker_v4" ]
+	[ ! -f "$marker_v6" ]
+}
+
+@test "execute_ban: falls back to standard for IPv6 when V6 empty" {
+	local marker="$TEST_TMPDIR/ban_fallback"
+	execute_ban "2001:db8::1" "sshd" "touch $marker" "0" "22" "" >/dev/null
+	# standard command should have run
+	[ -f "$marker" ]
+}
+
+@test "execute_unban: selects V6 command for IPv6 host" {
+	local marker_v6="$TEST_TMPDIR/unban_v6"
+	execute_unban "2001:db8::1" "sshd" "true" "22" "touch $marker_v6" >/dev/null
+	[ -f "$marker_v6" ]
+}
+
+@test "execute_unban: uses standard for IPv4 when V6 set" {
+	local marker_v4="$TEST_TMPDIR/unban_v4"
+	local marker_v6="$TEST_TMPDIR/unban_v6"
+	execute_unban "10.0.0.1" "sshd" "touch $marker_v4" "22" "touch $marker_v6" >/dev/null
+	[ -f "$marker_v4" ]
+	[ ! -f "$marker_v6" ]
+}
+
+# --- IPv6 local address detection ---
+
+@test "filter_host: IPv6 local address detected" {
+	local ignore_files="$TEST_TMPDIR/exclude.files"
+	local lo_hosts="$TEST_TMPDIR/lo_hosts"
+	touch "$ignore_files"
+	echo "2001:db8::1" > "$lo_hosts"
+	local filter_rc=0
+	filter_host "2001:db8::1" "$ignore_files" "$lo_hosts" || filter_rc=$?
+	[ "$filter_rc" -eq 2 ]
+}
+
+@test "filter_host: IPv6 loopback detected" {
+	local ignore_files="$TEST_TMPDIR/exclude.files"
+	local lo_hosts="$TEST_TMPDIR/lo_hosts"
+	touch "$ignore_files"
+	echo "::1" > "$lo_hosts"
+	local filter_rc=0
+	filter_host "::1" "$ignore_files" "$lo_hosts" || filter_rc=$?
+	[ "$filter_rc" -eq 2 ]
+}
+
+# --- IPv6 manual ban/unban ---
+
+@test "manual_ban: accepts IPv6 address" {
+	manual_ban "$INSTALL_PATH" "2001:db8::1" "1000" "true" "sshd" >/dev/null
+	run state_bans_active_check "$INSTALL_PATH" "2001:db8::1"
+	assert_success
+}
+
+@test "manual_unban: accepts IPv6 address" {
+	state_bans_active_append "$INSTALL_PATH" "900" "0" "2001:db8::1" "sshd" "22"
+	run manual_unban "$INSTALL_PATH" "2001:db8::1" "1000" ""
+	assert_success
+	assert_output --partial "unbanned"
+}
