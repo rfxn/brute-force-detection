@@ -399,3 +399,53 @@ teardown() {
 	assert_failure
 	assert_output --partial "not in the active ban list"
 }
+
+# --- PORTS enforcement ---
+
+@test "execute_ban: sets PORTS global" {
+	execute_ban "10.0.0.1" "sshd" "true" "1" "22" >/dev/null
+	[ "$PORTS" = "22" ]
+}
+
+@test "execute_ban: PORTS available in template expansion" {
+	local marker="$TEST_TMPDIR/ports_check"
+	execute_ban "10.0.0.1" "sshd" "echo \$PORTS > $marker" "0" "110,143,993,995" >/dev/null
+	run cat "$marker"
+	assert_output "110,143,993,995"
+}
+
+@test "execute_ban: defaults PORTS to all when not provided" {
+	execute_ban "10.0.0.1" "sshd" "true" "1" >/dev/null
+	[ "$PORTS" = "all" ]
+}
+
+@test "execute_ban: sets MOD global" {
+	execute_ban "10.0.0.1" "dovecot" "true" "1" "22" >/dev/null
+	[ "$MOD" = "dovecot" ]
+}
+
+@test "execute_unban: sets PORTS global" {
+	execute_unban "10.0.0.1" "sshd" "true" "22" >/dev/null
+	[ "$PORTS" = "22" ]
+}
+
+@test "execute_unban: defaults PORTS to all when not provided" {
+	execute_unban "10.0.0.1" "sshd" "true" >/dev/null
+	[ "$PORTS" = "all" ]
+}
+
+@test "process_unbans: passes PORTS from state to unban command" {
+	local marker="$TEST_TMPDIR/unban_ports"
+	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "22"
+	process_unbans "$INSTALL_PATH" "1400" "echo \$PORTS > $marker" >/dev/null
+	run cat "$marker"
+	assert_output "22"
+}
+
+@test "manual_unban: reads and passes PORTS from state" {
+	local marker="$TEST_TMPDIR/manual_unban_ports"
+	state_bans_active_append "$INSTALL_PATH" "900" "0" "10.0.0.1" "dovecot" "110,143,993,995"
+	manual_unban "$INSTALL_PATH" "10.0.0.1" "1000" "echo \$PORTS > $marker" >/dev/null
+	run cat "$marker"
+	assert_output "110,143,993,995"
+}

@@ -228,7 +228,7 @@ check() {
 				elif [ "$LAST_HOST" != "$ATTACK_HOST" ]; then
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
 					LAST_HOST="$ATTACK_HOST"
-					if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN"; then
+					if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN" "${PORTS:-all}"; then
 						if [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							alert
 							SKIP_ALERT=""

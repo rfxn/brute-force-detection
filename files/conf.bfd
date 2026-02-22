@@ -57,9 +57,13 @@ BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
 #BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST drop"
 # ip route null-route (all distros):
 #BAN_COMMAND="/sbin/ip route add blackhole $ATTACK_HOST/32"
+# iptables with port-specific blocking ($PORTS from rule file):
+#BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -p tcp -m multiport --dports $PORTS -j DROP"
+# nftables with port-specific blocking:
+#BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST tcp dport { $PORTS } drop"
 
 # command to remove a ban (leave empty to disable auto-unban)
-# uses same $ATTACK_HOST and $MOD variables as BAN_COMMAND
+# uses same $ATTACK_HOST, $MOD, and $PORTS variables as BAN_COMMAND
 UNBAN_COMMAND=""
 # APF:
 #UNBAN_COMMAND="/etc/apf/apf -u $ATTACK_HOST"
@@ -71,6 +75,8 @@ UNBAN_COMMAND=""
 #UNBAN_COMMAND="/usr/sbin/nft delete rule inet filter input handle $(/usr/sbin/nft -a list chain inet filter input | grep $ATTACK_HOST | awk '{print $NF}')"
 # ip route:
 #UNBAN_COMMAND="/sbin/ip route del blackhole $ATTACK_HOST/32"
+# iptables with port-specific unblocking:
+#UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -p tcp -m multiport --dports $PORTS -j DROP"
 
 ######
 # You should not need to edit any options below this line

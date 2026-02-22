@@ -1,4 +1,16 @@
 2.0.1:
+[New] $PORTS substitution in BAN_COMMAND/UNBAN_COMMAND templates for
+      port-specific firewall rules (rule files define PORTS per service)
+[New] port-aware iptables/nftables ban command examples in conf.bfd
+[Change] execute_ban accepts 5th parameter (ports); sets PORTS and MOD globals
+         for template expansion
+[Change] execute_unban accepts 4th parameter (ports); sets PORTS global for
+         template expansion
+[Change] process_unbans passes stored PORTS from bans.active to unban commands
+[Change] manual_unban reads PORTS from ban state for unban command expansion
+[Change] manual_ban accepts optional ports parameter (default "all")
+[New] 8 tests for PORTS enforcement in test_check_pipeline.bats (44 total);
+      full suite now 247 tests
 [Fix] removed dead SKIP variable and vestigial if-wrapper in check(); dedup
       now handled by state_bans_active_check
 [Fix] removed unreachable tlog library delegation branch (tlog_read never
