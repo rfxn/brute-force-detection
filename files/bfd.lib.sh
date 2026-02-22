@@ -269,8 +269,9 @@ extract_hosts() {
 	for pattern in "$@"; do
 		# replace <HOST> with ERE capture group for IP
 		sed_pat="${pattern//<HOST>/($ip_re)}"
-		# sed -r = ERE mode (GNU sed 4.2+, available on all targets)
-		echo "$tlog_input" | sed -rn "s#.*${sed_pat}.*#\1#p"
+		# (^|.*[^0-9.]) boundary prevents greedy .* from consuming
+		# leading digits of the IP address; IP capture becomes \2
+		echo "$tlog_input" | sed -rn "s#(^|.*[^0-9.])${sed_pat}.*#\2#p"
 	done | tr -d '[]' | while IFS= read -r ip; do
 		[ -z "$ip" ] && continue
 		validate_ip "$ip" 2>/dev/null || true
