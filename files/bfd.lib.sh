@@ -103,7 +103,8 @@ safe_source() {
 	. "$file"
 }
 
-# validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, EMAIL_ALERTS,
+# validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, BAN_DURATION,
+#   BAN_PERMANENT_AFTER, BAN_PERMANENT_WINDOW, EMAIL_ALERTS,
 #   LOCK_FILE_TIMEOUT, BAN_COMMAND_TEMPLATE, INSTALL_PATH, EXIT_CONFIG_ERROR
 validate_config() {
 	local int_pattern='^[0-9]+$'
@@ -118,6 +119,21 @@ validate_config() {
 	if ! [[ "$TRIG_GLOBAL" =~ $int_pattern ]]; then
 		echo "error: TRIG_GLOBAL must be a non-negative integer (got '$TRIG_GLOBAL')."
 		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "${BAN_DURATION:-0}" =~ $int_pattern ]]; then
+		echo "error: BAN_DURATION must be a non-negative integer (got '${BAN_DURATION:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "${BAN_PERMANENT_AFTER:-0}" =~ $int_pattern ]]; then
+		echo "error: BAN_PERMANENT_AFTER must be a non-negative integer (got '${BAN_PERMANENT_AFTER:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "${BAN_PERMANENT_WINDOW:-1}" =~ $int_pattern ]] || [ "${BAN_PERMANENT_WINDOW:-1}" -eq 0 ]; then
+		echo "error: BAN_PERMANENT_WINDOW must be a positive integer (got '${BAN_PERMANENT_WINDOW:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
+		echo "warning: BAN_DURATION>0 but UNBAN_COMMAND is empty; auto-unban will only remove state, not firewall rules."
 	fi
 	if [ "$EMAIL_ALERTS" != "0" ] && [ "$EMAIL_ALERTS" != "1" ]; then
 		echo "error: EMAIL_ALERTS must be 0 or 1 (got '$EMAIL_ALERTS')."
