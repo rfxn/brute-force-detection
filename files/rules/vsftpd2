@@ -13,5 +13,6 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="vsftpd"
 
 	## VSFTPD
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | grep -w 'FAIL LOGIN:' | tr '[]' ' ' | tr -d '()' | awk '{print$12" "$8}' | tr -d ':' | tr -d '"' | awk '{print$1":"$2}' | grep -E '[0-9]+')
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		'FAIL LOGIN: Client "<HOST>"')
 fi

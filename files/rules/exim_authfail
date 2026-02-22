@@ -14,5 +14,6 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="exim_authfail"
 
 	## EXIM SMTP Auth failures
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | sed -n -e '/login authenticator/s/.*failed for.*\[\([^ ]*\)\]:.*535 Incorrect authentication data (set_id=\(.*\))$/\1:\2/p' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"login authenticator failed.*\[<HOST>\]")
 fi
