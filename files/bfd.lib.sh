@@ -390,8 +390,7 @@ list_bans() {
 		return 0
 	fi
 	echo "[+] Active bans" && echo
-	echo "IP|SERVICE|PORTS|BANNED|EXPIRES" | format_table
-	echo "$listing" | format_table
+	printf "IP|SERVICE|PORTS|BANNED|EXPIRES\n%s\n" "$listing" | format_table
 }
 
 # manual_unban install_path ip utime unban_cmd_template — manually unban an IP
@@ -418,11 +417,7 @@ manual_ban() {
 	local install_path="$1" ip="$2" utime="$3" ban_cmd_template="$4"
 	local mod="${5:-manual}"
 	ip=$(validate_ip "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
-	if [ -n "$mod" ]; then
-		mod=$(sanitize_mod "$mod") || { echo "error: invalid service name '$mod'."; return 1; }
-	else
-		mod="manual"
-	fi
+	mod=$(sanitize_mod "$mod") || { echo "error: invalid service name '$mod'."; return 1; }
 	state_init "$install_path"
 	if state_bans_active_check "$install_path" "$ip"; then
 		echo "error: $ip is already banned."

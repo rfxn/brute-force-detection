@@ -10,3 +10,5 @@ rm -f /usr/local/bfd/tmp/.weekly.apool.*
 if [ -f /usr/local/bfd/tmp/bans.history ]; then
 	mv -f /usr/local/bfd/tmp/bans.history "/usr/local/bfd/tmp/bans.history.$(date +%m%d%y)"
 fi
+# purge rotated bans.history files older than 30 days
+find /usr/local/bfd/tmp -maxdepth 1 -name 'bans.history.*' -type f -mtime +30 -delete 2>/dev/null

@@ -1,4 +1,15 @@
 2.0.1:
+[Fix] removed dead SKIP variable and vestigial if-wrapper in check(); dedup
+      now handled by state_bans_active_check
+[Fix] removed unreachable tlog library delegation branch (tlog_read never
+      available in subprocess context)
+[Fix] list_bans header/data piped through single format_table call for
+      aligned column widths
+[Fix] unknown CLI flags now print error and exit non-zero instead of
+      silently showing help
+[Fix] cron.daily purges rotated bans.history files older than 30 days
+[Fix] removed dead else branch in manual_ban (mod always non-empty via
+      default)
 [Fix] importconf targeted cleanup preserves ban lifecycle state (bans.active,
       bans.history, events.dat) during upgrades instead of rm -f tmp/*
 [Fix] state_init() called in pre() so state files are created with 600
