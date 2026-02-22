@@ -1,4 +1,7 @@
 2.0.1:
+[New] validate_rule() in bfd.lib.sh verifies LP, TLOG_TF, ARG_VAL after
+      rule sourcing; returns 1 with diagnostic on skip
+[New] tests/test_validate_rule.bats with 9 tests for rule validation
 [New] state file I/O functions in bfd.lib.sh: state_init, state_track_append,
       state_track_count, state_track_trim, state_ban_check, state_ban_append,
       state_pool_append

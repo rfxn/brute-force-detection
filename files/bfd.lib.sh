@@ -160,6 +160,29 @@ format_table() {
 	fi
 }
 
+# validate_rule rule_name — check that a sourced rule set required variables
+# requires: LP, TLOG_TF, ARG_VAL to be set by the rule file
+# returns 0 on success, 1 on skip
+validate_rule() {
+	local rule_name="$1"
+	if [ -z "${LP:-}" ]; then
+		eout "rule $rule_name: LP not set (prerequisite not installed?), skipping" le
+		return 1
+	fi
+	if [ ! -f "$LP" ]; then
+		eout "rule $rule_name: log file '$LP' does not exist, skipping" le
+		return 1
+	fi
+	if [ -z "${TLOG_TF:-}" ]; then
+		eout "rule $rule_name: TLOG_TF not set, skipping" le
+		return 1
+	fi
+	if [ -z "${ARG_VAL:-}" ]; then
+		return 1
+	fi
+	return 0
+}
+
 # --- State file I/O functions ---
 # State file formats:
 #   track.attack: "IP COUNT MOD" — per-run failure accumulator, line-capped
