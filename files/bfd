@@ -178,6 +178,9 @@ fi
 
 
 check() {
+	local run_start rules_count=0 events_count=0 bans_count=0
+	run_start=$(date +"%s")
+
 	# prune expired events once per run, before iterating rules
 	state_events_prune "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME"
 
@@ -195,8 +198,13 @@ check() {
 		fi
 		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
 		validate_rule "$str" || continue
+		rules_count=$((rules_count + 1))
 		# process ARG_VAL pipeline once; reuse for iteration and counting
 		HOSTS_PARSED=$(echo "$ARG_VAL" | tr ' ' '\n' | sort)
+		# count events (raw IP occurrences including duplicates)
+		local host_lines
+		host_lines=$(echo "$HOSTS_PARSED" | grep -c . 2>/dev/null || echo 0)
+		events_count=$((events_count + host_lines))
 		while IFS= read -r ahost; do
 			[ -z "$ahost" ] && continue
 			ATTACK_HOST=$(validate_ip_any "$ahost") || continue
@@ -237,6 +245,7 @@ check() {
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
 					LAST_HOST="$ATTACK_HOST"
 					if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN" "${PORTS:-all}" "${BAN_COMMAND_V6_TEMPLATE:-}"; then
+						bans_count=$((bans_count + 1))
 						if [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							alert
 							SKIP_ALERT=""
@@ -263,6 +272,11 @@ check() {
 			fi
 		done < <(echo "$HOSTS_PARSED" | uniq)
 	done
+
+	local run_end run_elapsed
+	run_end=$(date +"%s")
+	run_elapsed=$((run_end - run_start))
+	eout "run complete: $rules_count rules checked, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" le
 }
 
 _apool_report() {
@@ -272,13 +286,14 @@ _apool_report() {
 	local atmp
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.alist.XXXXXX")
 	echo "[+] $title" && echo
-	echo "#TRIGS|IP|FIRST_SEEN|LAST_SEEN|RULES" > "$atmp"
-	local cnt aip first_ts last_ts mods first_fmt last_fmt
+	echo "#TRIGS|IP|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
+	local cnt aip first_ts last_ts mods first_fmt last_fmt ban_status
 	while IFS='|' read -r cnt aip first_ts last_ts mods; do
 		[ -z "$cnt" ] && continue
 		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S")
 		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S")
-		echo "$cnt|$aip|$first_fmt|$last_fmt|$mods" >> "$atmp"
+		ban_status=$(_apool_ban_status "$aip")
+		echo "$cnt|$aip|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
 	done < <(
 		if [ -n "$search" ]; then
 			grep -E "$search" "$source_file"
@@ -301,6 +316,57 @@ _apool_report() {
 	rm -f "$atmp"
 }
 
+# _apool_ban_status ip — return ban status string for an IP
+_apool_ban_status() {
+	local aip="$1"
+	local bans_active="$INSTALL_PATH/tmp/bans.active"
+	local bans_history="$INSTALL_PATH/tmp/bans.history"
+	if grep -qFw "$aip" "$bans_active" 2>/dev/null; then
+		local ban_expiry
+		ban_expiry=$(awk -v ip="$aip" '$3 == ip {print $2; exit}' "$bans_active")
+		if [ "$ban_expiry" = "0" ]; then
+			echo "BANNED(perm)"
+		else
+			local now remain
+			now=$(date +"%s")
+			remain=$(( (ban_expiry - now) / 60 ))
+			if [ "$remain" -lt 0 ]; then
+				remain=0
+			fi
+			echo "BANNED(${remain}m)"
+		fi
+	elif [ -f "$bans_history" ]; then
+		local hist_count
+		hist_count=$(awk -v ip="$aip" '$3 == ip && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
+			"$bans_history")
+		if [ "$hist_count" -gt 0 ]; then
+			echo "prev:$hist_count"
+		fi
+	fi
+}
+
+# _apool_service_summary source_file — per-service event and unique IP breakdown
+_apool_service_summary() {
+	local source_file="$1"
+	if [ ! -f "$source_file" ] || [ ! -s "$source_file" ]; then
+		return 0
+	fi
+	local atmp
+	atmp=$(mktemp "$INSTALL_PATH/tmp/.svcsum.XXXXXX")
+	echo "[+] Per-service breakdown" && echo
+	echo "SERVICE|EVENTS|UNIQUE_IPS" > "$atmp"
+	awk '{
+		svc[$3]++
+		key = $3 " " $2
+		if (!(key in seen)) { seen[key] = 1; uniq[$3]++ }
+	}
+	END {
+		for (s in svc) print svc[s] "|" s "|" uniq[s]
+	}' "$source_file" | sort -t'|' -k1 -nr >> "$atmp"
+	format_table < "$atmp"
+	rm -f "$atmp"
+}
+
 apool_list() {
 	local ahost="${1:-}"
 	if [ -n "$ahost" ]; then
@@ -311,6 +377,8 @@ apool_list() {
 		rm -f "$WAPOOL_LIST"
 	elif [ -f "$APOOL_LIST" ]; then
 		_apool_report "$APOOL_LIST" "Top 25 brute force attackers today"
+		echo
+		_apool_service_summary "$APOOL_LIST"
 		echo
 		local WAPOOL_LIST
 		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
@@ -333,6 +401,7 @@ usage() {
 	echo "-q|--quiet ................. run quiet with output hidden"
 	echo "-d|--dryrun ................ run detection without banning"
 	echo "-a|--attackpool [STRING] ... list addresses that have attacked this host"
+	echo "-c|--check ................. health check and diagnostics"
 	echo "-l|--list .................. list active bans"
 	echo "-u|--unban IP .............. unban an IP address"
 	echo "-b|--ban IP [SERVICE] ...... manually ban an IP address"
@@ -345,6 +414,7 @@ case "$1" in
 -q|--quiet)     exec >/dev/null 2>&1; run ;;
 -d|--dryrun)    DRY_RUN=1; vhead; run ;;
 -a|--attackpool) vhead; pre; apool_list "${2:-}" ;;
+-c|--check)     vhead; pre; health_check "$INSTALL_PATH" ;;
 -l|--list)      vhead; pre; list_bans "$INSTALL_PATH" ;;
 -u|--unban)     vhead; pre; manual_unban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}" ;;
 -b|--ban)       vhead; pre; manual_ban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$BAN_COMMAND_TEMPLATE" "${3:-manual}" "all" "${BAN_COMMAND_V6_TEMPLATE:-}" ;;
