@@ -6,14 +6,18 @@
       state_bans_active_append, state_bans_active_remove, state_bans_active_check,
       _apool_ban_status, state_ban_check, state_ban_append, state_track_count,
       filter_host, manual_unban
+[Fix] Local address detection: grep -Ew 'inet6? ' failed to match IPv4 inet
+      lines (word boundary after trailing space meets digit), causing local IPv4
+      addresses to be missing from LO_HOSTS; changed to grep -E without -w
 [Fix] Attack pool search (bfd -a STRING) used grep -E treating dots and other
       characters as regex wildcards; changed to grep -F for literal matching
 [Fix] Documentation: nftables missing UNBAN_COMMAND example, health check
       [SKIP] indicator undocumented, TLOG_TF described as log path instead of
       tracking identifier, weekly attack pool report not mentioned
-[New] 12 regression tests: IPv6 exact-match for bans.active (append, remove,
+[New] 14 regression tests: IPv6 exact-match for bans.active (append, remove,
       check, dedup), ban.list, ignore.hosts, attack pool ban status, recidivism,
-      full ban lifecycle flow, literal search matching; suite now 411 tests
+      full ban lifecycle flow, literal search matching, lo_hosts pipeline IPv4/IPv6
+      capture; suite now 413 tests
 [New] Per-run statistics in check(): rules_count, events_count, bans_count,
       elapsed time (seconds); logged via eout at end of each run
 [New] health_check() non-destructive diagnostic: validates config, log paths,
@@ -66,8 +70,8 @@
 [Change] process_unbans() passes UNBAN_COMMAND_V6_TEMPLATE for IPv6 hosts
 [Change] manual_ban()/manual_unban() accept IPv6 addresses and pass V6
          templates; validate_ip_any() replaces validate_ip()
-[Change] LO_HOSTS uses grep -Ew 'inet6? ' to capture both IPv4 and IPv6
-         local addresses, preventing IPv6 self-banning
+[Change] LO_HOSTS uses grep -E 'inet6? ' to capture both IPv4 and IPv6
+         local addresses, preventing self-banning
 [New] tests/test_validate_ip6.bats: 33 tests for IPv6 validation and
       validate_ip_any() dual-stack behavior
 [New] 8 IPv6 extraction tests in test_extract_hosts.bats (23 total)

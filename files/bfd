@@ -136,7 +136,7 @@ if [ -z "$IP_BIN" ]; then
 	done
 fi
 if [ -n "$IP_BIN" ]; then
-	"$IP_BIN" addr list | grep -Ew 'inet6? ' | tr '/' ' ' | awk '{print$2}' > "$LO_HOSTS"
+	"$IP_BIN" addr list | grep -E 'inet6? ' | tr '/' ' ' | awk '{print$2}' > "$LO_HOSTS"
 else
 	hostname -I | tr ' ' '\n' > "$LO_HOSTS"
 fi
