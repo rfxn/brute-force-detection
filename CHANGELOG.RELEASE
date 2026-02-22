@@ -1,12 +1,19 @@
 2.0.1:
+[Change] test suite migrated from custom assert framework to BATS 1.11.0
+         with bats-support 0.3.0 and bats-assert 2.1.0
+[New] 9 Dockerfiles for multi-OS test execution (Debian 12, CentOS 6/7,
+      Rocky 8/9/10, Ubuntu 12.04/20.04/24.04)
+[New] tests/run-tests.sh Docker-based test runner with --os flag
+[New] tests/Makefile with sequential and parallel targets for all OS tiers
+[New] tests/helpers/bfd-common.bash shared BATS helper sourcing bfd.lib.sh
+[Change] .github/workflows/ci.yml rebuilt with 8-OS Docker matrix, Buildx
+         caching, separate lint and test jobs
+[Change] all 7 test files converted from .sh with custom asserts to .bats
+         format (87 tests)
 [New] run() function in bfd consolidates pre/get_state/check dispatch
 [New] usage() function extracted from inline case statement help text
 [Change] case statement simplified: -s/-q/-d branches call run() instead of
          duplicating pre; get_state; check
-[New] tests/test_helpers.sh shared assert framework (assert_eq, assert_rc,
-      assert_match, summary) eliminates 154 lines of duplication across 7 tests
-[New] tests/run_tests.sh runner discovers and runs all test_*.sh with totals
-[Change] all 7 test files refactored to source shared test_helpers.sh
 [New] validate_ip() function for strict octet 0-255 IP validation using BASH_REMATCH
 [New] sanitize_mod() function restricts rule names to alphanumeric, underscore, hyphen
 [New] safe_source() validates root ownership and non-world-writable before sourcing files

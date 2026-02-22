@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, '**']
+    branches: [master, '2.*']
   pull_request:
     branches: [master]
 
@@ -17,9 +17,32 @@ jobs:
         run: |
           shellcheck files/bfd files/bfd.lib.sh files/tlog
           shellcheck install.sh uninstall.sh importconf cron.daily
-      - name: Run tests
-        run: |
-          for t in tests/test_*.sh; do
-            echo "--- Running $t ---"
-            bash "$t" || exit 1
-          done
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      matrix:
+        os: [debian12, centos6, centos7, rocky8, rocky9, ubuntu1204, ubuntu2004, ubuntu2404]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.os == 'debian12' && 'tests/Dockerfile' || format('tests/Dockerfile.{0}', matrix.os) }}
+          tags: bfd-test-${{ matrix.os }}
+          load: true
+          cache-from: type=gha,scope=${{ matrix.os }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.os }}
+
+      - name: Run tests (${{ matrix.os }})
+        run: docker run --rm bfd-test-${{ matrix.os }}
