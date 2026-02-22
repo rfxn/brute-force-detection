@@ -13,12 +13,17 @@
 [New] _apool_service_summary() per-service breakdown: event counts and
       unique IP counts per service, sorted by event count descending
 [Change] apool_list() shows per-service breakdown after daily report
-[Change] README rewritten: added ban management (section 9), IPv6 support
-         (section 10), 30-rule catalog, all config variables (TRIG_WINDOW,
-         TRIG_GLOBAL, BAN_DURATION, BAN_PERMANENT_AFTER, BAN_PERMANENT_WINDOW,
-         UNBAN_COMMAND, BAN_COMMAND_V6, UNBAN_COMMAND_V6), port-specific and
-         IPv6 firewall examples, health check and ban CLI usage (-c/-l/-u/-b),
-         troubleshooting updated with bfd -c recommendation
+[Change] Wholesale README rewrite modeled on APF documentation structure:
+         header with copyright/license, table of contents, quick start guide,
+         subsectioned configuration (detection, banning, escalation, IPv6,
+         alerts, log paths), firewall integration with paired ban/unban
+         examples, general usage with dry run/health check/attack pool
+         subsections, rule engine with catalog table and customization guide,
+         ignore lists, ban management lifecycle, IPv6 support, troubleshooting
+         table, corrected support URLs
+[New] README.md: full Markdown version with badges, anchor-linked table of
+      contents, tables for config/rules/troubleshooting, fenced code blocks
+      for all command examples
 [New] tests/test_health_check.bats with 15 tests for health check mode
 [New] tests/test_apool.bats with 10 tests for enhanced attack summary
 [New] 5 run statistics tests in test_check_pipeline.bats (62 total);

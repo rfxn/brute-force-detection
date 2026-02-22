@@ -1,0 +1,467 @@
+# Brute Force Detection (BFD)
+
+[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](CHANGELOG)
+[![License: GPL v2](https://img.shields.io/badge/license-GPL_v2-green.svg)](COPYING.GPL)
+
+**Log-based brute force attack detection and IP banning for Linux servers** — modular
+rule engine, sliding time-window counting, automatic ban lifecycle, and IPv4/IPv6 support.
+
+> (C) 1999-2026, R-fx Networks &lt;proj@rfxn.com&gt;<br>
+> (C) 2026, Ryan MacDonald &lt;ryan@rfxn.com&gt;<br>
+> Licensed under [GNU GPL v2](COPYING.GPL)
+
+---
+
+## Contents
+
+- [1. Introduction](#1-introduction)
+  - [1.1 Supported Systems](#11-supported-systems)
+- [2. Installation](#2-installation)
+  - [2.1 Scheduling](#21-scheduling)
+- [3. Configuration](#3-configuration)
+  - [3.1 Detection Thresholds](#31-detection-thresholds)
+  - [3.2 Ban Command & Duration](#32-ban-command--duration)
+  - [3.3 Repeat Offender Escalation](#33-repeat-offender-escalation)
+  - [3.4 IPv6](#34-ipv6)
+  - [3.5 Email Alerts](#35-email-alerts)
+  - [3.6 Log Paths](#36-log-paths)
+- [4. Firewall Integration](#4-firewall-integration)
+- [5. General Usage](#5-general-usage)
+  - [5.1 Dry Run](#51-dry-run)
+  - [5.2 Health Check](#52-health-check)
+  - [5.3 Attack Pool](#53-attack-pool)
+- [6. Rule Engine](#6-rule-engine)
+  - [6.1 Rule Catalog](#61-rule-catalog)
+  - [6.2 Rule Customization](#62-rule-customization)
+- [7. Ignore Lists](#7-ignore-lists)
+- [8. Ban Management](#8-ban-management)
+- [9. IPv6 Support](#9-ipv6-support)
+- [10. Troubleshooting](#10-troubleshooting)
+- [11. License](#11-license)
+- [12. Support](#12-support)
+
+---
+
+## Quick Start
+
+```bash
+# Install (as root)
+./install.sh
+
+# Configure — set your firewall ban command
+vi /usr/local/bfd/conf.bfd
+
+# Health check — validate config, log paths, and rules
+bfd -c
+
+# Dry run — detect without banning
+bfd -d
+
+# Run with output
+bfd -s
+
+# View top attackers and ban status
+bfd -a
+
+# Manage bans
+bfd -l               # list active bans
+bfd -b 10.0.0.1 sshd # manually ban an IP
+bfd -u 10.0.0.1      # unban an IP
+```
+
+---
+
+## 1. Introduction
+
+Brute Force Detection (BFD) is a modular shell script for parsing application logs and detecting authentication failures. It ships with 30 service rules covering SSH, mail, FTP, web, database, control panel, VPN, and VoIP services. Each rule declares fail2ban-compatible `<HOST>` regex patterns; the engine handles log reading, IP extraction, IPv6 normalization, and validation.
+
+BFD uses a log tracking system so logs are only parsed from the point at which they were last read. This greatly assists in performance as we are not constantly reading the same log data. The log tracking system is compatible with syslog/logrotate style log rotations — it detects when rotations have occurred and grabs log tails from both the new log file and the rotated log file.
+
+**Detection**
+- 30 service rules with fail2ban-compatible `<HOST>` regex patterns
+- Sliding time-window failure counting (default 5 minutes)
+- Per-rule and global cross-service trigger thresholds
+- Incremental log parsing with rotation-aware tracking
+
+**Banning**
+- Temporary bans with automatic expiry and firewall rule cleanup
+- Repeat offender escalation to permanent bans
+- Pluggable ban commands — APF, iptables, firewalld, nftables, ip route, or any custom command
+- Manual ban/unban CLI with full state tracking
+
+**IPv4/IPv6**
+- Dual-stack detection and banning with no rule modifications needed
+- Separate IPv6 ban commands for firewalls that require it (ip6tables)
+- Automatic local address exclusion for both address families
+
+**Operational**
+- Health check mode for non-destructive diagnostics (`bfd -c`)
+- Dry-run mode for testing rules without banning (`bfd -d`)
+- Attack pool reporting with per-service breakdown and ban status (`bfd -a`)
+- Per-run statistics logging (rules checked, events parsed, bans executed)
+- Customizable email alerting with per-rule alert suppression
+
+### 1.1 Supported Systems
+
+BFD runs on any Linux distribution with bash 4.1+ and standard GNU utilities (grep, awk, sed). It has been tested and is supported on:
+
+**RHEL-family:**
+- CentOS 6, 7
+- Rocky Linux 8, 9, 10
+
+**Debian-family:**
+- Ubuntu 14.04, 16.04, 18.04, 20.04, 22.04, 24.04
+- Debian 12
+
+Log paths are auto-detected at runtime:
+- RHEL: `/var/log/secure`, `/var/log/messages`, `/var/log/maillog`
+- Debian/Ubuntu: `/var/log/auth.log`, `/var/log/syslog`, `/var/log/mail.log`
+
+BFD requires root privileges. No additional dependencies beyond the base system are needed.
+
+---
+
+## 2. Installation
+
+The included `install.sh` script handles all installation tasks:
+
+```bash
+./install.sh
+```
+
+This will:
+- Install BFD to `/usr/local/bfd`
+- Place the `bfd` command at `/usr/local/sbin/bfd`
+- Install a 3-minute cronjob in `/etc/cron.d/bfd`
+- On systemd systems, install `bfd.service` and `bfd.timer` (not enabled by default)
+- If upgrading, run `importconf` to import settings from the previous installation
+
+Previous installations are backed up before overwriting.
+
+- **Install Path:** `/usr/local/bfd`
+- **Bin Path:** `/usr/local/sbin/bfd`
+
+### 2.1 Scheduling
+
+**Cron (default, all systems):**
+
+The installer places a cronjob at `/etc/cron.d/bfd` that runs BFD every 3 minutes in quiet mode. This works on all supported distributions including CentOS 6 and Ubuntu 14.04.
+
+**systemd timer (optional):**
+
+On systems with systemd, a timer unit is installed but not enabled. To use it instead of cron:
+
+```bash
+systemctl enable --now bfd.timer
+```
+
+It is not recommended to use both scheduling methods simultaneously.
+
+---
+
+## 3. Configuration
+
+The main configuration file is `/usr/local/bfd/conf.bfd`. Each option has a descriptive comment directly above it in the file. Review the file from top to bottom before your first run.
+
+Use `bfd -c` to validate your configuration without banning anything.
+
+### 3.1 Detection Thresholds
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TRIG` | `15` | Failed logins before an address is blocked. Override per-rule in `/usr/local/bfd/rules/` |
+| `TRIG_WINDOW` | `300` | Sliding window in seconds (default 5 min). Only failures within this window count toward the threshold |
+| `TRIG_GLOBAL` | `0` | Cross-service aggregate threshold (0 = disabled). When set, failures from ALL services count toward this single threshold |
+
+### 3.2 Ban Command & Duration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BAN_COMMAND` | APF deny | Command to execute when banning a host. See [section 4](#4-firewall-integration) for examples |
+| `BAN_DURATION` | `300` | Ban duration in seconds (0 = permanent). Temporary bans require `UNBAN_COMMAND` |
+| `UNBAN_COMMAND` | *(empty)* | Command to remove a ban. Required for temporary bans to auto-remove firewall rules on expiry |
+
+The variables `$ATTACK_HOST`, `$MOD` (service name), and `$PORTS` (from rule file) are available in ban/unban commands.
+
+### 3.3 Repeat Offender Escalation
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BAN_PERMANENT_AFTER` | `5` | Number of temporary bans before escalating to permanent (0 = disabled) |
+| `BAN_PERMANENT_WINDOW` | `86400` | Window in seconds for counting repeat offenses (default 24 hours) |
+
+When an IP accumulates `BAN_PERMANENT_AFTER` temporary bans within `BAN_PERMANENT_WINDOW` seconds, subsequent bans are automatically escalated to permanent.
+
+### 3.4 IPv6
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BAN_COMMAND_V6` | *(empty)* | IPv6-specific ban command. When empty, `BAN_COMMAND` is used for both address families |
+| `UNBAN_COMMAND_V6` | *(empty)* | IPv6-specific unban command. When empty, `UNBAN_COMMAND` is used for both |
+
+Leave empty when using tools that handle both protocols natively (nft with `inet` family, APF, ip route). Set explicitly for tools that require separate IPv4/IPv6 commands (iptables/ip6tables). See [section 9](#9-ipv6-support).
+
+### 3.5 Email Alerts
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EMAIL_ALERTS` | `0` | Send email alerts (0 = off, 1 = on) |
+| `EMAIL_ADDRESS` | `root` | Alert recipient(s), comma-separated |
+| `EMAIL_SUBJECT` | `Brute Force Warning for $HOSTNAME` | Subject line for alert emails |
+| `EMAIL_LOGLINES` | `50` | Number of log lines to include in alert body |
+
+The email template (`alert.bfd`) is fully customizable. Individual rules can suppress alerts by setting `SKIP_ALERT="1"` in the rule file.
+
+### 3.6 Log Paths
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUTH_LOG_PATH` | `/var/log/secure` | Auth log (auto-detected: `/var/log/auth.log` on Debian) |
+| `KERNEL_LOG_PATH` | `/var/log/messages` | Kernel/syslog (auto-detected: `/var/log/syslog` on Debian) |
+| `MAIL_LOG_PATH` | `/var/log/maillog` | Mail log (auto-detected: `/var/log/mail.log` on Debian) |
+| `BFD_LOG_PATH` | `/var/log/bfd_log` | BFD's own application log |
+
+Log paths are auto-detected based on the distribution. Override in `conf.bfd` if your system uses non-standard paths.
+
+---
+
+## 4. Firewall Integration
+
+Configure `BAN_COMMAND` in `conf.bfd` for your firewall. The variable `$ATTACK_HOST` is replaced with the offending IP address at ban time. For temporary bans, also set `UNBAN_COMMAND` to the reverse operation.
+
+**APF (default):**
+```bash
+BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
+UNBAN_COMMAND="/etc/apf/apf -u $ATTACK_HOST"
+```
+
+**iptables (CentOS 6/7, Ubuntu 14-20):**
+```bash
+BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP"
+UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -j DROP"
+```
+
+**firewalld (Rocky 8+, CentOS 7):**
+```bash
+BAN_COMMAND="/usr/bin/firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
+UNBAN_COMMAND="/usr/bin/firewall-cmd --permanent --remove-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
+```
+
+**nftables (Rocky 9+, Debian 12, Ubuntu 22+):**
+```bash
+BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST drop"
+```
+
+**ip route null-route (all distros):**
+```bash
+BAN_COMMAND="/sbin/ip route add blackhole $ATTACK_HOST/32"
+UNBAN_COMMAND="/sbin/ip route del blackhole $ATTACK_HOST/32"
+```
+
+**Port-specific blocking (uses `$PORTS` from rule files):**
+```bash
+BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -p tcp -m multiport --dports $PORTS -j DROP"
+UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -p tcp -m multiport --dports $PORTS -j DROP"
+```
+
+**IPv6 firewall commands** — set `BAN_COMMAND_V6` if your firewall needs separate commands for IPv6 (leave empty for tools that handle both):
+```bash
+BAN_COMMAND_V6="/sbin/ip6tables -I INPUT -s $ATTACK_HOST -j DROP"
+UNBAN_COMMAND_V6="/sbin/ip6tables -D INPUT -s $ATTACK_HOST -j DROP"
+```
+
+---
+
+## 5. General Usage
+
+The `/usr/local/sbin/bfd` command provides the following options:
+
+```
+usage: bfd [OPTION]
+-s|--standard .............. run standard with output
+-q|--quiet ................. run quiet with output hidden
+-d|--dryrun ................ run detection without banning
+-a|--attackpool [STRING] ... list addresses that have attacked this host
+-c|--check ................. health check and diagnostics
+-l|--list .................. list active bans
+-u|--unban IP .............. unban an IP address
+-b|--ban IP [SERVICE] ...... manually ban an IP address
+-v|--version ............... display version
+-h|--help .................. display this help
+```
+
+The **`-s|--standard`** and **`-q|--quiet`** options run the full detection and banning cycle. Standard mode prints output; quiet mode suppresses it (used by cron). Both parse logs, count failures against thresholds, and execute bans.
+
+### 5.1 Dry Run
+
+The **`-d|--dryrun`** option runs full detection but logs "would ban" instead of executing the ban command. Use this to test rules safely, validate your configuration, and see what BFD would do without affecting production.
+
+```bash
+bfd -d
+```
+
+### 5.2 Health Check
+
+The **`-c|--check`** option performs a non-destructive diagnostic check of your entire BFD installation:
+
+- Validates configuration (required variables, sane values)
+- Checks log file paths exist and are readable
+- Verifies ban command binary exists and is executable
+- Warns if `UNBAN_COMMAND` is empty when `BAN_DURATION > 0`
+- Checks `BAN_COMMAND_V6` binary if configured
+- Scans all rules: reports active vs inactive, trigger thresholds, ports, log paths
+- Verifies tlog (log tracking script) is executable
+- Checks state directories exist with correct permissions
+- Reports lock file status
+- Counts active bans
+
+```bash
+bfd -c
+```
+
+Output uses `[PASS]`, `[WARN]`, and `[FAIL]` indicators with a final summary.
+
+### 5.3 Attack Pool
+
+The **`-a|--attackpool`** option displays the top brute force attackers for the current day, with per-service breakdown and ban status for each IP:
+
+```bash
+bfd -a           # show top attackers
+bfd -a 10.0.0    # search for a specific string
+```
+
+The report includes:
+- **Top 25 attackers** — trigger count, IP, first/last seen, services, and ban status (active bans show `BANNED(perm)` or `BANNED(Xm)`, previous bans show `prev:N`)
+- **Per-service breakdown** — event count and unique IP count per service
+
+---
+
+## 6. Rule Engine
+
+Rules are located under `/usr/local/bfd/rules/`. Each rule is a shell fragment that declares the service name, required binary, log path, and a regex pattern for matching authentication failures.
+
+Each rule auto-enables based on the existence of a specific application binary (`REQ`). For example, if `/usr/sbin/sshd` exists, the sshd rule is active. No manual activation is needed — install the application and BFD will detect it.
+
+Use `bfd -c` to see which rules are active on your system.
+
+### 6.1 Rule Catalog
+
+BFD ships with 30 rules:
+
+| Category | Rules |
+|----------|-------|
+| **SSH** | sshd, dropbear |
+| **Mail** | dovecot, courier, postfix, sendmail, exim_authfail, exim_nxuser, vpopmail, cyrus-imap |
+| **FTP** | vsftpd, vsftpd2, proftpd, pure-ftpd |
+| **Web** | apache-auth, nginx-http-auth, modsec, wordpress, roundcube |
+| **Panel** | cpanel, plesk, webmin, directadmin |
+| **Database** | mysqld-auth |
+| **VPN** | openvpnas |
+| **VoIP** | asterisk_badauth, asterisk_iax, asterisk_nopeer |
+| **Legacy** | rh_imapd, rh_ipop3d |
+
+### 6.2 Rule Customization
+
+Each rule file supports the following variables:
+
+| Variable | Description |
+|----------|-------------|
+| `REQ` | Path to required binary. Rule is active only if this binary exists |
+| `LP` | Log file path to monitor (uses config variables like `$AUTH_LOG_PATH`) |
+| `ARG_VAL` | Regex pattern for matching failures. Uses `<HOST>` as IP placeholder |
+| `TRIG` | Per-service trigger threshold (overrides global `TRIG` from `conf.bfd`) |
+| `PORTS` | Service ports for port-specific blocking (e.g., `"22"` for sshd) |
+| `SKIP_ALERT` | Set to `"1"` to suppress email alerts for this service |
+| `TLOG_TF` | Track log format (usually `$LP` — the log path) |
+
+To customize a rule's trigger threshold:
+```bash
+# In /usr/local/bfd/rules/sshd
+TRIG="5"
+```
+
+---
+
+## 7. Ignore Lists
+
+BFD provides two mechanisms for excluding addresses from bans:
+
+- **`/usr/local/bfd/ignore.hosts`** — IPs to never ban, one per line. Supports IPv4 and IPv6 addresses.
+- **`/usr/local/bfd/exclude.files`** — additional files containing IPs to ignore. One file path per line; each referenced file contains IPs to exclude.
+
+BFD automatically detects local IPv4 and IPv6 addresses (including `::1`) and excludes them from bans. No manual configuration is needed for local address exclusion.
+
+---
+
+## 8. Ban Management
+
+Bans can be temporary (auto-expire after `BAN_DURATION` seconds) or permanent (`BAN_DURATION=0`). Temporary bans require `UNBAN_COMMAND` to be set for the firewall rule to be removed automatically on expiry.
+
+Repeat offenders are escalated to permanent bans after `BAN_PERMANENT_AFTER` temporary bans within `BAN_PERMANENT_WINDOW` seconds.
+
+**CLI commands:**
+```bash
+bfd -l                   # list all active bans (service, ports, expiry)
+bfd -u 10.0.0.1          # unban an IP address
+bfd -b 10.0.0.1          # manually ban an IP permanently
+bfd -b 10.0.0.1 sshd     # manually ban with a service label
+```
+
+**State files** in `/usr/local/bfd/tmp/`:
+
+| File | Description |
+|------|-------------|
+| `bans.active` | Currently active bans (timestamp, expiry, IP, service, ports) |
+| `bans.history` | Append-only log of all ban/unban events |
+
+The `bfd -a` attack pool report integrates with ban state — each IP shows whether it is currently banned, its ban type (permanent or time remaining), and historical ban count.
+
+---
+
+## 9. IPv6 Support
+
+BFD detects and bans both IPv4 and IPv6 addresses automatically. Rules do not need modification — the extraction engine handles both address families. IPv6 addresses are normalized before counting and comparison.
+
+For firewalls that handle both protocols natively (nft with `inet` family, APF, ip route), leave `BAN_COMMAND_V6` empty — `BAN_COMMAND` is used for all addresses.
+
+For firewalls that require separate commands (iptables/ip6tables), set `BAN_COMMAND_V6` and `UNBAN_COMMAND_V6`:
+
+```bash
+BAN_COMMAND_V6="/sbin/ip6tables -I INPUT -s $ATTACK_HOST -j DROP"
+UNBAN_COMMAND_V6="/sbin/ip6tables -D INPUT -s $ATTACK_HOST -j DROP"
+```
+
+Local IPv6 addresses (including `::1` and all link-local addresses) are auto-detected and excluded from bans.
+
+---
+
+## 10. Troubleshooting
+
+Run `bfd -c` first — it validates config, log paths, firewall binaries, rule status, state directories, and active bans in a single non-destructive check.
+
+| Symptom | Cause & Fix |
+|---------|-------------|
+| "locked subsystem, already running?" | A previous BFD run is still active or was killed. The lock auto-clears after 300 seconds |
+| "BAN_COMMAND binary not found" | The configured firewall tool is not installed. Update `BAN_COMMAND` in `conf.bfd` |
+| Rules not triggering | Check that the log path exists and the application is writing to the expected file. Use `bfd -d` to test detection without banning. Use `bfd -c` to see which rules are active |
+| Wrong log paths on Debian/Ubuntu | Log paths are auto-detected but can be overridden in `conf.bfd`: `AUTH_LOG_PATH`, `MAIL_LOG_PATH`, `KERNEL_LOG_PATH` |
+| "UNBAN_COMMAND is empty" | Set `UNBAN_COMMAND` in `conf.bfd` for temporary bans to auto-remove firewall rules on expiry |
+| IPv6 addresses not detected | IPv6 support is automatic. If using ip6tables, set `BAN_COMMAND_V6` in `conf.bfd` |
+
+---
+
+## 11. License
+
+BFD is developed and supported on a volunteer basis by Ryan MacDonald [ryan@rfxn.com].
+
+BFD (Brute Force Detection) is distributed under the GNU General Public License (GPL) without restrictions on usage or redistribution. The BFD copyright statement, and GNU GPL, "COPYING.GPL" are included in the top-level directory of the distribution. Credit must be given for derivative works as required under GNU GPL.
+
+---
+
+## 12. Support
+
+The BFD source repository is at: https://github.com/rfxn/brute-force-detection
+
+Bugs, feature requests, and general questions can be filed as GitHub issues or sent to proj@rfxn.com. When reporting issues, include the output of `bfd -c` to help diagnose configuration problems.
+
+The official project page is at: https://www.rfxn.com/projects/brute-force-detection/
