@@ -1,4 +1,43 @@
 2.0.1:
+[New] tests/test_filter_host.bats with 12 tests for ignore list and local
+      address filtering
+[New] tests/test_check_pipeline.bats with 15 integration tests for
+      count_attacks, execute_ban, and end-to-end pipeline
+[New] filter_host() in bfd.lib.sh checks ignore lists and local addresses;
+      returns 0 (process), 1 (ignored), or 2 (local address)
+[New] count_attacks() in bfd.lib.sh counts host occurrences and accumulates
+      track.attack history using state_track_* functions
+[New] execute_ban() in bfd.lib.sh executes or dry-run logs ban commands
+[Change] check() in bfd decomposed from 99 to 40 lines; delegates to
+         filter_host, count_attacks, execute_ban, validate_rule,
+         state_ban_append, state_pool_append
+[New] tlog_read() in bfd.lib.sh implements tlog byte-offset tracking as a
+      library function, avoiding subprocess overhead per rule
+[Change] files/tlog delegates to tlog_read() when bfd.lib.sh is loaded,
+         with standalone fallback for backward compatibility
+[New] 7 additional tlog_read tests in tests/test_tlog.bats (14 total)
+[New] validate_rule() in bfd.lib.sh verifies LP, TLOG_TF, ARG_VAL after
+      rule sourcing; returns 1 with diagnostic on skip
+[New] tests/test_validate_rule.bats with 9 tests for rule validation
+[New] state file I/O functions in bfd.lib.sh: state_init, state_track_append,
+      state_track_count, state_track_trim, state_ban_check, state_ban_append,
+      state_pool_append
+[New] tests/test_state_io.bats with 20 tests for state file I/O functions
+[Change] test suite migrated from custom assert framework to BATS 1.11.0
+         with bats-support 0.3.0 and bats-assert 2.1.0
+[New] 9 Dockerfiles for multi-OS test execution (Debian 12, CentOS 6/7,
+      Rocky 8/9/10, Ubuntu 12.04/20.04/24.04)
+[New] tests/run-tests.sh Docker-based test runner with --os flag
+[New] tests/Makefile with sequential and parallel targets for all OS tiers
+[New] tests/helpers/bfd-common.bash shared BATS helper sourcing bfd.lib.sh
+[Change] .github/workflows/ci.yml rebuilt with 8-OS Docker matrix, Buildx
+         caching, separate lint and test jobs
+[Change] all 7 test files converted from .sh with custom asserts to .bats
+         format (87 tests)
+[New] run() function in bfd consolidates pre/get_state/check dispatch
+[New] usage() function extracted from inline case statement help text
+[Change] case statement simplified: -s/-q/-d branches call run() instead of
+         duplicating pre; get_state; check
 [New] validate_ip() function for strict octet 0-255 IP validation using BASH_REMATCH
 [New] sanitize_mod() function restricts rule names to alphanumeric, underscore, hyphen
 [New] safe_source() validates root ownership and non-world-writable before sourcing files

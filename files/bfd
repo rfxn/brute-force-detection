@@ -173,96 +173,52 @@ check() {
 		TRIG=""
 		ARG_VAL=""
 		SKIP_ALERT=""
+		LP=""
+		TLOG_TF=""
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
 		if [ -z "$TRIG" ]; then
 			TRIG="$GLOB_TRIG"
 		fi
 		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
-		if [ -n "$ARG_VAL" ]; then
+		validate_rule "$str" || continue
 		# process ARG_VAL pipeline once; reuse for iteration and counting
 		HOSTS_PARSED=$(echo "$ARG_VAL" | tr ' ' '\n' | tr ':' ' ' | awk '{print$1}' | sort -n)
 		while IFS= read -r ahost; do
-			 [ -z "$ahost" ] && continue
-			 ATTACK_HOST=$(validate_ip "$ahost") || continue
-			 HOST_IGNORE=0
-			 if [ -f "$IGNORE_HOST_FILES" ]; then
-				while IFS= read -r file; do
-					[ -z "$file" ] && continue
-					if [ -f "$file" ]; then
-						CHKHOST_IGNORE=$(grep -v "#" "$file" | grep -Fw "$ATTACK_HOST")
-						if [ -n "$CHKHOST_IGNORE" ]; then
-							HOST_IGNORE="1"
-						fi
-					fi
-				done < <(grep -v "#" "$IGNORE_HOST_FILES")
-			 fi
-			 if [ "$HOST_IGNORE" == "0" ]; then
-				ATTACK_COUNT=$(echo "$HOSTS_PARSED" | grep -cFw "$ATTACK_HOST")
-				echo "$ATTACK_HOST $ATTACK_COUNT $MOD" >> "$INSTALL_PATH/tmp/track.attack"
-				if [ "$ATTACK_COUNT" -lt "$TRIG" ]; then
-					MAX_LINES=50
-					CUR_LINES=$(wc -l "$INSTALL_PATH/tmp/track.attack" | awk '{print$1}')
-					if [ "$CUR_LINES" -gt "$MAX_LINES" ]; then
-						tail -n "$MAX_LINES" "$INSTALL_PATH/tmp/track.attack" > "$INSTALL_PATH/tmp/track.attack.new"
-						mv "$INSTALL_PATH/tmp/track.attack.new" "$INSTALL_PATH/tmp/track.attack"
-					fi
-					RET_COUNT=0
-					while IFS= read -r i; do
-						if [ -n "$i" ]; then
-							RET_COUNT=$((RET_COUNT + i))
-						fi
-					done < <(grep -Fw "$ATTACK_HOST" "$INSTALL_PATH/tmp/track.attack" | awk '{print$2}')
-					ATTACK_COUNT=$((RET_COUNT + ATTACK_COUNT))
-				fi
-			 fi
-			 if [ -z "$ATTACK_COUNT" ]; then
+			[ -z "$ahost" ] && continue
+			ATTACK_HOST=$(validate_ip "$ahost") || continue
+			local filter_rc=0
+			filter_host "$ATTACK_HOST" "$IGNORE_HOST_FILES" "$LO_HOSTS" || filter_rc=$?
+			if [ "$filter_rc" -eq 1 ]; then
+				continue
+			fi
+			ATTACK_COUNT=$(count_attacks "$ATTACK_HOST" "$HOSTS_PARSED" "$INSTALL_PATH" "$TRIG")
+			if [ -z "$ATTACK_COUNT" ]; then
 				ATTACK_COUNT=0
-			 fi
-			 if [ "$ATTACK_COUNT" -ge "$TRIG" ] && [ "$HOST_IGNORE" == "0" ]; then
+			fi
+			if [ "$ATTACK_COUNT" -ge "$TRIG" ]; then
 				SKIP=0
-				MAX_LINES=50
-				tail -n "$MAX_LINES" "$BAN_LIST" > "$BAN_LIST.new" ; mv "$BAN_LIST.new" "$BAN_LIST"
-				CHKSKIP=$(grep -Fw "$ATTACK_HOST" "$BAN_LIST")
-				if [ -z "$CHKSKIP" ]; then
-					echo "$ATTACK_HOST" >> "$BAN_LIST"
-				fi
+				state_ban_append "$INSTALL_PATH" "$ATTACK_HOST" 50
 				if [ "$SKIP" == "0" ]; then
-				 SKIP_BAN="0"
-				 while IFS= read -r localnet; do
-					[ -z "$localnet" ] && continue
-					if [ "$ATTACK_HOST" == "$localnet" ]; then
+					if [ "$filter_rc" -eq 2 ]; then
+						# local address
 						eout "{$MOD} $ATTACK_HOST is equal to a local address." le
-						SKIP_BAN="1"
-					fi
-				 done < "$LO_HOSTS"
-
-				 if [ "$SKIP_BAN" == "0" ] && [ "$LAST_HOST" != "$ATTACK_HOST" ]; then
-					echo "$UTIME $ATTACK_HOST $MOD" >> "$APOOL_LIST"
-					LAST_HOST="$ATTACK_HOST"
-					BAN_COMMAND="$BAN_COMMAND_TEMPLATE"
-					if [ "$DRY_RUN" == "1" ]; then
-						eout "{$MOD} [dry-run] would ban $ATTACK_HOST with command '$BAN_COMMAND'." le
-					else
-						eout "{$MOD} $ATTACK_HOST exceeded login failures; executed ban command '$BAN_COMMAND'." le
-						eval "$BAN_COMMAND" >/dev/null 2>&1
-						ban_rc=$?
-						if [ "$ban_rc" -ne 0 ]; then
-							eout "{$MOD} ban command for $ATTACK_HOST exited with code $ban_rc." le
+						if [ "$LAST" != "$ATTACK_HOST" ]; then
+							state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
+							LAST="$ATTACK_HOST"
+							eout "{$MOD} $ATTACK_HOST exceeded maximum login failures; host already banned or ignored." le
+						fi
+					elif [ "$LAST_HOST" != "$ATTACK_HOST" ]; then
+						state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
+						LAST_HOST="$ATTACK_HOST"
+						execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN"
+						if [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
+							alert
+							SKIP_ALERT=""
 						fi
 					fi
-					if [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
-						alert
-						SKIP_ALERT=""
-					fi
-				 elif [ "$SKIP_BAN" == "1" ] && [ "$LAST" != "$ATTACK_HOST" ]; then
-					echo "$UTIME $ATTACK_HOST $MOD" >> "$APOOL_LIST"
-					LAST="$ATTACK_HOST"
-					eout "{$MOD} $ATTACK_HOST exceeded maximum login failures; host already banned or ignored." le
-				 fi
 				fi
-			 fi
+			fi
 		done < <(echo "$HOSTS_PARSED" | uniq)
-		fi
 	done
 }
 
@@ -321,36 +277,13 @@ apool_list() {
 	fi
 }
 
-case "$1" in
--s|--standard)
-	vhead
+run() {
 	pre
 	get_state
 	check
-	;;
--q|--quiet)
-	exec >/dev/null 2>&1
-	pre
-	get_state
-	check
-	;;
--d|--dryrun)
-	DRY_RUN=1
-	vhead
-	pre
-	get_state
-	check
-	;;
--a|--attackpool)
-	vhead
-	pre
-	apool_list "${2:-}"
-	;;
--v|--version)
-	vhead
-	;;
--h|--help|*)
-	vhead
+}
+
+usage() {
 	echo "usage: $0 [OPTION]"
 	echo "-s|--standard .............. run standard with output"
 	echo "-q|--quiet ................. run quiet with output hidden"
@@ -358,5 +291,14 @@ case "$1" in
 	echo "-a|--attackpool [STRING] ... list addresses that have attacked this host"
 	echo "-v|--version ............... display version"
 	echo "-h|--help .................. display this help"
+}
+
+case "$1" in
+-s|--standard)  vhead; run ;;
+-q|--quiet)     exec >/dev/null 2>&1; run ;;
+-d|--dryrun)    DRY_RUN=1; vhead; run ;;
+-a|--attackpool) vhead; pre; apool_list "${2:-}" ;;
+-v|--version)   vhead ;;
+-h|--help|*)    vhead; usage ;;
 esac
 exit $EXIT_OK
