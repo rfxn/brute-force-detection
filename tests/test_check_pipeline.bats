@@ -188,6 +188,18 @@ teardown() {
 	assert_output --partial "exited with code"
 }
 
+@test "execute_ban: failed ban skips lifecycle recording" {
+	# execute_ban with a command that fails
+	run execute_ban "10.0.0.1" "sshd" "false" "0"
+	[ "$status" -ne 0 ]
+
+	# bans.active and bans.history must remain empty
+	run cat "$INSTALL_PATH/tmp/bans.active"
+	assert_output ""
+	run cat "$INSTALL_PATH/tmp/bans.history"
+	assert_output ""
+}
+
 # --- end-to-end pipeline ---
 
 @test "pipeline: filter_host + count_failures + state_ban_append" {
@@ -256,4 +268,134 @@ teardown() {
 	# ban.list should be empty
 	run cat "$INSTALL_PATH/tmp/ban.list"
 	assert_output ""
+}
+
+# --- execute_unban ---
+
+@test "execute_unban: runs command and sets globals" {
+	local marker="$TEST_TMPDIR/unban_executed"
+	execute_unban "10.0.0.1" "sshd" "touch $marker" >/dev/null
+	[ -f "$marker" ]
+	[ "$ATTACK_HOST" = "10.0.0.1" ]
+}
+
+@test "execute_unban: returns non-zero on command failure" {
+	run execute_unban "10.0.0.1" "sshd" "false"
+	[ "$status" -ne 0 ]
+}
+
+# --- process_unbans ---
+
+@test "process_unbans: removes expired bans" {
+	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "22"
+	process_unbans "$INSTALL_PATH" "1400" "" >/dev/null
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	assert_failure
+}
+
+@test "process_unbans: skips permanent bans (expiry=0)" {
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "10.0.0.1" "sshd" "22"
+	process_unbans "$INSTALL_PATH" "9999999" "" >/dev/null
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	assert_success
+}
+
+@test "process_unbans: with empty UNBAN_COMMAND still removes from state" {
+	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "22"
+	process_unbans "$INSTALL_PATH" "1400" "" >/dev/null
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	assert_failure
+	# verify history recorded
+	run cat "$INSTALL_PATH/tmp/bans.history"
+	assert_output --partial "10.0.0.1"
+	assert_output --partial "unban"
+}
+
+@test "process_unbans: executes unban command when set" {
+	local marker="$TEST_TMPDIR/unban_ran"
+	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "22"
+	process_unbans "$INSTALL_PATH" "1400" "touch $marker" >/dev/null
+	[ -f "$marker" ]
+}
+
+# --- check_recidivism ---
+
+@test "check_recidivism: returns 0 when threshold met" {
+	# seed 5 ban events in window
+	local i
+	for i in 1 2 3 4 5; do
+		state_bans_history_append "$INSTALL_PATH" "$((800 + i))" "1100" "10.0.0.1" "sshd" "ban"
+	done
+	run check_recidivism "$INSTALL_PATH" "10.0.0.1" "500" "1000" "5"
+	assert_success
+}
+
+@test "check_recidivism: returns 1 when below threshold" {
+	state_bans_history_append "$INSTALL_PATH" "900" "1200" "10.0.0.1" "sshd" "ban"
+	run check_recidivism "$INSTALL_PATH" "10.0.0.1" "500" "1000" "5"
+	assert_failure
+}
+
+@test "check_recidivism: returns 1 when disabled (permanent_after=0)" {
+	state_bans_history_append "$INSTALL_PATH" "900" "1200" "10.0.0.1" "sshd" "ban"
+	run check_recidivism "$INSTALL_PATH" "10.0.0.1" "500" "1000" "0"
+	assert_failure
+}
+
+# --- ban lifecycle flow ---
+
+@test "pipeline: ban → record → expire → unban flow" {
+	# simulate a ban
+	execute_ban "10.0.0.1" "sshd" "true" "0" >/dev/null
+	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "22"
+	state_bans_history_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "ban"
+
+	# verify active
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	assert_success
+
+	# process unbans at time past expiry
+	process_unbans "$INSTALL_PATH" "1400" "" >/dev/null
+
+	# verify removed from active
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	assert_failure
+
+	# verify unban recorded in history
+	run cat "$INSTALL_PATH/tmp/bans.history"
+	assert_output --partial "unban"
+}
+
+# --- manual_ban / manual_unban ---
+
+@test "manual_ban: bans IP and records in state" {
+	manual_ban "$INSTALL_PATH" "10.0.0.1" "1000" "true" "sshd" >/dev/null
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	assert_success
+	run cat "$INSTALL_PATH/tmp/bans.history"
+	assert_output --partial "10.0.0.1"
+	assert_output --partial "ban"
+}
+
+@test "manual_ban: rejects already banned IP" {
+	state_bans_active_append "$INSTALL_PATH" "900" "0" "10.0.0.1" "sshd" "22"
+	run manual_ban "$INSTALL_PATH" "10.0.0.1" "1000" "true" "sshd"
+	assert_failure
+	assert_output --partial "already banned"
+}
+
+@test "manual_unban: unbans IP and records in history" {
+	state_bans_active_append "$INSTALL_PATH" "900" "0" "10.0.0.1" "sshd" "22"
+	run manual_unban "$INSTALL_PATH" "10.0.0.1" "1000" ""
+	assert_success
+	assert_output --partial "unbanned"
+	# verify removed from active
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	assert_failure
+}
+
+@test "manual_unban: rejects IP not in ban list" {
+	run manual_unban "$INSTALL_PATH" "10.0.0.99" "1000" ""
+	assert_failure
+	assert_output --partial "not in the active ban list"
 }

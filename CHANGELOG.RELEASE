@@ -1,4 +1,49 @@
 2.0.1:
+[Fix] importconf targeted cleanup preserves ban lifecycle state (bans.active,
+      bans.history, events.dat) during upgrades instead of rm -f tmp/*
+[Fix] state_init() called in pre() so state files are created with 600
+      permissions before first use, preventing world-readable state
+[Fix] check() verifies execute_ban return code; failed bans no longer
+      recorded in bans.active/bans.history (phantom ban prevention)
+[New] test for failed ban command skipping lifecycle recording
+      (test_check_pipeline.bats, 36 total); full suite now 239 tests
+[New] BAN_DURATION config variable (default 300s) for temporary bans with
+      auto-expiry; 0 = permanent ban (legacy behavior)
+[New] BAN_PERMANENT_AFTER config variable (default 5) for recidivism
+      escalation: repeat temp-bans become permanent
+[New] BAN_PERMANENT_WINDOW config variable (default 86400s/24h) for
+      counting repeat offenses toward permanent ban threshold
+[New] UNBAN_COMMAND config variable with APF, iptables, firewalld,
+      nftables, and ip route examples
+[New] ban state tracking via bans.active (active bans with expiry) and
+      bans.history (append-only ban event log) in tmp/
+[New] state_bans_active_append/remove/check/list/expired functions for
+      managing active ban state with duplicate prevention
+[New] state_bans_history_append and state_bans_count_recent for ban
+      event logging and recidivism counting
+[New] execute_unban() mirrors execute_ban for removing bans
+[New] process_unbans() auto-expires temporary bans each cron cycle,
+      executing UNBAN_COMMAND and recording unban events
+[New] check_recidivism() escalates repeat offenders to permanent bans
+      when BAN_PERMANENT_AFTER threshold met within window
+[New] -l|--list CLI flag displays active bans with formatted table
+[New] -u|--unban CLI flag manually unbans an IP address
+[New] -b|--ban CLI flag manually bans an IP address permanently
+[New] list_bans, manual_unban, manual_ban functions in bfd.lib.sh
+[Change] run() calls process_unbans before check() to clear expired bans
+[Change] check() skips hosts with active bans; records bans in lifecycle
+         state with recidivism-aware expiry calculation
+[Change] validate_config() validates BAN_DURATION, BAN_PERMANENT_AFTER,
+         BAN_PERMANENT_WINDOW; warns if BAN_DURATION>0 with no UNBAN_COMMAND
+[Fix] cron.daily replaced rm -f tmp/* with targeted cleanup preserving
+      bans.active and events.dat; rotates bans.history daily
+[Change] state_init() creates bans.active and bans.history alongside
+         existing state files
+[New] tests/test_ban_lifecycle.bats with 26 tests for ban state functions
+[New] 14 tests for ban lifecycle integration and CLI in
+      test_check_pipeline.bats
+[New] 10 tests for ban config validation in test_config_validation.bats
+      (34 total)
 [Change] per-service TRIG thresholds enabled in all 20 rule files: sshd=5,
          dovecot=10, postfix=10, vsftpd/vsftpd2=10, proftpd=10, pure-ftpd=10,
          exim_authfail=10, exim_nxuser=15, modsec=10, asterisk_badauth=5,

@@ -21,6 +21,10 @@ run_validate() {
 		TRIG="15"
 		TRIG_WINDOW="300"
 		TRIG_GLOBAL="0"
+		BAN_DURATION="300"
+		BAN_PERMANENT_AFTER="5"
+		BAN_PERMANENT_WINDOW="86400"
+		UNBAN_COMMAND_TEMPLATE=""
 		EMAIL_ALERTS="0"
 		LOCK_FILE_TIMEOUT="300"
 		BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
@@ -28,6 +32,25 @@ run_validate() {
 		eval "$1"
 		validate_config
 	) >/dev/null 2>&1
+}
+
+# helper: capture stdout+stderr for warning checks
+run_validate_output() {
+	(
+		TRIG="15"
+		TRIG_WINDOW="300"
+		TRIG_GLOBAL="0"
+		BAN_DURATION="300"
+		BAN_PERMANENT_AFTER="5"
+		BAN_PERMANENT_WINDOW="86400"
+		UNBAN_COMMAND_TEMPLATE=""
+		EMAIL_ALERTS="0"
+		LOCK_FILE_TIMEOUT="300"
+		BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
+		INSTALL_PATH="$TEST_TMPDIR"
+		eval "$1"
+		validate_config
+	) 2>&1
 }
 
 @test "validate_config: valid config passes" {
@@ -152,4 +175,64 @@ run_validate() {
 @test "validate_config: TRIG_GLOBAL= rejects" {
 	run run_validate 'TRIG_GLOBAL=""'
 	assert_failure
+}
+
+# --- BAN_DURATION ---
+
+@test "validate_config: BAN_DURATION=300 passes" {
+	run run_validate 'BAN_DURATION="300"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_DURATION=0 passes (permanent)" {
+	run run_validate 'BAN_DURATION="0"'
+	assert_success
+}
+
+@test "validate_config: BAN_DURATION=abc rejects" {
+	run run_validate 'BAN_DURATION="abc"'
+	assert_failure
+}
+
+# --- BAN_PERMANENT_AFTER ---
+
+@test "validate_config: BAN_PERMANENT_AFTER=5 passes" {
+	run run_validate 'BAN_PERMANENT_AFTER="5"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_PERMANENT_AFTER=0 passes (disabled)" {
+	run run_validate 'BAN_PERMANENT_AFTER="0"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_PERMANENT_AFTER=abc rejects" {
+	run run_validate 'BAN_PERMANENT_AFTER="abc"'
+	assert_failure
+}
+
+# --- BAN_PERMANENT_WINDOW ---
+
+@test "validate_config: BAN_PERMANENT_WINDOW=86400 passes" {
+	run run_validate 'BAN_PERMANENT_WINDOW="86400"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_PERMANENT_WINDOW=0 rejects" {
+	run run_validate 'BAN_PERMANENT_WINDOW="0"'
+	assert_failure
+}
+
+@test "validate_config: BAN_PERMANENT_WINDOW=abc rejects" {
+	run run_validate 'BAN_PERMANENT_WINDOW="abc"'
+	assert_failure
+}
+
+# --- UNBAN_COMMAND warning ---
+
+@test "validate_config: warns when BAN_DURATION>0 and UNBAN_COMMAND empty" {
+	run run_validate_output 'BAN_DURATION="300"; UNBAN_COMMAND_TEMPLATE=""'
+	assert_success
+	assert_output --partial "warning"
+	assert_output --partial "UNBAN_COMMAND"
 }

@@ -71,6 +71,7 @@ fi
 GLOB_TRIG="$TRIG"
 # extract BAN_COMMAND template without shell expansion of $ATTACK_HOST/$MOD
 BAN_COMMAND_TEMPLATE=$(grep '^BAN_COMMAND=' "$CNF" | tail -1 | sed "s/^BAN_COMMAND=//;s/^\"//;s/\"$//")
+UNBAN_COMMAND_TEMPLATE=$(grep '^UNBAN_COMMAND=' "$CNF" | tail -1 | sed "s/^UNBAN_COMMAND=//;s/^\"//;s/\"$//")
 
 validate_config
 detect_log_paths
@@ -113,6 +114,8 @@ if [ ! -f "$BAN_LIST" ]; then
 	touch "$BAN_LIST"
 	chmod 600 "$BAN_LIST"
 fi
+
+state_init "$INSTALL_PATH"
 
 LO_HOSTS="$INSTALL_PATH/ignore.hosts.local"
 IP_BIN=$(command -v ip 2>/dev/null)
@@ -209,6 +212,10 @@ check() {
 				fi
 			fi
 			if [ "$should_ban" -eq 1 ]; then
+				# skip if host already has an active ban
+				if state_bans_active_check "$INSTALL_PATH" "$ATTACK_HOST"; then
+					continue
+				fi
 				SKIP=0
 				state_ban_append "$INSTALL_PATH" "$ATTACK_HOST" 50
 				if [ "$SKIP" == "0" ]; then
@@ -223,11 +230,29 @@ check() {
 					elif [ "$LAST_HOST" != "$ATTACK_HOST" ]; then
 						state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
 						LAST_HOST="$ATTACK_HOST"
-						execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN"
+						if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN"; then
 						if [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							alert
 							SKIP_ALERT=""
 						fi
+						# record ban in lifecycle state
+						local ban_expiry
+						if [ "${BAN_DURATION:-0}" -eq 0 ]; then
+							ban_expiry=0
+						elif check_recidivism "$INSTALL_PATH" "$ATTACK_HOST" \
+							"${BAN_PERMANENT_WINDOW:-86400}" "$UTIME" "${BAN_PERMANENT_AFTER:-0}"; then
+							ban_expiry=0
+							eout "{$MOD} $ATTACK_HOST escalated to permanent ban (repeat offender)." le
+						else
+							ban_expiry=$((UTIME + BAN_DURATION))
+						fi
+						state_bans_active_append "$INSTALL_PATH" "$UTIME" "$ban_expiry" "$ATTACK_HOST" "$MOD" "${PORTS:-all}"
+						local ban_action="ban"
+						if [ "$ban_expiry" -eq 0 ] && [ "${BAN_DURATION:-0}" -gt 0 ]; then
+							ban_action="escalate"
+						fi
+						state_bans_history_append "$INSTALL_PATH" "$UTIME" "$ban_expiry" "$ATTACK_HOST" "$MOD" "$ban_action"
+					fi
 					fi
 				fi
 			fi
@@ -293,6 +318,7 @@ apool_list() {
 run() {
 	pre
 	get_state
+	process_unbans "$INSTALL_PATH" "$UTIME" "$UNBAN_COMMAND_TEMPLATE"
 	check
 }
 
@@ -302,6 +328,9 @@ usage() {
 	echo "-q|--quiet ................. run quiet with output hidden"
 	echo "-d|--dryrun ................ run detection without banning"
 	echo "-a|--attackpool [STRING] ... list addresses that have attacked this host"
+	echo "-l|--list .................. list active bans"
+	echo "-u|--unban IP .............. unban an IP address"
+	echo "-b|--ban IP [SERVICE] ...... manually ban an IP address"
 	echo "-v|--version ............... display version"
 	echo "-h|--help .................. display this help"
 }
@@ -311,6 +340,9 @@ case "$1" in
 -q|--quiet)     exec >/dev/null 2>&1; run ;;
 -d|--dryrun)    DRY_RUN=1; vhead; run ;;
 -a|--attackpool) vhead; pre; apool_list "${2:-}" ;;
+-l|--list)      vhead; pre; list_bans "$INSTALL_PATH" ;;
+-u|--unban)     vhead; pre; manual_unban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" ;;
+-b|--ban)       vhead; pre; manual_ban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$BAN_COMMAND_TEMPLATE" "${3:-}" ;;
 -v|--version)   vhead ;;
 -h|--help|*)    vhead; usage ;;
 esac

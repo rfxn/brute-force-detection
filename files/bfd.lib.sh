@@ -103,7 +103,8 @@ safe_source() {
 	. "$file"
 }
 
-# validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, EMAIL_ALERTS,
+# validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, BAN_DURATION,
+#   BAN_PERMANENT_AFTER, BAN_PERMANENT_WINDOW, EMAIL_ALERTS,
 #   LOCK_FILE_TIMEOUT, BAN_COMMAND_TEMPLATE, INSTALL_PATH, EXIT_CONFIG_ERROR
 validate_config() {
 	local int_pattern='^[0-9]+$'
@@ -118,6 +119,21 @@ validate_config() {
 	if ! [[ "$TRIG_GLOBAL" =~ $int_pattern ]]; then
 		echo "error: TRIG_GLOBAL must be a non-negative integer (got '$TRIG_GLOBAL')."
 		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "${BAN_DURATION:-0}" =~ $int_pattern ]]; then
+		echo "error: BAN_DURATION must be a non-negative integer (got '${BAN_DURATION:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "${BAN_PERMANENT_AFTER:-0}" =~ $int_pattern ]]; then
+		echo "error: BAN_PERMANENT_AFTER must be a non-negative integer (got '${BAN_PERMANENT_AFTER:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "${BAN_PERMANENT_WINDOW:-1}" =~ $int_pattern ]] || [ "${BAN_PERMANENT_WINDOW:-1}" -eq 0 ]; then
+		echo "error: BAN_PERMANENT_WINDOW must be a positive integer (got '${BAN_PERMANENT_WINDOW:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
+		echo "warning: BAN_DURATION>0 but UNBAN_COMMAND is empty; auto-unban will only remove state, not firewall rules."
 	fi
 	if [ "$EMAIL_ALERTS" != "0" ] && [ "$EMAIL_ALERTS" != "1" ]; then
 		echo "error: EMAIL_ALERTS must be 0 or 1 (got '$EMAIL_ALERTS')."
@@ -316,6 +332,108 @@ execute_ban() {
 	return $ban_rc
 }
 
+# execute_unban host mod unban_cmd_template — execute unban command
+# returns 0 on success, unban command exit code on failure
+execute_unban() {
+	local host="$1" mod="$2" unban_cmd_template="$3"
+	ATTACK_HOST="$host"
+	MOD="$mod"
+	eout "{$mod} $host ban expired; executing unban command." le
+	eval "$unban_cmd_template" >/dev/null 2>&1
+	local unban_rc=$?
+	if [ "$unban_rc" -ne 0 ]; then
+		eout "{$mod} unban command for $host exited with code $unban_rc." le
+	fi
+	return $unban_rc
+}
+
+# process_unbans install_path now unban_cmd_template — unban expired entries
+process_unbans() {
+	local install_path="$1" now="$2" unban_cmd_template="$3"
+	local expired_line ts expiry host mod ports
+	while IFS=' ' read -r ts expiry host mod ports; do
+		[ -z "$ts" ] && continue
+		if [ -n "$unban_cmd_template" ]; then
+			execute_unban "$host" "$mod" "$unban_cmd_template"
+		else
+			eout "{$mod} $host ban expired; no UNBAN_COMMAND configured, removing state only." le
+		fi
+		state_bans_active_remove "$install_path" "$host"
+		state_bans_history_append "$install_path" "$now" "$expiry" "$host" "$mod" "unban"
+	done < <(state_bans_active_expired "$install_path" "$now")
+}
+
+# check_recidivism install_path host permanent_window now permanent_after
+# returns 0 if host should be escalated to permanent ban, 1 otherwise
+check_recidivism() {
+	local install_path="$1" host="$2" permanent_window="$3"
+	local now="$4" permanent_after="$5"
+	if [ "$permanent_after" -eq 0 ]; then
+		return 1
+	fi
+	local recent_count
+	recent_count=$(state_bans_count_recent "$install_path" "$host" "$permanent_window" "$now")
+	if [ "$recent_count" -ge "$permanent_after" ]; then
+		return 0
+	fi
+	return 1
+}
+
+# list_bans install_path — display formatted active ban list
+list_bans() {
+	local install_path="$1"
+	state_init "$install_path"
+	local listing
+	listing=$(state_bans_active_list "$install_path")
+	if [ -z "$listing" ]; then
+		echo "No active bans."
+		return 0
+	fi
+	echo "[+] Active bans" && echo
+	echo "IP|SERVICE|PORTS|BANNED|EXPIRES" | format_table
+	echo "$listing" | format_table
+}
+
+# manual_unban install_path ip utime unban_cmd_template — manually unban an IP
+manual_unban() {
+	local install_path="$1" ip="$2" utime="$3" unban_cmd_template="$4"
+	ip=$(validate_ip "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
+	state_init "$install_path"
+	if ! state_bans_active_check "$install_path" "$ip"; then
+		echo "error: $ip is not in the active ban list."
+		return 1
+	fi
+	local ban_mod
+	ban_mod=$(grep -Fw "$ip" "$install_path/tmp/bans.active" | awk '{print $4}' | head -1)
+	if [ -n "$unban_cmd_template" ]; then
+		execute_unban "$ip" "${ban_mod:-unknown}" "$unban_cmd_template"
+	fi
+	state_bans_active_remove "$install_path" "$ip"
+	state_bans_history_append "$install_path" "$utime" "0" "$ip" "${ban_mod:-unknown}" "unban"
+	echo "$ip unbanned successfully."
+}
+
+# manual_ban install_path ip utime ban_cmd_template [mod] — manually ban an IP
+manual_ban() {
+	local install_path="$1" ip="$2" utime="$3" ban_cmd_template="$4"
+	local mod="${5:-manual}"
+	ip=$(validate_ip "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
+	if [ -n "$mod" ]; then
+		mod=$(sanitize_mod "$mod") || { echo "error: invalid service name '$mod'."; return 1; }
+	else
+		mod="manual"
+	fi
+	state_init "$install_path"
+	if state_bans_active_check "$install_path" "$ip"; then
+		echo "error: $ip is already banned."
+		return 1
+	fi
+	execute_ban "$ip" "$mod" "$ban_cmd_template" "0"
+	state_bans_active_append "$install_path" "$utime" "0" "$ip" "$mod" "all"
+	state_bans_history_append "$install_path" "$utime" "0" "$ip" "$mod" "ban"
+	echo "$ip banned permanently."
+}
+
 # --- State file I/O functions ---
 # State file formats:
 #   track.attack: "IP COUNT MOD" — per-run failure accumulator, line-capped
@@ -332,7 +450,9 @@ state_init() {
 		mkdir -p "$install_path/stats"
 	fi
 	local f
-	for f in "$install_path/tmp/track.attack" "$install_path/tmp/ban.list" "$install_path/tmp/events.dat"; do
+	for f in "$install_path/tmp/track.attack" "$install_path/tmp/ban.list" \
+		 "$install_path/tmp/events.dat" "$install_path/tmp/bans.active" \
+		 "$install_path/tmp/bans.history"; do
 		if [ ! -f "$f" ]; then
 			touch "$f"
 			chmod 600 "$f"
@@ -401,6 +521,94 @@ state_ban_append() {
 state_pool_append() {
 	local install_path="$1" utime="$2" host="$3" mod="$4"
 	echo "$utime $host $mod" >> "$install_path/stats/attack.pool"
+}
+
+# --- Ban state I/O functions ---
+# State file formats:
+#   bans.active:  "TIMESTAMP EXPIRY IP MOD PORTS" — currently active bans
+#   bans.history: "TIMESTAMP EXPIRY IP MOD ACTION" — append-only ban event log
+
+# state_bans_active_append install_path timestamp expiry host mod ports
+# Append ban entry to bans.active. Skips if host already has active entry.
+state_bans_active_append() {
+	local install_path="$1" timestamp="$2" expiry="$3"
+	local host="$4" mod="$5" ports="$6"
+	local bans_file="$install_path/tmp/bans.active"
+	if grep -qFw "$host" "$bans_file" 2>/dev/null; then
+		return 0
+	fi
+	echo "$timestamp $expiry $host $mod $ports" >> "$bans_file"
+}
+
+# state_bans_active_remove install_path host — remove all entries for host
+state_bans_active_remove() {
+	local install_path="$1" host="$2"
+	local bans_file="$install_path/tmp/bans.active"
+	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
+		return 0
+	fi
+	grep -vFw "$host" "$bans_file" > "$bans_file.new" || true
+	mv "$bans_file.new" "$bans_file"
+}
+
+# state_bans_active_check install_path host — return 0 if host has active ban
+state_bans_active_check() {
+	local install_path="$1" host="$2"
+	if grep -qFw "$host" "$install_path/tmp/bans.active" 2>/dev/null; then
+		return 0
+	fi
+	return 1
+}
+
+# state_bans_active_list install_path — output formatted active ban lines
+state_bans_active_list() {
+	local install_path="$1"
+	local bans_file="$install_path/tmp/bans.active"
+	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
+		return 0
+	fi
+	local ts expiry host mod ports banned_fmt expiry_fmt
+	while IFS=' ' read -r ts expiry host mod ports; do
+		[ -z "$ts" ] && continue
+		banned_fmt=$(date -d "@${ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$ts")
+		if [ "$expiry" = "0" ]; then
+			expiry_fmt="permanent"
+		else
+			expiry_fmt=$(date -d "@${expiry}" +"%D %H:%M:%S" 2>/dev/null || echo "$expiry")
+		fi
+		echo "$host|$mod|$ports|$banned_fmt|$expiry_fmt"
+	done < "$bans_file"
+}
+
+# state_bans_active_expired install_path now — output entries where EXPIRY>0 and EXPIRY<=now
+state_bans_active_expired() {
+	local install_path="$1" now="$2"
+	local bans_file="$install_path/tmp/bans.active"
+	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
+		return 0
+	fi
+	awk -v now="$now" '$2+0 > 0 && $2+0 <= now+0' "$bans_file"
+}
+
+# state_bans_history_append install_path timestamp expiry host mod action
+state_bans_history_append() {
+	local install_path="$1" timestamp="$2" expiry="$3"
+	local host="$4" mod="$5" action="$6"
+	echo "$timestamp $expiry $host $mod $action" >> "$install_path/tmp/bans.history"
+}
+
+# state_bans_count_recent install_path host window now — count ban/escalate events in window
+state_bans_count_recent() {
+	local install_path="$1" host="$2" window="$3" now="$4"
+	local history_file="$install_path/tmp/bans.history"
+	local cutoff=$((now - window))
+	if [ ! -f "$history_file" ] || [ ! -s "$history_file" ]; then
+		echo "0"
+		return 0
+	fi
+	awk -v cutoff="$cutoff" -v host="$host" \
+		'$1+0 >= cutoff && $3 == host && ($5 == "ban" || $5 == "escalate") { c++ } END { print c+0 }' \
+		"$history_file"
 }
 
 # --- Event state I/O functions ---

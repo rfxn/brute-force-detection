@@ -23,6 +23,20 @@ TRIG_WINDOW="300"
 # regardless of per-rule TRIG values
 TRIG_GLOBAL="0"
 
+# ban duration in seconds (0 = permanent, 300 = 5 minutes)
+# temporary bans are automatically removed after this duration
+# requires UNBAN_COMMAND to be set for auto-unban to work
+BAN_DURATION="300"
+
+# number of temporary bans before permanent ban (0 = disabled)
+# when an IP is temp-banned this many times within BAN_PERMANENT_WINDOW,
+# subsequent bans are escalated to permanent
+BAN_PERMANENT_AFTER="5"
+
+# window in seconds for counting repeat offenses (default 24 hours)
+# only bans within this window count toward BAN_PERMANENT_AFTER threshold
+BAN_PERMANENT_WINDOW="86400"
+
 # send email alerts for all events [0 = off; 1 = on]
 EMAIL_ALERTS="0"
 
@@ -43,6 +57,20 @@ BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
 #BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST drop"
 # ip route null-route (all distros):
 #BAN_COMMAND="/sbin/ip route add blackhole $ATTACK_HOST/32"
+
+# command to remove a ban (leave empty to disable auto-unban)
+# uses same $ATTACK_HOST and $MOD variables as BAN_COMMAND
+UNBAN_COMMAND=""
+# APF:
+#UNBAN_COMMAND="/etc/apf/apf -u $ATTACK_HOST"
+# iptables:
+#UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -j DROP"
+# firewalld:
+#UNBAN_COMMAND="/usr/bin/firewall-cmd --permanent --remove-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
+# nftables (requires handle lookup):
+#UNBAN_COMMAND="/usr/sbin/nft delete rule inet filter input handle $(/usr/sbin/nft -a list chain inet filter input | grep $ATTACK_HOST | awk '{print $NF}')"
+# ip route:
+#UNBAN_COMMAND="/sbin/ip route del blackhole $ATTACK_HOST/32"
 
 ######
 # You should not need to edit any options below this line
