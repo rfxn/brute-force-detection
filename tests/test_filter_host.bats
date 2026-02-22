@@ -110,3 +110,30 @@ teardown() {
 	run filter_host "10.0.0.1" "$IGNORE_HOST_FILES" "$LO_HOSTS"
 	assert_success
 }
+
+# --- local address population pipeline ---
+
+@test "lo_hosts pipeline: captures both IPv4 and IPv6 from ip addr output" {
+	# simulate ip addr list output
+	local fake_ip_output
+	fake_ip_output=$(printf '%s\n' \
+		"1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536" \
+		"    inet 127.0.0.1/8 scope host lo" \
+		"    inet6 ::1/128 scope host" \
+		"2: eth0: <BROADCAST,MULTICAST,UP>" \
+		"    inet 192.168.1.100/24 brd 192.168.1.255 scope global eth0" \
+		"    inet6 fe80::1/64 scope link")
+	echo "$fake_ip_output" | grep -E 'inet6? ' | tr '/' ' ' | awk '{print$2}' > "$LO_HOSTS"
+	run cat "$LO_HOSTS"
+	assert_output --partial "127.0.0.1"
+	assert_output --partial "::1"
+	assert_output --partial "192.168.1.100"
+	assert_output --partial "fe80::1"
+}
+
+@test "lo_hosts pipeline: IPv4 local address blocks detection via filter_host" {
+	# populate LO_HOSTS as the pipeline would
+	printf "127.0.0.1\n192.168.1.100\n::1\n" > "$LO_HOSTS"
+	run filter_host "192.168.1.100" "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	[ "$status" -eq 2 ]
+}

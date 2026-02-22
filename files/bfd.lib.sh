@@ -353,7 +353,7 @@ filter_host() {
 		while IFS= read -r file; do
 			[ -z "$file" ] && continue
 			if [ -f "$file" ]; then
-				if grep -v "#" "$file" | grep -qFw "$host"; then
+				if grep -v "#" "$file" | grep -qFx "$host"; then
 					return 1
 				fi
 			fi
@@ -497,8 +497,8 @@ manual_unban() {
 		return 1
 	fi
 	local ban_mod ban_ports
-	ban_mod=$(grep -Fw "$ip" "$install_path/tmp/bans.active" | awk '{print $4}' | head -1)
-	ban_ports=$(grep -Fw "$ip" "$install_path/tmp/bans.active" | awk '{print $5}' | head -1)
+	ban_mod=$(awk -v ip="$ip" '$3 == ip {print $4; exit}' "$install_path/tmp/bans.active")
+	ban_ports=$(awk -v ip="$ip" '$3 == ip {print $5; exit}' "$install_path/tmp/bans.active")
 	if [ -n "$unban_cmd_template" ]; then
 		execute_unban "$ip" "${ban_mod:-unknown}" "$unban_cmd_template" "${ban_ports:-all}" "$unban_cmd_v6"
 	fi
@@ -571,7 +571,7 @@ state_track_count() {
 		if [ -n "$i" ]; then
 			total=$((total + i))
 		fi
-	done < <(grep -Fw "$host" "$install_path/tmp/track.attack" 2>/dev/null | awk '{print$2}')
+	done < <(awk -v h="$host" '$1 == h {print $2}' "$install_path/tmp/track.attack" 2>/dev/null)
 	echo "$total"
 }
 
@@ -590,7 +590,7 @@ state_track_trim() {
 # state_ban_check install_path host — return 0 if host is in ban.list, 1 if not
 state_ban_check() {
 	local install_path="$1" host="$2"
-	if grep -qFw "$host" "$install_path/tmp/ban.list" 2>/dev/null; then
+	if grep -qFx "$host" "$install_path/tmp/ban.list" 2>/dev/null; then
 		return 0
 	fi
 	return 1
@@ -603,7 +603,7 @@ state_ban_append() {
 	# trim before appending
 	tail -n "$max_lines" "$ban_file" > "$ban_file.new"
 	mv "$ban_file.new" "$ban_file"
-	if ! grep -qFw "$host" "$ban_file" 2>/dev/null; then
+	if ! grep -qFx "$host" "$ban_file" 2>/dev/null; then
 		echo "$host" >> "$ban_file"
 	fi
 }
@@ -625,7 +625,7 @@ state_bans_active_append() {
 	local install_path="$1" timestamp="$2" expiry="$3"
 	local host="$4" mod="$5" ports="$6"
 	local bans_file="$install_path/tmp/bans.active"
-	if grep -qFw "$host" "$bans_file" 2>/dev/null; then
+	if awk -v ip="$host" '$3 == ip {found=1; exit} END {exit !found}' "$bans_file" 2>/dev/null; then
 		return 0
 	fi
 	echo "$timestamp $expiry $host $mod $ports" >> "$bans_file"
@@ -638,14 +638,14 @@ state_bans_active_remove() {
 	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
 		return 0
 	fi
-	grep -vFw "$host" "$bans_file" > "$bans_file.new" || true
+	awk -v ip="$host" '$3 != ip' "$bans_file" > "$bans_file.new" || true
 	mv "$bans_file.new" "$bans_file"
 }
 
 # state_bans_active_check install_path host — return 0 if host has active ban
 state_bans_active_check() {
 	local install_path="$1" host="$2"
-	if grep -qFw "$host" "$install_path/tmp/bans.active" 2>/dev/null; then
+	if awk -v ip="$host" '$3 == ip {found=1; exit} END {exit !found}' "$install_path/tmp/bans.active" 2>/dev/null; then
 		return 0
 	fi
 	return 1

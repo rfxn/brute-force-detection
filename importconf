@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Brute Force Detection 2.0.1 importconf [bfd_ic@rfxn.com]
+# Brute Force Detection 2.0.1 importconf <bfd@rfxn.com>
 ###
 # Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
@@ -21,31 +21,56 @@
 ###
 #
 INSTALL_PATH="/usr/local/bfd"
-DEF=".ca.def"
-DOUT=".conf.bfd"
 
-if [ -d "/usr/local/bfd.bk.last" ]; then
-# get all the vars from current release
-# shellcheck disable=SC1091
-. /usr/local/bfd/conf.bfd
-# replace with any vars old release had
-# shellcheck disable=SC1091
-. /usr/local/bfd.bk.last/conf.bfd
-# generate new conf
-# shellcheck disable=SC1090
-. "$DEF"
-
-cp -f "$INSTALL_PATH/conf.bfd" "$INSTALL_PATH/conf.bfd.orig"
-cp -f "$DOUT" "$INSTALL_PATH/conf.bfd"
-cp -f /usr/local/bfd.bk.last/ignore.hosts "$INSTALL_PATH" >> /dev/null 2>&1
-cp -f /usr/local/bfd.bk.last/tmp/* "$INSTALL_PATH/tmp" >> /dev/null 2>&1
-# clear transient state but preserve ban tracking and event data
-rm -f "$INSTALL_PATH/tmp/track.attack"
-rm -f "$INSTALL_PATH/tmp/ban.list"
-rm -f "$INSTALL_PATH/tmp/.alist."*
-rm -f "$INSTALL_PATH/tmp/.weekly.apool."*
-
-OV=$(tac /usr/local/bfd.bk.last/conf.bfd | tail -n 3 | grep BFD | awk '{print$3}')
-NV=$(tac /usr/local/bfd/conf.bfd | tail -n 3 | grep BFD | awk '{print$3}')
-        echo "  Imported tracking and options from BFD $OV to $NV."
+if [ ! -d "$INSTALL_PATH.bk.last" ]; then
+	exit 0
 fi
+
+old_conf="$INSTALL_PATH.bk.last/conf.bfd"
+new_conf="$INSTALL_PATH/conf.bfd"
+
+if [ ! -f "$old_conf" ] || [ ! -f "$new_conf" ]; then
+	exit 0
+fi
+
+# extract old/new version from file header comment
+OV=$(awk '/^# Brute Force Detection/ {print $5; exit}' "$old_conf")
+NV=$(awk '/^# Brute Force Detection/ {print $5; exit}' "$new_conf")
+
+# merge: use new conf.bfd as base, overlay old user values
+# awk extracts raw text (no shell expansion), preserving $ATTACK_HOST etc.
+awk -v old_conf="$old_conf" '
+BEGIN {
+	# read old config: store last uncommented assignment per variable
+	while ((getline line < old_conf) > 0) {
+		if (line ~ /^[A-Za-z_][A-Za-z_0-9]*=/) {
+			idx = index(line, "=")
+			name = substr(line, 1, idx - 1)
+			old[name] = line
+		}
+	}
+	close(old_conf)
+}
+{
+	# for uncommented assignments in new config, substitute old value if exists
+	if ($0 ~ /^[A-Za-z_][A-Za-z_0-9]*=/) {
+		idx = index($0, "=")
+		name = substr($0, 1, idx - 1)
+		if (name in old) {
+			print old[name]
+			next
+		}
+	}
+	print
+}' "$new_conf" > "$new_conf.tmp" && mv -f "$new_conf.tmp" "$new_conf"
+
+# preserve user's ignore lists
+cp -f "$INSTALL_PATH.bk.last/ignore.hosts" "$INSTALL_PATH" 2>/dev/null
+
+# preserve ban tracking state
+cp -f "$INSTALL_PATH.bk.last/tmp/bans.active" "$INSTALL_PATH/tmp/" 2>/dev/null
+cp -f "$INSTALL_PATH.bk.last/tmp/bans.history"* "$INSTALL_PATH/tmp/" 2>/dev/null
+cp -f "$INSTALL_PATH.bk.last/tmp/events.dat" "$INSTALL_PATH/tmp/" 2>/dev/null
+cp -f "$INSTALL_PATH.bk.last/stats/"* "$INSTALL_PATH/stats/" 2>/dev/null
+
+echo "  Imported config and state from BFD $OV to $NV."

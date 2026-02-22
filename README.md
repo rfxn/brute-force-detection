@@ -250,6 +250,7 @@ UNBAN_COMMAND="/usr/bin/firewall-cmd --permanent --remove-rich-rule='rule family
 **nftables (Rocky 9+, Debian 12, Ubuntu 22+):**
 ```bash
 BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST drop"
+UNBAN_COMMAND="/usr/sbin/nft delete rule inet filter input handle $(/usr/sbin/nft -a list chain inet filter input | grep $ATTACK_HOST | awk '{print $NF}')"
 ```
 
 **ip route null-route (all distros):**
@@ -319,11 +320,11 @@ The **`-c|--check`** option performs a non-destructive diagnostic check of your 
 bfd -c
 ```
 
-Output uses `[PASS]`, `[WARN]`, and `[FAIL]` indicators with a final summary.
+Output uses `[PASS]`, `[WARN]`, `[FAIL]`, and `[SKIP]` (inactive rules) indicators with a final summary.
 
 ### 5.3 Attack Pool
 
-The **`-a|--attackpool`** option displays the top brute force attackers for the current day, with per-service breakdown and ban status for each IP:
+The **`-a|--attackpool`** option displays the top brute force attackers with per-service breakdown and ban status for each IP:
 
 ```bash
 bfd -a           # show top attackers
@@ -331,8 +332,9 @@ bfd -a 10.0.0    # search for a specific string
 ```
 
 The report includes:
-- **Top 25 attackers** — trigger count, IP, first/last seen, services, and ban status (active bans show `BANNED(perm)` or `BANNED(Xm)`, previous bans show `prev:N`)
+- **Top 25 attackers today** — trigger count, IP, first/last seen, services, and ban status (active bans show `BANNED(perm)` or `BANNED(Xm)`, previous bans show `prev:N`)
 - **Per-service breakdown** — event count and unique IP count per service
+- **Top 25 attackers this week** — same format, aggregated from the weekly pool
 
 ---
 
@@ -372,7 +374,7 @@ Each rule file supports the following variables:
 | `TRIG` | Per-service trigger threshold (overrides global `TRIG` from `conf.bfd`) |
 | `PORTS` | Service ports for port-specific blocking (e.g., `"22"` for sshd) |
 | `SKIP_ALERT` | Set to `"1"` to suppress email alerts for this service |
-| `TLOG_TF` | Track log format (usually `$LP` — the log path) |
+| `TLOG_TF` | Tracking identifier used by tlog for state file naming (e.g., `"sshd"`, `"dovecot"`) |
 
 To customize a rule's trigger threshold:
 ```bash

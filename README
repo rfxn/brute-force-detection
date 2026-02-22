@@ -257,6 +257,7 @@ firewalld (Rocky 8+, CentOS 7):
 
 nftables (Rocky 9+, Debian 12, Ubuntu 22+):
   BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST drop"
+  UNBAN_COMMAND="/usr/sbin/nft delete rule inet filter input handle $(/usr/sbin/nft -a list chain inet filter input | grep $ATTACK_HOST | awk '{print $NF}')"
 
 ip route null-route (all distros):
   BAN_COMMAND="/sbin/ip route add blackhole $ATTACK_HOST/32"
@@ -315,20 +316,22 @@ entire BFD installation:
 
   bfd -c
 
-Output uses [PASS], [WARN], and [FAIL] indicators with a final summary.
+Output uses [PASS], [WARN], [FAIL], and [SKIP] (inactive rules) indicators
+with a final summary.
 
 5.3) General Usage: Attack Pool
-The -a|--attackpool option displays the top brute force attackers for the
-current day, with per-service breakdown and ban status for each IP:
+The -a|--attackpool option displays the top brute force attackers with
+per-service breakdown and ban status for each IP:
 
   bfd -a           # show top attackers
   bfd -a 10.0.0    # search for a specific string
 
 The report includes:
-  - Top 25 attackers — trigger count, IP, first/last seen, services, and ban
-    status (active bans show BANNED(perm) or BANNED(Xm), previous bans show
-    prev:N)
+  - Top 25 attackers today — trigger count, IP, first/last seen, services,
+    and ban status (active bans show BANNED(perm) or BANNED(Xm), previous
+    bans show prev:N)
   - Per-service breakdown — event count and unique IP count per service
+  - Top 25 attackers this week — same format, aggregated from weekly pool
 
 6) Rule Engine
 Rules are located under /usr/local/bfd/rules/. Each rule is a shell fragment
@@ -368,7 +371,8 @@ Each rule file supports the following variables:
                conf.bfd).
   PORTS      - service ports for port-specific blocking (e.g., "22" for sshd).
   SKIP_ALERT - set to "1" to suppress email alerts for this service.
-  TLOG_TF    - track log format (usually $LP — the log path).
+  TLOG_TF    - tracking identifier used by tlog for state file naming
+               (e.g., "sshd", "dovecot").
 
 To customize a rule's trigger threshold, edit the rule file:
   # In /usr/local/bfd/rules/sshd
