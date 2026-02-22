@@ -1,4 +1,10 @@
 2.0.1:
+[New] 3 new service rules: http_401 (HTTP 401 in Apache/nginx access logs,
+      TRIG=30), pam_generic (generic PAM authentication failure, TRIG=20),
+      named (BIND/named query/zone transfer denied, TRIG=100); 33 rules total
+[New] named added to tlog_journal_filter() for systemd journal support
+      (SYSLOG_IDENTIFIER=named); 16 of 33 rules now journal-capable
+[New] 10 regex sample tests and 1 journal filter test; suite now 461 tests
 [Change] conf.bfd reorganized into 5 clearly labeled sections: Detection
          Thresholds, Ban Actions, Email Alerts, Log Paths, Logging & Advanced;
          "You should not need to edit" separator eliminated — all remaining

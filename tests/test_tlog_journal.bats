@@ -139,6 +139,12 @@ MOCK
 	assert_output "SYSLOG_IDENTIFIER=ipop3d"
 }
 
+@test "tlog_journal_filter: named maps to named" {
+	run tlog_journal_filter "named"
+	assert_success
+	assert_output "SYSLOG_IDENTIFIER=named"
+}
+
 @test "tlog_journal_filter: unknown identifier returns failure" {
 	run tlog_journal_filter "apache-auth"
 	assert_failure

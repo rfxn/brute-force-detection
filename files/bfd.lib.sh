@@ -316,6 +316,7 @@ tlog_journal_filter() {
 		wordpress)  echo "SYSLOG_IDENTIFIER=wordpress" ;;
 		rh_imapd)   echo "SYSLOG_IDENTIFIER=imapd" ;;
 		rh_ipop3)   echo "SYSLOG_IDENTIFIER=ipop3d" ;;
+		named)      echo "SYSLOG_IDENTIFIER=named" ;;
 		*) return 1 ;;
 	esac
 	return 0
