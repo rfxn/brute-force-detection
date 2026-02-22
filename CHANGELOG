@@ -51,6 +51,21 @@
          4 greps per IP (100 greps per report reduced to 1 awk pass)
 [Change] ARG_VAL tr/awk/sort pipeline processed once per rule instead
          of N+1 times (once per unique host + once for iteration)
+[New] bfd.lib.sh function library extracted for testability
+      (validate_ip, sanitize_mod, eout, safe_source, validate_config,
+      detect_log_paths, format_table)
+[New] test suite with 58 tests (test_validate_ip, test_detect_log_paths,
+      test_config_validation) using simple assert framework
+[New] -d|--dryrun flag runs detection without executing ban commands
+[New] -v|--version and -h|--help CLI flags
+[New] systemd bfd.service and bfd.timer for optional systemd scheduling
+[Change] install.sh conditionally installs systemd timer when systemd
+         is available; cron remains primary scheduler
+[Change] uninstall.sh cleans up systemd timer and cron.daily
+[New] .shellcheckrc and full shellcheck compliance across all scripts
+[New] .github/workflows/ci.yml for shellcheck and test automation
+[Change] README updated with supported distro matrix, firewall examples,
+         dry-run usage, rule customization, and troubleshooting
 
 1.5-2:
 [Change] simplified dovecot rule regex matching

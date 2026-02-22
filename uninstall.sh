@@ -26,10 +26,17 @@ APPN="BFD"
 uninstall(){
 echo "Remove $APPN from this system; are you sure ?"
 echo "Press any key to continue or ^C to abort."
-read val
+read -r _
 
 if [ -d "$INSPATH" ]; then
-	rm -rf "$INSPATH" "$BINPATH" /etc/cron.d/bfd /etc/logrotate.d/bfd /var/log/bfd_log
+	# clean up systemd timer if present
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl stop bfd.timer 2>/dev/null || true
+		systemctl disable bfd.timer 2>/dev/null || true
+		rm -f /etc/systemd/system/bfd.service /etc/systemd/system/bfd.timer
+		systemctl daemon-reload 2>/dev/null || true
+	fi
+	rm -rf "$INSPATH" "$BINPATH" /etc/cron.d/bfd /etc/cron.daily/bfd /etc/logrotate.d/bfd /var/log/bfd_log
 	echo "$APPN has been uninstalled."
 else
 	echo "$APPN does not appear to be installed."

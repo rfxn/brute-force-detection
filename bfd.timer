@@ -1,0 +1,9 @@
+[Unit]
+Description=Run BFD every 3 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=3min
+
+[Install]
+WantedBy=timers.target

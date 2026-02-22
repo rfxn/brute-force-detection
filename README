@@ -1,6 +1,6 @@
-BFD (Brute Force Detection) 1.5-2 [bfdr-fx.org]
- Copyright (C) 1999-2008, R-fx Networks <proj@r-fx.org>
- Copyright (C) 2008, Ryan MacDonald <ryan@r-fx.org>
+BFD (Brute Force Detection) 1.6-1 <bfd@rfxn.com>
+ Copyright (C) 1999-2026, R-fx Networks <proj@r-fx.org>
+ Copyright (C) 2026, Ryan MacDonald <ryan@r-fx.org>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -20,82 +20,116 @@ BFD (Brute Force Detection) 1.5-2 [bfdr-fx.org]
 BFD is a modular shell script for parsing application logs and checking for
 authentication failures. It does this using a rules system where application
 specific options are stored including regular expressions for each unique auth
-format. The regular expressions are parsed against logs using the 'sed' tool
-(stream editor) which allows for vastly superior performance as opposed to
-perl based regular expressions or using other tools such as grep/egrep.
+format. The regular expressions are parsed against logs using sed and awk for
+efficient stream processing.
 
-Although some will argue that perl based stream processing is far more flexible
-than unix tools, I argue that perl is a bloated framework to depend upon and unix
-tools such as sed are universal across *nix. Further, perl is only more flexible
-with regular expression based stream 'editing', such as in place editing etc..,
-if you are only processing a data stream (as bfd does) then sed wins hands down.
-
-In addition to the benefits of parsing logs in a single stream, BFD also uses a
-log tracking system so logs are only parsed from the point which they were last
-read. This greatly assists in extending the performance of BFD even further as
-we are not constantly reading the same log data. The log tracking system is
-compatible with syslog/logrotate style log rotations which allows it to detect
-when rotations have happened and grab log tails from both the new log file and
+BFD uses a log tracking system so logs are only parsed from the point which
+they were last read. This greatly assists in performance as we are not
+constantly reading the same log data. The log tracking system is compatible
+with syslog/logrotate style log rotations which allows it to detect when
+rotations have happened and grab log tails from both the new log file and
 the rotated log file.
 
-You can also leverage BFD to block attackers using any number of tools such as
-APF, Shorewall, raw iptables, ip route or execute any custom command. There is 
-also a fully customizable e-mail alerting system with an e-mail template that
-is well suited for every day use or you can open it up and modify it.
+You can leverage BFD to block attackers using any number of tools such as
+APF, iptables, firewalld, nftables, ip route, or execute any custom command.
+There is also a fully customizable e-mail alerting system with an e-mail
+template that is well suited for every day use.
 
-The attacker tracking in BFD is handled using simple flat text files that are
-size-controlled to prevent space constraints over time, ideal for disk less
-devices. There is also an attack pool where trending data is stored on all hosts
-hat have been blocked including which rule the block was triggered by.
+2) Supported Distributions:
+BFD has been tested and is supported on the following distributions:
 
-In the execution process, there is simply a cron job that executes BFD once
-every 3 minutes by default. An embedded lock file system makes sure that no
-two instances ever run at the same time, preventing messy and potentially load
-heavy results. The cronjob can be run more frequently for those that desire it
-and doing so will not cause any performance issues (no less than once a minute).
+  RHEL-family:
+    - CentOS 6, 7
+    - Rocky Linux 8, 9, 10
 
-2) Installation:
-The included install.sh script does as it says, it will install bfd to the
-'/usr/local/bfd' path and place a 3-minute cronjob in '/etc/cron.d/bfd'. The
-setup script will also execute an included 'importconf' script if you have a
-previous version of bfd installed, which will import your previous settings.
+  Debian-family:
+    - Ubuntu 14.04, 16.04, 18.04, 20.04, 22.04, 24.04
+    - Debian 12
 
-Although it is supported to customize the default installation layout of BFD,
-it is not something I recommend or have done much testing with so do so as
-you see fit :-)
+Log paths are auto-detected at runtime:
+  - RHEL: /var/log/secure, /var/log/messages, /var/log/maillog
+  - Debian/Ubuntu: /var/log/auth.log, /var/log/syslog, /var/log/mail.log
 
-3) Configuration:
-The configuration file for BFD is located at '/usr/local/bfd/conf.bfd', it is
-very straight forward and the comments explain themself as to what each option
-is for. The most important option is the TRIG="" value in conf.bfd as this
-controls how many failed logins before an address is blocked. You should also
-make sure to configure an email address and to turn on email alerting to stay
-informed on any bans that are placed.
+3) Installation:
+The included install.sh script will install BFD to '/usr/local/bfd' and
+place a 3-minute cronjob in '/etc/cron.d/bfd'. The setup script will also
+execute an included 'importconf' script if you have a previous version of
+BFD installed, which will import your previous settings.
 
-An ignore file is present at '/usr/loca/bfd/ignore.hosts', this is a line
-spaced file to place IP Addr's into that you would like to be ignored for
-authentication failures. An internal function will attempt to fetch all local
-IP's bound on the installed system and ignore any events appearing to source
-from those local addresses (but still send an alert).
+On systems with systemd, a systemd timer is also installed (but not enabled
+by default). To use it instead of cron:
+  systemctl enable --now bfd.timer
 
-The application rule files are located under '/usr/local/bfd/rules/' and
-they use a simple check feature to auto-enable them self based on the existence
-of specific application files. As an example, if the file '/usr/sbin/exim' is
-found to exist then the exim rule will be enabled for processing.
+Requirements: must be run as root.
+  ./install.sh
 
-You may wish to set unique trigger values for each application and this can be
-done by opening the rule in question (i.e: /usr/local/bfd/rules/exim) and set
-the TRIG="" value to whatever amount of failed authentications you would like a
-ban to be issued at.
+4) Configuration:
+The configuration file is located at '/usr/local/bfd/conf.bfd'. Key options:
 
-If you would like to have BFD place bans via a facility other than the default
-configured APF ban command, you can do so by editing the BAN_COMMAND option in
-conf.bfd. As an example you can use a generic system route reject to drop hosts
-like so:
+  TRIG="15"          - failed logins before an address is blocked
+  EMAIL_ALERTS="0"   - send email alerts [0=off, 1=on]
+  EMAIL_ADDRESS="root" - alert recipient(s), comma-separated
+  BAN_COMMAND="..."  - command to execute when banning a host
 
-BAN_COMMAND="route add -host $ATTACK_HOST reject"
+5) Firewall Integration:
+Configure BAN_COMMAND in conf.bfd for your firewall:
 
-4) License:
+  APF (default):
+    BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
+
+  iptables (CentOS 6/7, Ubuntu 14-20):
+    BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP"
+
+  firewalld (Rocky 8+, CentOS 7):
+    BAN_COMMAND="/usr/bin/firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
+
+  nftables (Rocky 9+, Debian 12, Ubuntu 22+):
+    BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST drop"
+
+  ip route null-route (all distros):
+    BAN_COMMAND="/sbin/ip route add blackhole $ATTACK_HOST/32"
+
+6) Usage:
+  bfd -s               run with output
+  bfd -q               run quietly (cron mode)
+  bfd -d               dry-run: detect but do not ban
+  bfd -a               show attack pool (top attackers)
+  bfd -a [STRING]      search attack pool for a string
+  bfd -v               display version
+  bfd -h               display help
+
+The dry-run mode (-d) runs full detection but logs "would ban" instead
+of executing the ban command. Use this to test rules safely.
+
+7) Rule Customization:
+Rules are located under '/usr/local/bfd/rules/'. Each rule uses a check
+to auto-enable itself based on the existence of a specific application
+binary. For example, if '/usr/sbin/exim' exists, the exim rules are active.
+
+To set per-rule trigger values, edit the rule file and uncomment:
+  TRIG="10"
+
+To disable alerts for a specific rule, uncomment:
+  SKIP_ALERT="1"
+
+8) Ignore Lists:
+  /usr/local/bfd/ignore.hosts     - IPs to never ban (one per line)
+  /usr/local/bfd/exclude.files    - additional files containing IPs to ignore
+
+BFD automatically detects local IP addresses and excludes them from bans.
+
+9) Troubleshooting:
+  - "locked subsystem, already running?" — a previous BFD run is still
+    active or was killed. The lock auto-clears after 300 seconds.
+  - "BAN_COMMAND binary not found" — the configured firewall tool is
+    not installed. Update BAN_COMMAND in conf.bfd.
+  - Rules not triggering — check that the log path exists and the
+    application is writing to the expected log file. Use 'bfd -d' to
+    test detection without banning.
+  - On Debian/Ubuntu, ensure log paths are auto-detected correctly.
+    Override in conf.bfd if needed: AUTH_LOG_PATH, MAIL_LOG_PATH.
+
+10) License:
 BFD is developed and supported on a volunteer basis by Ryan MacDonald
 [ryan@r-fx.org]
 
@@ -105,15 +139,14 @@ copyright statement, and GNU GPL, "COPYING.GPL" are included in the top-level
 directory of the distribution. Credit must be given for derivative works as
 required under GNU GPL.
 
-5) Support:
+11) Support:
 If you require any assistance with BFD you may refer to the R-fx Networks
 community forums located at http://forums.rfxnetworks.com. You may also send
 an e-mail to support@r-fx.org.
 
-The offical home page for BFD is located at:
+The official home page for BFD is located at:
 http://www.rfxnetworks.com/bfd.php
 
-All bugs or feature requests should be sent to ryan@r-fx.org and please be sure
-to include as much information as possible or conceptual ideas of how you think
-a new feature should work.
-
+All bugs or feature requests should be sent to ryan@r-fx.org and please be
+sure to include as much information as possible or conceptual ideas of how
+you think a new feature should work.

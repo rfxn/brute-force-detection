@@ -1,0 +1,7 @@
+[Unit]
+Description=Brute Force Detection (BFD)
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/bfd -s

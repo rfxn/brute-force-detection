@@ -26,10 +26,13 @@ DOUT=".conf.bfd"
 
 if [ -d "/usr/local/bfd.bk.last" ]; then
 # get all the vars from current release
+# shellcheck disable=SC1091
 . /usr/local/bfd/conf.bfd
 # replace with any vars old release had
+# shellcheck disable=SC1091
 . /usr/local/bfd.bk.last/conf.bfd
 # generate new conf
+# shellcheck disable=SC1090
 . "$DEF"
 
 cp -f "$INSTALL_PATH/conf.bfd" "$INSTALL_PATH/conf.bfd.orig"

@@ -23,75 +23,26 @@
 INSTALL_PATH="/usr/local/bfd"
 CNF="$INSTALL_PATH/conf.bfd"
 V="1.6-1"
+# shellcheck disable=SC2034 # APPN used by importconf
 APPN="BFD"
 UTIME=$(date +"%s")
 
-# exit codes
-EXIT_OK=0
-EXIT_CONFIG_ERROR=1
-EXIT_LOCK_ERROR=2
-EXIT_PREREQ_ERROR=3
+# source function library
+# shellcheck source=files/bfd.lib.sh
+. "$INSTALL_PATH/bfd.lib.sh"
 
 # initialize variables that may be unset
 LAST_HOST=""
 LAST=""
 SKIP_ALERT=""
+DRY_RUN=0
 
-validate_ip() {
-	local ip="$1"
-	local ip_pattern='^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$'
-	if [[ "$ip" =~ $ip_pattern ]]; then
-		local i
-		for i in 1 2 3 4; do
-			if [ "${BASH_REMATCH[$i]}" -gt 255 ]; then
-				return 1
-			fi
-		done
-		echo "$ip"
-		return 0
-	fi
-	return 1
-}
-
-sanitize_mod() {
-	local mod="$1"
-	local mod_pattern='^[a-zA-Z0-9_-]+$'
-	if [[ "$mod" =~ $mod_pattern ]]; then
-		echo "$mod"
-		return 0
-	fi
-	return 1
-}
-
+# shellcheck disable=SC2317 # called via trap
 cleanup() {
 	rm -f "$LOCK_FILE"
 	eval "exec $LOCK_FD>&-" 2>/dev/null
 }
 trap cleanup EXIT INT TERM
-
-safe_source() {
-	local file="$1"
-	local label="${2:-$file}"
-	if [ ! -f "$file" ]; then
-		eout "safe_source: $label does not exist." le
-		return 1
-	fi
-	local fowner
-	fowner=$(stat -c '%u' "$file")
-	if [ "$fowner" != "0" ]; then
-		eout "safe_source: $label is not owned by root (uid=$fowner)." le
-		return 1
-	fi
-	local fperms
-	fperms=$(stat -c '%a' "$file")
-	# check world-writable: last digit has write bit (2, 3, 6, 7)
-	local world_digit="${fperms: -1}"
-	if [ "$((world_digit & 2))" -ne 0 ]; then
-		eout "safe_source: $label is world-writable (perms=$fperms)." le
-		return 1
-	fi
-	. "$file"
-}
 
 vhead() {
 	echo "Brute Force Detection v$V <bfd@r-fx.org>"
@@ -115,56 +66,13 @@ if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
 	echo "conf.bfd has unsafe ownership (uid=$_cnf_owner) or permissions ($_cnf_perms), aborting."
 	exit $EXIT_CONFIG_ERROR
 fi
+# shellcheck disable=SC1090
 . "$CNF"
 GLOB_TRIG="$TRIG"
 # extract BAN_COMMAND template without shell expansion of $ATTACK_HOST/$MOD
 BAN_COMMAND_TEMPLATE=$(grep '^BAN_COMMAND=' "$CNF" | tail -1 | sed "s/^BAN_COMMAND=//;s/^\"//;s/\"$//")
 
-validate_config() {
-	local int_pattern='^[0-9]+$'
-	if ! [[ "$TRIG" =~ $int_pattern ]] || [ "$TRIG" -eq 0 ]; then
-		echo "error: TRIG must be a positive integer (got '$TRIG')."
-		exit $EXIT_CONFIG_ERROR
-	fi
-	if [ "$EMAIL_ALERTS" != "0" ] && [ "$EMAIL_ALERTS" != "1" ]; then
-		echo "error: EMAIL_ALERTS must be 0 or 1 (got '$EMAIL_ALERTS')."
-		exit $EXIT_CONFIG_ERROR
-	fi
-	if ! [[ "$LOCK_FILE_TIMEOUT" =~ $int_pattern ]] || [ "$LOCK_FILE_TIMEOUT" -eq 0 ]; then
-		echo "error: LOCK_FILE_TIMEOUT must be a positive integer (got '$LOCK_FILE_TIMEOUT')."
-		exit $EXIT_CONFIG_ERROR
-	fi
-	if [ -z "$BAN_COMMAND_TEMPLATE" ]; then
-		echo "error: BAN_COMMAND must not be empty."
-		exit $EXIT_CONFIG_ERROR
-	fi
-	if [ ! -d "$INSTALL_PATH" ]; then
-		echo "error: INSTALL_PATH '$INSTALL_PATH' does not exist."
-		exit $EXIT_CONFIG_ERROR
-	fi
-}
 validate_config
-
-detect_log_paths() {
-	# auto-detect log paths if configured paths don't exist
-	# user overrides in conf.bfd always take priority
-	if [ ! -f "$AUTH_LOG_PATH" ]; then
-		if [ -f "/var/log/auth.log" ]; then
-			AUTH_LOG_PATH="/var/log/auth.log"
-		fi
-	fi
-	if [ ! -f "$KERNEL_LOG_PATH" ]; then
-		if [ -f "/var/log/syslog" ]; then
-			KERNEL_LOG_PATH="/var/log/syslog"
-			OUTPUT_SYSLOG_FILE="$KERNEL_LOG_PATH"
-		fi
-	fi
-	if [ ! -f "$MAIL_LOG_PATH" ]; then
-		if [ -f "/var/log/mail.log" ]; then
-			MAIL_LOG_PATH="/var/log/mail.log"
-		fi
-	fi
-}
 detect_log_paths
 
 # warn if BAN_COMMAND binary not found
@@ -172,32 +80,6 @@ BAN_CMD_BIN=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
 if [ -n "$BAN_CMD_BIN" ] && [ ! -x "$BAN_CMD_BIN" ]; then
 	echo "warning: BAN_COMMAND binary '$BAN_CMD_BIN' not found or not executable."
 fi
-
-format_table() {
-	if command -v column >/dev/null 2>&1; then
-		column -s '|' -t
-	else
-		tr '|' '\t'
-	fi
-}
-
-eout() {
-	local arg="${1:-}"
-	local val="${2:-}"
-	if [ -n "$arg" ]; then
-		local ts
-		ts=$(date +"%b %e %H:%M:%S")
-		local host
-		host=$(hostname -s)
-		echo "$ts $host bfd($$): $arg"
-		if [ "$val" == "le" ]; then
-			echo "$ts $host bfd($$): $arg" >> "$BFD_LOG_PATH"
-		fi
-		if [ "$OUTPUT_SYSLOG" == "1" ] && [ "$val" == "le" ]; then
-			echo "$ts $host bfd($$): $arg" >> "$OUTPUT_SYSLOG_FILE"
-		fi
-	fi
-}
 
 pre() {
 if [ ! -f "$TLOG_PATH" ]; then
@@ -278,6 +160,7 @@ echo "$UTIME" > "$LOCK_FILE"
 
 alert() {
 if [ "$EMAIL_ALERTS" == "1" ]; then
+	# shellcheck disable=SC1090
 	. "$EMAIL_TEMPLATE" | mail -s "$EMAIL_SUBJECT" "$EMAIL_ADDRESS"
 fi
 }
@@ -314,7 +197,7 @@ check() {
 				done < <(grep -v "#" "$IGNORE_HOST_FILES")
 			 fi
 			 if [ "$HOST_IGNORE" == "0" ]; then
-				ATTACK_COUNT=$(echo "$HOSTS_PARSED" | grep -Fw "$ATTACK_HOST" | wc -l)
+				ATTACK_COUNT=$(echo "$HOSTS_PARSED" | grep -cFw "$ATTACK_HOST")
 				echo "$ATTACK_HOST $ATTACK_COUNT $MOD" >> "$INSTALL_PATH/tmp/track.attack"
 				if [ "$ATTACK_COUNT" -lt "$TRIG" ]; then
 					MAX_LINES=50
@@ -357,13 +240,17 @@ check() {
 					echo "$UTIME $ATTACK_HOST $MOD" >> "$APOOL_LIST"
 					LAST_HOST="$ATTACK_HOST"
 					BAN_COMMAND="$BAN_COMMAND_TEMPLATE"
-					eout "{$MOD} $ATTACK_HOST exceeded login failures; executed ban command '$BAN_COMMAND'." le
-					eval "$BAN_COMMAND" >/dev/null 2>&1
-					ban_rc=$?
-					if [ "$ban_rc" -ne 0 ]; then
-						eout "{$MOD} ban command for $ATTACK_HOST exited with code $ban_rc." le
+					if [ "$DRY_RUN" == "1" ]; then
+						eout "{$MOD} [dry-run] would ban $ATTACK_HOST with command '$BAN_COMMAND'." le
+					else
+						eout "{$MOD} $ATTACK_HOST exceeded login failures; executed ban command '$BAN_COMMAND'." le
+						eval "$BAN_COMMAND" >/dev/null 2>&1
+						ban_rc=$?
+						if [ "$ban_rc" -ne 0 ]; then
+							eout "{$MOD} ban command for $ATTACK_HOST exited with code $ban_rc." le
+						fi
 					fi
-					if [ "$SKIP_ALERT" != "1" ]; then
+					if [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 						alert
 						SKIP_ALERT=""
 					fi
@@ -411,7 +298,7 @@ _apool_report() {
 				print count[ip] "|" ip "|" first[ip] "|" last[ip] "|" rules[ip]
 		}' | sort -t'|' -k1 -nr | head -n 25
 	)
-	cat "$atmp" | format_table
+	format_table < "$atmp"
 	rm -f "$atmp"
 }
 
@@ -420,7 +307,7 @@ apool_list() {
 	if [ -n "$ahost" ]; then
 		local WAPOOL_LIST
 		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
-		find "$APOOL_LIST"* -type f -mtime -7 2>/dev/null | xargs -I{} cat {} > "$WAPOOL_LIST"
+		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
 		_apool_report "$WAPOOL_LIST" "Events for search string \"$ahost\"" "$ahost"
 		rm -f "$WAPOOL_LIST"
 	elif [ -f "$APOOL_LIST" ]; then
@@ -428,7 +315,7 @@ apool_list() {
 		echo
 		local WAPOOL_LIST
 		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
-		find "$APOOL_LIST"* -type f -mtime -7 2>/dev/null | xargs -I{} cat {} > "$WAPOOL_LIST"
+		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
 		_apool_report "$WAPOOL_LIST" "Top 25 brute force attackers this week"
 		rm -f "$WAPOOL_LIST"
 	fi
@@ -442,18 +329,31 @@ case "$1" in
 	check
 	;;
 -q|--quiet)
-	$0 -s >/dev/null 2>&1
+	"$0" -s >/dev/null 2>&1
+	;;
+-d|--dryrun)
+	DRY_RUN=1
+	vhead
+	pre
+	get_state
+	check
 	;;
 -a|--attackpool)
 	vhead
 	pre
 	apool_list "${2:-}"
 	;;
-*)
+-v|--version)
+	vhead
+	;;
+-h|--help|*)
 	vhead
 	echo "usage: $0 [OPTION]"
 	echo "-s|--standard .............. run standard with output"
 	echo "-q|--quiet ................. run quiet with output hidden"
+	echo "-d|--dryrun ................ run detection without banning"
 	echo "-a|--attackpool [STRING] ... list addresses that have attacked this host"
+	echo "-v|--version ............... display version"
+	echo "-h|--help .................. display this help"
 esac
 exit $EXIT_OK

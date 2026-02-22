@@ -35,6 +35,7 @@ if [ -d "$INSPATH" ]; then
 	mv "$INSPATH" "$INSPATH.bk.$DVAL"
 	rm -f "$INSPATH.bk.last"
 	ln -s "$INSPATH.bk.$DVAL" "$INSPATH.bk.last"
+	# shellcheck disable=SC2034
 	OBK=1
 fi
 }
@@ -63,6 +64,16 @@ install(){
 	if [ -f "cron" ]; then
 		cp cron /etc/cron.d/bfd
 		chmod 644 /etc/cron.d/bfd
+	fi
+	# install systemd timer if systemd is available
+	if command -v systemctl >/dev/null 2>&1; then
+		if [ -f "bfd.service" ] && [ -f "bfd.timer" ]; then
+			cp bfd.service /etc/systemd/system/bfd.service
+			cp bfd.timer /etc/systemd/system/bfd.timer
+			chmod 644 /etc/systemd/system/bfd.service /etc/systemd/system/bfd.timer
+			systemctl daemon-reload
+			echo "  systemd timer installed (enable with: systemctl enable --now bfd.timer)"
+		fi
 	fi
 }
 
