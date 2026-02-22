@@ -292,7 +292,8 @@ tlog_read() {
 # Global IGNOREREGEX: if set by rule, lines matching this ERE pattern are
 # excluded before extraction (fail2ban-compatible ignoreregex).
 extract_hosts() {
-	local ip_re='[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
+	local ip4_re='[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
+	local ip6_re='[0-9a-fA-F]{0,4}(:[0-9a-fA-F]{0,4}){1,7}'
 	local tlog_input
 	tlog_input=$(sed 's/::ffff://g')
 	[ -z "$tlog_input" ] && return 0
@@ -305,14 +306,17 @@ extract_hosts() {
 
 	local pattern sed_pat
 	for pattern in "$@"; do
-		# replace <HOST> with ERE capture group for IP
-		sed_pat="${pattern//<HOST>/($ip_re)}"
+		# IPv4 extraction
+		sed_pat="${pattern//<HOST>/($ip4_re)}"
 		# (^|.*[^0-9.]) boundary prevents greedy .* from consuming
 		# leading digits of the IP address; IP capture becomes \2
 		echo "$tlog_input" | sed -rn "s#(^|.*[^0-9.])${sed_pat}.*#\2#p"
+		# IPv6 extraction — inner group in ip6_re pushes IP to \2
+		sed_pat="${pattern//<HOST>/($ip6_re)}"
+		echo "$tlog_input" | sed -rn "s#(^|.*[^0-9a-fA-F:])${sed_pat}.*#\2#p"
 	done | tr -d '[]' | while IFS= read -r ip; do
 		[ -z "$ip" ] && continue
-		validate_ip "$ip" 2>/dev/null || true
+		validate_ip_any "$ip" 2>/dev/null || true
 	done
 }
 

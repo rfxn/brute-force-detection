@@ -116,3 +116,20 @@ plesk|192.168.1.50|2024-06-15 10:22:33 ERR [panel] [Action Log] Failed login att
 # --- dropbear (2 patterns) ---
 dropbear|192.168.1.50|Feb 22 10:15:03 myhost dropbear[12345]: Bad password attempt for 'root' from 192.168.1.50:54321
 dropbear|10.0.0.5|Feb 22 10:15:05 myhost dropbear[12346]: Login attempt for nonexistent user from 10.0.0.5:12345
+
+# ============================================================
+# IPv6 SAMPLES — same rules, IPv6 source addresses
+# ============================================================
+
+# --- sshd (IPv6) ---
+sshd|2001:db8::1|Feb 22 10:15:03 myhost sshd[12345]: Failed password for root from 2001:db8::1 port 22 ssh2
+sshd|2607:f8b0:4004:800::200e|Feb 22 10:15:05 myhost sshd[12345]: Invalid user admin from 2607:f8b0:4004:800::200e port 54321 ssh2
+
+# --- dovecot (IPv6) ---
+dovecot|2001:db8::ff|Feb 22 10:15:03 myhost dovecot: pop3-login: Aborted login (auth failed, 1 attempts): user=<admin>, method=PLAIN, rip=2001:db8::ff, lip=::1
+
+# --- postfix (IPv6) ---
+postfix|2001:db8::abcd|Feb 22 10:15:03 myhost postfix/smtpd[9876]: warning: unknown[2001:db8::abcd]: SASL LOGIN authentication failed: authentication failure
+
+# --- nginx-http-auth (IPv6) ---
+nginx-http-auth|2001:db8::50|2024/02/22 10:15:03 [error] 5596#560: *3 user "admin": password mismatch, client: 2001:db8::50, server: example.com, request: "GET /admin HTTP/1.1", host: "example.com"
