@@ -68,6 +68,26 @@ if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
 fi
 # shellcheck disable=SC1090
 . "$CNF"
+# source internal/derived variables (split from conf.bfd in 2.0.1)
+INTCNF="$INSTALL_PATH/internals.conf"
+if [ -f "$INTCNF" ]; then
+	_int_owner=$(stat -c '%u' "$INTCNF")
+	_int_perms=$(stat -c '%a' "$INTCNF")
+	_int_world="${_int_perms: -1}"
+	if [ "$_int_owner" = "0" ] && [ "$((_int_world & 2))" -eq 0 ]; then
+		# shellcheck disable=SC1090
+		. "$INTCNF"
+	else
+		echo "warning: internals.conf has unsafe ownership or permissions, using defaults."
+	fi
+fi
+# fallbacks for internals.conf variables (backward compat with pre-split installs)
+RULES_PATH="${RULES_PATH:-$INSTALL_PATH/rules}"
+TLOG_PATH="${TLOG_PATH:-$INSTALL_PATH/tlog}"
+EMAIL_TEMPLATE="${EMAIL_TEMPLATE:-$INSTALL_PATH/alert.bfd}"
+IGNORE_HOST_FILES="${IGNORE_HOST_FILES:-$INSTALL_PATH/exclude.files}"
+LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
+TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
 GLOB_TRIG="$TRIG"
 # extract BAN_COMMAND template without shell expansion of $ATTACK_HOST/$MOD
 BAN_COMMAND_TEMPLATE=$(grep '^BAN_COMMAND=' "$CNF" | tail -1 | sed "s/^BAN_COMMAND=//;s/^\"//;s/\"$//")

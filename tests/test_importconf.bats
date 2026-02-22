@@ -162,28 +162,25 @@ NEWEOF
 	assert_failure
 }
 
-@test "importconf: comments and structure from new config preserved" {
+@test "importconf: comments and section headers from new config preserved" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
 TRIG="10"
-INSTALL_PATH="/usr/local/bfd"
 OLDEOF
 
 	cat > "$inst/conf.bfd" <<'NEWEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
+# =============================================
+# Detection Thresholds
+# =============================================
 # This is a new comment explaining TRIG
 TRIG="15"
 
-######
-# You should not need to edit any options below this line
-######
-
 # commented example that should pass through
 #BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP"
-INSTALL_PATH="/usr/local/bfd"
 NEWEOF
 
 	local script
@@ -196,8 +193,8 @@ NEWEOF
 	# new comments should be present
 	run grep 'This is a new comment explaining TRIG' "$inst/conf.bfd"
 	assert_success
-	# section divider should be present
-	run grep 'You should not need to edit' "$inst/conf.bfd"
+	# section header should be present
+	run grep 'Detection Thresholds' "$inst/conf.bfd"
 	assert_success
 	# commented example should pass through unchanged
 	run grep '^#BAN_COMMAND=' "$inst/conf.bfd"
@@ -227,6 +224,98 @@ NEWEOF
 	run bash "$script"
 	assert_success
 	assert_output "  Imported config and state from BFD 1.5-2 to 2.0.1."
+}
+
+@test "importconf: pre-split conf.bfd variables migrate to internals.conf" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	# old pre-split config has internal variables in conf.bfd
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+TRIG="10"
+INSTALL_PATH="/usr/local/bfd"
+RULES_PATH="/usr/local/bfd/rules"
+TLOG_PATH="/usr/local/bfd/tlog"
+LOCK_FILE="/usr/local/bfd/lock.utime"
+LOCK_FILE_TIMEOUT="600"
+OLDEOF
+
+	# new conf.bfd (no internal variables)
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+TRIG="15"
+LOCK_FILE_TIMEOUT="300"
+NEWEOF
+
+	# new internals.conf
+	cat > "$inst/internals.conf" <<'INTEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+RULES_PATH="$INSTALL_PATH/rules"
+TLOG_PATH="$INSTALL_PATH/tlog"
+LOCK_FILE="$INSTALL_PATH/lock.utime"
+INTEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# TRIG should migrate to conf.bfd
+	run grep '^TRIG=' "$inst/conf.bfd"
+	assert_output 'TRIG="10"'
+	# LOCK_FILE_TIMEOUT should migrate to conf.bfd
+	run grep '^LOCK_FILE_TIMEOUT=' "$inst/conf.bfd"
+	assert_output 'LOCK_FILE_TIMEOUT="600"'
+	# RULES_PATH should migrate to internals.conf
+	run grep '^RULES_PATH=' "$inst/internals.conf"
+	assert_output 'RULES_PATH="/usr/local/bfd/rules"'
+	# LOCK_FILE should migrate to internals.conf
+	run grep '^LOCK_FILE=' "$inst/internals.conf"
+	assert_output 'LOCK_FILE="/usr/local/bfd/lock.utime"'
+}
+
+@test "importconf: post-split upgrade merges both old files" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	# old post-split install has both files
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+TRIG="8"
+OLDEOF
+	cat > "$inst.bk.last/internals.conf" <<'OLDINTEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+RULES_PATH="/custom/rules"
+OLDINTEOF
+
+	# new conf.bfd
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+TRIG="15"
+NEWEOF
+
+	# new internals.conf
+	cat > "$inst/internals.conf" <<'INTEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+RULES_PATH="$INSTALL_PATH/rules"
+INTEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# conf.bfd value preserved
+	run grep '^TRIG=' "$inst/conf.bfd"
+	assert_output 'TRIG="8"'
+	# internals.conf value preserved from old internals.conf
+	run grep '^RULES_PATH=' "$inst/internals.conf"
+	assert_output 'RULES_PATH="/custom/rules"'
 }
 
 @test "importconf: state files (bans.active, events.dat) copied on upgrade" {

@@ -1,4 +1,26 @@
 2.0.1:
+[Change] conf.bfd reorganized into 5 clearly labeled sections: Detection
+         Thresholds, Ban Actions, Email Alerts, Log Paths, Logging & Advanced;
+         "You should not need to edit" separator eliminated — all remaining
+         variables are user-configurable
+[New] internals.conf: internal/derived variables (RULES_PATH, TLOG_PATH,
+      EMAIL_TEMPLATE, IGNORE_HOST_FILES, LOCK_FILE, TIME_ZONE) split from
+      conf.bfd into separate file; users never need to edit these
+[Change] LOG_SOURCE promoted from below separator to Log Paths section;
+         comment updated to clarify journal mode now behaves same as auto
+[Change] TIME_UNIX dead variable removed (redundant with UTIME in bfd);
+         INSTALL_PATH removed from conf.bfd (hardcoded in bfd before conf.bfd
+         is sourced, changing it in conf.bfd alone had no effect)
+[Change] files/bfd sources internals.conf after conf.bfd with same safety
+         checks (root ownership, not world-writable); fallback defaults for
+         all internals.conf variables ensure backward compat with pre-split
+         installs
+[Change] importconf: merge_conf() function extracted; dual-merge handles
+         both conf.bfd and internals.conf; for pre-split upgrades, old
+         conf.bfd variables migrate to new internals.conf; journal cursor
+         and timestamp state preserved during upgrades
+[New] 2 importconf tests: pre-split variable migration to internals.conf,
+      post-split upgrade merging both old files; full suite now 451 tests
 [Fix] tlog_journal_filter: rh_ipop3d case key mismatched TLOG_TF="rh_ipop3"
       set by the rh_ipop3d rule file; journal fallback silently failed for
       POP3 rules; corrected to rh_ipop3
