@@ -19,6 +19,8 @@ teardown() {
 run_validate() {
 	(
 		TRIG="15"
+		TRIG_WINDOW="300"
+		TRIG_GLOBAL="0"
 		EMAIL_ALERTS="0"
 		LOCK_FILE_TIMEOUT="300"
 		BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
@@ -105,5 +107,49 @@ run_validate() {
 
 @test "validate_config: bad INSTALL_PATH rejects" {
 	run run_validate 'INSTALL_PATH="/nonexistent/path"'
+	assert_failure
+}
+
+# --- TRIG_WINDOW ---
+
+@test "validate_config: TRIG_WINDOW=300 passes" {
+	run run_validate 'TRIG_WINDOW="300"'
+	assert_success
+}
+
+@test "validate_config: TRIG_WINDOW=0 rejects" {
+	run run_validate 'TRIG_WINDOW="0"'
+	assert_failure
+}
+
+@test "validate_config: TRIG_WINDOW=abc rejects" {
+	run run_validate 'TRIG_WINDOW="abc"'
+	assert_failure
+}
+
+@test "validate_config: TRIG_WINDOW= rejects" {
+	run run_validate 'TRIG_WINDOW=""'
+	assert_failure
+}
+
+# --- TRIG_GLOBAL ---
+
+@test "validate_config: TRIG_GLOBAL=0 passes (disabled)" {
+	run run_validate 'TRIG_GLOBAL="0"'
+	assert_success
+}
+
+@test "validate_config: TRIG_GLOBAL=10 passes" {
+	run run_validate 'TRIG_GLOBAL="10"'
+	assert_success
+}
+
+@test "validate_config: TRIG_GLOBAL=abc rejects" {
+	run run_validate 'TRIG_GLOBAL="abc"'
+	assert_failure
+}
+
+@test "validate_config: TRIG_GLOBAL= rejects" {
+	run run_validate 'TRIG_GLOBAL=""'
 	assert_failure
 }

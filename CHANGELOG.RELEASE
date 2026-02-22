@@ -1,4 +1,12 @@
 2.0.1:
+[New] TRIG_WINDOW config variable (default 300s) for time-windowed failure
+      counting; only failures within this window count toward threshold
+[New] TRIG_GLOBAL config variable (default 0/disabled) for cross-service
+      aggregate threshold regardless of per-rule TRIG values
+[Change] validate_config() validates TRIG_WINDOW (positive integer) and
+         TRIG_GLOBAL (non-negative integer)
+[New] 8 tests for TRIG_WINDOW and TRIG_GLOBAL validation in
+      test_config_validation.bats (24 total)
 [New] tests/test_filter_host.bats with 12 tests for ignore list and local
       address filtering
 [New] tests/test_check_pipeline.bats with 15 integration tests for

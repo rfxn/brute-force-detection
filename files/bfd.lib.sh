@@ -103,12 +103,20 @@ safe_source() {
 	. "$file"
 }
 
-# validate_config requires: TRIG, EMAIL_ALERTS, LOCK_FILE_TIMEOUT,
-#   BAN_COMMAND_TEMPLATE, INSTALL_PATH, EXIT_CONFIG_ERROR
+# validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, EMAIL_ALERTS,
+#   LOCK_FILE_TIMEOUT, BAN_COMMAND_TEMPLATE, INSTALL_PATH, EXIT_CONFIG_ERROR
 validate_config() {
 	local int_pattern='^[0-9]+$'
 	if ! [[ "$TRIG" =~ $int_pattern ]] || [ "$TRIG" -eq 0 ]; then
 		echo "error: TRIG must be a positive integer (got '$TRIG')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "$TRIG_WINDOW" =~ $int_pattern ]] || [ "$TRIG_WINDOW" -eq 0 ]; then
+		echo "error: TRIG_WINDOW must be a positive integer (got '$TRIG_WINDOW')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "$TRIG_GLOBAL" =~ $int_pattern ]]; then
+		echo "error: TRIG_GLOBAL must be a non-negative integer (got '$TRIG_GLOBAL')."
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if [ "$EMAIL_ALERTS" != "0" ] && [ "$EMAIL_ALERTS" != "1" ]; then
