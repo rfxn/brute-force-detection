@@ -1,4 +1,19 @@
 2.0.1:
+[Change] importconf rewritten: grep/awk-based config merge replaces
+         source+heredoc approach; user values (including template variables
+         like $ATTACK_HOST) preserved as raw text without shell expansion;
+         new variables get defaults, removed variables dropped; .ca.def and
+         .conf.bfd dual-template files eliminated — files/conf.bfd is now
+         the single source of truth for both fresh installs and upgrades
+[Change] importconf state file copies made explicit: only bans.active,
+         bans.history*, events.dat, stats/*, and ignore.hosts are preserved;
+         replaces cp tmp/* + selective rm approach
+[Change] importconf version extraction uses awk on header comment instead
+         of fragile tac | tail -n 3 | grep BFD | awk pipeline
+[New] tests/test_importconf.bats with 8 tests: fresh install exit, simple
+      value preservation, template variable preservation ($ATTACK_HOST),
+      new variable defaults, removed variable dropping, comment/structure
+      preservation, version extraction, state file copying
 [Fix] IPv6 false-match bug: grep -Fw treats colons as word boundaries, causing
       prefix false positives (2001:db8::1 matches 2001:db8::10). Replaced with
       awk field-exact matching ($3 == ip) for bans.active lookups and grep -Fx
