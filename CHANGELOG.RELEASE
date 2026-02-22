@@ -1,4 +1,22 @@
 2.0.1:
+[New] Per-run statistics in check(): rules_count, events_count, bans_count,
+      elapsed time (seconds); logged via eout at end of each run
+[New] health_check() non-destructive diagnostic: validates config, log paths,
+      BAN_COMMAND binaries, rule activation (active vs inactive with REQ
+      checks), tlog, state directories, lock files, active ban count;
+      formatted PASS/WARN/FAIL/SKIP output with summary
+[New] -c|--check CLI flag for health check and diagnostics
+[New] _apool_ban_status() returns ban status per IP: BANNED(perm) for
+      permanent, BANNED(Xm) for temp with remaining minutes, prev:N for
+      historical ban count from bans.history
+[New] STATUS column added to _apool_report() attack summary output
+[New] _apool_service_summary() per-service breakdown: event counts and
+      unique IP counts per service, sorted by event count descending
+[Change] apool_list() shows per-service breakdown after daily report
+[New] tests/test_health_check.bats with 15 tests for health check mode
+[New] tests/test_apool.bats with 10 tests for enhanced attack summary
+[New] 5 run statistics tests in test_check_pipeline.bats (62 total);
+      full suite now 399 tests
 [New] validate_ip6() for IPv6 address validation: full 8-group, ::
       compression, zone ID stripping (%eth0), mixed case; rejects
       malformed addresses, triple colon, multiple ::, injection attempts
