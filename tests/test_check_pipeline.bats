@@ -449,3 +449,62 @@ teardown() {
 	run cat "$marker"
 	assert_output "110,143,993,995"
 }
+
+# --- IPv6 pipeline tests ---
+
+@test "count_failures: counts IPv6 host with grep -cxF" {
+	local hosts_parsed
+	hosts_parsed=$(printf "2001:db8::1\n10.0.0.1\n2001:db8::1\n")
+	run count_failures "2001:db8::1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
+	assert_success
+	assert_output "2"
+}
+
+@test "count_failures: IPv6 no false positive on prefix match" {
+	local hosts_parsed
+	hosts_parsed=$(printf "2001:db8::1\n2001:db8::1:0\n2001:db8::10\n")
+	# grep -cxF ensures exact line match — only "2001:db8::1" matches
+	run count_failures "2001:db8::1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
+	assert_success
+	assert_output "1"
+}
+
+@test "pipeline: IPv6 host flows through filter + count + ban" {
+	local ignore_files="$TEST_TMPDIR/exclude.files"
+	local lo_hosts="$TEST_TMPDIR/lo_hosts"
+	touch "$ignore_files" "$lo_hosts"
+
+	local host="2001:db8::1"
+	local hosts_parsed
+	hosts_parsed=$(printf "2001:db8::1\n2001:db8::1\n2001:db8::1\n2001:db8::1\n2001:db8::1\n")
+
+	# host passes filter
+	filter_host "$host" "$ignore_files" "$lo_hosts"
+	local filter_rc=$?
+	[ "$filter_rc" -eq 0 ]
+
+	# count failures
+	local count
+	count=$(count_failures "$host" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
+	[ "$count" -ge 5 ]
+
+	# ban and record
+	state_ban_append "$INSTALL_PATH" "$host" 50
+	state_pool_append "$INSTALL_PATH" "1700000000" "$host" "sshd"
+
+	# verify state
+	state_ban_check "$INSTALL_PATH" "$host"
+	run cat "$INSTALL_PATH/stats/attack.pool"
+	assert_output --partial "2001:db8::1"
+}
+
+@test "pipeline: mixed IPv4+IPv6 counted independently" {
+	local hosts_parsed
+	hosts_parsed=$(printf "10.0.0.1\n2001:db8::1\n10.0.0.1\n2001:db8::1\n10.0.0.1\n")
+	local v4_count
+	v4_count=$(count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
+	[ "$v4_count" -eq 3 ]
+	local v6_count
+	v6_count=$(count_failures "2001:db8::1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
+	[ "$v6_count" -eq 2 ]
+}

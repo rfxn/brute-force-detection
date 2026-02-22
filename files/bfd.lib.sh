@@ -745,7 +745,7 @@ state_events_prune() {
 
 # count_failures host hosts_parsed install_path window now mod — count windowed failures
 # Replacement for count_attacks():
-#   1. Count host occurrences in hosts_parsed (grep -cFw)
+#   1. Count host occurrences in hosts_parsed (grep -cxF)
 #   2. Append that many timestamped events
 #   3. Count per-service events within window
 #   4. Return the windowed count
@@ -753,7 +753,7 @@ count_failures() {
 	local host="$1" hosts_parsed="$2" install_path="$3"
 	local window="$4" now="$5" mod="$6"
 	local count
-	count=$(echo "$hosts_parsed" | grep -cFw "$host")
+	count=$(echo "$hosts_parsed" | grep -cxF "$host")
 	if [ "$count" -gt 0 ]; then
 		state_events_append "$install_path" "$now" "$host" "$mod" "$count"
 	fi

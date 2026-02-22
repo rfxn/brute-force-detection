@@ -188,10 +188,10 @@ check() {
 		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
 		validate_rule "$str" || continue
 		# process ARG_VAL pipeline once; reuse for iteration and counting
-		HOSTS_PARSED=$(echo "$ARG_VAL" | tr ' ' '\n' | tr ':' ' ' | awk '{print$1}' | sort -n)
+		HOSTS_PARSED=$(echo "$ARG_VAL" | tr ' ' '\n' | sort)
 		while IFS= read -r ahost; do
 			[ -z "$ahost" ] && continue
-			ATTACK_HOST=$(validate_ip "$ahost") || continue
+			ATTACK_HOST=$(validate_ip_any "$ahost") || continue
 			local filter_rc=0
 			filter_host "$ATTACK_HOST" "$IGNORE_HOST_FILES" "$LO_HOSTS" || filter_rc=$?
 			if [ "$filter_rc" -eq 1 ]; then
