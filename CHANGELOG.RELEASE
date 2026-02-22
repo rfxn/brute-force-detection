@@ -1,4 +1,36 @@
 2.0.1:
+[New] validate_ip6() for IPv6 address validation: full 8-group, ::
+      compression, zone ID stripping (%eth0), mixed case; rejects
+      malformed addresses, triple colon, multiple ::, injection attempts
+[New] validate_ip_any() dual-stack validator: tries IPv4 first, falls back
+      to IPv6; single entry point for all IP validation
+[New] extract_hosts() dual IPv4/IPv6 extraction: IPv6 regex alongside IPv4
+      with boundary-aware [^0-9a-fA-F:] prefix; validate_ip_any() in output
+      pipeline accepts both address families
+[New] BAN_COMMAND_V6 config variable for IPv6-specific ban commands with
+      ip6tables, nft, ip route examples; empty = use BAN_COMMAND for both
+[New] UNBAN_COMMAND_V6 config variable for IPv6-specific unban commands
+[Change] HOSTS_PARSED pipeline simplified: removed tr ':' ' ' | awk that
+         destroyed IPv6 addresses; sort -n changed to sort
+[Change] check() uses validate_ip_any() instead of validate_ip() to accept
+         both IPv4 and IPv6 through the detection pipeline
+[Fix] count_failures() uses grep -cxF (exact line match) instead of
+      grep -cFw to prevent IPv6 false positives from colon word boundaries
+[Change] execute_ban()/execute_unban() select V6 command template for IPv6
+         hosts when BAN_COMMAND_V6/UNBAN_COMMAND_V6 configured; fall back to
+         standard commands when V6 templates empty
+[Change] process_unbans() passes UNBAN_COMMAND_V6_TEMPLATE for IPv6 hosts
+[Change] manual_ban()/manual_unban() accept IPv6 addresses and pass V6
+         templates; validate_ip_any() replaces validate_ip()
+[Change] LO_HOSTS uses grep -Ew 'inet6? ' to capture both IPv4 and IPv6
+         local addresses, preventing IPv6 self-banning
+[New] tests/test_validate_ip6.bats: 33 tests for IPv6 validation and
+      validate_ip_any() dual-stack behavior
+[New] 8 IPv6 extraction tests in test_extract_hosts.bats (23 total)
+[New] 5 IPv6 regex sample lines and tests in regex_samples.txt/bats (53 total)
+[New] 13 IPv6 pipeline tests in test_check_pipeline.bats (57 total): counting,
+      false-positive prevention, V6 command selection, local address detection,
+      manual ban/unban IPv6; full suite now 369 tests
 [New] extract_hosts() declarative rule engine with fail2ban-compatible <HOST>
       placeholder patterns; boundary-aware sed extraction prevents greedy .*
       from consuming leading IP digits

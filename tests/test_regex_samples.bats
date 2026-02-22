@@ -422,3 +422,42 @@ teardown() {
 		extract_hosts "dropbear.*Login attempt for nonexistent user from <HOST>")
 	[ "$result" = "10.0.0.5" ]
 }
+
+# ============================================================
+# IPv6 PATTERNS — same rules, IPv6 source addresses
+# ============================================================
+
+@test "regex: sshd - Failed password (IPv6)" {
+	local result
+	result=$(echo "Feb 22 10:15:03 myhost sshd[12345]: Failed password for root from 2001:db8::1 port 22 ssh2" | \
+		extract_hosts "sshd.*Failed password for .* from <HOST>")
+	[ "$result" = "2001:db8::1" ]
+}
+
+@test "regex: sshd - Invalid user (IPv6)" {
+	local result
+	result=$(echo "Feb 22 10:15:05 myhost sshd[12345]: Invalid user admin from 2607:f8b0:4004:800::200e port 54321 ssh2" | \
+		extract_hosts "sshd.*Invalid user .* from <HOST>")
+	[ "$result" = "2607:f8b0:4004:800::200e" ]
+}
+
+@test "regex: dovecot - pop3-login auth failed (IPv6)" {
+	local result
+	result=$(echo "Feb 22 10:15:03 myhost dovecot: pop3-login: Aborted login (auth failed, 1 attempts): user=<admin>, method=PLAIN, rip=2001:db8::ff, lip=::1" | \
+		extract_hosts "pop3-login.*auth failed.*rip=<HOST>")
+	[ "$result" = "2001:db8::ff" ]
+}
+
+@test "regex: postfix - SASL auth failed (IPv6)" {
+	local result
+	result=$(echo "Feb 22 10:15:03 myhost postfix/smtpd[9876]: warning: unknown[2001:db8::abcd]: SASL LOGIN authentication failed: authentication failure" | \
+		extract_hosts "\[<HOST>\].*SASL.*authentication failed")
+	[ "$result" = "2001:db8::abcd" ]
+}
+
+@test "regex: nginx-http-auth - password mismatch (IPv6)" {
+	local result
+	result=$(echo '2024/02/22 10:15:03 [error] 5596#560: *3 user "admin": password mismatch, client: 2001:db8::50, server: example.com, request: "GET /admin HTTP/1.1", host: "example.com"' | \
+		extract_hosts "password mismatch, client: <HOST>")
+	[ "$result" = "2001:db8::50" ]
+}

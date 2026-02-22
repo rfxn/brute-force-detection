@@ -149,3 +149,68 @@ teardown() {
 	result=$(echo "$input" | extract_hosts "Failed login attempt .* from IP <HOST>")
 	[ "$result" = "203.0.113.10" ]
 }
+
+# --- IPv6 extraction tests ---
+
+@test "extract_hosts: IPv6 from sshd log" {
+	local input="Feb 22 10:15:03 myhost sshd[12345]: Failed password for root from 2001:db8::1 port 22 ssh2"
+	local result
+	result=$(echo "$input" | extract_hosts "sshd.*Failed password for .* from <HOST>")
+	[ "$result" = "2001:db8::1" ]
+}
+
+@test "extract_hosts: IPv6 in brackets" {
+	local input="Feb 22 10:15:03 myhost postfix/smtpd[9876]: warning: unknown[2001:db8::abcd]: SASL LOGIN authentication failed: authentication failure"
+	local result
+	result=$(echo "$input" | extract_hosts "\[<HOST>\].*SASL.*authentication failed")
+	[ "$result" = "2001:db8::abcd" ]
+}
+
+@test "extract_hosts: IPv6 after rip= (dovecot)" {
+	local input="Feb 22 10:15:03 myhost dovecot: pop3-login: Aborted login (auth failed, 1 attempts): user=<admin>, method=PLAIN, rip=2001:db8::ff, lip=::1"
+	local result
+	result=$(echo "$input" | extract_hosts "pop3-login.*auth failed.*rip=<HOST>")
+	[ "$result" = "2001:db8::ff" ]
+}
+
+@test "extract_hosts: ::ffff: prefix still strips to IPv4" {
+	local input="Feb 22 10:15:03 myhost sshd[12345]: Failed password for root from ::ffff:192.168.1.1 port 22 ssh2"
+	local result
+	result=$(echo "$input" | extract_hosts "sshd.*Failed password for .* from <HOST>")
+	[ "$result" = "192.168.1.1" ]
+}
+
+@test "extract_hosts: mixed IPv4+IPv6 both extracted" {
+	local input
+	input=$(printf '%s\n' \
+		"Feb 22 myhost sshd[1]: Failed password for root from 10.0.0.1 port 22 ssh2" \
+		"Feb 22 myhost sshd[2]: Failed password for admin from 2001:db8::99 port 22 ssh2")
+	local result
+	result=$(echo "$input" | extract_hosts "sshd.*Failed password for .* from <HOST>")
+	local count
+	count=$(echo "$result" | wc -l)
+	[ "$count" -eq 2 ]
+	echo "$result" | grep -qF "10.0.0.1"
+	echo "$result" | grep -qF "2001:db8::99"
+}
+
+@test "extract_hosts: invalid IPv6 rejected" {
+	local input="Feb 22 10:15:03 myhost sshd[12345]: Failed password for root from 2001:db8:::bad port 22 ssh2"
+	local result
+	result=$(echo "$input" | extract_hosts "sshd.*Failed password for .* from <HOST>")
+	[ -z "$result" ]
+}
+
+@test "extract_hosts: full IPv6 address" {
+	local input="Feb 22 10:15:03 myhost sshd[12345]: Failed password for root from 2001:0db8:0000:0000:0000:0000:0000:0001 port 22 ssh2"
+	local result
+	result=$(echo "$input" | extract_hosts "sshd.*Failed password for .* from <HOST>")
+	[ "$result" = "2001:0db8:0000:0000:0000:0000:0000:0001" ]
+}
+
+@test "extract_hosts: IPv6 loopback ::1" {
+	local input="Feb 22 10:15:03 myhost sshd[12345]: Failed password for root from ::1 port 22 ssh2"
+	local result
+	result=$(echo "$input" | extract_hosts "sshd.*Failed password for .* from <HOST>")
+	[ "$result" = "::1" ]
+}

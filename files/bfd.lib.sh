@@ -48,6 +48,44 @@ validate_ip() {
 	return 1
 }
 
+validate_ip6() {
+	local ip="$1"
+	ip="${ip%%\%*}"                          # strip zone ID (%eth0)
+	[ -z "$ip" ] && return 1
+	local valid='^[0-9a-fA-F:]+$'
+	[[ "$ip" =~ $valid ]] || return 1        # only hex+colon
+	[[ "$ip" == *:* ]] || return 1           # must have colon
+	[[ "$ip" == *:::* ]] && return 1         # no triple colon
+	# reject leading/trailing single colon (not part of ::)
+	[[ "$ip" == :* ]] && [[ "$ip" != ::* ]] && return 1
+	[[ "$ip" == *: ]] && [[ "$ip" != *:: ]] && return 1
+	# at most one ::
+	local no_dc="${ip/::}"
+	[[ "$no_dc" == *::* ]] && return 1
+	# split into groups, count and validate
+	local has_dc=0
+	[[ "$ip" == *::* ]] && has_dc=1
+	IFS=':' read -ra groups <<< "$ip"
+	local non_empty=0 g
+	for g in "${groups[@]}"; do
+		[ -z "$g" ] && continue
+		non_empty=$((non_empty + 1))
+		[ "${#g}" -gt 4 ] && return 1        # max 4 hex per group
+	done
+	if [ "$has_dc" -eq 1 ]; then
+		[ "$non_empty" -gt 7 ] && return 1   # :: must replace ≥1 group
+	else
+		[ "$non_empty" -ne 8 ] && return 1   # no :: → exactly 8 groups
+	fi
+	echo "$ip"
+	return 0
+}
+
+validate_ip_any() {
+	validate_ip "$1" 2>/dev/null && return 0
+	validate_ip6 "$1" 2>/dev/null
+}
+
 sanitize_mod() {
 	local mod="$1"
 	local mod_pattern='^[a-zA-Z0-9_-]+$'
@@ -254,7 +292,8 @@ tlog_read() {
 # Global IGNOREREGEX: if set by rule, lines matching this ERE pattern are
 # excluded before extraction (fail2ban-compatible ignoreregex).
 extract_hosts() {
-	local ip_re='[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
+	local ip4_re='[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
+	local ip6_re='[0-9a-fA-F]{0,4}(:[0-9a-fA-F]{0,4}){1,7}'
 	local tlog_input
 	tlog_input=$(sed 's/::ffff://g')
 	[ -z "$tlog_input" ] && return 0
@@ -267,14 +306,17 @@ extract_hosts() {
 
 	local pattern sed_pat
 	for pattern in "$@"; do
-		# replace <HOST> with ERE capture group for IP
-		sed_pat="${pattern//<HOST>/($ip_re)}"
+		# IPv4 extraction
+		sed_pat="${pattern//<HOST>/($ip4_re)}"
 		# (^|.*[^0-9.]) boundary prevents greedy .* from consuming
 		# leading digits of the IP address; IP capture becomes \2
 		echo "$tlog_input" | sed -rn "s#(^|.*[^0-9.])${sed_pat}.*#\2#p"
+		# IPv6 extraction — inner group in ip6_re pushes IP to \2
+		sed_pat="${pattern//<HOST>/($ip6_re)}"
+		echo "$tlog_input" | sed -rn "s#(^|.*[^0-9a-fA-F:])${sed_pat}.*#\2#p"
 	done | tr -d '[]' | while IFS= read -r ip; do
 		[ -z "$ip" ] && continue
-		validate_ip "$ip" 2>/dev/null || true
+		validate_ip_any "$ip" 2>/dev/null || true
 	done
 }
 
@@ -347,11 +389,16 @@ count_attacks() {
 	echo "$count"
 }
 
-# execute_ban host mod ban_cmd_template dry_run [ports] — execute or log ban command
+# execute_ban host mod ban_cmd_template dry_run [ports] [ban_cmd_v6_template]
+# execute or log ban command; selects V6 template for IPv6 hosts
 # returns 0 on success, ban command exit code on failure
 execute_ban() {
 	local host="$1" mod="$2" ban_cmd_template="$3" dry_run="$4"
-	local ports="${5:-all}"
+	local ports="${5:-all}" ban_cmd_v6="${6:-}"
+	# select V6 command for IPv6 hosts when available
+	if [ -n "$ban_cmd_v6" ] && [[ "$host" == *:* ]]; then
+		ban_cmd_template="$ban_cmd_v6"
+	fi
 	# set globals needed by alert.bfd template and command expansion
 	ATTACK_HOST="$host"
 	MOD="$mod"
@@ -370,11 +417,16 @@ execute_ban() {
 	return $ban_rc
 }
 
-# execute_unban host mod unban_cmd_template [ports] — execute unban command
+# execute_unban host mod unban_cmd_template [ports] [unban_cmd_v6_template]
+# execute unban command; selects V6 template for IPv6 hosts
 # returns 0 on success, unban command exit code on failure
 execute_unban() {
 	local host="$1" mod="$2" unban_cmd_template="$3"
-	local ports="${4:-all}"
+	local ports="${4:-all}" unban_cmd_v6="${5:-}"
+	# select V6 command for IPv6 hosts when available
+	if [ -n "$unban_cmd_v6" ] && [[ "$host" == *:* ]]; then
+		unban_cmd_template="$unban_cmd_v6"
+	fi
 	ATTACK_HOST="$host"
 	MOD="$mod"
 	PORTS="$ports"
@@ -387,14 +439,15 @@ execute_unban() {
 	return $unban_rc
 }
 
-# process_unbans install_path now unban_cmd_template — unban expired entries
+# process_unbans install_path now unban_cmd_template [unban_cmd_v6_template]
 process_unbans() {
 	local install_path="$1" now="$2" unban_cmd_template="$3"
+	local unban_cmd_v6="${4:-}"
 	local expired_line ts expiry host mod ports
 	while IFS=' ' read -r ts expiry host mod ports; do
 		[ -z "$ts" ] && continue
 		if [ -n "$unban_cmd_template" ]; then
-			execute_unban "$host" "$mod" "$unban_cmd_template" "$ports"
+			execute_unban "$host" "$mod" "$unban_cmd_template" "$ports" "$unban_cmd_v6"
 		else
 			eout "{$mod} $host ban expired; no UNBAN_COMMAND configured, removing state only." le
 		fi
@@ -433,10 +486,11 @@ list_bans() {
 	printf "IP|SERVICE|PORTS|BANNED|EXPIRES\n%s\n" "$listing" | format_table
 }
 
-# manual_unban install_path ip utime unban_cmd_template — manually unban an IP
+# manual_unban install_path ip utime unban_cmd_template [unban_cmd_v6_template]
 manual_unban() {
 	local install_path="$1" ip="$2" utime="$3" unban_cmd_template="$4"
-	ip=$(validate_ip "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
+	local unban_cmd_v6="${5:-}"
+	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
 	state_init "$install_path"
 	if ! state_bans_active_check "$install_path" "$ip"; then
 		echo "error: $ip is not in the active ban list."
@@ -446,26 +500,26 @@ manual_unban() {
 	ban_mod=$(grep -Fw "$ip" "$install_path/tmp/bans.active" | awk '{print $4}' | head -1)
 	ban_ports=$(grep -Fw "$ip" "$install_path/tmp/bans.active" | awk '{print $5}' | head -1)
 	if [ -n "$unban_cmd_template" ]; then
-		execute_unban "$ip" "${ban_mod:-unknown}" "$unban_cmd_template" "${ban_ports:-all}"
+		execute_unban "$ip" "${ban_mod:-unknown}" "$unban_cmd_template" "${ban_ports:-all}" "$unban_cmd_v6"
 	fi
 	state_bans_active_remove "$install_path" "$ip"
 	state_bans_history_append "$install_path" "$utime" "0" "$ip" "${ban_mod:-unknown}" "unban"
 	echo "$ip unbanned successfully."
 }
 
-# manual_ban install_path ip utime ban_cmd_template [mod] [ports] — manually ban an IP
+# manual_ban install_path ip utime ban_cmd_template [mod] [ports] [ban_cmd_v6_template]
 manual_ban() {
 	local install_path="$1" ip="$2" utime="$3" ban_cmd_template="$4"
 	local mod="${5:-manual}"
-	local ports="${6:-all}"
-	ip=$(validate_ip "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
+	local ports="${6:-all}" ban_cmd_v6="${7:-}"
+	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
 	mod=$(sanitize_mod "$mod") || { echo "error: invalid service name '$mod'."; return 1; }
 	state_init "$install_path"
 	if state_bans_active_check "$install_path" "$ip"; then
 		echo "error: $ip is already banned."
 		return 1
 	fi
-	execute_ban "$ip" "$mod" "$ban_cmd_template" "0" "$ports"
+	execute_ban "$ip" "$mod" "$ban_cmd_template" "0" "$ports" "$ban_cmd_v6"
 	state_bans_active_append "$install_path" "$utime" "0" "$ip" "$mod" "$ports"
 	state_bans_history_append "$install_path" "$utime" "0" "$ip" "$mod" "ban"
 	echo "$ip banned permanently."
@@ -703,7 +757,7 @@ state_events_prune() {
 
 # count_failures host hosts_parsed install_path window now mod — count windowed failures
 # Replacement for count_attacks():
-#   1. Count host occurrences in hosts_parsed (grep -cFw)
+#   1. Count host occurrences in hosts_parsed (grep -cxF)
 #   2. Append that many timestamped events
 #   3. Count per-service events within window
 #   4. Return the windowed count
@@ -711,7 +765,7 @@ count_failures() {
 	local host="$1" hosts_parsed="$2" install_path="$3"
 	local window="$4" now="$5" mod="$6"
 	local count
-	count=$(echo "$hosts_parsed" | grep -cFw "$host")
+	count=$(echo "$hosts_parsed" | grep -cxF "$host")
 	if [ "$count" -gt 0 ]; then
 		state_events_append "$install_path" "$now" "$host" "$mod" "$count"
 	fi
