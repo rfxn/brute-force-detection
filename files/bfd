@@ -347,6 +347,7 @@ usage() {
 	echo "-q|--quiet ................. run quiet with output hidden"
 	echo "-d|--dryrun ................ run detection without banning"
 	echo "-a|--attackpool [STRING] ... list addresses that have attacked this host"
+	echo "-c|--check ................. health check and diagnostics"
 	echo "-l|--list .................. list active bans"
 	echo "-u|--unban IP .............. unban an IP address"
 	echo "-b|--ban IP [SERVICE] ...... manually ban an IP address"
@@ -359,6 +360,7 @@ case "$1" in
 -q|--quiet)     exec >/dev/null 2>&1; run ;;
 -d|--dryrun)    DRY_RUN=1; vhead; run ;;
 -a|--attackpool) vhead; pre; apool_list "${2:-}" ;;
+-c|--check)     vhead; pre; health_check "$INSTALL_PATH" ;;
 -l|--list)      vhead; pre; list_bans "$INSTALL_PATH" ;;
 -u|--unban)     vhead; pre; manual_unban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}" ;;
 -b|--ban)       vhead; pre; manual_ban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$BAN_COMMAND_TEMPLATE" "${3:-manual}" "all" "${BAN_COMMAND_V6_TEMPLATE:-}" ;;

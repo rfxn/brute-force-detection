@@ -771,3 +771,159 @@ count_failures() {
 	fi
 	state_events_count "$install_path" "$host" "$window" "$now" "$mod"
 }
+
+# health_check install_path — non-destructive diagnostic report
+# Validates configuration, paths, rules, state, and reports status.
+# Each check prints [PASS], [WARN], [FAIL], or [SKIP] with description.
+health_check() {
+	local install_path="$1"
+	local pass_count=0 warn_count=0 fail_count=0
+
+	# 1. Config validation — capture errors from validate_config
+	local config_out config_rc=0
+	config_out=$(validate_config 2>&1) || config_rc=$?
+	if [ "$config_rc" -ne 0 ]; then
+		echo "[FAIL] Configuration: $config_out"
+		fail_count=$((fail_count + 1))
+	else
+		if [ -n "$config_out" ]; then
+			# warnings from validate_config (e.g. UNBAN_COMMAND empty)
+			echo "[WARN] Configuration: $config_out"
+			warn_count=$((warn_count + 1))
+		else
+			echo "[PASS] Configuration validated"
+			pass_count=$((pass_count + 1))
+		fi
+	fi
+
+	# 2. Log paths
+	local log_name log_path
+	for log_name in AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH; do
+		eval "log_path=\${$log_name:-}"
+		if [ -z "$log_path" ]; then
+			echo "[WARN] $log_name: not configured"
+			warn_count=$((warn_count + 1))
+		elif [ -f "$log_path" ] && [ -r "$log_path" ]; then
+			echo "[PASS] $log_name: $log_path (exists, readable)"
+			pass_count=$((pass_count + 1))
+		else
+			echo "[WARN] $log_name: $log_path (not found)"
+			warn_count=$((warn_count + 1))
+		fi
+	done
+
+	# 3. BAN_COMMAND binary
+	local ban_bin
+	ban_bin=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
+	if [ -z "$ban_bin" ]; then
+		echo "[FAIL] BAN_COMMAND: not configured"
+		fail_count=$((fail_count + 1))
+	elif [ -x "$ban_bin" ]; then
+		echo "[PASS] BAN_COMMAND binary: $ban_bin (found)"
+		pass_count=$((pass_count + 1))
+	else
+		echo "[WARN] BAN_COMMAND binary: $ban_bin (not found)"
+		warn_count=$((warn_count + 1))
+	fi
+
+	# 4. UNBAN_COMMAND consistency
+	if [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
+		echo "[WARN] UNBAN_COMMAND is empty; temp bans won't auto-unban firewall rules"
+		warn_count=$((warn_count + 1))
+	fi
+
+	# 5. BAN_COMMAND_V6 binary
+	if [ -n "${BAN_COMMAND_V6_TEMPLATE:-}" ]; then
+		local ban_v6_bin
+		ban_v6_bin=$(echo "$BAN_COMMAND_V6_TEMPLATE" | awk '{print $1}')
+		if [ -x "$ban_v6_bin" ]; then
+			echo "[PASS] BAN_COMMAND_V6 binary: $ban_v6_bin (found)"
+			pass_count=$((pass_count + 1))
+		else
+			echo "[WARN] BAN_COMMAND_V6 binary: $ban_v6_bin (not found)"
+			warn_count=$((warn_count + 1))
+		fi
+	else
+		echo "[PASS] BAN_COMMAND_V6: not configured (will use BAN_COMMAND for IPv6)"
+		pass_count=$((pass_count + 1))
+	fi
+
+	# 6. Rule scan
+	local rules_active=0 rules_inactive=0 rules_total=0
+	if [ -d "${RULES_PATH:-$install_path/rules}" ]; then
+		local rule_file rule_name
+		for rule_file in "${RULES_PATH:-$install_path/rules}"/*; do
+			[ ! -f "$rule_file" ] && continue
+			rule_name=$(basename "$rule_file")
+			rules_total=$((rules_total + 1))
+			# save/restore rule variables to avoid pollution
+			local _saved_REQ="${REQ:-}" _saved_LP="${LP:-}" _saved_TRIG="${TRIG:-}"
+			local _saved_TLOG_TF="${TLOG_TF:-}" _saved_PORTS="${PORTS:-}"
+			REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
+			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+				if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+					rules_active=$((rules_active + 1))
+					local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
+					echo "  [PASS] $rule_name: active (TRIG=$rule_trig, PORTS=${PORTS:-all}, LOG=${LP:-n/a})"
+				else
+					rules_inactive=$((rules_inactive + 1))
+					echo "  [SKIP] $rule_name: inactive (REQ ${REQ:-unset} not found)"
+				fi
+			else
+				rules_inactive=$((rules_inactive + 1))
+				echo "  [SKIP] $rule_name: failed to source"
+			fi
+			REQ="$_saved_REQ" LP="$_saved_LP" TRIG="$_saved_TRIG"
+			TLOG_TF="$_saved_TLOG_TF" PORTS="$_saved_PORTS"
+		done
+		echo "[PASS] Rules: $rules_active active, $rules_inactive inactive ($rules_total total)"
+		pass_count=$((pass_count + 1))
+	else
+		echo "[FAIL] Rules directory not found: ${RULES_PATH:-$install_path/rules}"
+		fail_count=$((fail_count + 1))
+	fi
+
+	# 7. tlog tracking
+	local tlog="${TLOG_PATH:-$install_path/tlog}"
+	if [ -f "$tlog" ] && [ -x "$tlog" ]; then
+		echo "[PASS] tlog: $tlog (executable)"
+		pass_count=$((pass_count + 1))
+	elif [ -f "$tlog" ]; then
+		echo "[WARN] tlog: $tlog (exists but not executable)"
+		warn_count=$((warn_count + 1))
+	else
+		echo "[WARN] tlog: $tlog (not found)"
+		warn_count=$((warn_count + 1))
+	fi
+
+	# 8. State directories
+	if [ -d "$install_path/tmp" ] && [ -d "$install_path/stats" ]; then
+		echo "[PASS] State: tmp/ and stats/ exist"
+		pass_count=$((pass_count + 1))
+	else
+		echo "[WARN] State: missing tmp/ or stats/ directory"
+		warn_count=$((warn_count + 1))
+	fi
+
+	# 9. Lock file
+	local lock="${LOCK_FILE:-$install_path/lock.utime}"
+	if [ -f "$lock" ]; then
+		echo "[WARN] Lock: active lock file exists ($lock)"
+		warn_count=$((warn_count + 1))
+	else
+		echo "[PASS] Lock: no active lock"
+		pass_count=$((pass_count + 1))
+	fi
+
+	# 10. Active bans
+	local bans_file="$install_path/tmp/bans.active"
+	local ban_count=0
+	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
+		ban_count=$(wc -l < "$bans_file")
+	fi
+	echo "[PASS] Active bans: $ban_count"
+	pass_count=$((pass_count + 1))
+
+	echo
+	echo "Summary: $pass_count passed, $warn_count warnings, $fail_count failures"
+}
