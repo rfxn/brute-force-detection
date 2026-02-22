@@ -14,5 +14,6 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="pure-ftpd"
 
 	## PURE-FTPD
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr -d ':[]()@?' | sed -n -e '/pure-ftpd/s/.* \(.*\) WARNING Authentication failed for user \([^ ]*\).*/\1:\2/p')
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"pure-ftpd.*@<HOST>.*WARNING.*Authentication failed")
 fi

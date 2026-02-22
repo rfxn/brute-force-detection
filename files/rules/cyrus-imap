@@ -6,14 +6,14 @@ TRIG="10"
 # SKIP_ALERT="1"
 
 # file must exist for rule to be active
-REQ="/usr/sbin/vsftpd"
+REQ="/usr/lib/cyrus-imapd/imapd"
 
 if [ -f "$REQ" ]; then
-	PORTS="20,21"
-	LP="$AUTH_LOG_PATH"
-	TLOG_TF="vsftpd"
+	PORTS="143,993,110,995"
+	LP="$MAIL_LOG_PATH"
+	TLOG_TF="cyrus"
 
-	## VSFTPD
+	## Cyrus IMAP authentication failures
 	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
-		"vsftpd.*authentication failure.*rhost=<HOST>")
+		"badlogin:.*\[<HOST>\].*SASL")
 fi

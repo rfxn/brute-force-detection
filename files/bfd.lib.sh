@@ -243,6 +243,41 @@ tlog_read() {
 	return 0
 }
 
+# extract_hosts pattern1 [pattern2 ...] — extract IPs from tlog output on stdin
+# Each pattern is a grep -E regex with <HOST> marking the IP position.
+# <HOST> is replaced with an IP-matching capture group for sed -r.
+# Outputs one validated IP per line.
+#
+# Rules must NOT use () groups before <HOST> in a pattern.
+# For alternation before <HOST>, use multiple patterns instead.
+#
+# Global IGNOREREGEX: if set by rule, lines matching this ERE pattern are
+# excluded before extraction (fail2ban-compatible ignoreregex).
+extract_hosts() {
+	local ip_re='[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
+	local tlog_input
+	tlog_input=$(sed 's/::ffff://g')
+	[ -z "$tlog_input" ] && return 0
+
+	# apply IGNOREREGEX exclusion if set by rule
+	if [ -n "${IGNOREREGEX:-}" ]; then
+		tlog_input=$(echo "$tlog_input" | grep -Ev "$IGNOREREGEX")
+		[ -z "$tlog_input" ] && return 0
+	fi
+
+	local pattern sed_pat
+	for pattern in "$@"; do
+		# replace <HOST> with ERE capture group for IP
+		sed_pat="${pattern//<HOST>/($ip_re)}"
+		# (^|.*[^0-9.]) boundary prevents greedy .* from consuming
+		# leading digits of the IP address; IP capture becomes \2
+		echo "$tlog_input" | sed -rn "s#(^|.*[^0-9.])${sed_pat}.*#\2#p"
+	done | tr -d '[]' | while IFS= read -r ip; do
+		[ -z "$ip" ] && continue
+		validate_ip "$ip" 2>/dev/null || true
+	done
+}
+
 # validate_rule rule_name — check that a sourced rule set required variables
 # requires: LP, TLOG_TF, ARG_VAL to be set by the rule file
 # returns 0 on success, 1 on skip

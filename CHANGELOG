@@ -1,4 +1,16 @@
 2.0.1:
+[New] extract_hosts() declarative rule engine with fail2ban-compatible <HOST>
+      placeholder patterns; boundary-aware sed extraction prevents greedy .*
+      from consuming leading IP digits
+[New] IGNOREREGEX support for per-rule line exclusion (fail2ban-compatible)
+[New] tests/regex_samples.txt: CSF-inspired sample log lines for all 30 rules
+[New] tests/test_regex_samples.bats: 48 automated pattern validation tests
+[New] tests/test_extract_hosts.bats: 15 unit tests for extract_hosts()
+[New] 10 new service rules from fail2ban/CSF patterns: apache-auth,
+      nginx-http-auth, mysqld-auth, wordpress, webmin, directadmin,
+      cyrus-imap, roundcube, plesk, dropbear (30 rules total)
+[Change] all 20 existing rules converted from ad-hoc grep/sed/awk pipelines
+         to extract_hosts() with FAILREGEX patterns
 [New] $PORTS substitution in BAN_COMMAND/UNBAN_COMMAND templates for
       port-specific firewall rules (rule files define PORTS per service)
 [New] port-aware iptables/nftables ban command examples in conf.bfd

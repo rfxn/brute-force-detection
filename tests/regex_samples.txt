@@ -1,0 +1,118 @@
+# BFD Rule Regex Samples — test data for extract_hosts() pattern validation
+# Inspired by CSF/LFD regex.txt approach.
+#
+# Format: RULE|EXPECTED_IP|LOG_LINE
+# Lines starting with # are comments. Blank lines are ignored.
+
+# --- sshd (3 patterns) ---
+sshd|192.168.1.100|Feb 22 10:15:03 myhost sshd[12345]: Failed password for root from 192.168.1.100 port 22 ssh2
+sshd|10.0.0.5|Feb 22 10:15:05 myhost sshd[12345]: Invalid user admin from 10.0.0.5 port 54321 ssh2
+sshd|172.16.0.1|Feb 22 10:15:07 myhost sshd[12345]: User root from 172.16.0.1 not allowed because listed in DenyUsers
+
+# --- dovecot (2 patterns + IGNOREREGEX) ---
+dovecot|192.168.1.100|Feb 22 10:15:03 myhost dovecot: pop3-login: Aborted login (auth failed, 1 attempts): user=<admin>, method=PLAIN, rip=192.168.1.100, lip=10.0.0.1
+dovecot|10.0.0.5|Feb 22 10:15:05 myhost dovecot: imap-login: Disconnected (auth failed, 3 attempts): user=<test>, method=PLAIN, rip=10.0.0.5, lip=10.0.0.1
+
+# --- postfix (1 pattern) ---
+postfix|192.168.1.50|Feb 22 10:15:03 myhost postfix/smtpd[9876]: warning: unknown[192.168.1.50]: SASL LOGIN authentication failed: authentication failure
+postfix|10.20.30.40|Feb 22 10:15:05 myhost postfix/smtpd[9877]: warning: mail.example.com[10.20.30.40]: SASL PLAIN authentication failed: UGFzc3dvcmQ6
+
+# --- exim_authfail (1 pattern) ---
+exim_authfail|192.168.1.100|2024-02-22 10:15:03 login authenticator failed for (test) [192.168.1.100]:12345: 535 Incorrect authentication data (set_id=test@example.com)
+
+# --- exim_nxuser (1 pattern) ---
+exim_nxuser|10.0.0.5|2024-02-22 10:15:03 H=mail.example.com [10.0.0.5] F=<sender@example.com> rejected RCPT <nobody@example.com>: No such person at this address
+
+# --- vsftpd (1 pattern) ---
+vsftpd|192.168.1.50|Feb 22 10:15:03 myhost vsftpd: pam_unix(vsftpd:auth): authentication failure; logname= uid=0 euid=0 tty=ftp ruser=admin rhost=192.168.1.50
+
+# --- vsftpd2 (1 pattern) ---
+vsftpd2|10.0.0.5|Wed Feb 22 10:15:03 2024 [pid 12345] FAIL LOGIN: Client "10.0.0.5"
+
+# --- proftpd (1 pattern) ---
+proftpd|172.16.0.1|Feb 22 10:15:03 myhost proftpd[12345]: myhost (172.16.0.1[172.16.0.1]) - USER admin: no such user found from 172.16.0.1 [172.16.0.1] to 10.0.0.1:21
+
+# --- pure-ftpd (1 pattern) ---
+pure-ftpd|192.168.1.100|Feb 22 10:15:03 myhost pure-ftpd: (?@192.168.1.100) [WARNING] Authentication failed for user [admin]
+
+# --- sendmail (3 patterns) ---
+sendmail|192.168.1.50|Feb 22 10:15:03 myhost sendmail[12345]: ruleset=check_rcpt, arg1=<user@example.com>, relay=[192.168.1.50], reject=550 relaying denied
+sendmail|10.0.0.5|Feb 22 10:15:05 myhost sendmail[12346]: AUTH=server, relay=[10.0.0.5], authid=admin, mech=LOGIN, bits=0
+
+# --- courier (1 pattern) ---
+courier|192.168.1.100|Feb 22 10:15:03 myhost imapd: LOGIN FAILED, user=admin, ip=[192.168.1.100]
+
+# --- vpopmail (2 patterns) ---
+vpopmail|10.0.0.5|Feb 22 10:15:03 myhost vchkpw-pop3: password fail admin@example.com:10.0.0.5
+vpopmail|172.16.0.1|Feb 22 10:15:05 myhost vchkpw-pop3: vpopmail user not found nobody@example.com:172.16.0.1
+
+# --- rh_imapd (1 pattern) ---
+rh_imapd|192.168.1.100|Feb 22 10:15:03 myhost imapd[12345]: Login failed user=admin auth=admin host=[192.168.1.100]
+
+# --- rh_ipop3d (1 pattern) ---
+rh_ipop3d|10.0.0.5|Feb 22 10:15:03 myhost ipop3d[12345]: Login failed user=admin auth=admin host=[10.0.0.5]
+
+# --- cpanel (1 pattern) ---
+cpanel|192.168.1.100|192.168.1.100 - admin [02/22/2024:10:15:03 -0000] FAILED LOGIN whostmgrd: ip - password
+
+# --- modsec (1 pattern) ---
+modsec|203.0.113.10|[Wed Feb 22 10:15:03.123456 2024] [security2:error] [pid 12345] [client 203.0.113.10:54321] ModSecurity: Access denied with code 403 (phase 2). [id "1234"]
+
+# --- openvpnas (1 pattern) ---
+openvpnas|10.0.0.5|2024-02-22T10:15:03+0000 [] AUTH_FAILED,r=user,ip=10.0.0.5,cn=,key=
+
+# --- asterisk_badauth (1 pattern) ---
+asterisk_badauth|203.0.113.50|[2024-02-22 10:15:03] NOTICE[12345] chan_sip.c: Wrong password for user 'admin' from '203.0.113.50':5060
+
+# --- asterisk_iax (1 pattern) ---
+asterisk_iax|192.168.1.50|[2024-02-22 10:15:03] NOTICE[12345] chan_iax2.c: Host 192.168.1.50 failed MD5 authentication for 'admin' (key 'abc123')
+
+# --- asterisk_nopeer (1 pattern) ---
+asterisk_nopeer|10.0.0.5|[2024-02-22 10:15:03] NOTICE[12345] chan_sip.c: No matching peer found from '10.0.0.5':5060
+
+# ============================================================
+# NEW RULES (fail2ban/CSF-inspired)
+# ============================================================
+
+# --- apache-auth (2 patterns: Apache 2.4 + 2.2) ---
+apache-auth|76.181.65.196|[Tue Sep 08 13:34:46.224312 2015] [auth_basic:error] [pid 2043:tid 140302748706560] [client 76.181.65.196:53340] AH01617: user mfoley: authentication failure for "/admin/": Password Mismatch
+apache-auth|192.168.1.50|[Thu Sep 11 01:29:56.950717 2014] [auth_basic:error] [pid 8153] [client 192.168.1.50] AH01618: user joe not found: /admin/
+apache-auth|10.0.0.5|[Mon Dec 02 10:44:23 2013] [error] [client 10.0.0.5] user admin: authentication failure for "/admin": Password Mismatch
+
+# --- nginx-http-auth (3 patterns) ---
+nginx-http-auth|192.168.1.50|2024/02/22 10:15:03 [error] 5596#560: *3 user "admin": password mismatch, client: 192.168.1.50, server: example.com, request: "GET /admin HTTP/1.1", host: "example.com"
+nginx-http-auth|10.0.0.5|2024/02/22 10:15:05 [error] 5669#5669: *2829 user "testuser" was not found in "/etc/nginx/.htpasswd", client: 10.0.0.5, server: _, request: "GET /private/ HTTP/1.1", host: "example.com"
+nginx-http-auth|1.2.3.4|2024/02/22 10:15:07 [error] 3057#0: *13 no user/password was provided for basic authentication, client: 1.2.3.4, server: domain.tld, request: "GET /protected/ HTTP/1.1", host: "domain.tld"
+
+# --- mysqld-auth (1 pattern) ---
+mysqld-auth|192.168.1.50|2024-02-22 10:15:03 8 [Warning] Access denied for user 'root'@'192.168.1.50' (using password: YES)
+mysqld-auth|10.0.0.5|130322 11:26:54 [Warning] Access denied for user 'admin'@'10.0.0.5' (using password: NO)
+
+# --- wordpress (3 patterns, via wp-fail2ban plugin) ---
+wordpress|192.168.1.50|Feb 22 10:15:03 myhost wordpress(www.example.com)[1234]: Authentication failure for admin from 192.168.1.50
+wordpress|10.0.0.5|Feb 22 10:15:05 myhost wordpress(www.example.com)[1235]: Blocked authentication attempt for admin from 10.0.0.5
+wordpress|203.0.113.10|Feb 22 10:15:07 myhost wordpress(www.example.com)[1236]: XML-RPC authentication attempt for unknown user attacker from 203.0.113.10
+
+# --- webmin (2 patterns) ---
+webmin|192.168.1.50|Feb 22 10:15:03 myhost webmin[27643]: Invalid login as admin from 192.168.1.50
+webmin|86.0.6.217|Mar 15 09:22:11 myhost webmin[15673]: Non-existent login as toto from 86.0.6.217
+
+# --- directadmin (1 pattern) ---
+directadmin|192.168.1.50|2014:05:08-01:40:09: '192.168.1.50' 15 failed login attempt on account 'admin'
+directadmin|10.0.0.5|2024:02:22-10:15:03: '10.0.0.5' 1 failed login attempts. Account 'user'
+
+# --- cyrus-imap (1 pattern) ---
+cyrus-imap|192.168.1.50|Jan 15 10:30:22 mail cyrus/imap[7257]: badlogin: mail.example.com [192.168.1.50] plaintext admin SASL(-13): authentication failure: checkpass failed
+cyrus-imap|10.0.0.5|Jan 15 10:31:45 mail imap[5444]: badlogin: localhost [10.0.0.5] plaintext testuser SASL(-13): user not found: checkpass failed
+
+# --- roundcube (2 patterns) ---
+roundcube|192.168.1.50|[22-Feb-2024 10:15:03 +0000]: IMAP Error: Login failed for user@example.com from 192.168.1.50. Could not connect to ssl://mail.example.com:993: Unknown reason
+roundcube|10.0.0.5|[22-Feb-2024 10:15:05 +0000]: Failed login for admin@example.com from 10.0.0.5 in session abc123def
+
+# --- plesk (1 pattern) ---
+plesk|203.0.113.10|2024-02-22 10:15:03 ERR [panel] [Action Log] Failed login attempt with login 'admin' from IP 203.0.113.10
+plesk|192.168.1.50|2024-06-15 10:22:33 ERR [panel] [Action Log] Failed login attempt with login 'root' from IP 192.168.1.50
+
+# --- dropbear (2 patterns) ---
+dropbear|192.168.1.50|Feb 22 10:15:03 myhost dropbear[12345]: Bad password attempt for 'root' from 192.168.1.50:54321
+dropbear|10.0.0.5|Feb 22 10:15:05 myhost dropbear[12346]: Login attempt for nonexistent user from 10.0.0.5:12345
