@@ -332,6 +332,53 @@ execute_ban() {
 	return $ban_rc
 }
 
+# execute_unban host mod unban_cmd_template — execute unban command
+# returns 0 on success, unban command exit code on failure
+execute_unban() {
+	local host="$1" mod="$2" unban_cmd_template="$3"
+	ATTACK_HOST="$host"
+	MOD="$mod"
+	eout "{$mod} $host ban expired; executing unban command." le
+	eval "$unban_cmd_template" >/dev/null 2>&1
+	local unban_rc=$?
+	if [ "$unban_rc" -ne 0 ]; then
+		eout "{$mod} unban command for $host exited with code $unban_rc." le
+	fi
+	return $unban_rc
+}
+
+# process_unbans install_path now unban_cmd_template — unban expired entries
+process_unbans() {
+	local install_path="$1" now="$2" unban_cmd_template="$3"
+	local expired_line ts expiry host mod ports
+	while IFS=' ' read -r ts expiry host mod ports; do
+		[ -z "$ts" ] && continue
+		if [ -n "$unban_cmd_template" ]; then
+			execute_unban "$host" "$mod" "$unban_cmd_template"
+		else
+			eout "{$mod} $host ban expired; no UNBAN_COMMAND configured, removing state only." le
+		fi
+		state_bans_active_remove "$install_path" "$host"
+		state_bans_history_append "$install_path" "$now" "$expiry" "$host" "$mod" "unban"
+	done < <(state_bans_active_expired "$install_path" "$now")
+}
+
+# check_recidivism install_path host permanent_window now permanent_after
+# returns 0 if host should be escalated to permanent ban, 1 otherwise
+check_recidivism() {
+	local install_path="$1" host="$2" permanent_window="$3"
+	local now="$4" permanent_after="$5"
+	if [ "$permanent_after" -eq 0 ]; then
+		return 1
+	fi
+	local recent_count
+	recent_count=$(state_bans_count_recent "$install_path" "$host" "$permanent_window" "$now")
+	if [ "$recent_count" -ge "$permanent_after" ]; then
+		return 0
+	fi
+	return 1
+}
+
 # --- State file I/O functions ---
 # State file formats:
 #   track.attack: "IP COUNT MOD" — per-run failure accumulator, line-capped
