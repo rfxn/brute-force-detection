@@ -286,13 +286,14 @@ _apool_report() {
 	local atmp
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.alist.XXXXXX")
 	echo "[+] $title" && echo
-	echo "#TRIGS|IP|FIRST_SEEN|LAST_SEEN|RULES" > "$atmp"
-	local cnt aip first_ts last_ts mods first_fmt last_fmt
+	echo "#TRIGS|IP|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
+	local cnt aip first_ts last_ts mods first_fmt last_fmt ban_status
 	while IFS='|' read -r cnt aip first_ts last_ts mods; do
 		[ -z "$cnt" ] && continue
 		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S")
 		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S")
-		echo "$cnt|$aip|$first_fmt|$last_fmt|$mods" >> "$atmp"
+		ban_status=$(_apool_ban_status "$aip")
+		echo "$cnt|$aip|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
 	done < <(
 		if [ -n "$search" ]; then
 			grep -E "$search" "$source_file"
@@ -315,6 +316,57 @@ _apool_report() {
 	rm -f "$atmp"
 }
 
+# _apool_ban_status ip — return ban status string for an IP
+_apool_ban_status() {
+	local aip="$1"
+	local bans_active="$INSTALL_PATH/tmp/bans.active"
+	local bans_history="$INSTALL_PATH/tmp/bans.history"
+	if grep -qFw "$aip" "$bans_active" 2>/dev/null; then
+		local ban_expiry
+		ban_expiry=$(awk -v ip="$aip" '$3 == ip {print $2; exit}' "$bans_active")
+		if [ "$ban_expiry" = "0" ]; then
+			echo "BANNED(perm)"
+		else
+			local now remain
+			now=$(date +"%s")
+			remain=$(( (ban_expiry - now) / 60 ))
+			if [ "$remain" -lt 0 ]; then
+				remain=0
+			fi
+			echo "BANNED(${remain}m)"
+		fi
+	elif [ -f "$bans_history" ]; then
+		local hist_count
+		hist_count=$(awk -v ip="$aip" '$3 == ip && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
+			"$bans_history")
+		if [ "$hist_count" -gt 0 ]; then
+			echo "prev:$hist_count"
+		fi
+	fi
+}
+
+# _apool_service_summary source_file — per-service event and unique IP breakdown
+_apool_service_summary() {
+	local source_file="$1"
+	if [ ! -f "$source_file" ] || [ ! -s "$source_file" ]; then
+		return 0
+	fi
+	local atmp
+	atmp=$(mktemp "$INSTALL_PATH/tmp/.svcsum.XXXXXX")
+	echo "[+] Per-service breakdown" && echo
+	echo "SERVICE|EVENTS|UNIQUE_IPS" > "$atmp"
+	awk '{
+		svc[$3]++
+		key = $3 " " $2
+		if (!(key in seen)) { seen[key] = 1; uniq[$3]++ }
+	}
+	END {
+		for (s in svc) print svc[s] "|" s "|" uniq[s]
+	}' "$source_file" | sort -t'|' -k1 -nr >> "$atmp"
+	format_table < "$atmp"
+	rm -f "$atmp"
+}
+
 apool_list() {
 	local ahost="${1:-}"
 	if [ -n "$ahost" ]; then
@@ -325,6 +377,8 @@ apool_list() {
 		rm -f "$WAPOOL_LIST"
 	elif [ -f "$APOOL_LIST" ]; then
 		_apool_report "$APOOL_LIST" "Top 25 brute force attackers today"
+		echo
+		_apool_service_summary "$APOOL_LIST"
 		echo
 		local WAPOOL_LIST
 		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
