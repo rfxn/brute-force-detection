@@ -1,4 +1,8 @@
 2.0.1:
+[New] tests/test_filter_host.bats with 12 tests for ignore list and local
+      address filtering
+[New] tests/test_check_pipeline.bats with 15 integration tests for
+      count_attacks, execute_ban, and end-to-end pipeline
 [New] filter_host() in bfd.lib.sh checks ignore lists and local addresses;
       returns 0 (process), 1 (ignored), or 2 (local address)
 [New] count_attacks() in bfd.lib.sh counts host occurrences and accumulates
