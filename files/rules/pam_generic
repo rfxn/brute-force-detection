@@ -1,0 +1,18 @@
+# failed logins from a single address before ban
+# high threshold to avoid overlap with specific service rules
+TRIG="20"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# file must exist for rule to be active
+REQ="$AUTH_LOG_PATH"
+
+if [ -f "$REQ" ]; then
+	LP="$AUTH_LOG_PATH"
+	TLOG_TF="pam"
+
+	## Generic PAM authentication failures (catches any PAM service)
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"pam_unix.*authentication failure.*rhost=<HOST>")
+fi

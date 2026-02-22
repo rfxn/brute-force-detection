@@ -423,6 +423,61 @@ teardown() {
 	[ "$result" = "10.0.0.5" ]
 }
 
+# --- http_401 ---
+
+@test "regex: http_401 - Apache combined 401" {
+	local result
+	result=$(echo '192.168.1.100 - - [22/Feb/2024:10:15:03 +0000] "GET /admin HTTP/1.1" 401 381 "-" "curl/7.68.0"' | \
+		extract_hosts '<HOST> -.*" 401 ')
+	[ "$result" = "192.168.1.100" ]
+}
+
+@test "regex: http_401 - POST 401 with referer" {
+	local result
+	result=$(echo '10.0.0.5 - admin [22/Feb/2024:10:15:05 +0000] "POST /wp-login.php HTTP/1.1" 401 4521 "https://example.com/" "Mozilla/5.0"' | \
+		extract_hosts '<HOST> -.*" 401 ')
+	[ "$result" = "10.0.0.5" ]
+}
+
+# --- pam_generic ---
+
+@test "regex: pam_generic - su auth failure" {
+	local result
+	result=$(echo "Feb 22 10:15:03 myhost su: pam_unix(su:auth): authentication failure; logname=admin uid=1000 euid=0 tty=pts/0 ruser=admin rhost=192.168.1.50" | \
+		extract_hosts "pam_unix.*authentication failure.*rhost=<HOST>")
+	[ "$result" = "192.168.1.50" ]
+}
+
+@test "regex: pam_generic - login auth failure" {
+	local result
+	result=$(echo "Feb 22 10:15:05 myhost login: pam_unix(login:auth): authentication failure; logname= uid=0 euid=0 tty=tty1 ruser= rhost=10.0.0.5 user=root" | \
+		extract_hosts "pam_unix.*authentication failure.*rhost=<HOST>")
+	[ "$result" = "10.0.0.5" ]
+}
+
+# --- named ---
+
+@test "regex: named - query denied (with @0x prefix)" {
+	local result
+	result=$(echo "Feb 22 10:15:03 ns1 named[12345]: client @0x7f 192.168.1.100#54321 (example.com): query (cache) 'example.com/A/IN' denied" | \
+		extract_hosts "named.* <HOST>[#][0-9]+.*query.*denied")
+	[ "$result" = "192.168.1.100" ]
+}
+
+@test "regex: named - zone transfer denied" {
+	local result
+	result=$(echo "Feb 22 10:15:05 ns1 named[12345]: client @0x7f 10.0.0.5#12345: zone transfer 'example.com/IN' denied" | \
+		extract_hosts "named.* <HOST>[#][0-9]+.*zone transfer.*denied")
+	[ "$result" = "10.0.0.5" ]
+}
+
+@test "regex: named - query denied (no @0x prefix)" {
+	local result
+	result=$(echo "Feb 22 10:15:07 ns1 named[6789]: client 172.16.0.1#9999 (test.com): query (cache) 'test.com/AAAA/IN' denied" | \
+		extract_hosts "named.* <HOST>[#][0-9]+.*query.*denied")
+	[ "$result" = "172.16.0.1" ]
+}
+
 # ============================================================
 # IPv6 PATTERNS — same rules, IPv6 source addresses
 # ============================================================
@@ -460,4 +515,18 @@ teardown() {
 	result=$(echo '2024/02/22 10:15:03 [error] 5596#560: *3 user "admin": password mismatch, client: 2001:db8::50, server: example.com, request: "GET /admin HTTP/1.1", host: "example.com"' | \
 		extract_hosts "password mismatch, client: <HOST>")
 	[ "$result" = "2001:db8::50" ]
+}
+
+@test "regex: pam_generic - auth failure (IPv6)" {
+	local result
+	result=$(echo "Feb 22 10:15:03 myhost sshd: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=2001:db8::99" | \
+		extract_hosts "pam_unix.*authentication failure.*rhost=<HOST>")
+	[ "$result" = "2001:db8::99" ]
+}
+
+@test "regex: named - query denied (IPv6)" {
+	local result
+	result=$(echo "Feb 22 10:15:03 ns1 named[12345]: client @0x7f 2001:db8::abcd#54321 (example.com): query (cache) 'example.com/A/IN' denied" | \
+		extract_hosts "named.* <HOST>[#][0-9]+.*query.*denied")
+	[ "$result" = "2001:db8::abcd" ]
 }

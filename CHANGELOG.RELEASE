@@ -1,4 +1,85 @@
 2.0.1:
+[Fix] README/README.md: update rule count from 30 to 33; add http_401,
+      pam_generic, named to rule catalog; add Auth and DNS categories
+[New] 3 new service rules: http_401 (HTTP 401 in Apache/nginx access logs,
+      TRIG=30), pam_generic (generic PAM authentication failure, TRIG=20),
+      named (BIND/named query/zone transfer denied, TRIG=100); 33 rules total
+[New] named added to tlog_journal_filter() for systemd journal support
+      (SYSLOG_IDENTIFIER=named); 16 of 33 rules now journal-capable
+[New] 10 regex sample tests and 1 journal filter test; suite now 461 tests
+[Change] conf.bfd reorganized into 5 clearly labeled sections: Detection
+         Thresholds, Ban Actions, Email Alerts, Log Paths, Logging & Advanced;
+         "You should not need to edit" separator eliminated — all remaining
+         variables are user-configurable
+[New] internals.conf: internal/derived variables (RULES_PATH, TLOG_PATH,
+      EMAIL_TEMPLATE, IGNORE_HOST_FILES, LOCK_FILE, TIME_ZONE) split from
+      conf.bfd into separate file; users never need to edit these
+[Change] LOG_SOURCE promoted from below separator to Log Paths section;
+         comment updated to clarify journal mode now behaves same as auto
+[Change] TIME_UNIX dead variable removed (redundant with UTIME in bfd);
+         INSTALL_PATH removed from conf.bfd (hardcoded in bfd before conf.bfd
+         is sourced, changing it in conf.bfd alone had no effect)
+[Change] files/bfd sources internals.conf after conf.bfd with same safety
+         checks (root ownership, not world-writable); fallback defaults for
+         all internals.conf variables ensure backward compat with pre-split
+         installs
+[Change] importconf: merge_conf() function extracted; dual-merge handles
+         both conf.bfd and internals.conf; for pre-split upgrades, old
+         conf.bfd variables migrate to new internals.conf; journal cursor
+         and timestamp state preserved during upgrades
+[New] 2 importconf tests: pre-split variable migration to internals.conf,
+      post-split upgrade merging both old files; full suite now 451 tests
+[Fix] tlog_journal_filter: rh_ipop3d case key mismatched TLOG_TF="rh_ipop3"
+      set by the rh_ipop3d rule file; journal fallback silently failed for
+      POP3 rules; corrected to rh_ipop3
+[Fix] tlog_read/tlog journal dispatch: LOG_SOURCE=journal bypassed existing
+      log files, hijacking rules like vsftpd2 whose TLOG_TF matched journal
+      mappings but whose LP pointed to application-specific logs; dispatch
+      now requires file to be missing regardless of LOG_SOURCE setting
+[Fix] cron.daily: .cursor and .jts files accumulated in tmp/ without cleanup;
+      added rm -f for *.cursor and *.jts during daily rotation
+[New] tlog_journal_filter test for rh_ipop3 → ipop3d mapping
+[Change] tlog_read forced-journal test updated to expect file mode when file
+         exists (matches simplified dispatch logic); full suite now 449 tests
+[New] systemd journal reader with transparent fallback: when a rule's flat
+      log file is missing but journalctl is available, BFD reads from the
+      systemd journal instead; 15 of 30 rules are journal-capable (sshd,
+      dropbear, dovecot, postfix, courier, sendmail, vpopmail, cyrus,
+      pure-ftpd, proftpd, vsftpd, webmin, wordpress, rh_imapd, rh_ipop3d)
+[New] LOG_SOURCE config variable: auto (default, journal fallback), file
+      (flat files only, for CentOS 6), or journal (prefer journal for
+      syslog-based rules)
+[New] tlog_journal_filter() maps TLOG_TF names to SYSLOG_IDENTIFIER
+      journalctl filters via case statement with 15 service mappings
+[New] tlog_journal_read() reads new journal entries with cursor-based
+      tracking (primary) and Unix timestamp fallback; first run saves
+      cursor and outputs nothing (matches tlog first-run behavior);
+      invalid cursors (journal vacuumed) fall back to timestamp; all
+      journalctl calls wrapped with timeout 30
+[Change] tlog_read() adds journal dispatch: when LOG_SOURCE=journal or
+         file is missing in auto mode, delegates to tlog_journal_read()
+         for journal-capable rules before falling back to file error
+[Change] validate_rule() relaxes LP file check: allows rules where LP is
+         missing if journalctl is available and TLOG_TF has a journal
+         mapping (unless LOG_SOURCE=file)
+[Change] validate_config() validates LOG_SOURCE (must be auto, file, or
+         journal)
+[Change] health_check() adds journalctl availability status, LOG_SOURCE
+         setting display, and journal-aware rule scan that shows
+         "active via journal" for rules using journal fallback
+[Change] files/tlog adds journal dispatch: sources bfd.lib.sh lazily
+         only in the journal path; no performance impact on file-based
+         systems
+[Change] files/bfd exports LOG_SOURCE in pre() for tlog subprocess access
+[New] tests/test_tlog_journal.bats with 27 tests: tlog_journal_filter
+      mappings (7), tlog_journal_read cursor/timestamp/fallback (8),
+      tlog_read dispatch logic (6), validate_rule journal awareness (4),
+      validate_config LOG_SOURCE validation (2); mocked journalctl
+[Fix] test_validate_rule.bats: LP-missing test now sets LOG_SOURCE=file
+      to prevent journal fallback on systems with journalctl
+[Note] zero modifications to any of the 30 rule files; journal output
+       format (--output=short) is syslog-compatible with existing
+       extract_hosts() patterns; full suite now 448 tests
 [Change] importconf rewritten: grep/awk-based config merge replaces
          source+heredoc approach; user values (including template variables
          like $ATTACK_HOST) preserved as raw text without shell expansion;

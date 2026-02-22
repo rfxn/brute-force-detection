@@ -117,6 +117,19 @@ plesk|192.168.1.50|2024-06-15 10:22:33 ERR [panel] [Action Log] Failed login att
 dropbear|192.168.1.50|Feb 22 10:15:03 myhost dropbear[12345]: Bad password attempt for 'root' from 192.168.1.50:54321
 dropbear|10.0.0.5|Feb 22 10:15:05 myhost dropbear[12346]: Login attempt for nonexistent user from 10.0.0.5:12345
 
+# --- http_401 (1 pattern: access log 401 status) ---
+http_401|192.168.1.100|192.168.1.100 - - [22/Feb/2024:10:15:03 +0000] "GET /admin HTTP/1.1" 401 381 "-" "curl/7.68.0"
+http_401|10.0.0.5|10.0.0.5 - admin [22/Feb/2024:10:15:05 +0000] "POST /wp-login.php HTTP/1.1" 401 4521 "https://example.com/" "Mozilla/5.0"
+
+# --- pam_generic (1 pattern: pam_unix auth failure) ---
+pam_generic|192.168.1.50|Feb 22 10:15:03 myhost su: pam_unix(su:auth): authentication failure; logname=admin uid=1000 euid=0 tty=pts/0 ruser=admin rhost=192.168.1.50
+pam_generic|10.0.0.5|Feb 22 10:15:05 myhost login: pam_unix(login:auth): authentication failure; logname= uid=0 euid=0 tty=tty1 ruser= rhost=10.0.0.5 user=root
+
+# --- named (2 patterns: query denied, zone transfer denied) ---
+named|192.168.1.100|Feb 22 10:15:03 ns1 named[12345]: client @0x7f 192.168.1.100#54321 (example.com): query (cache) 'example.com/A/IN' denied
+named|10.0.0.5|Feb 22 10:15:05 ns1 named[12345]: client @0x7f 10.0.0.5#12345: zone transfer 'example.com/IN' denied
+named|172.16.0.1|Feb 22 10:15:07 ns1 named[6789]: client 172.16.0.1#9999 (test.com): query (cache) 'test.com/AAAA/IN' denied
+
 # ============================================================
 # IPv6 SAMPLES — same rules, IPv6 source addresses
 # ============================================================
@@ -133,3 +146,9 @@ postfix|2001:db8::abcd|Feb 22 10:15:03 myhost postfix/smtpd[9876]: warning: unkn
 
 # --- nginx-http-auth (IPv6) ---
 nginx-http-auth|2001:db8::50|2024/02/22 10:15:03 [error] 5596#560: *3 user "admin": password mismatch, client: 2001:db8::50, server: example.com, request: "GET /admin HTTP/1.1", host: "example.com"
+
+# --- pam_generic (IPv6) ---
+pam_generic|2001:db8::99|Feb 22 10:15:03 myhost sshd: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=2001:db8::99
+
+# --- named (IPv6) ---
+named|2001:db8::abcd|Feb 22 10:15:03 ns1 named[12345]: client @0x7f 2001:db8::abcd#54321 (example.com): query (cache) 'example.com/A/IN' denied

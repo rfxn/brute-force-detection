@@ -37,6 +37,18 @@ else
 	TLOG="$2"
 fi
 
+# Journal fallback: use journal when file is missing (auto or journal mode)
+if [ "${LOG_SOURCE:-auto}" != "file" ] && [ ! -f "$FILE" ]; then
+	_LIB="${INSTALL_PATH:-/usr/local/bfd}/bfd.lib.sh"
+	if [ -f "$_LIB" ]; then
+		# shellcheck disable=SC1090
+		. "$_LIB"
+		if tlog_journal_read "$TLOG" "$BASERUN" 2>/dev/null; then
+			exit 0
+		fi
+	fi
+fi
+
 if [ ! -f "$FILE" ]; then
 	echo "$FILE is not a valid file, aborting"
 	exit 1

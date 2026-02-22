@@ -37,9 +37,11 @@ fi
 OV=$(awk '/^# Brute Force Detection/ {print $5; exit}' "$old_conf")
 NV=$(awk '/^# Brute Force Detection/ {print $5; exit}' "$new_conf")
 
-# merge: use new conf.bfd as base, overlay old user values
+# merge_conf old_source new_target — overlay old user values onto new config
 # awk extracts raw text (no shell expansion), preserving $ATTACK_HOST etc.
-awk -v old_conf="$old_conf" '
+merge_conf() {
+	local old_source="$1" new_target="$2"
+	awk -v old_conf="$old_source" '
 BEGIN {
 	# read old config: store last uncommented assignment per variable
 	while ((getline line < old_conf) > 0) {
@@ -62,7 +64,28 @@ BEGIN {
 		}
 	}
 	print
-}' "$new_conf" > "$new_conf.tmp" && mv -f "$new_conf.tmp" "$new_conf"
+}' "$new_target" > "$new_target.tmp" && mv -f "$new_target.tmp" "$new_target"
+}
+
+# build combined old source: concatenate old conf.bfd + old internals.conf
+# (for pre-split installs, all variables are in conf.bfd; for post-split,
+# internals.conf has the internal variables)
+old_combined=$(mktemp "$INSTALL_PATH/tmp/.importconf.XXXXXX")
+cat "$old_conf" > "$old_combined"
+if [ -f "$INSTALL_PATH.bk.last/internals.conf" ]; then
+	cat "$INSTALL_PATH.bk.last/internals.conf" >> "$old_combined"
+fi
+
+# merge conf.bfd
+merge_conf "$old_combined" "$new_conf"
+
+# merge internals.conf if new install has it
+new_int="$INSTALL_PATH/internals.conf"
+if [ -f "$new_int" ]; then
+	merge_conf "$old_combined" "$new_int"
+fi
+
+rm -f "$old_combined"
 
 # preserve user's ignore lists
 cp -f "$INSTALL_PATH.bk.last/ignore.hosts" "$INSTALL_PATH" 2>/dev/null
@@ -72,5 +95,9 @@ cp -f "$INSTALL_PATH.bk.last/tmp/bans.active" "$INSTALL_PATH/tmp/" 2>/dev/null
 cp -f "$INSTALL_PATH.bk.last/tmp/bans.history"* "$INSTALL_PATH/tmp/" 2>/dev/null
 cp -f "$INSTALL_PATH.bk.last/tmp/events.dat" "$INSTALL_PATH/tmp/" 2>/dev/null
 cp -f "$INSTALL_PATH.bk.last/stats/"* "$INSTALL_PATH/stats/" 2>/dev/null
+
+# preserve journal cursor/timestamp state
+cp -f "$INSTALL_PATH.bk.last/tmp/"*.cursor "$INSTALL_PATH/tmp/" 2>/dev/null
+cp -f "$INSTALL_PATH.bk.last/tmp/"*.jts "$INSTALL_PATH/tmp/" 2>/dev/null
 
 echo "  Imported config and state from BFD $OV to $NV."

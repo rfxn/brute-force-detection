@@ -5,48 +5,26 @@
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
 # This program may be freely redistributed under the terms of the GNU GPL
 #
-# NOTE: This file should be edited with word/line wrapping off,
-#       if your using pico please start it with the -w switch.
-#       (e.g: pico -w filename)
-#
 
-# how many failure events must an address have before being blocked?
-# you can override this on a per rule basis in /usr/local/bfd/rules/
+# =============================================
+# Detection Thresholds
+# =============================================
+
+# failure events before an address is blocked (per-rule override in rules/)
 TRIG="15"
 
 # sliding window in seconds for counting failures (default 5 min)
-# only failures within this window count toward the trigger threshold
 TRIG_WINDOW="300"
 
 # cross-service aggregate threshold (0 = disabled)
-# when enabled, failures from ALL services count toward this threshold
-# regardless of per-rule TRIG values
+# failures from ALL services count toward this threshold
 TRIG_GLOBAL="0"
 
-# ban duration in seconds (0 = permanent, 300 = 5 minutes)
-# temporary bans are automatically removed after this duration
-# requires UNBAN_COMMAND to be set for auto-unban to work
-BAN_DURATION="300"
+# =============================================
+# Ban Actions
+# =============================================
 
-# number of temporary bans before permanent ban (0 = disabled)
-# when an IP is temp-banned this many times within BAN_PERMANENT_WINDOW,
-# subsequent bans are escalated to permanent
-BAN_PERMANENT_AFTER="5"
-
-# window in seconds for counting repeat offenses (default 24 hours)
-# only bans within this window count toward BAN_PERMANENT_AFTER threshold
-BAN_PERMANENT_WINDOW="86400"
-
-# send email alerts for all events [0 = off; 1 = on]
-EMAIL_ALERTS="0" 
-
-# local user or email address alerts are sent to (separate multiple with comma)
-EMAIL_ADDRESS="root"
-
-# subject of email alerts
-EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
-
-# executable command to block attacking hosts
+# command to block attacking hosts
 # APF (default):
 BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
 # iptables (CentOS 6/7, Ubuntu 14-20):
@@ -78,9 +56,7 @@ UNBAN_COMMAND=""
 # iptables with port-specific unblocking:
 #UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -p tcp -m multiport --dports $PORTS -j DROP"
 
-# IPv6 ban command (leave empty to use BAN_COMMAND for both IPv4 and IPv6)
-# when empty, BAN_COMMAND is used for all addresses — works with tools that
-# handle both protocols (nft with inet family, APF, ip route)
+# IPv6 ban command (leave empty to use BAN_COMMAND for both)
 BAN_COMMAND_V6=""
 # ip6tables:
 #BAN_COMMAND_V6="/sbin/ip6tables -I INPUT -s $ATTACK_HOST -j DROP"
@@ -96,24 +72,47 @@ UNBAN_COMMAND_V6=""
 # ip route:
 #UNBAN_COMMAND_V6="/sbin/ip route del blackhole $ATTACK_HOST/128"
 
-######
-# You should not need to edit any options below this line
-######
+# ban duration in seconds (0 = permanent, 300 = 5 minutes)
+# requires UNBAN_COMMAND to be set for auto-unban
+BAN_DURATION="300"
 
-# installation path
-INSTALL_PATH="/usr/local/bfd"
+# number of temporary bans before permanent (0 = disabled)
+BAN_PERMANENT_AFTER="5"
 
-# rule files path
-RULES_PATH="$INSTALL_PATH/rules"
+# window in seconds for counting repeat offenses (default 24 hours)
+BAN_PERMANENT_WINDOW="86400"
 
-# track log script path
-TLOG_PATH="$INSTALL_PATH/tlog"
+# =============================================
+# Email Alerts
+# =============================================
 
-# syslog kernel log path
-KERNEL_LOG_PATH="/var/log/messages"
+# send email alerts for all events [0 = off; 1 = on]
+EMAIL_ALERTS="0"
+
+# address alerts are sent to (separate multiple with comma)
+EMAIL_ADDRESS="root"
+
+# subject of email alerts
+EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
+
+# number of log lines to include in email alerts
+EMAIL_LOGLINES="50"
+
+# =============================================
+# Log Paths
+# =============================================
+
+# log source mode: auto, file, or journal
+# auto: use flat log files, fall back to journalctl when files are missing
+# file: flat log files only (required for CentOS 6)
+# journal: same as auto (journal used only when file is missing)
+LOG_SOURCE="auto"
 
 # syslog auth log path
 AUTH_LOG_PATH="/var/log/secure"
+
+# syslog kernel/messages log path
+KERNEL_LOG_PATH="/var/log/messages"
 
 # syslog mail log path
 MAIL_LOG_PATH="/var/log/maillog"
@@ -121,8 +120,9 @@ MAIL_LOG_PATH="/var/log/maillog"
 # bfd application log path
 BFD_LOG_PATH="/var/log/bfd_log"
 
-# number of log lines to include in email alerts
-EMAIL_LOGLINES="50"
+# =============================================
+# Logging & Advanced
+# =============================================
 
 # log all events to syslog [0 = off; 1 = on]
 OUTPUT_SYSLOG="1"
@@ -130,20 +130,5 @@ OUTPUT_SYSLOG="1"
 # log file path for syslog logging
 OUTPUT_SYSLOG_FILE="$KERNEL_LOG_PATH"
 
-# template of the email message body
-EMAIL_TEMPLATE="$INSTALL_PATH/alert.bfd"
-
-# contains list of files to search for addresses that are excluded from bans
-IGNORE_HOST_FILES="$INSTALL_PATH/exclude.files"
-
-# grab the local time zone
-TIME_ZONE=$(date +"%z")
-
-# grab the local unix time
-TIME_UNIX=$(date +"%s")
-
-# lock file path
-LOCK_FILE="$INSTALL_PATH/lock.utime"
-
-# lock file timeout
+# lock file timeout in seconds
 LOCK_FILE_TIMEOUT="300"

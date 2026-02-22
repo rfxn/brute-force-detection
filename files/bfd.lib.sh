@@ -189,6 +189,13 @@ validate_config() {
 		echo "error: INSTALL_PATH '$INSTALL_PATH' does not exist."
 		exit $EXIT_CONFIG_ERROR
 	fi
+	if [ -n "${LOG_SOURCE:-}" ] && \
+	   [ "$LOG_SOURCE" != "auto" ] && \
+	   [ "$LOG_SOURCE" != "file" ] && \
+	   [ "$LOG_SOURCE" != "journal" ]; then
+		echo "error: LOG_SOURCE must be auto, file, or journal (got '$LOG_SOURCE')."
+		exit $EXIT_CONFIG_ERROR
+	fi
 }
 
 # detect_log_paths requires: AUTH_LOG_PATH, KERNEL_LOG_PATH, MAIL_LOG_PATH,
@@ -228,6 +235,14 @@ format_table() {
 # Outputs new content to stdout; returns 0 on success, 1 on error.
 tlog_read() {
 	local file="$1" tlog_name="$2" baserun="$3"
+	# Journal dispatch: use journal when file is missing (auto or journal mode)
+	if [ "${LOG_SOURCE:-auto}" != "file" ] && [ ! -f "$file" ]; then
+		if command -v journalctl >/dev/null 2>&1 && \
+		   tlog_journal_filter "$tlog_name" >/dev/null 2>&1; then
+			tlog_journal_read "$tlog_name" "$baserun"
+			return $?
+		fi
+	fi
 	if [ ! -f "$file" ]; then
 		echo "$file is not a valid file, aborting" >&2
 		return 1
@@ -281,6 +296,111 @@ tlog_read() {
 	return 0
 }
 
+# tlog_journal_filter tlog_name — map TLOG_TF to journalctl filter argument
+# Returns 0 with filter on stdout, or 1 if no mapping exists (not journal-capable).
+tlog_journal_filter() {
+	local tlog_name="$1"
+	case "$tlog_name" in
+		sshd)       echo "SYSLOG_IDENTIFIER=sshd" ;;
+		dropbear)   echo "SYSLOG_IDENTIFIER=dropbear" ;;
+		dovecot)    echo "SYSLOG_IDENTIFIER=dovecot" ;;
+		postfix)    echo "SYSLOG_IDENTIFIER=postfix" ;;
+		courier)    echo "SYSLOG_IDENTIFIER=couriertcpd" ;;
+		sendmail)   echo "SYSLOG_IDENTIFIER=sm-mta" ;;
+		vpopmail)   echo "SYSLOG_IDENTIFIER=vpopmail" ;;
+		cyrus)      echo "SYSLOG_IDENTIFIER=cyrus" ;;
+		pure-ftpd)  echo "SYSLOG_IDENTIFIER=pure-ftpd" ;;
+		proftpd)    echo "SYSLOG_IDENTIFIER=proftpd" ;;
+		vsftpd)     echo "SYSLOG_IDENTIFIER=vsftpd" ;;
+		webmin)     echo "SYSLOG_IDENTIFIER=webmin" ;;
+		wordpress)  echo "SYSLOG_IDENTIFIER=wordpress" ;;
+		rh_imapd)   echo "SYSLOG_IDENTIFIER=imapd" ;;
+		rh_ipop3)   echo "SYSLOG_IDENTIFIER=ipop3d" ;;
+		named)      echo "SYSLOG_IDENTIFIER=named" ;;
+		*) return 1 ;;
+	esac
+	return 0
+}
+
+# tlog_journal_read tlog_name baserun — read new journal entries for a syslog identifier
+# Uses cursor-based tracking with timestamp fallback.
+# First run saves cursor and outputs nothing (matches tlog first-run behavior).
+# Outputs new journal lines to stdout; returns 0 on success, 1 on error.
+tlog_journal_read() {
+	local tlog_name="$1" baserun="$2"
+	local jfilter cursor_file ts_file
+	jfilter=$(tlog_journal_filter "$tlog_name") || return 1
+	cursor_file="$baserun/${tlog_name}.cursor"
+	ts_file="$baserun/${tlog_name}.jts"
+
+	if [ ! -d "$baserun" ]; then
+		echo "$baserun is not a valid operating path, aborting." >&2
+		return 1
+	fi
+
+	if ! command -v journalctl >/dev/null 2>&1; then
+		echo "journalctl not available" >&2
+		return 1
+	fi
+
+	local jctl_out cursor_line new_cursor now_ts
+
+	if [ -f "$cursor_file" ]; then
+		local saved_cursor
+		saved_cursor=$(cat "$cursor_file" 2>/dev/null)
+		# try cursor-based read; fall back to timestamp if cursor invalid
+		jctl_out=$(timeout 30 journalctl "$jfilter" --after-cursor="$saved_cursor" \
+			--output=short --show-cursor --no-pager -q 2>/dev/null) || {
+			# cursor invalid (journal vacuumed?) — fall back to timestamp
+			if [ -f "$ts_file" ]; then
+				local saved_ts
+				saved_ts=$(cat "$ts_file" 2>/dev/null)
+				jctl_out=$(timeout 30 journalctl "$jfilter" --since="@${saved_ts}" \
+					--output=short --show-cursor --no-pager -q 2>/dev/null) || return 1
+			else
+				# no fallback available; treat as first run
+				jctl_out=$(timeout 30 journalctl "$jfilter" -n 0 \
+					--output=short --show-cursor --no-pager -q 2>/dev/null) || return 1
+			fi
+		}
+	elif [ -f "$ts_file" ]; then
+		local saved_ts
+		saved_ts=$(cat "$ts_file" 2>/dev/null)
+		jctl_out=$(timeout 30 journalctl "$jfilter" --since="@${saved_ts}" \
+			--output=short --show-cursor --no-pager -q 2>/dev/null) || return 1
+	else
+		# first run: get current cursor, output nothing
+		jctl_out=$(timeout 30 journalctl "$jfilter" -n 0 \
+			--output=short --show-cursor --no-pager -q 2>/dev/null) || return 1
+		# extract cursor from output
+		cursor_line=$(echo "$jctl_out" | grep '^-- cursor:' | tail -1)
+		if [ -n "$cursor_line" ]; then
+			new_cursor="${cursor_line#-- cursor: }"
+			echo "$new_cursor" > "$cursor_file"
+		fi
+		now_ts=$(date +"%s")
+		echo "$now_ts" > "$ts_file"
+		return 0
+	fi
+
+	# extract and save new cursor
+	cursor_line=$(echo "$jctl_out" | grep '^-- cursor:' | tail -1)
+	if [ -n "$cursor_line" ]; then
+		new_cursor="${cursor_line#-- cursor: }"
+		echo "$new_cursor" > "$cursor_file"
+		# output log lines (everything except the cursor line)
+		echo "$jctl_out" | grep -v '^-- cursor:'
+	else
+		# no cursor in output — no new entries
+		:
+	fi
+
+	# update timestamp on every successful read
+	now_ts=$(date +"%s")
+	echo "$now_ts" > "$ts_file"
+	return 0
+}
+
 # extract_hosts pattern1 [pattern2 ...] — extract IPs from tlog output on stdin
 # Each pattern is a grep -E regex with <HOST> marking the IP position.
 # <HOST> is replaced with an IP-matching capture group for sed -r.
@@ -330,8 +450,15 @@ validate_rule() {
 		return 1
 	fi
 	if [ ! -f "$LP" ]; then
-		eout "rule $rule_name: log file '$LP' does not exist, skipping" le
-		return 1
+		# allow rule if journal fallback is possible
+		if [ "${LOG_SOURCE:-auto}" != "file" ] && \
+		   command -v journalctl >/dev/null 2>&1 && \
+		   tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
+			: # journal-capable, continue validation
+		else
+			eout "rule $rule_name: log file '$LP' does not exist, skipping" le
+			return 1
+		fi
 	fi
 	if [ -z "${TLOG_TF:-}" ]; then
 		eout "rule $rule_name: TLOG_TF not set, skipping" le
@@ -848,7 +975,31 @@ health_check() {
 		pass_count=$((pass_count + 1))
 	fi
 
-	# 6. Rule scan
+	# 6. journalctl availability
+	local has_journalctl=0
+	if command -v journalctl >/dev/null 2>&1; then
+		local jctl_bin
+		jctl_bin=$(command -v journalctl)
+		echo "[PASS] journalctl: available ($jctl_bin)"
+		pass_count=$((pass_count + 1))
+		has_journalctl=1
+	else
+		echo "[SKIP] journalctl: not available (file-only mode)"
+		pass_count=$((pass_count + 1))
+	fi
+
+	# 7. LOG_SOURCE setting
+	local log_source="${LOG_SOURCE:-auto}"
+	if [ "$log_source" = "auto" ]; then
+		echo "[PASS] LOG_SOURCE: auto (journal fallback enabled)"
+	elif [ "$log_source" = "journal" ]; then
+		echo "[PASS] LOG_SOURCE: journal (prefer journal for syslog rules)"
+	else
+		echo "[PASS] LOG_SOURCE: file (journal disabled)"
+	fi
+	pass_count=$((pass_count + 1))
+
+	# 8. Rule scan
 	local rules_active=0 rules_inactive=0 rules_total=0
 	if [ -d "${RULES_PATH:-$install_path/rules}" ]; then
 		local rule_file rule_name
@@ -862,9 +1013,17 @@ health_check() {
 			REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
 			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
 				if [ -n "$REQ" ] && [ -f "$REQ" ]; then
-					rules_active=$((rules_active + 1))
 					local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
-					echo "  [PASS] $rule_name: active (TRIG=$rule_trig, PORTS=${PORTS:-all}, LOG=${LP:-n/a})"
+					# check if rule would use journal (LP missing but journal-capable)
+					if [ -n "${LP:-}" ] && [ ! -f "$LP" ] && [ "$has_journalctl" -eq 1 ] && \
+					   [ "$log_source" != "file" ] && \
+					   tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
+						rules_active=$((rules_active + 1))
+						echo "  [PASS] $rule_name: active via journal (TRIG=$rule_trig, PORTS=${PORTS:-all})"
+					else
+						rules_active=$((rules_active + 1))
+						echo "  [PASS] $rule_name: active (TRIG=$rule_trig, PORTS=${PORTS:-all}, LOG=${LP:-n/a})"
+					fi
 				else
 					rules_inactive=$((rules_inactive + 1))
 					echo "  [SKIP] $rule_name: inactive (REQ ${REQ:-unset} not found)"
@@ -883,7 +1042,7 @@ health_check() {
 		fail_count=$((fail_count + 1))
 	fi
 
-	# 7. tlog tracking
+	# 9. tlog tracking
 	local tlog="${TLOG_PATH:-$install_path/tlog}"
 	if [ -f "$tlog" ] && [ -x "$tlog" ]; then
 		echo "[PASS] tlog: $tlog (executable)"
@@ -896,7 +1055,7 @@ health_check() {
 		warn_count=$((warn_count + 1))
 	fi
 
-	# 8. State directories
+	# 10. State directories
 	if [ -d "$install_path/tmp" ] && [ -d "$install_path/stats" ]; then
 		echo "[PASS] State: tmp/ and stats/ exist"
 		pass_count=$((pass_count + 1))
@@ -905,7 +1064,7 @@ health_check() {
 		warn_count=$((warn_count + 1))
 	fi
 
-	# 9. Lock file
+	# 11. Lock file
 	local lock="${LOCK_FILE:-$install_path/lock.utime}"
 	if [ -f "$lock" ]; then
 		echo "[WARN] Lock: active lock file exists ($lock)"
@@ -915,7 +1074,7 @@ health_check() {
 		pass_count=$((pass_count + 1))
 	fi
 
-	# 10. Active bans
+	# 12. Active bans
 	local bans_file="$install_path/tmp/bans.active"
 	local ban_count=0
 	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then

@@ -1,0 +1,25 @@
+# failed logins from a single address before ban
+# very high threshold — DNS queries are high-volume
+TRIG="100"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# file must exist for rule to be active
+REQ="/usr/sbin/named"
+
+if [ -f "$REQ" ]; then
+	# detect named log path
+	if [ -f "/var/log/named/security.log" ]; then
+		LP="/var/log/named/security.log"
+	else
+		LP="$KERNEL_LOG_PATH"
+	fi
+	PORTS="53"
+	TLOG_TF="named"
+
+	## BIND/named query denied and zone transfer denied
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		"named.* <HOST>[#][0-9]+.*query.*denied" \
+		"named.* <HOST>[#][0-9]+.*zone transfer.*denied")
+fi
