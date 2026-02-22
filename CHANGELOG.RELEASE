@@ -1,4 +1,13 @@
 2.0.1:
+[New] state_events_append() appends timestamped failure events to events.dat
+[New] state_events_count() counts events for a host within a time window,
+      with optional per-service filtering using mawk-compatible awk
+[New] state_events_prune() removes expired events with safety cap (default 5000)
+[New] count_failures() replaces count_attacks() with time-windowed counting;
+      appends timestamped events and returns per-service windowed count
+[Change] state_init() now creates events.dat alongside track.attack and ban.list
+[New] tests/test_events.bats with 24 tests covering state_events_append,
+      state_events_count, state_events_prune, count_failures, and state_init
 [New] TRIG_WINDOW config variable (default 300s) for time-windowed failure
       counting; only failures within this window count toward threshold
 [New] TRIG_GLOBAL config variable (default 0/disabled) for cross-service

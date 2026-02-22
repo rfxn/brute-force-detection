@@ -332,7 +332,7 @@ state_init() {
 		mkdir -p "$install_path/stats"
 	fi
 	local f
-	for f in "$install_path/tmp/track.attack" "$install_path/tmp/ban.list"; do
+	for f in "$install_path/tmp/track.attack" "$install_path/tmp/ban.list" "$install_path/tmp/events.dat"; do
 		if [ ! -f "$f" ]; then
 			touch "$f"
 			chmod 600 "$f"
@@ -401,4 +401,74 @@ state_ban_append() {
 state_pool_append() {
 	local install_path="$1" utime="$2" host="$3" mod="$4"
 	echo "$utime $host $mod" >> "$install_path/stats/attack.pool"
+}
+
+# --- Event state I/O functions ---
+# State file format:
+#   events.dat: "TIMESTAMP IP MOD" — timestamped failure events
+
+# state_events_append install_path timestamp host mod [count] — append events
+# Appends count timestamped event lines (default 1) to events.dat
+state_events_append() {
+	local install_path="$1" timestamp="$2" host="$3" mod="$4"
+	local count="${5:-1}"
+	local events_file="$install_path/tmp/events.dat"
+	local i
+	for ((i = 0; i < count; i++)); do
+		echo "$timestamp $host $mod"
+	done >> "$events_file"
+}
+
+# state_events_count install_path host window now [mod] — count events in window
+# Counts events for host within window seconds of now.
+# If mod specified, counts only that service. Outputs count to stdout.
+state_events_count() {
+	local install_path="$1" host="$2" window="$3" now="$4"
+	local mod="${5:-}"
+	local events_file="$install_path/tmp/events.dat"
+	local cutoff=$((now - window))
+	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
+		echo "0"
+		return 0
+	fi
+	if [ -n "$mod" ]; then
+		awk -v cutoff="$cutoff" -v host="$host" -v mod="$mod" \
+			'$1+0 >= cutoff && $2 == host && $3 == mod { c++ } END { print c+0 }' \
+			"$events_file"
+	else
+		awk -v cutoff="$cutoff" -v host="$host" \
+			'$1+0 >= cutoff && $2 == host { c++ } END { print c+0 }' \
+			"$events_file"
+	fi
+}
+
+# state_events_prune install_path window now [max_lines] — remove old events
+# Removes events older than window. Safety cap at max_lines (default 5000).
+state_events_prune() {
+	local install_path="$1" window="$2" now="$3"
+	local max_lines="${4:-5000}"
+	local events_file="$install_path/tmp/events.dat"
+	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
+		return 0
+	fi
+	local cutoff=$((now - window))
+	awk -v cutoff="$cutoff" '$1+0 >= cutoff' "$events_file" | tail -n "$max_lines" > "$events_file.new"
+	mv "$events_file.new" "$events_file"
+}
+
+# count_failures host hosts_parsed install_path window now mod — count windowed failures
+# Replacement for count_attacks():
+#   1. Count host occurrences in hosts_parsed (grep -cFw)
+#   2. Append that many timestamped events
+#   3. Count per-service events within window
+#   4. Return the windowed count
+count_failures() {
+	local host="$1" hosts_parsed="$2" install_path="$3"
+	local window="$4" now="$5" mod="$6"
+	local count
+	count=$(echo "$hosts_parsed" | grep -cFw "$host")
+	if [ "$count" -gt 0 ]; then
+		state_events_append "$install_path" "$now" "$host" "$mod" "$count"
+	fi
+	state_events_count "$install_path" "$host" "$window" "$now" "$mod"
 }
