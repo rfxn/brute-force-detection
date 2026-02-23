@@ -223,6 +223,15 @@ validate_config() {
 		echo "error: WATCH_INTERVAL must be a positive integer (got '${WATCH_INTERVAL:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
+	local _esc="${BAN_ESCALATION:-none}"
+	if [ "$_esc" != "none" ] && [ "$_esc" != "linear" ] && [ "$_esc" != "exponential" ]; then
+		echo "error: BAN_ESCALATION must be none, linear, or exponential (got '$_esc')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "${BAN_ESCALATION_CAP:-0}" =~ $int_pattern ]]; then
+		echo "error: BAN_ESCALATION_CAP must be a non-negative integer (got '${BAN_ESCALATION_CAP:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
 }
 
 # detect_log_paths requires: AUTH_LOG_PATH, KERNEL_LOG_PATH, MAIL_LOG_PATH,
@@ -918,6 +927,31 @@ check_recidivism() {
 	return 1
 }
 
+# compute_ban_duration base_duration ban_count mode cap
+# Computes escalated ban duration based on repeat offense count.
+# ban_count = previous bans (0 for first offense)
+# mode: none (fixed), linear (base * n), exponential (base * 2^(n-1))
+# cap: maximum duration (0 = no cap)
+compute_ban_duration() {
+	local base_duration="$1" ban_count="$2" mode="$3" cap="$4"
+	local effective_count=$((ban_count + 1))
+	local d="$base_duration"
+	case "$mode" in
+		linear)
+			d=$((base_duration * effective_count))
+			;;
+		exponential)
+			local shift=$((effective_count - 1))
+			[ "$shift" -gt 30 ] && shift=30
+			d=$((base_duration * (1 << shift)))
+			;;
+	esac
+	if [ "${cap:-0}" -gt 0 ] && [ "$d" -gt "$cap" ]; then
+		d="$cap"
+	fi
+	echo "$d"
+}
+
 # list_bans install_path — display formatted active ban list
 list_bans() {
 	local install_path="$1"
@@ -1460,7 +1494,12 @@ format_alert_entry() {
 		if [ "$duration" -lt 0 ]; then
 			duration=0
 		fi
-		ban_type="Temporary ($(format_duration "$duration"))"
+		local base_duration="${BAN_DURATION:-0}"
+		if [ "${BAN_ESCALATION:-none}" != "none" ] && [ "$recent" -gt 0 ] && [ "$duration" -gt "$base_duration" ]; then
+			ban_type="Temporary ($(format_duration "$duration"), escalated from $(format_duration "$base_duration"))"
+		else
+			ban_type="Temporary ($(format_duration "$duration"))"
+		fi
 		ban_detail=$(date -d "@${expiry}" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || echo "$expiry")
 	fi
 
@@ -1821,7 +1860,7 @@ show_config() {
 		echo "$val"
 	else
 		# dump all active config variables
-		local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG LOCK_FILE_TIMEOUT WATCH_INTERVAL"
+		local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG LOCK_FILE_TIMEOUT WATCH_INTERVAL"
 		local v val
 		for v in $config_vars; do
 			eval "val=\${$v:-}"
