@@ -139,3 +139,51 @@ teardown() {
 	line_count=$(wc -l < "$INSTALL_PATH/tmp/bans.history")
 	[ "$line_count" -eq 10 ]
 }
+
+# --- flock-protected mutation tests (Phase 26) ---
+
+@test "state_bans_active_remove: preserves other entries after remove" {
+	state_init "$INSTALL_PATH"
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "10.0.0.1" "sshd" "22"
+	state_bans_active_append "$INSTALL_PATH" "1001" "0" "10.0.0.2" "dovecot" "143"
+	state_bans_active_append "$INSTALL_PATH" "1002" "0" "10.0.0.3" "postfix" "25"
+	state_bans_active_remove "$INSTALL_PATH" "10.0.0.2"
+	# 10.0.0.1 and 10.0.0.3 must still be present
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	assert_success
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.3"
+	assert_success
+	# 10.0.0.2 must be gone
+	run state_bans_active_check "$INSTALL_PATH" "10.0.0.2"
+	assert_failure
+}
+
+@test "state_events_prune: respects cutoff window" {
+	state_init "$INSTALL_PATH"
+	# seed events: old (t=100) and new (t=900)
+	state_events_append "$INSTALL_PATH" "100" "10.0.0.1" "sshd" "3"
+	state_events_append "$INSTALL_PATH" "900" "10.0.0.2" "sshd" "2"
+	# now=1000, window=300, cutoff=700 => old events at t=100 pruned
+	state_events_prune "$INSTALL_PATH" "300" "1000"
+	local count
+	count=$(wc -l < "$INSTALL_PATH/tmp/events.dat")
+	[ "$count" -eq 2 ]
+	# only 10.0.0.2 events should remain
+	run cat "$INSTALL_PATH/tmp/events.dat"
+	assert_output --partial "10.0.0.2"
+	refute_output --partial "10.0.0.1"
+}
+
+@test "state_bans_active_remove: empty file is no-op" {
+	state_init "$INSTALL_PATH"
+	# file exists but is empty
+	run state_bans_active_remove "$INSTALL_PATH" "10.0.0.1"
+	assert_success
+}
+
+@test "state_events_prune: empty file is no-op" {
+	state_init "$INSTALL_PATH"
+	# file exists but is empty
+	run state_events_prune "$INSTALL_PATH" "300" "1000"
+	assert_success
+}

@@ -361,3 +361,130 @@ run_validate_output() {
 	run run_validate 'unset SUBNET_MASK_V6'
 	assert_success
 }
+
+# --- show_config injection tests (Phase 26) ---
+
+@test "show_config: rejects \$(cmd) injection attempt" {
+	TRIG="15"
+	run show_config '$(touch /tmp/pwned)'
+	assert_failure
+	assert_output --partial "unknown config variable"
+	[ ! -f "/tmp/pwned" ]
+}
+
+@test "show_config: rejects backtick injection attempt" {
+	TRIG="15"
+	run show_config '`touch /tmp/pwned2`'
+	assert_failure
+	assert_output --partial "unknown config variable"
+	[ ! -f "/tmp/pwned2" ]
+}
+
+@test "show_config: rejects unknown variable name" {
+	TRIG="15"
+	run show_config "NONEXISTENT_VAR"
+	assert_failure
+	assert_output --partial "unknown config variable"
+}
+
+@test "show_config: accepts valid config var TRIG" {
+	TRIG="42"
+	run show_config "TRIG"
+	assert_success
+	assert_output "42"
+}
+
+# --- eout tests (Phase 27) ---
+
+@test "eout: writes to stdout" {
+	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
+	touch "$BFD_LOG_PATH"
+	OUTPUT_SYSLOG="0"
+	OUTPUT_SYSLOG_FILE="/dev/null"
+	run eout "test message"
+	assert_success
+	assert_output --partial "test message"
+}
+
+@test "eout: writes to BFD_LOG_PATH with le flag" {
+	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
+	touch "$BFD_LOG_PATH"
+	OUTPUT_SYSLOG="0"
+	OUTPUT_SYSLOG_FILE="/dev/null"
+	eout "logged message" "le"
+	run cat "$BFD_LOG_PATH"
+	assert_output --partial "logged message"
+}
+
+# --- _hc_config case statement tests (Phase 27) ---
+
+@test "_hc_config: validates log paths with case statement" {
+	AUTH_LOG_PATH="/var/log/auth.log"
+	KERNEL_LOG_PATH=""
+	MAIL_LOG_PATH="/var/log/mail.log"
+	_hc_pass=0
+	_hc_warn=0
+	_hc_fail=0
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	UNBAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	UNBAN_COMMAND_V6_TEMPLATE=""
+	_FW_BACKEND="custom"
+	# just test config section's log path logic
+	run _hc_config
+	assert_output --partial "KERNEL_LOG_PATH: not configured"
+}
+
+# --- _save_rule_vars / _restore_rule_vars / _clear_rule_vars ---
+
+@test "_save/_restore_rule_vars: round-trip preserves values" {
+	REQ="/usr/sbin/sshd" LP="/var/log/auth.log" TRIG="10"
+	TLOG_TF="sshd" PORTS="22" ARG_VAL="1.2.3.4" IGNOREREGEX="^ignore"
+	_save_rule_vars
+	REQ="" LP="" TRIG="" TLOG_TF="" PORTS="" ARG_VAL="" IGNOREREGEX=""
+	_restore_rule_vars
+	[ "$REQ" = "/usr/sbin/sshd" ]
+	[ "$LP" = "/var/log/auth.log" ]
+	[ "$TRIG" = "10" ]
+	[ "$TLOG_TF" = "sshd" ]
+	[ "$PORTS" = "22" ]
+	[ "$ARG_VAL" = "1.2.3.4" ]
+	[ "$IGNOREREGEX" = "^ignore" ]
+}
+
+@test "_clear_rule_vars: clears all rule variables" {
+	REQ="/usr/sbin/sshd" LP="/var/log/auth.log" TRIG="10"
+	TLOG_TF="sshd" PORTS="22" ARG_VAL="1.2.3.4" IGNOREREGEX="^ignore"
+	SKIP_ALERT="1" RULE_EMAIL="test@example.com"
+	_clear_rule_vars
+	[ -z "$REQ" ]
+	[ -z "$LP" ]
+	[ -z "$TRIG" ]
+	[ -z "$TLOG_TF" ]
+	[ -z "$PORTS" ]
+	[ -z "$ARG_VAL" ]
+	[ -z "$IGNOREREGEX" ]
+	[ -z "$SKIP_ALERT" ]
+	[ -z "$RULE_EMAIL" ]
+}
+
+# --- _rule_is_active ---
+
+@test "_rule_is_active: active when REQ exists" {
+	REQ="$TEST_TMPDIR/fake_binary"
+	touch "$REQ"
+	run _rule_is_active
+	assert_success
+}
+
+@test "_rule_is_active: inactive when REQ missing" {
+	REQ="$TEST_TMPDIR/nonexistent"
+	run _rule_is_active
+	assert_failure
+}
+
+@test "_rule_is_active: inactive when REQ empty" {
+	REQ=""
+	run _rule_is_active
+	assert_failure
+}

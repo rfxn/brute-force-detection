@@ -1,4 +1,41 @@
 2.0.1:
+[New] record_ban() helper extracts ban lifecycle logic (expiry computation,
+      recidivism escalation, state recording) from check() and
+      check_distributed(), eliminating 20-line duplication
+[New] _save_rule_vars(), _restore_rule_vars(), _clear_rule_vars() helpers
+      consolidate per-rule variable save/restore across 7 callers
+[New] _rule_is_active() replaces inline [ -n "$REQ" ] && [ -f "$REQ" ]
+      checks in _hc_rules(), show_status(), list_rules()
+[Fix] POSIX compliance: == in [ ] tests replaced with = in eout(), tlog
+[Fix] unquoted $EXIT_* and $LOCK_FD variables in files/bfd; all now quoted
+[Fix] _hc_config() eval replaced with case statement for log path lookup
+[Fix] _apool_report() date -d calls lack fallback; added || echo for
+      systems without GNU date -d
+[Change] LAST_HOST/LAST dedup variables removed from check(); duplicate
+         ban prevention now handled entirely by state_bans_active_check()
+[Change] BAN_CMD_BIN/BAN_CMD_V6_BIN renamed with underscore prefix and
+         unset after use to avoid namespace pollution
+[New] shellcheck SC2034 directive for reload_watch() template variables
+[New] security comments on _fw_custom_ban/unban eval documenting the
+      mitigation chain (validate_ip_any, sanitize_mod, safe_source)
+[New] ip_to_subnet() and tlog_read() header comments clarifying library
+      vs production usage
+[Fix] show_config() eval injection: unsanitized CLI input passed to eval
+      allowed arbitrary command execution; now validates against config
+      variable whitelist before eval
+[Fix] bfd.lib.sh sourced without ownership/permission checks; added stat
+      validation matching conf.bfd pattern (root-owned, non-world-writable)
+[Fix] alert template sourced without safety checks; send_alerts() now
+      validates ownership/permissions before sourcing alert.bfd
+[Fix] state_bans_active_remove and state_events_prune ran awk+mv without
+      flock; wrapped in flock -x subshells for atomicity
+[Fix] IGNOREREGEX and PORTS not reset between rules in check(); dovecot
+      IGNOREREGEX leaked into subsequent rules; PORTS leaked similarly
+[Fix] postgresql rule tested log path with [ -f ] && [ -d ] (impossible);
+      changed to [ -d ] so Debian log path is reachable
+[Fix] vsftpd2 rule TLOG_TF="vsftpd" collided with vsftpd rule cursor;
+      changed to TLOG_TF="vsftpd2"
+[Fix] ignore.hosts missing IPv6 loopback; added ::1
 [Fix] eliminated command injection in BAN_COMMAND execution; template now
       extracted raw from conf.bfd preventing premature variable expansion
 [Fix] temp files secured with mktemp replacing predictable PID-based names

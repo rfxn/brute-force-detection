@@ -163,10 +163,10 @@ teardown() {
 	assert_output "15"
 }
 
-@test "show_config: shows empty for unset variable" {
+@test "show_config: rejects unknown variable" {
 	run show_config "NONEXISTENT_VAR"
-	assert_success
-	assert_output ""
+	assert_failure
+	assert_output --partial "unknown config variable"
 }
 
 # --- flush_bans ---
@@ -355,4 +355,25 @@ teardown() {
 	run search_ip "$INSTALL_PATH" "2001:db8::1"
 	assert_success
 	assert_output --partial "BANNED (permanent"
+}
+
+# --- Exit code and POSIX compliance tests (Phase 27) ---
+
+@test "exit code variables are defined and numeric" {
+	[ -n "$EXIT_OK" ]
+	[ -n "$EXIT_CONFIG_ERROR" ]
+	[ -n "$EXIT_LOCK_ERROR" ]
+	[ -n "$EXIT_PREREQ_ERROR" ]
+	# verify they are valid integers
+	[ "$EXIT_OK" -eq 0 ]
+	[ "$EXIT_CONFIG_ERROR" -ge 1 ]
+	[ "$EXIT_LOCK_ERROR" -ge 1 ]
+	[ "$EXIT_PREREQ_ERROR" -ge 1 ]
+}
+
+@test "_fw_custom_ban: eval with security comment does not break execution" {
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	run _fw_custom_ban "192.0.2.1" "sshd" "22"
+	assert_success
 }
