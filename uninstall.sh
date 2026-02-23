@@ -19,9 +19,14 @@
 #    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 ###
 #
-INSPATH="/usr/local/bfd"
-BINPATH="/usr/local/sbin/bfd"
+INSPATH="${INSTALL_PATH:-/usr/local/bfd}"
+BINPATH="${BIN_PATH:-/usr/local/sbin/bfd}"
 APPN="BFD"
+
+if [ "$(id -u)" -ne 0 ]; then
+	echo "error: uninstall.sh must be run as root."
+	exit 1
+fi
 
 uninstall(){
 echo "Remove $APPN from this system; are you sure ?"
@@ -31,6 +36,8 @@ read -r _
 if [ -d "$INSPATH" ]; then
 	# clean up systemd units if present
 	if command -v systemctl >/dev/null 2>&1; then
+		systemctl stop bfd.service 2>/dev/null || true
+		systemctl disable bfd.service 2>/dev/null || true
 		systemctl stop bfd.timer 2>/dev/null || true
 		systemctl disable bfd.timer 2>/dev/null || true
 		systemctl stop bfd-watch.service 2>/dev/null || true

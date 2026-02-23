@@ -8,29 +8,21 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	INSTALL_PATH="$TEST_TMPDIR/bfd"
-	state_init "$INSTALL_PATH"
-	mkdir -p "$INSTALL_PATH/rules"
-	# eout dependencies
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="/dev/null"
-	# config defaults
+	bfd_standard_setup
 	GLOB_TRIG="15"
 	TRIG=""
 	TLOG_PATH="/bin/cat"
 	RULES_PATH="$INSTALL_PATH/rules"
+	mkdir -p "$RULES_PATH"
 	LOG_SOURCE="file"
 	# create sample log file with known sshd patterns
 	SAMPLE_LOG="$TEST_TMPDIR/sample.log"
 	cat > "$SAMPLE_LOG" <<'LOGEOF'
-Feb 20 10:01:01 server sshd[1234]: Failed password for root from 192.168.1.100 port 22 ssh2
-Feb 20 10:01:02 server sshd[1235]: Failed password for admin from 192.168.1.100 port 22 ssh2
-Feb 20 10:01:03 server sshd[1236]: Invalid user test from 192.168.1.200 port 22 ssh2
-Feb 20 10:01:04 server sshd[1237]: Failed password for root from 192.168.1.200 port 22 ssh2
-Feb 20 10:01:05 server sshd[1238]: Failed password for nobody from 192.168.1.100 port 22 ssh2
+Feb 20 10:01:01 server sshd[1234]: Failed password for root from 203.0.113.100 port 22 ssh2
+Feb 20 10:01:02 server sshd[1235]: Failed password for admin from 203.0.113.100 port 22 ssh2
+Feb 20 10:01:03 server sshd[1236]: Invalid user test from 203.0.113.200 port 22 ssh2
+Feb 20 10:01:04 server sshd[1237]: Failed password for root from 203.0.113.200 port 22 ssh2
+Feb 20 10:01:05 server sshd[1238]: Failed password for nobody from 203.0.113.100 port 22 ssh2
 LOGEOF
 	# create test rule file
 	cat > "$INSTALL_PATH/rules/test-sshd" <<RULEEOF
@@ -48,7 +40,7 @@ RULEEOF
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 @test "test_rule: reports rule name" {
@@ -75,7 +67,7 @@ teardown() {
 @test "test_rule: shows top IPs" {
 	run test_rule "$INSTALL_PATH" "test-sshd" "$SAMPLE_LOG"
 	assert_success
-	assert_output --partial "192.168.1.100"
+	assert_output --partial "203.0.113.100"
 }
 
 @test "test_rule: error for nonexistent rule" {
@@ -86,11 +78,11 @@ teardown() {
 
 @test "test_rule: custom log file overrides LP" {
 	local alt_log="$TEST_TMPDIR/alt.log"
-	echo "Feb 20 10:01:01 server sshd[1234]: Failed password for root from 10.0.0.1 port 22 ssh2" > "$alt_log"
+	echo "Feb 20 10:01:01 server sshd[1234]: Failed password for root from 192.0.2.1 port 22 ssh2" > "$alt_log"
 	run test_rule "$INSTALL_PATH" "test-sshd" "$alt_log"
 	assert_success
 	assert_output --partial "Log file:     $alt_log"
-	assert_output --partial "10.0.0.1"
+	assert_output --partial "192.0.2.1"
 }
 
 @test "test_rule: zero matches on empty log" {

@@ -5,14 +5,15 @@
 
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
+load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	IMPORTCONF="$BATS_TEST_DIRNAME/../importconf"
+	bfd_common_setup
+	IMPORTCONF="$PROJECT_ROOT/importconf"
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 # --- fresh install (no backup dir) ---
@@ -21,7 +22,7 @@ teardown() {
 	# override INSTALL_PATH to a non-existent path
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$TEST_TMPDIR/bfd\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$TEST_TMPDIR/bfd"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -57,7 +58,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -89,7 +90,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -120,7 +121,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -152,7 +153,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -185,7 +186,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -219,7 +220,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -258,7 +259,7 @@ INTEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -305,7 +306,7 @@ INTEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -333,15 +334,15 @@ INSTALL_PATH="/usr/local/bfd"
 NEWEOF
 
 	# create state files in old backup
-	echo "1.2.3.4 1700000000 0 sshd all" > "$inst.bk.last/tmp/bans.active"
-	echo "1.2.3.4 1700000000 ban sshd all" > "$inst.bk.last/tmp/bans.history"
-	echo "1.2.3.4 1700000000 sshd" > "$inst.bk.last/tmp/events.dat"
-	echo "1.2.3.4;5;sshd" > "$inst.bk.last/stats/attack.pool"
-	echo "10.0.0.1" > "$inst.bk.last/ignore.hosts"
+	echo "192.0.2.4 1700000000 0 sshd all" > "$inst.bk.last/tmp/bans.active"
+	echo "192.0.2.4 1700000000 ban sshd all" > "$inst.bk.last/tmp/bans.history"
+	echo "192.0.2.4 1700000000 sshd" > "$inst.bk.last/tmp/events.dat"
+	echo "192.0.2.4;5;sshd" > "$inst.bk.last/stats/attack.pool"
+	echo "192.0.2.1" > "$inst.bk.last/ignore.hosts"
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -355,7 +356,7 @@ NEWEOF
 
 	# verify content
 	run cat "$inst/tmp/bans.active"
-	assert_output "1.2.3.4 1700000000 0 sshd all"
+	assert_output "192.0.2.4 1700000000 0 sshd all"
 	run cat "$inst/ignore.hosts"
-	assert_output "10.0.0.1"
+	assert_output "192.0.2.1"
 }

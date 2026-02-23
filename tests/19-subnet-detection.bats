@@ -9,24 +9,7 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	INSTALL_PATH="$TEST_TMPDIR/bfd"
-	mkdir -p "$INSTALL_PATH"
-	state_init "$INSTALL_PATH"
-
-	# eout dependencies
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="$TEST_TMPDIR/syslog"
-
-	# config defaults
-	BAN_RETRY_COUNT="0"
-	BAN_COMMAND_TEMPLATE="/bin/true"
-	UNBAN_COMMAND_TEMPLATE="/bin/true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	UNBAN_COMMAND_V6_TEMPLATE=""
-	_FW_BACKEND="custom"
+	bfd_standard_setup
 	BAN_DURATION="300"
 	BAN_PERMANENT_AFTER="0"
 	BAN_PERMANENT_WINDOW="86400"
@@ -40,7 +23,7 @@ setup() {
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 # ============================================================
@@ -48,33 +31,33 @@ teardown() {
 # ============================================================
 
 @test "ip_to_subnet: IPv4 /24" {
-	run ip_to_subnet "192.168.1.100" "24"
+	run ip_to_subnet "203.0.113.100" "24"
 	assert_success
-	assert_output "192.168.1.0/24"
+	assert_output "203.0.113.0/24"
 }
 
 @test "ip_to_subnet: IPv4 /16" {
-	run ip_to_subnet "10.20.30.40" "16"
+	run ip_to_subnet "198.51.100.40" "16"
 	assert_success
-	assert_output "10.20.0.0/16"
+	assert_output "198.51.0.0/16"
 }
 
 @test "ip_to_subnet: IPv4 /8" {
-	run ip_to_subnet "172.16.5.130" "8"
+	run ip_to_subnet "198.51.100.130" "8"
 	assert_success
-	assert_output "172.0.0.0/8"
+	assert_output "198.0.0.0/8"
 }
 
 @test "ip_to_subnet: IPv4 /32" {
-	run ip_to_subnet "1.2.3.4" "32"
+	run ip_to_subnet "192.0.2.4" "32"
 	assert_success
-	assert_output "1.2.3.4/32"
+	assert_output "192.0.2.4/32"
 }
 
 @test "ip_to_subnet: IPv4 /20 non-octet-aligned" {
-	run ip_to_subnet "172.16.5.130" "20"
+	run ip_to_subnet "198.51.100.130" "20"
 	assert_success
-	assert_output "172.16.0.0/20"
+	assert_output "198.51.96.0/20"
 }
 
 @test "ip_to_subnet: IPv6 /48 with ::" {
@@ -102,22 +85,22 @@ teardown() {
 @test "count_subnet_attackers: finds IPv4 subnet with 3 unique IPs" {
 	local now=1000000
 	local events_file="$INSTALL_PATH/tmp/events.dat"
-	echo "$now 10.0.0.1 sshd" >> "$events_file"
-	echo "$now 10.0.0.2 sshd" >> "$events_file"
-	echo "$now 10.0.0.3 sshd" >> "$events_file"
+	echo "$now 192.0.2.1 sshd" >> "$events_file"
+	echo "$now 192.0.2.2 sshd" >> "$events_file"
+	echo "$now 192.0.2.3 sshd" >> "$events_file"
 
 	run count_subnet_attackers "$INSTALL_PATH" "300" "$now" "24" "48" "3"
 	assert_success
-	assert_output --partial "10.0.0.0/24 sshd 3"
+	assert_output --partial "192.0.2.0/24 sshd 3"
 }
 
 @test "count_subnet_attackers: respects window cutoff" {
 	local now=1000000
 	local events_file="$INSTALL_PATH/tmp/events.dat"
 	# events outside window (window=300, cutoff=999700)
-	echo "999600 10.0.0.1 sshd" >> "$events_file"
-	echo "999600 10.0.0.2 sshd" >> "$events_file"
-	echo "999600 10.0.0.3 sshd" >> "$events_file"
+	echo "999600 192.0.2.1 sshd" >> "$events_file"
+	echo "999600 192.0.2.2 sshd" >> "$events_file"
+	echo "999600 192.0.2.3 sshd" >> "$events_file"
 
 	run count_subnet_attackers "$INSTALL_PATH" "300" "$now" "24" "48" "3"
 	assert_success
@@ -128,15 +111,15 @@ teardown() {
 	local now=1000000
 	local events_file="$INSTALL_PATH/tmp/events.dat"
 	# 3 IPs for sshd
-	echo "$now 10.0.0.1 sshd" >> "$events_file"
-	echo "$now 10.0.0.2 sshd" >> "$events_file"
-	echo "$now 10.0.0.3 sshd" >> "$events_file"
+	echo "$now 192.0.2.1 sshd" >> "$events_file"
+	echo "$now 192.0.2.2 sshd" >> "$events_file"
+	echo "$now 192.0.2.3 sshd" >> "$events_file"
 	# 1 IP for dovecot (same subnet, but different service)
-	echo "$now 10.0.0.4 dovecot" >> "$events_file"
+	echo "$now 192.0.2.4 dovecot" >> "$events_file"
 
 	run count_subnet_attackers "$INSTALL_PATH" "300" "$now" "24" "48" "3"
 	assert_success
-	assert_output --partial "10.0.0.0/24 sshd 3"
+	assert_output --partial "192.0.2.0/24 sshd 3"
 	refute_output --partial "dovecot"
 }
 
@@ -281,11 +264,11 @@ teardown() {
 	local now=1000000
 	local events_file="$INSTALL_PATH/tmp/events.dat"
 	# same IP appears 5 times, but only 2 unique IPs
-	echo "$now 10.0.0.1 sshd" >> "$events_file"
-	echo "$now 10.0.0.1 sshd" >> "$events_file"
-	echo "$now 10.0.0.1 sshd" >> "$events_file"
-	echo "$now 10.0.0.2 sshd" >> "$events_file"
-	echo "$now 10.0.0.2 sshd" >> "$events_file"
+	echo "$now 192.0.2.1 sshd" >> "$events_file"
+	echo "$now 192.0.2.1 sshd" >> "$events_file"
+	echo "$now 192.0.2.1 sshd" >> "$events_file"
+	echo "$now 192.0.2.2 sshd" >> "$events_file"
+	echo "$now 192.0.2.2 sshd" >> "$events_file"
 
 	run count_subnet_attackers "$INSTALL_PATH" "300" "$now" "24" "48" "3"
 	assert_success

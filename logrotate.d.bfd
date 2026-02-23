@@ -1,6 +1,9 @@
 /var/log/bfd_log {
+    weekly
+    rotate 4
+    compress
+    copytruncate
     missingok
-    postrotate
-    endscript
+    notifempty
+    create 0640 root root
 }
-

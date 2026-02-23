@@ -134,7 +134,7 @@ load 'helpers/bfd-common'
 }
 
 @test "validate_ip6: IPv4 address rejected" {
-	run validate_ip6 "192.168.1.1"
+	run validate_ip6 "203.0.113.1"
 	assert_failure
 }
 
@@ -166,9 +166,9 @@ load 'helpers/bfd-common'
 # --- validate_ip_any ---
 
 @test "validate_ip_any: IPv4 returns IPv4" {
-	run validate_ip_any "192.168.1.100"
+	run validate_ip_any "203.0.113.100"
 	assert_success
-	assert_output "192.168.1.100"
+	assert_output "203.0.113.100"
 }
 
 @test "validate_ip_any: IPv6 returns IPv6" {
@@ -189,7 +189,7 @@ load 'helpers/bfd-common'
 }
 
 @test "validate_ip_any: IPv4 preferred over ambiguous" {
-	run validate_ip_any "10.0.0.1"
+	run validate_ip_any "192.0.2.1"
 	assert_success
-	assert_output "10.0.0.1"
+	assert_output "192.0.2.1"
 }

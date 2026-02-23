@@ -20,7 +20,7 @@
 #    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 ###
 #
-INSTALL_PATH="/usr/local/bfd"
+INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
 
 if [ ! -d "$INSTALL_PATH.bk.last" ]; then
 	exit 0

@@ -157,6 +157,16 @@ sanitize_mod() {
 	return 1
 }
 
+sanitize_ports() {
+	local ports="$1"
+	local ports_pattern='^(all|[0-9]+(,[0-9]+)*)$'
+	if [[ "$ports" =~ $ports_pattern ]]; then
+		echo "$ports"
+		return 0
+	fi
+	return 1
+}
+
 # _save_rule_vars / _restore_rule_vars / _clear_rule_vars
 # Save, restore, and clear the per-rule variables that rule files set.
 # Used by functions that source rules but must not clobber the caller's state.
@@ -231,6 +241,16 @@ safe_source() {
 extract_command_template() {
 	local config_file="$1" var_name="$2"
 	grep "^${var_name}=" "$config_file" | tail -1 | sed "s/^${var_name}=//;s/^\"//;s/\"$//"
+}
+
+# expand_command_template template — expand $ATTACK_HOST, $MOD, $PORTS
+# in a BAN_COMMAND template string without eval. Uses safe ${var//pat/rep}.
+expand_command_template() {
+	local cmd="$1"
+	cmd="${cmd//\$ATTACK_HOST/$ATTACK_HOST}"
+	cmd="${cmd//\$MOD/$MOD}"
+	cmd="${cmd//\$PORTS/$PORTS}"
+	echo "$cmd"
 }
 
 # validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, BAN_DURATION,
@@ -652,8 +672,8 @@ filter_host() {
 # detect_firewall — auto-detect available firewall tool
 # returns backend name on stdout: apf, csf, firewalld, ufw, nftables, iptables, route
 detect_firewall() {
-	if [ -x "/etc/apf/apf" ]; then echo "apf"; return; fi
-	if [ -x "/usr/sbin/csf" ]; then echo "csf"; return; fi
+	if command -v apf >/dev/null 2>&1; then echo "apf"; return; fi
+	if command -v csf >/dev/null 2>&1; then echo "csf"; return; fi
 	if command -v firewall-cmd >/dev/null 2>&1 && \
 	   firewall-cmd --state >/dev/null 2>&1; then echo "firewalld"; return; fi
 	if command -v ufw >/dev/null 2>&1 && \
@@ -666,16 +686,22 @@ detect_firewall() {
 }
 
 # --- APF backend ---
-_fw_apf_setup() { :; }
+_fw_apf_setup() {
+	_FW_APF_BIN=$(command -v apf 2>/dev/null) || _FW_APF_BIN=""
+	if [ -z "$_FW_APF_BIN" ]; then
+		eout "{glob} apf binary not found" "le"
+		return 1
+	fi
+}
 
 _fw_apf_ban() {
 	local host="$1" mod="${2:-}"
-	/etc/apf/apf -d "$host" "{bfd.$mod}" >/dev/null 2>&1
+	"$_FW_APF_BIN" -d "$host" "{bfd.$mod}" >/dev/null 2>&1
 }
 
 _fw_apf_unban() {
 	local host="$1"
-	/etc/apf/apf -u "$host" >/dev/null 2>&1
+	"$_FW_APF_BIN" -u "$host" >/dev/null 2>&1
 }
 
 _fw_apf_status() {
@@ -683,16 +709,22 @@ _fw_apf_status() {
 }
 
 # --- CSF backend ---
-_fw_csf_setup() { :; }
+_fw_csf_setup() {
+	_FW_CSF_BIN=$(command -v csf 2>/dev/null) || _FW_CSF_BIN=""
+	if [ -z "$_FW_CSF_BIN" ]; then
+		eout "{glob} csf binary not found" "le"
+		return 1
+	fi
+}
 
 _fw_csf_ban() {
 	local host="$1" mod="${2:-}"
-	/usr/sbin/csf -d "$host" "bfd.$mod" >/dev/null 2>&1
+	"$_FW_CSF_BIN" -d "$host" "bfd.$mod" >/dev/null 2>&1
 }
 
 _fw_csf_unban() {
 	local host="$1"
-	/usr/sbin/csf -dr "$host" >/dev/null 2>&1
+	"$_FW_CSF_BIN" -dr "$host" >/dev/null 2>&1
 }
 
 _fw_csf_status() {
@@ -776,69 +808,81 @@ _fw_nftables_status() {
 
 # --- iptables backend (dedicated bfd chain) ---
 _fw_iptables_setup() {
-	iptables -N bfd 2>/dev/null || true
-	iptables -C INPUT -j bfd 2>/dev/null || iptables -I INPUT -j bfd
-	if command -v ip6tables >/dev/null 2>&1; then
-		ip6tables -N bfd 2>/dev/null || true
-		ip6tables -C INPUT -j bfd 2>/dev/null || ip6tables -I INPUT -j bfd
+	_FW_IPT_BIN=$(command -v iptables 2>/dev/null) || _FW_IPT_BIN=""
+	_FW_IP6T_BIN=$(command -v ip6tables 2>/dev/null) || _FW_IP6T_BIN=""
+	if [ -z "$_FW_IPT_BIN" ]; then
+		eout "{glob} iptables binary not found" "le"
+		return 1
+	fi
+	"$_FW_IPT_BIN" -N bfd 2>/dev/null || true
+	"$_FW_IPT_BIN" -C INPUT -j bfd 2>/dev/null || "$_FW_IPT_BIN" -I INPUT -j bfd
+	if [ -n "$_FW_IP6T_BIN" ]; then
+		"$_FW_IP6T_BIN" -N bfd 2>/dev/null || true
+		"$_FW_IP6T_BIN" -C INPUT -j bfd 2>/dev/null || "$_FW_IP6T_BIN" -I INPUT -j bfd
 	fi
 }
 
 _fw_iptables_ban() {
 	local host="$1"
 	if [[ "$host" == *:* ]]; then
-		ip6tables -A bfd -s "$host" -j DROP 2>/dev/null
+		"$_FW_IP6T_BIN" -A bfd -s "$host" -j DROP 2>/dev/null
 	else
-		iptables -A bfd -s "$host" -j DROP
+		"$_FW_IPT_BIN" -A bfd -s "$host" -j DROP
 	fi
 }
 
 _fw_iptables_unban() {
 	local host="$1"
 	if [[ "$host" == *:* ]]; then
-		ip6tables -D bfd -s "$host" -j DROP 2>/dev/null
+		"$_FW_IP6T_BIN" -D bfd -s "$host" -j DROP 2>/dev/null
 	else
-		iptables -D bfd -s "$host" -j DROP 2>/dev/null
+		"$_FW_IPT_BIN" -D bfd -s "$host" -j DROP 2>/dev/null
 	fi
 }
 
 _fw_iptables_status() {
 	local v4_count=0 v6_count=0
-	v4_count=$(iptables -L bfd -n 2>/dev/null | grep -c "DROP") || v4_count=0
-	if command -v ip6tables >/dev/null 2>&1; then
-		v6_count=$(ip6tables -L bfd -n 2>/dev/null | grep -c "DROP") || v6_count=0
+	v4_count=$("$_FW_IPT_BIN" -L bfd -n 2>/dev/null | grep -c "DROP") || v4_count=0
+	if [ -n "$_FW_IP6T_BIN" ]; then
+		v6_count=$("$_FW_IP6T_BIN" -L bfd -n 2>/dev/null | grep -c "DROP") || v6_count=0
 	fi
 	echo "iptables (bfd chain, $v4_count v4 + $v6_count v6 rules)"
 }
 
 # --- route backend (ip route null-route / blackhole) ---
-_fw_route_setup() { :; }
+_fw_route_setup() {
+	_FW_ROUTE_IP_BIN=$(command -v ip 2>/dev/null) || _FW_ROUTE_IP_BIN=""
+	if [ -z "$_FW_ROUTE_IP_BIN" ]; then
+		eout "{glob} ip binary not found" "le"
+		return 1
+	fi
+}
 
 _fw_route_ban() {
 	local host="$1"
 	if [[ "$host" == */* ]]; then
-		ip route add blackhole "$host" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route add blackhole "$host" 2>/dev/null
 	elif [[ "$host" == *:* ]]; then
-		ip route add blackhole "$host/128" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route add blackhole "$host/128" 2>/dev/null
 	else
-		ip route add blackhole "$host/32" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route add blackhole "$host/32" 2>/dev/null
 	fi
 }
 
 _fw_route_unban() {
 	local host="$1"
 	if [[ "$host" == */* ]]; then
-		ip route del blackhole "$host" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route del blackhole "$host" 2>/dev/null
 	elif [[ "$host" == *:* ]]; then
-		ip route del blackhole "$host/128" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route del blackhole "$host/128" 2>/dev/null
 	else
-		ip route del blackhole "$host/32" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route del blackhole "$host/32" 2>/dev/null
 	fi
 }
 
 _fw_route_status() {
 	local count=0
-	count=$(ip route list type blackhole 2>/dev/null | wc -l) || count=0
+	count=$("$_FW_ROUTE_IP_BIN" route list type blackhole 2>/dev/null | wc -l) || count=0
 	echo "route ($count blackhole routes)"
 }
 
@@ -847,6 +891,7 @@ _fw_custom_setup() { :; }
 
 _fw_custom_ban() {
 	local host="$1" mod="$2" ports="$3"
+	ports=$(sanitize_ports "$ports") || { eout "invalid PORTS value '$3'" "le"; return 1; }
 	local cmd="$BAN_COMMAND_TEMPLATE"
 	if [ -n "${BAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]]; then
 		cmd="$BAN_COMMAND_V6_TEMPLATE"
@@ -854,7 +899,7 @@ _fw_custom_ban() {
 	ATTACK_HOST="$host"; MOD="$mod"; PORTS="$ports"
 	# Security: $cmd is from BAN_COMMAND_TEMPLATE, extracted raw from conf.bfd
 	# by extract_command_template(). $host is validated by validate_ip_any(),
-	# $mod by sanitize_mod(), $ports by rule files. conf.bfd is root-owned
+	# $mod by sanitize_mod(), $ports by sanitize_ports(). conf.bfd is root-owned
 	# and verified by safe_source(). This eval is intentional for user-defined
 	# firewall commands.
 	eval "$cmd" >/dev/null 2>&1
@@ -862,6 +907,7 @@ _fw_custom_ban() {
 
 _fw_custom_unban() {
 	local host="$1" mod="$2" ports="$3"
+	ports=$(sanitize_ports "$ports") || { eout "invalid PORTS value '$3'" "le"; return 1; }
 	local cmd="$UNBAN_COMMAND_TEMPLATE"
 	if [ -n "${UNBAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]]; then
 		cmd="$UNBAN_COMMAND_V6_TEMPLATE"
@@ -1798,7 +1844,7 @@ format_alert_entry() {
 	# reconstruct ban command display
 	local display_cmd
 	if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
-		display_cmd=$(eval echo "$BAN_COMMAND_TEMPLATE" 2>/dev/null) || display_cmd="$BAN_COMMAND_TEMPLATE"
+		display_cmd=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
 	else
 		display_cmd="fw_ban $host ($_FW_BACKEND)"
 	fi
@@ -1913,7 +1959,7 @@ send_alerts() {
 			LP="$_lp"
 			PORTS="$_ports"
 			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
-				BAN_COMMAND=$(eval echo "$BAN_COMMAND_TEMPLATE" 2>/dev/null) || BAN_COMMAND="$BAN_COMMAND_TEMPLATE"
+				BAN_COMMAND=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
 			else
 				BAN_COMMAND="fw_ban $_host ($_FW_BACKEND)"
 			fi

@@ -8,16 +8,11 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	# eout dependencies
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd_log"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="$TEST_TMPDIR/syslog"
-	touch "$BFD_LOG_PATH" "$OUTPUT_SYSLOG_FILE"
+	bfd_common_setup
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 @test "safe_source: valid root-owned file returns 0" {
@@ -103,7 +98,7 @@ teardown() {
 
 @test "send_alerts: world-writable template skips alerts" {
 	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "10.0.0.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
 	local template="$TEST_TMPDIR/alert.bfd"
 	echo 'echo "alert"' > "$template"
 	chmod 666 "$template"
@@ -115,7 +110,7 @@ teardown() {
 
 @test "send_alerts: missing template skips alerts" {
 	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "10.0.0.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
 	run send_alerts "$alerts_file" "BFD Alert" "$TEST_TMPDIR/nonexistent_template" "50"
 	assert_failure
 	# alerts_file should be cleaned up
@@ -124,7 +119,7 @@ teardown() {
 
 @test "send_alerts: root-owned 644 template passes safety check" {
 	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "10.0.0.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
 	local template="$TEST_TMPDIR/alert.bfd"
 	echo 'echo "alert body"' > "$template"
 	chmod 644 "$template"

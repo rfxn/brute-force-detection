@@ -9,10 +9,10 @@ load 'helpers/bfd-common'
 
 # --- validate_ip: valid IPs ---
 
-@test "validate_ip: valid 1.2.3.4" {
-	run validate_ip "1.2.3.4"
+@test "validate_ip: valid 192.0.2.4" {
+	run validate_ip "192.0.2.4"
 	assert_success
-	assert_output "1.2.3.4"
+	assert_output "192.0.2.4"
 }
 
 @test "validate_ip: valid 0.0.0.0" {
@@ -27,22 +27,22 @@ load 'helpers/bfd-common'
 	assert_output "255.255.255.255"
 }
 
-@test "validate_ip: valid 192.168.1.1" {
-	run validate_ip "192.168.1.1"
+@test "validate_ip: valid 203.0.113.1" {
+	run validate_ip "203.0.113.1"
 	assert_success
-	assert_output "192.168.1.1"
+	assert_output "203.0.113.1"
 }
 
-@test "validate_ip: valid 10.0.0.1" {
-	run validate_ip "10.0.0.1"
+@test "validate_ip: valid 192.0.2.1" {
+	run validate_ip "192.0.2.1"
 	assert_success
-	assert_output "10.0.0.1"
+	assert_output "192.0.2.1"
 }
 
-@test "validate_ip: valid 172.16.0.255" {
-	run validate_ip "172.16.0.255"
+@test "validate_ip: valid 198.51.100.255" {
+	run validate_ip "198.51.100.255"
 	assert_success
-	assert_output "172.16.0.255"
+	assert_output "198.51.100.255"
 }
 
 # --- validate_ip: invalid IPs (out of range) ---
@@ -92,19 +92,19 @@ load 'helpers/bfd-common'
 }
 
 @test "validate_ip: too many octets" {
-	run validate_ip "1.2.3.4.5"
+	run validate_ip "192.0.2.4.5"
 	assert_failure
 	assert_output ""
 }
 
 @test "validate_ip: trailing dot" {
-	run validate_ip "1.2.3.4."
+	run validate_ip "192.0.2.4."
 	assert_failure
 	assert_output ""
 }
 
 @test "validate_ip: leading dot" {
-	run validate_ip ".1.2.3.4"
+	run validate_ip ".192.0.2.4"
 	assert_failure
 	assert_output ""
 }
@@ -112,32 +112,32 @@ load 'helpers/bfd-common'
 # --- validate_ip: injection attempts ---
 
 @test "validate_ip: injection semicolon" {
-	run validate_ip "1.2.3.4;rm -rf /"
+	run validate_ip "192.0.2.4;rm -rf /"
 	assert_failure
 	assert_output ""
 }
 
 @test "validate_ip: injection dollar" {
-	run validate_ip '1.2.3.4$(whoami)'
+	run validate_ip '192.0.2.4$(whoami)'
 	assert_failure
 	assert_output ""
 }
 
 @test "validate_ip: injection backtick" {
-	run validate_ip '1.2.3.4`id`'
+	run validate_ip '192.0.2.4`id`'
 	assert_failure
 	assert_output ""
 }
 
 @test "validate_ip: injection pipe" {
-	run validate_ip "1.2.3.4|cat /etc/passwd"
+	run validate_ip "192.0.2.4|cat /etc/passwd"
 	assert_failure
 	assert_output ""
 }
 
 @test "validate_ip: injection newline" {
 	local input
-	input=$(printf '1.2.3.4\n5.6.7.8')
+	input=$(printf '192.0.2.4\n198.51.100.8')
 	run validate_ip "$input"
 	assert_failure
 	assert_output ""

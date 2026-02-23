@@ -1,15 +1,29 @@
 #!/bin/bash
+INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
+LOCK_FILE="$INSTALL_PATH/lock.utime"
 dstamp=$(date +"%m%d%y.%H%M")
-mv -f /usr/local/bfd/stats/attack.pool "/usr/local/bfd/stats/attack.pool.$dstamp"
-# clear transient state but preserve ban tracking and event data
-rm -f /usr/local/bfd/tmp/.alist.*
-rm -f /usr/local/bfd/tmp/.alerts.*
-rm -f /usr/local/bfd/tmp/.weekly.apool.*
-rm -f /usr/local/bfd/tmp/*.cursor
-rm -f /usr/local/bfd/tmp/*.jts
-# rotate bans.history (append-only, rotated daily)
-if [ -f /usr/local/bfd/tmp/bans.history ]; then
-	mv -f /usr/local/bfd/tmp/bans.history "/usr/local/bfd/tmp/bans.history.$(date +%m%d%y)"
+
+# acquire BFD's lock to avoid racing with running bfd process
+(
+flock -x -w 30 200 || exit 0
+# rotate attack pool
+if [ -f "$INSTALL_PATH/stats/attack.pool" ]; then
+	cp "$INSTALL_PATH/stats/attack.pool" "$INSTALL_PATH/stats/attack.pool.$dstamp"
+	: > "$INSTALL_PATH/stats/attack.pool"
 fi
-# purge rotated bans.history files older than 30 days
-find /usr/local/bfd/tmp -maxdepth 1 -name 'bans.history.*' -type f -mtime +30 -delete 2>/dev/null
+# clear transient state but preserve ban tracking and event data
+rm -f "$INSTALL_PATH"/tmp/.alist.*
+rm -f "$INSTALL_PATH"/tmp/.alerts.*
+rm -f "$INSTALL_PATH"/tmp/.weekly.apool.*
+rm -f "$INSTALL_PATH"/tmp/*.cursor
+rm -f "$INSTALL_PATH"/tmp/*.jts
+# rotate bans.history (append-only, rotated daily)
+if [ -f "$INSTALL_PATH/tmp/bans.history" ]; then
+	cp "$INSTALL_PATH/tmp/bans.history" "$INSTALL_PATH/tmp/bans.history.$(date +%m%d%y)"
+	: > "$INSTALL_PATH/tmp/bans.history"
+fi
+) 200>"$LOCK_FILE"
+
+# purge rotated files older than 30 days (outside lock — no race)
+find "$INSTALL_PATH/tmp" -maxdepth 1 -name 'bans.history.*' -type f -mtime +30 -delete 2>/dev/null
+find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' -type f -mtime +30 -delete 2>/dev/null

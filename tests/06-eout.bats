@@ -8,15 +8,11 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd_log"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="$TEST_TMPDIR/syslog"
-	touch "$BFD_LOG_PATH" "$OUTPUT_SYSLOG_FILE"
+	bfd_common_setup
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 @test "eout: basic output to stdout contains message" {
