@@ -2,8 +2,6 @@
 dstamp=$(date +"%m%d%y.%H%M")
 mv -f /usr/local/bfd/stats/attack.pool "/usr/local/bfd/stats/attack.pool.$dstamp"
 # clear transient state but preserve ban tracking and event data
-rm -f /usr/local/bfd/tmp/track.attack
-rm -f /usr/local/bfd/tmp/ban.list
 rm -f /usr/local/bfd/tmp/.alist.*
 rm -f /usr/local/bfd/tmp/.alerts.*
 rm -f /usr/local/bfd/tmp/.weekly.apool.*

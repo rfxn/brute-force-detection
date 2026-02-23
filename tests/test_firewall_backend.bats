@@ -474,6 +474,19 @@ SCRIPT
 	assert_output --partial "route del blackhole 10.0.0.1/32"
 }
 
+@test "_fw_route_ban: CIDR passed through without extra suffix" {
+	ip() {
+		echo "ip $*" >> "$TEST_TMPDIR/ip.log"
+		return 0
+	}
+	export -f ip
+	_fw_route_ban "10.0.0.0/24"
+	run cat "$TEST_TMPDIR/ip.log"
+	assert_output --partial "route add blackhole 10.0.0.0/24"
+	# must NOT have double suffix like /24/32
+	refute_output --partial "/24/32"
+}
+
 # ============================================================
 # custom backend
 # ============================================================

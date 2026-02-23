@@ -269,8 +269,8 @@ iptables (CentOS 6/7, Ubuntu 14-20):
   UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -j DROP"
 
 firewalld (Rocky 8+, CentOS 7):
-  BAN_COMMAND="/usr/bin/firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
-  UNBAN_COMMAND="/usr/bin/firewall-cmd --permanent --remove-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
+  BAN_COMMAND="/usr/bin/firewall-cmd --add-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
+  UNBAN_COMMAND="/usr/bin/firewall-cmd --remove-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
 
 nftables (Rocky 9+, Debian 12, Ubuntu 22+):
   BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST drop"
@@ -297,11 +297,20 @@ usage: bfd [OPTION]
 -q|--quiet ................. run quiet with output hidden
 -d|--dryrun ................ run detection without banning
 -w|--watch ................. run in continuous watch mode (foreground)
--a|--attackpool [STRING] ... list addresses that have attacked this host
+-a|--attackpool [IP|STR] ... attack pool report or IP search
 -c|--check ................. health check and diagnostics
 -l|--list .................. list active bans
 -u|--unban IP .............. unban an IP address
 -b|--ban IP [SERVICE] ...... manually ban an IP address
+-S|--status [SERVICE] ...... system or per-service status
+-C|--config [VAR] .......... show config values
+-R|--rules [RULE] .......... list rules or show rule details
+-T|--test RULE [FILE] ...... test rule patterns against log file
+   --test-pattern PAT [FILE] . test a raw <HOST> pattern
+   --flush-temp ............ unban all temporary bans
+   --flush-all ............. unban all bans
+   --json .................. output in JSON format (with -l)
+   --csv ................... output in CSV format (with -l)
 -v|--version ............... display version
 -h|--help .................. display this help
 

@@ -21,6 +21,22 @@ TRIG_WINDOW="300"
 TRIG_GLOBAL="0"
 
 # =============================================
+# Distributed Attack Detection
+# =============================================
+
+# unique IPs from same subnet triggering a subnet ban (0 = disabled)
+# when N unique IPs from the same subnet attack the same service
+# within TRIG_WINDOW, the entire subnet is banned
+SUBNET_TRIG="0"
+
+# IPv4 subnet mask for distributed attack aggregation
+SUBNET_MASK="24"
+
+# IPv6 subnet mask for distributed attack aggregation
+# must be a multiple of 16 (group-aligned: 16, 32, 48, 64, ...)
+SUBNET_MASK_V6="48"
+
+# =============================================
 # Ban Actions
 # =============================================
 
@@ -43,7 +59,7 @@ BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
 # iptables (CentOS 6/7, Ubuntu 14-20):
 #BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP"
 # firewalld (Rocky 8+, CentOS 7):
-#BAN_COMMAND="/usr/bin/firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
+#BAN_COMMAND="/usr/bin/firewall-cmd --add-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
 # nftables (Rocky 9+, Debian 12, Ubuntu 22+):
 #BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST drop"
 # ip route null-route (all distros):
@@ -61,7 +77,7 @@ UNBAN_COMMAND=""
 # iptables:
 #UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -j DROP"
 # firewalld:
-#UNBAN_COMMAND="/usr/bin/firewall-cmd --permanent --remove-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
+#UNBAN_COMMAND="/usr/bin/firewall-cmd --remove-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
 # nftables (requires handle lookup):
 #UNBAN_COMMAND="/usr/sbin/nft delete rule inet filter input handle $(/usr/sbin/nft -a list chain inet filter input | grep $ATTACK_HOST | awk '{print $NF}')"
 # ip route:
@@ -86,7 +102,7 @@ UNBAN_COMMAND_V6=""
 #UNBAN_COMMAND_V6="/sbin/ip route del blackhole $ATTACK_HOST/128"
 
 # ban duration in seconds (0 = permanent, 300 = 5 minutes)
-# requires UNBAN_COMMAND to be set for auto-unban
+# auto-unban requires UNBAN_COMMAND when using FIREWALL="custom"
 BAN_DURATION="300"
 
 # number of temporary bans before permanent (0 = disabled)

@@ -296,6 +296,13 @@ check() {
 		done < <(echo "$HOSTS_PARSED" | uniq)
 	done
 
+	# distributed attack detection
+	if [ "${SUBNET_TRIG:-0}" -gt 0 ]; then
+		local subnet_bans
+		subnet_bans=$(check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME" "$alerts_file")
+		bans_count=$((bans_count + subnet_bans))
+	fi
+
 	# send batched alert emails
 	if [ "$EMAIL_ALERTS" = "1" ] && [ -s "$alerts_file" ]; then
 		send_alerts "$alerts_file" "$EMAIL_SUBJECT" "$EMAIL_TEMPLATE" "${EMAIL_LOGLINES:-50}"
@@ -504,7 +511,7 @@ usage() {
 	echo "-C|--config [VAR] .......... show config values"
 	echo "-R|--rules [RULE] .......... list rules or show rule details"
 	echo "-T|--test RULE [FILE] ...... test rule patterns against log file"
-	echo "   --test-pattern PAT [FILE]  test a raw <HOST> pattern"
+	echo "   --test-pattern PAT [FILE] . test a raw <HOST> pattern"
 	echo "   --flush-temp ............ unban all temporary bans"
 	echo "   --flush-all ............. unban all bans"
 	echo "   --json .................. output in JSON format (with -l)"
