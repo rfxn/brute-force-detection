@@ -31,7 +31,9 @@ setup() {
 	BAN_COMMAND_TEMPLATE="/bin/true -d \$ATTACK_HOST"
 	UNBAN_COMMAND_TEMPLATE=""
 	BAN_COMMAND_V6_TEMPLATE=""
+	UNBAN_COMMAND_V6_TEMPLATE=""
 	GLOB_TRIG="$TRIG"
+	_FW_BACKEND="custom"
 	RULES_PATH="$INSTALL_PATH/rules"
 	TLOG_PATH="$INSTALL_PATH/tlog"
 	LOCK_FILE="$INSTALL_PATH/lock.utime"
@@ -57,7 +59,7 @@ teardown() {
 	assert_output --partial "[PASS] Configuration validated"
 }
 
-@test "health_check: FAIL for missing BAN_COMMAND" {
+@test "health_check: FAIL for missing BAN_COMMAND in custom mode" {
 	BAN_COMMAND_TEMPLATE=""
 	# validate_config will exit, so capture via subshell
 	run bash -c "
@@ -69,6 +71,7 @@ teardown() {
 		TRIG='15'; TRIG_WINDOW='300'; TRIG_GLOBAL='0'
 		BAN_DURATION='0'; BAN_PERMANENT_AFTER='0'; BAN_PERMANENT_WINDOW='86400'
 		EMAIL_ALERTS='0'; LOCK_FILE_TIMEOUT='300'
+		FIREWALL='custom'
 		BAN_COMMAND_TEMPLATE=''
 		UNBAN_COMMAND_TEMPLATE=''
 		BAN_COMMAND_V6_TEMPLATE=''
@@ -79,6 +82,7 @@ teardown() {
 		AUTH_LOG_PATH='$AUTH_LOG_PATH'
 		KERNEL_LOG_PATH='$KERNEL_LOG_PATH'
 		MAIL_LOG_PATH='$MAIL_LOG_PATH'
+		_FW_BACKEND='custom'
 		health_check '$INSTALL_PATH'
 	"
 	assert_output --partial "[FAIL] Configuration"
@@ -262,6 +266,7 @@ EOF
 		AUTH_LOG_PATH='$AUTH_LOG_PATH'
 		KERNEL_LOG_PATH='$KERNEL_LOG_PATH'
 		MAIL_LOG_PATH='$MAIL_LOG_PATH'
+		_FW_BACKEND='custom'
 		export PATH='$clean_dir'
 		health_check '$INSTALL_PATH'
 	"

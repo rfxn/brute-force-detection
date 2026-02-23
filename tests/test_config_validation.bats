@@ -28,6 +28,7 @@ run_validate() {
 		EMAIL_ALERTS="0"
 		LOCK_FILE_TIMEOUT="300"
 		BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
+		FIREWALL="custom"
 		INSTALL_PATH="$TEST_TMPDIR"
 		eval "$1"
 		validate_config
@@ -47,6 +48,7 @@ run_validate_output() {
 		EMAIL_ALERTS="0"
 		LOCK_FILE_TIMEOUT="300"
 		BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
+		FIREWALL="custom"
 		INSTALL_PATH="$TEST_TMPDIR"
 		eval "$1"
 		validate_config

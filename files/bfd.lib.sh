@@ -189,8 +189,22 @@ validate_config() {
 		echo "error: LOCK_FILE_TIMEOUT must be a positive integer (got '$LOCK_FILE_TIMEOUT')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if [ -z "$BAN_COMMAND_TEMPLATE" ]; then
-		echo "error: BAN_COMMAND must not be empty."
+	local valid_fw="auto apf csf firewalld ufw nftables iptables route custom"
+	if [ -n "${FIREWALL:-}" ]; then
+		local _fw_valid=0 _fw
+		for _fw in $valid_fw; do
+			if [ "$FIREWALL" = "$_fw" ]; then
+				_fw_valid=1
+				break
+			fi
+		done
+		if [ "$_fw_valid" -eq 0 ]; then
+			echo "error: FIREWALL must be one of: $valid_fw (got '$FIREWALL')."
+			exit $EXIT_CONFIG_ERROR
+		fi
+	fi
+	if [ "${FIREWALL:-auto}" = "custom" ] && [ -z "$BAN_COMMAND_TEMPLATE" ]; then
+		echo "error: BAN_COMMAND must not be empty when FIREWALL=custom."
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if [ ! -d "$INSTALL_PATH" ]; then
@@ -512,89 +526,376 @@ filter_host() {
 	return 0
 }
 
-# execute_ban host mod ban_cmd_template dry_run [ports] [ban_cmd_v6_template]
-# execute or log ban command; selects V6 template for IPv6 hosts
+# --- Firewall backend system ---
+# Auto-detects or uses configured firewall for ban/unban operations.
+# Each backend implements: _fw_BACKEND_{ban,unban,setup,status}
+# Dispatch layer: fw_resolve_backend, fw_setup, fw_ban, fw_unban, fw_status
+
+# detect_firewall — auto-detect available firewall tool
+# returns backend name on stdout: apf, csf, firewalld, ufw, nftables, iptables, route
+detect_firewall() {
+	if [ -x "/etc/apf/apf" ]; then echo "apf"; return; fi
+	if [ -x "/usr/sbin/csf" ]; then echo "csf"; return; fi
+	if command -v firewall-cmd >/dev/null 2>&1 && \
+	   firewall-cmd --state >/dev/null 2>&1; then echo "firewalld"; return; fi
+	if command -v ufw >/dev/null 2>&1 && \
+	   ufw status 2>/dev/null | grep -q "Status: active"; then echo "ufw"; return; fi
+	if command -v nft >/dev/null 2>&1 && \
+	   nft list tables >/dev/null 2>&1; then echo "nftables"; return; fi
+	if command -v iptables >/dev/null 2>&1 && \
+	   iptables -V >/dev/null 2>&1; then echo "iptables"; return; fi
+	echo "route"
+}
+
+# --- APF backend ---
+_fw_apf_setup() { :; }
+
+_fw_apf_ban() {
+	local host="$1" mod="${2:-}"
+	/etc/apf/apf -d "$host" "{bfd.$mod}" >/dev/null 2>&1
+}
+
+_fw_apf_unban() {
+	local host="$1"
+	/etc/apf/apf -u "$host" >/dev/null 2>&1
+}
+
+_fw_apf_status() {
+	echo "apf (Advanced Policy Firewall)"
+}
+
+# --- CSF backend ---
+_fw_csf_setup() { :; }
+
+_fw_csf_ban() {
+	local host="$1" mod="${2:-}"
+	/usr/sbin/csf -d "$host" "bfd.$mod" >/dev/null 2>&1
+}
+
+_fw_csf_unban() {
+	local host="$1"
+	/usr/sbin/csf -dr "$host" >/dev/null 2>&1
+}
+
+_fw_csf_status() {
+	echo "csf (ConfigServer Security & Firewall)"
+}
+
+# --- firewalld backend (runtime-only rich rules, no --permanent) ---
+_fw_firewalld_setup() { :; }
+
+_fw_firewalld_ban() {
+	local host="$1" family="ipv4"
+	[[ "$host" == *:* ]] && family="ipv6"
+	firewall-cmd --add-rich-rule="rule family=$family source address=$host drop" >/dev/null 2>&1
+}
+
+_fw_firewalld_unban() {
+	local host="$1" family="ipv4"
+	[[ "$host" == *:* ]] && family="ipv6"
+	firewall-cmd --remove-rich-rule="rule family=$family source address=$host drop" >/dev/null 2>&1
+}
+
+_fw_firewalld_status() {
+	local count=0
+	count=$(firewall-cmd --list-rich-rules 2>/dev/null | grep -c "drop") || count=0
+	echo "firewalld ($count rich rules, runtime-only)"
+}
+
+# --- UFW backend ---
+_fw_ufw_setup() { :; }
+
+_fw_ufw_ban() {
+	local host="$1"
+	ufw insert 1 deny from "$host" >/dev/null 2>&1
+}
+
+_fw_ufw_unban() {
+	local host="$1"
+	ufw delete deny from "$host" >/dev/null 2>&1
+}
+
+_fw_ufw_status() {
+	echo "ufw (Uncomplicated Firewall)"
+}
+
+# --- nftables backend (dedicated inet bfd table with IP sets) ---
+_fw_nftables_setup() {
+	# idempotent: skip if table already exists
+	nft list table inet bfd >/dev/null 2>&1 && return 0
+	nft add table inet bfd || return 1
+	nft add set inet bfd blocked4 '{ type ipv4_addr; flags interval; }' || return 1
+	nft add set inet bfd blocked6 '{ type ipv6_addr; flags interval; }' || return 1
+	nft add chain inet bfd input '{ type filter hook input priority -1; policy accept; }' || return 1
+	nft add rule inet bfd input ip saddr @blocked4 drop || return 1
+	nft add rule inet bfd input ip6 saddr @blocked6 drop || return 1
+}
+
+_fw_nftables_ban() {
+	local host="$1"
+	if [[ "$host" == *:* ]]; then
+		nft add element inet bfd blocked6 "{ $host }" >/dev/null 2>&1
+	else
+		nft add element inet bfd blocked4 "{ $host }" >/dev/null 2>&1
+	fi
+}
+
+_fw_nftables_unban() {
+	local host="$1"
+	if [[ "$host" == *:* ]]; then
+		nft delete element inet bfd blocked6 "{ $host }" >/dev/null 2>&1
+	else
+		nft delete element inet bfd blocked4 "{ $host }" >/dev/null 2>&1
+	fi
+}
+
+_fw_nftables_status() {
+	local v4_count=0 v6_count=0
+	v4_count=$(nft list set inet bfd blocked4 2>/dev/null | grep -c "elements") || v4_count=0
+	v6_count=$(nft list set inet bfd blocked6 2>/dev/null | grep -c "elements") || v6_count=0
+	echo "nftables (inet bfd table, $v4_count v4 + $v6_count v6 blocked)"
+}
+
+# --- iptables backend (dedicated bfd chain) ---
+_fw_iptables_setup() {
+	iptables -N bfd 2>/dev/null || true
+	iptables -C INPUT -j bfd 2>/dev/null || iptables -I INPUT -j bfd
+	if command -v ip6tables >/dev/null 2>&1; then
+		ip6tables -N bfd 2>/dev/null || true
+		ip6tables -C INPUT -j bfd 2>/dev/null || ip6tables -I INPUT -j bfd
+	fi
+}
+
+_fw_iptables_ban() {
+	local host="$1"
+	if [[ "$host" == *:* ]]; then
+		ip6tables -A bfd -s "$host" -j DROP 2>/dev/null
+	else
+		iptables -A bfd -s "$host" -j DROP
+	fi
+}
+
+_fw_iptables_unban() {
+	local host="$1"
+	if [[ "$host" == *:* ]]; then
+		ip6tables -D bfd -s "$host" -j DROP 2>/dev/null
+	else
+		iptables -D bfd -s "$host" -j DROP 2>/dev/null
+	fi
+}
+
+_fw_iptables_status() {
+	local v4_count=0 v6_count=0
+	v4_count=$(iptables -L bfd -n 2>/dev/null | grep -c "DROP") || v4_count=0
+	if command -v ip6tables >/dev/null 2>&1; then
+		v6_count=$(ip6tables -L bfd -n 2>/dev/null | grep -c "DROP") || v6_count=0
+	fi
+	echo "iptables (bfd chain, $v4_count v4 + $v6_count v6 rules)"
+}
+
+# --- route backend (ip route null-route / blackhole) ---
+_fw_route_setup() { :; }
+
+_fw_route_ban() {
+	local host="$1"
+	if [[ "$host" == *:* ]]; then
+		ip route add blackhole "$host/128" 2>/dev/null
+	else
+		ip route add blackhole "$host/32" 2>/dev/null
+	fi
+}
+
+_fw_route_unban() {
+	local host="$1"
+	if [[ "$host" == *:* ]]; then
+		ip route del blackhole "$host/128" 2>/dev/null
+	else
+		ip route del blackhole "$host/32" 2>/dev/null
+	fi
+}
+
+_fw_route_status() {
+	local count=0
+	count=$(ip route list type blackhole 2>/dev/null | wc -l) || count=0
+	echo "route ($count blackhole routes)"
+}
+
+# --- custom backend (backward-compatible eval of BAN_COMMAND templates) ---
+_fw_custom_setup() { :; }
+
+_fw_custom_ban() {
+	local host="$1" mod="$2" ports="$3"
+	local cmd="$BAN_COMMAND_TEMPLATE"
+	if [ -n "${BAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]]; then
+		cmd="$BAN_COMMAND_V6_TEMPLATE"
+	fi
+	ATTACK_HOST="$host"; MOD="$mod"; PORTS="$ports"
+	eval "$cmd" >/dev/null 2>&1
+}
+
+_fw_custom_unban() {
+	local host="$1" mod="$2" ports="$3"
+	local cmd="$UNBAN_COMMAND_TEMPLATE"
+	if [ -n "${UNBAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]]; then
+		cmd="$UNBAN_COMMAND_V6_TEMPLATE"
+	fi
+	ATTACK_HOST="$host"; MOD="$mod"; PORTS="$ports"
+	eval "$cmd" >/dev/null 2>&1
+}
+
+_fw_custom_status() {
+	echo "custom (BAN_COMMAND template)"
+}
+
+# --- Dispatch layer ---
+
+# fw_resolve_backend — set _FW_BACKEND from FIREWALL config or auto-detect
+fw_resolve_backend() {
+	local configured="${FIREWALL:-auto}"
+	if [ "$configured" = "auto" ]; then
+		_FW_BACKEND=$(detect_firewall)
+	else
+		_FW_BACKEND="$configured"
+	fi
+}
+
+# fw_setup — initialize firewall backend (create chains/tables/sets as needed)
+fw_setup() {
+	case "$_FW_BACKEND" in
+		apf)       _fw_apf_setup ;;
+		csf)       _fw_csf_setup ;;
+		firewalld) _fw_firewalld_setup ;;
+		ufw)       _fw_ufw_setup ;;
+		nftables)  _fw_nftables_setup ;;
+		iptables)  _fw_iptables_setup ;;
+		route)     _fw_route_setup ;;
+		custom)    _fw_custom_setup ;;
+	esac
+}
+
+# fw_ban host [mod] [ports] — ban a host via the active backend
+fw_ban() {
+	local host="$1" mod="${2:-}" ports="${3:-all}"
+	case "$_FW_BACKEND" in
+		apf)       _fw_apf_ban "$host" "$mod" ;;
+		csf)       _fw_csf_ban "$host" "$mod" ;;
+		firewalld) _fw_firewalld_ban "$host" ;;
+		ufw)       _fw_ufw_ban "$host" ;;
+		nftables)  _fw_nftables_ban "$host" ;;
+		iptables)  _fw_iptables_ban "$host" ;;
+		route)     _fw_route_ban "$host" ;;
+		custom)    _fw_custom_ban "$host" "$mod" "$ports" ;;
+	esac
+}
+
+# fw_unban host [mod] [ports] — unban a host via the active backend
+fw_unban() {
+	local host="$1" mod="${2:-}" ports="${3:-all}"
+	case "$_FW_BACKEND" in
+		apf)       _fw_apf_unban "$host" ;;
+		csf)       _fw_csf_unban "$host" ;;
+		firewalld) _fw_firewalld_unban "$host" ;;
+		ufw)       _fw_ufw_unban "$host" ;;
+		nftables)  _fw_nftables_unban "$host" ;;
+		iptables)  _fw_iptables_unban "$host" ;;
+		route)     _fw_route_unban "$host" ;;
+		custom)    _fw_custom_unban "$host" "$mod" "$ports" ;;
+	esac
+}
+
+# fw_status — return human-readable status of the active backend
+fw_status() {
+	case "$_FW_BACKEND" in
+		apf)       _fw_apf_status ;;
+		csf)       _fw_csf_status ;;
+		firewalld) _fw_firewalld_status ;;
+		ufw)       _fw_ufw_status ;;
+		nftables)  _fw_nftables_status ;;
+		iptables)  _fw_iptables_status ;;
+		route)     _fw_route_status ;;
+		custom)    _fw_custom_status ;;
+	esac
+}
+
+# execute_ban host mod dry_run [ports]
+# execute or log ban command via firewall backend
 # retries on failure with exponential backoff (BAN_RETRY_COUNT, default 2)
 # returns 0 on success, ban command exit code on failure
 execute_ban() {
-	local host="$1" mod="$2" ban_cmd_template="$3" dry_run="$4"
-	local ports="${5:-all}" ban_cmd_v6="${6:-}"
-	# select V6 command for IPv6 hosts when available
-	if [ -n "$ban_cmd_v6" ] && [[ "$host" == *:* ]]; then
-		ban_cmd_template="$ban_cmd_v6"
-	fi
-	# set globals needed by alert.bfd template and command expansion
+	local host="$1" mod="$2" dry_run="$3" ports="${4:-all}"
+	# set globals needed by alert.bfd template and custom backend
 	ATTACK_HOST="$host"
 	MOD="$mod"
 	PORTS="$ports"
-	BAN_COMMAND="$ban_cmd_template"
+	if [ "$_FW_BACKEND" = "custom" ]; then
+		BAN_COMMAND="$BAN_COMMAND_TEMPLATE"
+		if [ -n "${BAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]]; then
+			BAN_COMMAND="$BAN_COMMAND_V6_TEMPLATE"
+		fi
+	else
+		BAN_COMMAND="fw_ban $host ($_FW_BACKEND)"
+	fi
 	if [ "$dry_run" = "1" ]; then
-		eout "{$mod} [dry-run] would ban $host with command '$BAN_COMMAND'." le
+		eout "{$mod} [dry-run] would ban $host via $_FW_BACKEND." le
 		return 0
 	fi
-	eout "{$mod} $host exceeded login failures; executed ban command '$BAN_COMMAND'." le
+	eout "{$mod} $host exceeded login failures; banning via $_FW_BACKEND." le
 	local max_retries="${BAN_RETRY_COUNT:-2}"
 	local retry_delay=1 attempt=0 ban_rc=1
 	while [ "$attempt" -le "$max_retries" ] && [ "$ban_rc" -ne 0 ]; do
-		eval "$BAN_COMMAND" >/dev/null 2>&1
+		fw_ban "$host" "$mod" "$ports"
 		ban_rc=$?
 		if [ "$ban_rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
-			eout "{$mod} ban command for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s." le
+			eout "{$mod} ban for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s." le
 			sleep "$retry_delay"
 			retry_delay=$((retry_delay * 2))
 		fi
 		attempt=$((attempt + 1))
 	done
 	if [ "$ban_rc" -ne 0 ]; then
-		eout "{$mod} ban command for $host exited with code $ban_rc after $attempt attempt(s)." le
+		eout "{$mod} ban for $host failed after $attempt attempt(s) via $_FW_BACKEND." le
 	fi
 	return $ban_rc
 }
 
-# execute_unban host mod unban_cmd_template [ports] [unban_cmd_v6_template]
-# execute unban command; selects V6 template for IPv6 hosts
+# execute_unban host mod [ports]
+# execute unban command via firewall backend
 # retries on failure with exponential backoff (BAN_RETRY_COUNT, default 2)
 # returns 0 on success, unban command exit code on failure
 execute_unban() {
-	local host="$1" mod="$2" unban_cmd_template="$3"
-	local ports="${4:-all}" unban_cmd_v6="${5:-}"
-	# select V6 command for IPv6 hosts when available
-	if [ -n "$unban_cmd_v6" ] && [[ "$host" == *:* ]]; then
-		unban_cmd_template="$unban_cmd_v6"
-	fi
+	local host="$1" mod="$2" ports="${3:-all}"
 	ATTACK_HOST="$host"
 	MOD="$mod"
 	PORTS="$ports"
-	eout "{$mod} $host ban expired; executing unban command." le
+	eout "{$mod} $host ban expired; executing unban via $_FW_BACKEND." le
 	local max_retries="${BAN_RETRY_COUNT:-2}"
 	local retry_delay=1 attempt=0 unban_rc=1
 	while [ "$attempt" -le "$max_retries" ] && [ "$unban_rc" -ne 0 ]; do
-		eval "$unban_cmd_template" >/dev/null 2>&1
+		fw_unban "$host" "$mod" "$ports"
 		unban_rc=$?
 		if [ "$unban_rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
-			eout "{$mod} unban command for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s." le
+			eout "{$mod} unban for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s." le
 			sleep "$retry_delay"
 			retry_delay=$((retry_delay * 2))
 		fi
 		attempt=$((attempt + 1))
 	done
 	if [ "$unban_rc" -ne 0 ]; then
-		eout "{$mod} unban command for $host exited with code $unban_rc after $attempt attempt(s)." le
+		eout "{$mod} unban for $host failed after $attempt attempt(s) via $_FW_BACKEND." le
 	fi
 	return $unban_rc
 }
 
-# process_unbans install_path now unban_cmd_template [unban_cmd_v6_template]
+# process_unbans install_path now — expire and unban via firewall backend
 process_unbans() {
-	local install_path="$1" now="$2" unban_cmd_template="$3"
-	local unban_cmd_v6="${4:-}"
+	local install_path="$1" now="$2"
 	local expired_line ts expiry host mod ports
 	while IFS=' ' read -r ts expiry host mod ports; do
 		[ -z "$ts" ] && continue
-		if [ -n "$unban_cmd_template" ]; then
-			execute_unban "$host" "$mod" "$unban_cmd_template" "$ports" "$unban_cmd_v6"
-		else
+		if [ "$_FW_BACKEND" = "custom" ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
 			eout "{$mod} $host ban expired; no UNBAN_COMMAND configured, removing state only." le
+		else
+			execute_unban "$host" "$mod" "$ports"
 		fi
 		state_bans_active_remove "$install_path" "$host"
 		state_bans_history_append "$install_path" "$now" "$expiry" "$host" "$mod" "unban"
@@ -631,10 +932,9 @@ list_bans() {
 	printf "IP|SERVICE|PORTS|BANNED|EXPIRES\n%s\n" "$listing" | format_table
 }
 
-# manual_unban install_path ip utime unban_cmd_template [unban_cmd_v6_template]
+# manual_unban install_path ip utime — manually unban an IP via firewall backend
 manual_unban() {
-	local install_path="$1" ip="$2" utime="$3" unban_cmd_template="$4"
-	local unban_cmd_v6="${5:-}"
+	local install_path="$1" ip="$2" utime="$3"
 	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
 	state_init "$install_path"
 	if ! state_bans_active_check "$install_path" "$ip"; then
@@ -644,19 +944,17 @@ manual_unban() {
 	local ban_mod ban_ports
 	ban_mod=$(awk -v ip="$ip" '$3 == ip {print $4; exit}' "$install_path/tmp/bans.active")
 	ban_ports=$(awk -v ip="$ip" '$3 == ip {print $5; exit}' "$install_path/tmp/bans.active")
-	if [ -n "$unban_cmd_template" ]; then
-		execute_unban "$ip" "${ban_mod:-unknown}" "$unban_cmd_template" "${ban_ports:-all}" "$unban_cmd_v6"
-	fi
+	execute_unban "$ip" "${ban_mod:-unknown}" "${ban_ports:-all}"
 	state_bans_active_remove "$install_path" "$ip"
 	state_bans_history_append "$install_path" "$utime" "0" "$ip" "${ban_mod:-unknown}" "unban"
 	echo "$ip unbanned successfully."
 }
 
-# manual_ban install_path ip utime ban_cmd_template [mod] [ports] [ban_cmd_v6_template]
+# manual_ban install_path ip utime [mod] [ports] — manually ban an IP via firewall backend
 manual_ban() {
-	local install_path="$1" ip="$2" utime="$3" ban_cmd_template="$4"
-	local mod="${5:-manual}"
-	local ports="${6:-all}" ban_cmd_v6="${7:-}"
+	local install_path="$1" ip="$2" utime="$3"
+	local mod="${4:-manual}"
+	local ports="${5:-all}"
 	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
 	mod=$(sanitize_mod "$mod") || { echo "error: invalid service name '$mod'."; return 1; }
 	state_init "$install_path"
@@ -664,7 +962,7 @@ manual_ban() {
 		echo "error: $ip is already banned."
 		return 1
 	fi
-	execute_ban "$ip" "$mod" "$ban_cmd_template" "0" "$ports" "$ban_cmd_v6"
+	execute_ban "$ip" "$mod" "0" "$ports"
 	state_bans_active_append "$install_path" "$utime" "0" "$ip" "$mod" "$ports"
 	state_bans_history_append "$install_path" "$utime" "0" "$ip" "$mod" "ban"
 	echo "$ip banned permanently."
@@ -909,39 +1207,44 @@ _hc_config() {
 	done
 }
 
-# _hc_binaries — validate ban/unban command binaries
+# _hc_binaries — validate firewall backend and ban/unban binaries
 _hc_binaries() {
-	local ban_bin
-	ban_bin=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
-	if [ -z "$ban_bin" ]; then
-		echo "[FAIL] BAN_COMMAND: not configured"
-		_hc_fail=$((_hc_fail + 1))
-	elif [ -x "$ban_bin" ]; then
-		echo "[PASS] BAN_COMMAND binary: $ban_bin (found)"
-		_hc_pass=$((_hc_pass + 1))
-	else
-		echo "[WARN] BAN_COMMAND binary: $ban_bin (not found)"
-		_hc_warn=$((_hc_warn + 1))
-	fi
+	echo "[PASS] Firewall backend: $_FW_BACKEND ($(fw_status))"
+	_hc_pass=$((_hc_pass + 1))
 
-	if [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
-		echo "[WARN] UNBAN_COMMAND is empty; temp bans won't auto-unban firewall rules"
-		_hc_warn=$((_hc_warn + 1))
-	fi
-
-	if [ -n "${BAN_COMMAND_V6_TEMPLATE:-}" ]; then
-		local ban_v6_bin
-		ban_v6_bin=$(echo "$BAN_COMMAND_V6_TEMPLATE" | awk '{print $1}')
-		if [ -x "$ban_v6_bin" ]; then
-			echo "[PASS] BAN_COMMAND_V6 binary: $ban_v6_bin (found)"
+	if [ "$_FW_BACKEND" = "custom" ]; then
+		local ban_bin
+		ban_bin=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
+		if [ -z "$ban_bin" ]; then
+			echo "[FAIL] BAN_COMMAND: not configured"
+			_hc_fail=$((_hc_fail + 1))
+		elif [ -x "$ban_bin" ]; then
+			echo "[PASS] BAN_COMMAND binary: $ban_bin (found)"
 			_hc_pass=$((_hc_pass + 1))
 		else
-			echo "[WARN] BAN_COMMAND_V6 binary: $ban_v6_bin (not found)"
+			echo "[WARN] BAN_COMMAND binary: $ban_bin (not found)"
 			_hc_warn=$((_hc_warn + 1))
 		fi
-	else
-		echo "[PASS] BAN_COMMAND_V6: not configured (will use BAN_COMMAND for IPv6)"
-		_hc_pass=$((_hc_pass + 1))
+
+		if [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
+			echo "[WARN] UNBAN_COMMAND is empty; temp bans won't auto-unban firewall rules"
+			_hc_warn=$((_hc_warn + 1))
+		fi
+
+		if [ -n "${BAN_COMMAND_V6_TEMPLATE:-}" ]; then
+			local ban_v6_bin
+			ban_v6_bin=$(echo "$BAN_COMMAND_V6_TEMPLATE" | awk '{print $1}')
+			if [ -x "$ban_v6_bin" ]; then
+				echo "[PASS] BAN_COMMAND_V6 binary: $ban_v6_bin (found)"
+				_hc_pass=$((_hc_pass + 1))
+			else
+				echo "[WARN] BAN_COMMAND_V6 binary: $ban_v6_bin (not found)"
+				_hc_warn=$((_hc_warn + 1))
+			fi
+		else
+			echo "[PASS] BAN_COMMAND_V6: not configured (will use BAN_COMMAND for IPv6)"
+			_hc_pass=$((_hc_pass + 1))
+		fi
 	fi
 
 	local has_journalctl=0
@@ -1179,9 +1482,13 @@ format_alert_entry() {
 	if [ "${BAN_PERMANENT_AFTER:-0}" -gt 0 ]; then
 		echo "  History:    $recent previous ban(s) in ${BAN_PERMANENT_WINDOW:-86400}s (permanent at ${BAN_PERMANENT_AFTER})"
 	fi
-	# reconstruct ban command display via template expansion
+	# reconstruct ban command display
 	local display_cmd
-	display_cmd=$(eval echo "$BAN_COMMAND_TEMPLATE" 2>/dev/null) || display_cmd="$BAN_COMMAND_TEMPLATE"
+	if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
+		display_cmd=$(eval echo "$BAN_COMMAND_TEMPLATE" 2>/dev/null) || display_cmd="$BAN_COMMAND_TEMPLATE"
+	else
+		display_cmd="fw_ban $host ($_FW_BACKEND)"
+	fi
 	echo "  Command:    $display_cmd"
 	echo ""
 }
@@ -1276,7 +1583,11 @@ send_alerts() {
 			ATTACK_COUNT="$_count"
 			LP="$_lp"
 			PORTS="$_ports"
-			BAN_COMMAND=$(eval echo "$BAN_COMMAND_TEMPLATE" 2>/dev/null) || BAN_COMMAND="$BAN_COMMAND_TEMPLATE"
+			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
+				BAN_COMMAND=$(eval echo "$BAN_COMMAND_TEMPLATE" 2>/dev/null) || BAN_COMMAND="$BAN_COMMAND_TEMPLATE"
+			else
+				BAN_COMMAND="fw_ban $_host ($_FW_BACKEND)"
+			fi
 		fi
 
 		# augment subject for multi-ban
@@ -1324,6 +1635,15 @@ show_status() {
 		mode="cron"
 	fi
 	echo "  Mode:           $mode"
+
+	# Firewall backend
+	if [ -n "${_FW_BACKEND:-}" ]; then
+		local fw_auto=""
+		if [ "${FIREWALL:-auto}" = "auto" ]; then
+			fw_auto=" (auto-detected)"
+		fi
+		echo "  Firewall:       ${_FW_BACKEND}${fw_auto}"
+	fi
 
 	# Active bans
 	local bans_file="$install_path/tmp/bans.active"
@@ -1501,7 +1821,7 @@ show_config() {
 		echo "$val"
 	else
 		# dump all active config variables
-		local config_vars="TRIG TRIG_WINDOW TRIG_GLOBAL BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG LOCK_FILE_TIMEOUT WATCH_INTERVAL"
+		local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG LOCK_FILE_TIMEOUT WATCH_INTERVAL"
 		local v val
 		for v in $config_vars; do
 			eval "val=\${$v:-}"
@@ -1510,11 +1830,10 @@ show_config() {
 	fi
 }
 
-# flush_bans install_path mode utime unban_cmd_template [unban_cmd_v6_template]
+# flush_bans install_path mode utime — bulk unban via firewall backend
 # mode: "temp" — unban temporary bans only; "all" — unban everything
 flush_bans() {
 	local install_path="$1" mode="$2" utime="$3"
-	local unban_cmd_template="$4" unban_cmd_v6="${5:-}"
 	local bans_file="$install_path/tmp/bans.active"
 	local count=0
 
@@ -1531,9 +1850,7 @@ flush_bans() {
 	while IFS=' ' read -r ts expiry host mod ports; do
 		[ -z "$ts" ] && continue
 		if [ "$mode" = "all" ] || { [ "$expiry" != "0" ] && [ "$expiry" -gt 0 ]; }; then
-			if [ -n "$unban_cmd_template" ]; then
-				execute_unban "$host" "$mod" "$unban_cmd_template" "$ports" "$unban_cmd_v6"
-			fi
+			execute_unban "$host" "$mod" "$ports"
 			state_bans_active_remove "$install_path" "$host"
 			state_bans_history_append "$install_path" "$utime" "$expiry" "$host" "$mod" "unban"
 			count=$((count + 1))

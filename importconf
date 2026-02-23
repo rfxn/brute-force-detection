@@ -87,6 +87,12 @@ fi
 
 rm -f "$old_combined"
 
+# Phase 25: if upgrading from pre-firewall-backend config, set custom mode
+# to preserve existing BAN_COMMAND behavior
+if ! grep -q '^FIREWALL=' "$old_conf" 2>/dev/null; then
+	sed -i 's/^FIREWALL="auto"/FIREWALL="custom"/' "$new_conf"
+fi
+
 # preserve user's ignore lists
 cp -f "$INSTALL_PATH.bk.last/ignore.hosts" "$INSTALL_PATH" 2>/dev/null
 

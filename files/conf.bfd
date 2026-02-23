@@ -24,6 +24,19 @@ TRIG_GLOBAL="0"
 # Ban Actions
 # =============================================
 
+# firewall backend for ban/unban operations
+# auto       - auto-detect (APF > CSF > firewalld > UFW > nftables > iptables > route)
+# apf        - Advanced Policy Firewall
+# csf        - ConfigServer Security & Firewall
+# firewalld  - firewalld (runtime rich rules, no --permanent)
+# ufw        - Uncomplicated Firewall
+# nftables   - nftables (dedicated inet bfd table with IP sets)
+# iptables   - iptables/ip6tables (dedicated bfd chain)
+# route      - ip route null-route (blackhole)
+# custom     - use BAN_COMMAND/UNBAN_COMMAND templates below
+FIREWALL="auto"
+
+# --- Custom mode commands (only used when FIREWALL="custom") ---
 # command to block attacking hosts
 # APF (default):
 BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
