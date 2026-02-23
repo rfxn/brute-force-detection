@@ -82,6 +82,10 @@ BAN_PERMANENT_AFTER="5"
 # window in seconds for counting repeat offenses (default 24 hours)
 BAN_PERMANENT_WINDOW="86400"
 
+# ban command retry count on failure (e.g., iptables lock contention)
+# 0 = no retries (fail immediately), 2 = up to 2 retries with backoff
+BAN_RETRY_COUNT="2"
+
 # =============================================
 # Email Alerts
 # =============================================

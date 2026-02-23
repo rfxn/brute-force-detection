@@ -25,19 +25,20 @@ teardown() {
 	[ -d "$INSTALL_PATH/stats" ]
 }
 
-@test "state_init: creates track.attack, ban.list, attack.pool" {
+@test "state_init: creates events.dat, bans.active, bans.history, attack.pool" {
 	state_init "$INSTALL_PATH"
-	[ -f "$INSTALL_PATH/tmp/track.attack" ]
-	[ -f "$INSTALL_PATH/tmp/ban.list" ]
+	[ -f "$INSTALL_PATH/tmp/events.dat" ]
+	[ -f "$INSTALL_PATH/tmp/bans.active" ]
+	[ -f "$INSTALL_PATH/tmp/bans.history" ]
 	[ -f "$INSTALL_PATH/stats/attack.pool" ]
 }
 
 @test "state_init: sets 600 permissions on state files" {
 	state_init "$INSTALL_PATH"
 	local perms
-	perms=$(stat -c '%a' "$INSTALL_PATH/tmp/track.attack")
+	perms=$(stat -c '%a' "$INSTALL_PATH/tmp/events.dat")
 	[ "$perms" = "600" ]
-	perms=$(stat -c '%a' "$INSTALL_PATH/tmp/ban.list")
+	perms=$(stat -c '%a' "$INSTALL_PATH/tmp/bans.active")
 	[ "$perms" = "600" ]
 	perms=$(stat -c '%a' "$INSTALL_PATH/stats/attack.pool")
 	[ "$perms" = "600" ]
@@ -45,141 +46,11 @@ teardown() {
 
 @test "state_init: idempotent on existing dirs and files" {
 	state_init "$INSTALL_PATH"
-	echo "1.2.3.4 5 sshd" >> "$INSTALL_PATH/tmp/track.attack"
+	echo "1000 10.0.0.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
 	state_init "$INSTALL_PATH"
 	# file should not be truncated
-	run cat "$INSTALL_PATH/tmp/track.attack"
-	assert_output "1.2.3.4 5 sshd"
-}
-
-# --- state_track_append ---
-
-@test "state_track_append: appends entry to track.attack" {
-	state_init "$INSTALL_PATH"
-	state_track_append "$INSTALL_PATH" "10.0.0.1" "3" "sshd"
-	run cat "$INSTALL_PATH/tmp/track.attack"
-	assert_output "10.0.0.1 3 sshd"
-}
-
-@test "state_track_append: multiple appends accumulate" {
-	state_init "$INSTALL_PATH"
-	state_track_append "$INSTALL_PATH" "10.0.0.1" "3" "sshd"
-	state_track_append "$INSTALL_PATH" "10.0.0.2" "5" "dovecot"
-	local line_count
-	line_count=$(wc -l < "$INSTALL_PATH/tmp/track.attack")
-	[ "$line_count" -eq 2 ]
-}
-
-# --- state_track_count ---
-
-@test "state_track_count: returns 0 for unknown host" {
-	state_init "$INSTALL_PATH"
-	run state_track_count "$INSTALL_PATH" "192.168.1.1"
-	assert_output "0"
-}
-
-@test "state_track_count: sums counts for single entry" {
-	state_init "$INSTALL_PATH"
-	state_track_append "$INSTALL_PATH" "10.0.0.1" "7" "sshd"
-	run state_track_count "$INSTALL_PATH" "10.0.0.1"
-	assert_output "7"
-}
-
-@test "state_track_count: sums counts across multiple entries" {
-	state_init "$INSTALL_PATH"
-	state_track_append "$INSTALL_PATH" "10.0.0.1" "3" "sshd"
-	state_track_append "$INSTALL_PATH" "10.0.0.2" "5" "dovecot"
-	state_track_append "$INSTALL_PATH" "10.0.0.1" "4" "postfix"
-	run state_track_count "$INSTALL_PATH" "10.0.0.1"
-	assert_output "7"
-}
-
-@test "state_track_count: does not match partial IPs" {
-	state_init "$INSTALL_PATH"
-	state_track_append "$INSTALL_PATH" "10.0.0.1" "5" "sshd"
-	state_track_append "$INSTALL_PATH" "10.0.0.10" "3" "sshd"
-	run state_track_count "$INSTALL_PATH" "10.0.0.1"
-	assert_output "5"
-}
-
-# --- state_track_trim ---
-
-@test "state_track_trim: no-op when under max_lines" {
-	state_init "$INSTALL_PATH"
-	state_track_append "$INSTALL_PATH" "10.0.0.1" "1" "sshd"
-	state_track_append "$INSTALL_PATH" "10.0.0.2" "2" "sshd"
-	state_track_trim "$INSTALL_PATH" "5"
-	local line_count
-	line_count=$(wc -l < "$INSTALL_PATH/tmp/track.attack")
-	[ "$line_count" -eq 2 ]
-}
-
-@test "state_track_trim: trims to max_lines keeping newest" {
-	state_init "$INSTALL_PATH"
-	local i
-	for i in $(seq 1 10); do
-		state_track_append "$INSTALL_PATH" "10.0.0.$i" "$i" "sshd"
-	done
-	state_track_trim "$INSTALL_PATH" "3"
-	local line_count
-	line_count=$(wc -l < "$INSTALL_PATH/tmp/track.attack")
-	[ "$line_count" -eq 3 ]
-	# newest entries (8, 9, 10) should remain
-	run head -1 "$INSTALL_PATH/tmp/track.attack"
-	assert_output "10.0.0.8 8 sshd"
-}
-
-# --- state_ban_check ---
-
-@test "state_ban_check: returns 1 for unbanned host" {
-	state_init "$INSTALL_PATH"
-	run state_ban_check "$INSTALL_PATH" "10.0.0.1"
-	assert_failure
-}
-
-@test "state_ban_check: returns 0 for banned host" {
-	state_init "$INSTALL_PATH"
-	echo "10.0.0.1" >> "$INSTALL_PATH/tmp/ban.list"
-	run state_ban_check "$INSTALL_PATH" "10.0.0.1"
-	assert_success
-}
-
-@test "state_ban_check: does not match partial IPs" {
-	state_init "$INSTALL_PATH"
-	echo "10.0.0.1" >> "$INSTALL_PATH/tmp/ban.list"
-	run state_ban_check "$INSTALL_PATH" "10.0.0.10"
-	assert_failure
-}
-
-# --- state_ban_append ---
-
-@test "state_ban_append: adds host to ban.list" {
-	state_init "$INSTALL_PATH"
-	state_ban_append "$INSTALL_PATH" "10.0.0.1" "100"
-	run grep -Fw "10.0.0.1" "$INSTALL_PATH/tmp/ban.list"
-	assert_success
-}
-
-@test "state_ban_append: does not duplicate existing host" {
-	state_init "$INSTALL_PATH"
-	state_ban_append "$INSTALL_PATH" "10.0.0.1" "100"
-	state_ban_append "$INSTALL_PATH" "10.0.0.1" "100"
-	local count
-	count=$(grep -cFw "10.0.0.1" "$INSTALL_PATH/tmp/ban.list")
-	[ "$count" -eq 1 ]
-}
-
-@test "state_ban_append: trims ban.list to max_lines" {
-	state_init "$INSTALL_PATH"
-	local i
-	for i in $(seq 1 10); do
-		echo "10.0.0.$i" >> "$INSTALL_PATH/tmp/ban.list"
-	done
-	state_ban_append "$INSTALL_PATH" "10.0.0.99" "5"
-	local line_count
-	line_count=$(wc -l < "$INSTALL_PATH/tmp/ban.list")
-	# trimmed to 5 then appended 1 = 6
-	[ "$line_count" -eq 6 ]
+	run cat "$INSTALL_PATH/tmp/events.dat"
+	assert_output "1000 10.0.0.1 sshd"
 }
 
 # --- state_pool_append ---
@@ -198,4 +69,73 @@ teardown() {
 	local line_count
 	line_count=$(wc -l < "$INSTALL_PATH/stats/attack.pool")
 	[ "$line_count" -eq 2 ]
+}
+
+# --- extract_command_template ---
+
+@test "extract_command_template: extracts unquoted value" {
+	local tmpconf="$TEST_TMPDIR/test.conf"
+	echo 'BAN_COMMAND=/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP' > "$tmpconf"
+	run extract_command_template "$tmpconf" "BAN_COMMAND"
+	assert_output '/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+}
+
+@test "extract_command_template: extracts quoted value" {
+	local tmpconf="$TEST_TMPDIR/test.conf"
+	echo 'BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"' > "$tmpconf"
+	run extract_command_template "$tmpconf" "BAN_COMMAND"
+	assert_output '/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}'
+}
+
+@test "extract_command_template: takes last occurrence" {
+	local tmpconf="$TEST_TMPDIR/test.conf"
+	printf 'BAN_COMMAND="first"\nBAN_COMMAND="second"\n' > "$tmpconf"
+	run extract_command_template "$tmpconf" "BAN_COMMAND"
+	assert_output "second"
+}
+
+@test "extract_command_template: returns empty for missing var" {
+	local tmpconf="$TEST_TMPDIR/test.conf"
+	echo 'OTHER_VAR="value"' > "$tmpconf"
+	run extract_command_template "$tmpconf" "BAN_COMMAND"
+	assert_output ""
+}
+
+# --- flock-protected appends ---
+
+@test "state_pool_append: concurrent writes produce correct line count" {
+	state_init "$INSTALL_PATH"
+	# run 10 appends in parallel
+	local i
+	for i in $(seq 1 10); do
+		state_pool_append "$INSTALL_PATH" "1700000$i" "10.0.0.$i" "sshd" &
+	done
+	wait
+	local line_count
+	line_count=$(wc -l < "$INSTALL_PATH/stats/attack.pool")
+	[ "$line_count" -eq 10 ]
+}
+
+@test "state_events_append: concurrent writes produce correct line count" {
+	state_init "$INSTALL_PATH"
+	local i
+	for i in $(seq 1 10); do
+		state_events_append "$INSTALL_PATH" "100$i" "10.0.0.$i" "sshd" &
+	done
+	wait
+	local line_count
+	line_count=$(wc -l < "$INSTALL_PATH/tmp/events.dat")
+	[ "$line_count" -eq 10 ]
+}
+
+@test "state_bans_history_append: concurrent writes produce correct line count" {
+	state_init "$INSTALL_PATH"
+	local i
+	for i in $(seq 1 10); do
+		state_bans_history_append "$INSTALL_PATH" "100$i" "200$i" "10.0.0.$i" "sshd" "ban" &
+	done
+	wait
+	local line_count
+	line_count=$(wc -l < "$INSTALL_PATH/tmp/bans.history")
+	[ "$line_count" -eq 10 ]
 }
