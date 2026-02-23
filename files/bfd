@@ -39,8 +39,6 @@ fi
 . "$INSTALL_PATH/bfd.lib.sh"
 
 # initialize variables that may be unset
-LAST_HOST=""
-LAST=""
 SKIP_ALERT=""
 DRY_RUN=0
 
@@ -62,7 +60,7 @@ vhead() {
 if [ ! -f "$CNF" ]; then
 	vhead
 	echo "could not find \$CNF, aborting."
-	exit $EXIT_CONFIG_ERROR
+	exit "$EXIT_CONFIG_ERROR"
 fi
 # validate config file safety before sourcing
 _cnf_owner=$(stat -c '%u' "$CNF")
@@ -71,7 +69,7 @@ _cnf_world="${_cnf_perms: -1}"
 if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
 	vhead
 	echo "conf.bfd has unsafe ownership (uid=$_cnf_owner) or permissions ($_cnf_perms), aborting."
-	exit $EXIT_CONFIG_ERROR
+	exit "$EXIT_CONFIG_ERROR"
 fi
 # shellcheck disable=SC1090
 . "$CNF"
@@ -111,27 +109,28 @@ fw_setup
 
 # warn if BAN_COMMAND binary not found (custom mode only)
 if [ "$_FW_BACKEND" = "custom" ]; then
-	BAN_CMD_BIN=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
-	if [ -n "$BAN_CMD_BIN" ] && [ ! -x "$BAN_CMD_BIN" ]; then
-		echo "warning: BAN_COMMAND binary '$BAN_CMD_BIN' not found or not executable."
+	_ban_cmd_bin=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
+	if [ -n "$_ban_cmd_bin" ] && [ ! -x "$_ban_cmd_bin" ]; then
+		echo "warning: BAN_COMMAND binary '$_ban_cmd_bin' not found or not executable."
 	fi
 	if [ -n "$BAN_COMMAND_V6_TEMPLATE" ]; then
-		BAN_CMD_V6_BIN=$(echo "$BAN_COMMAND_V6_TEMPLATE" | awk '{print $1}')
-		if [ -n "$BAN_CMD_V6_BIN" ] && [ ! -x "$BAN_CMD_V6_BIN" ]; then
-			echo "warning: BAN_COMMAND_V6 binary '$BAN_CMD_V6_BIN' not found or not executable."
+		_ban_cmd_v6_bin=$(echo "$BAN_COMMAND_V6_TEMPLATE" | awk '{print $1}')
+		if [ -n "$_ban_cmd_v6_bin" ] && [ ! -x "$_ban_cmd_v6_bin" ]; then
+			echo "warning: BAN_COMMAND_V6 binary '$_ban_cmd_v6_bin' not found or not executable."
 		fi
 	fi
+	unset _ban_cmd_bin _ban_cmd_v6_bin
 fi
 
 pre() {
 export LOG_SOURCE
 if [ ! -f "$TLOG_PATH" ]; then
 	eout "could not locate \$TLOG_PATH, aborting."
-	exit $EXIT_PREREQ_ERROR
+	exit "$EXIT_PREREQ_ERROR"
 fi
 if [ ! -d "$RULES_PATH" ]; then
 	eout "could not locate \$RULES_PATH, aborting."
-	exit $EXIT_PREREQ_ERROR
+	exit "$EXIT_PREREQ_ERROR"
 fi
 if [ ! -f "$BFD_LOG_PATH" ]; then
 	touch "$BFD_LOG_PATH"
@@ -174,7 +173,7 @@ LOCK_FD=9
 
 get_state() {
 eval "exec $LOCK_FD>\"$LOCK_FILE\""
-if ! flock -n $LOCK_FD; then
+if ! flock -n "$LOCK_FD"; then
 	# flock failed — check for stale lock as secondary safety net
 	if [ -f "$LOCK_FILE" ]; then
 		OVAL=$(cat "$LOCK_FILE")
@@ -184,14 +183,14 @@ if ! flock -n $LOCK_FD; then
 			# force-acquire by removing and re-opening
 			rm -f "$LOCK_FILE"
 			eval "exec $LOCK_FD>\"$LOCK_FILE\""
-			flock -n $LOCK_FD || { eout "unable to acquire lock after stale cleanup, aborting."; exit $EXIT_LOCK_ERROR; }
+			flock -n "$LOCK_FD" || { eout "unable to acquire lock after stale cleanup, aborting."; exit "$EXIT_LOCK_ERROR"; }
 		else
 			eout "locked subsystem, already running ? ($LOCK_FILE is $DIFF seconds old), aborting."
-			exit $EXIT_LOCK_ERROR
+			exit "$EXIT_LOCK_ERROR"
 		fi
 	else
 		eout "unable to acquire lock, aborting."
-		exit $EXIT_LOCK_ERROR
+		exit "$EXIT_LOCK_ERROR"
 	fi
 fi
 echo "$UTIME" > "$LOCK_FILE"
@@ -261,15 +260,10 @@ check() {
 				fi
 				if [ "$filter_rc" -eq 2 ]; then
 					# local address
-					eout "{$MOD} $ATTACK_HOST is equal to a local address." le
-					if [ "$LAST" != "$ATTACK_HOST" ]; then
-						state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
-						LAST="$ATTACK_HOST"
-						eout "{$MOD} $ATTACK_HOST exceeded maximum login failures; host already banned or ignored." le
-					fi
-				elif [ "$LAST_HOST" != "$ATTACK_HOST" ]; then
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
-					LAST_HOST="$ATTACK_HOST"
+					eout "{$MOD} $ATTACK_HOST is a local address, skipping ban." le
+				else
+					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
 					if execute_ban "$ATTACK_HOST" "$MOD" "$DRY_RUN" "${PORTS:-all}"; then
 						bans_count=$((bans_count + 1))
 						# get repeat offense count
@@ -335,8 +329,8 @@ _apool_report() {
 	local cnt aip first_ts last_ts mods first_fmt last_fmt ban_status
 	while IFS='|' read -r cnt aip first_ts last_ts mods; do
 		[ -z "$cnt" ] && continue
-		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S")
-		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S")
+		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$first_ts")
+		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$last_ts")
 		ban_status=$(_apool_ban_status "$aip")
 		echo "$cnt|$aip|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
 	done < <(
@@ -472,6 +466,7 @@ reload_watch() {
 		fi
 	fi
 	GLOB_TRIG="$TRIG"
+	# shellcheck disable=SC2034  # templates used by _fw_custom_ban/unban
 	BAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND")
 	UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
 	BAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND_V6")
@@ -589,6 +584,6 @@ case "${1:-}" in
 -v|--version)   vhead ;;
 -h|--help)      vhead; usage ;;
 "")             vhead; usage ;;
-*)              vhead; echo "error: unknown option '$1'"; echo; usage; exit $EXIT_CONFIG_ERROR ;;
+*)              vhead; echo "error: unknown option '$1'"; echo; usage; exit "$EXIT_CONFIG_ERROR" ;;
 esac
-exit $EXIT_OK
+exit "$EXIT_OK"

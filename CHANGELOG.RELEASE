@@ -1,4 +1,18 @@
 2.0.1:
+[Fix] POSIX compliance: == in [ ] tests replaced with = in eout(), tlog
+[Fix] unquoted $EXIT_* and $LOCK_FD variables in files/bfd; all now quoted
+[Fix] _hc_config() eval replaced with case statement for log path lookup
+[Fix] _apool_report() date -d calls lack fallback; added || echo for
+      systems without GNU date -d
+[Change] LAST_HOST/LAST dedup variables removed from check(); duplicate
+         ban prevention now handled entirely by state_bans_active_check()
+[Change] BAN_CMD_BIN/BAN_CMD_V6_BIN renamed with underscore prefix and
+         unset after use to avoid namespace pollution
+[New] shellcheck SC2034 directive for reload_watch() template variables
+[New] security comments on _fw_custom_ban/unban eval documenting the
+      mitigation chain (validate_ip_any, sanitize_mod, safe_source)
+[New] ip_to_subnet() and tlog_read() header comments clarifying library
+      vs production usage
 [Fix] show_config() eval injection: unsanitized CLI input passed to eval
       allowed arbitrary command execution; now validates against config
       variable whitelist before eval

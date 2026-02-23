@@ -87,6 +87,8 @@ validate_ip_any() {
 }
 
 # ip_to_subnet ip mask — compute the network address for an IP and prefix length
+# Library utility exercised by tests and available for external callers;
+# production subnet math is inline in count_subnet_attackers() for performance.
 # IPv4: bit-shift arithmetic for any mask 8-32
 # IPv6: group-aligned mask (must be multiple of 16); expands :: then truncates
 ip_to_subnet() {
@@ -165,10 +167,10 @@ eout() {
 		local host
 		host=$(hostname -s)
 		echo "$ts $host bfd($$): $arg"
-		if [ "$val" == "le" ]; then
+		if [ "$val" = "le" ]; then
 			echo "$ts $host bfd($$): $arg" >> "$BFD_LOG_PATH"
 		fi
-		if [ "$OUTPUT_SYSLOG" == "1" ] && [ "$val" == "le" ]; then
+		if [ "$OUTPUT_SYSLOG" = "1" ] && [ "$val" = "le" ]; then
 			echo "$ts $host bfd($$): $arg" >> "$OUTPUT_SYSLOG_FILE"
 		fi
 	fi
@@ -348,6 +350,8 @@ format_table() {
 }
 
 # tlog_read file tlog_name baserun — read new content from a log file
+# Production log reading uses the standalone files/tlog script; this function
+# is the library equivalent for testability and future convergence.
 # Implements the same byte-offset tracking as files/tlog but as a function,
 # avoiding subprocess overhead when called from bfd.
 # Outputs new content to stdout; returns 0 on success, 1 on error.
@@ -825,6 +829,11 @@ _fw_custom_ban() {
 		cmd="$BAN_COMMAND_V6_TEMPLATE"
 	fi
 	ATTACK_HOST="$host"; MOD="$mod"; PORTS="$ports"
+	# Security: $cmd is from BAN_COMMAND_TEMPLATE, extracted raw from conf.bfd
+	# by extract_command_template(). $host is validated by validate_ip_any(),
+	# $mod by sanitize_mod(), $ports by rule files. conf.bfd is root-owned
+	# and verified by safe_source(). This eval is intentional for user-defined
+	# firewall commands.
 	eval "$cmd" >/dev/null 2>&1
 }
 
@@ -835,6 +844,7 @@ _fw_custom_unban() {
 		cmd="$UNBAN_COMMAND_V6_TEMPLATE"
 	fi
 	ATTACK_HOST="$host"; MOD="$mod"; PORTS="$ports"
+	# Security: same mitigation chain as _fw_custom_ban() — see comment there.
 	eval "$cmd" >/dev/null 2>&1
 }
 
@@ -1450,7 +1460,11 @@ _hc_config() {
 
 	local log_name log_path
 	for log_name in AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH; do
-		eval "log_path=\${$log_name:-}"
+		case "$log_name" in
+			AUTH_LOG_PATH)    log_path="${AUTH_LOG_PATH:-}" ;;
+			KERNEL_LOG_PATH)  log_path="${KERNEL_LOG_PATH:-}" ;;
+			MAIL_LOG_PATH)    log_path="${MAIL_LOG_PATH:-}" ;;
+		esac
 		if [ -z "$log_path" ]; then
 			echo "[WARN] $log_name: not configured"
 			_hc_warn=$((_hc_warn + 1))

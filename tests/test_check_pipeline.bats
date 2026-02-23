@@ -633,8 +633,6 @@ _run_check_with_stats() {
 	BAN_DURATION="0"
 	BAN_PERMANENT_AFTER="0"
 	BAN_PERMANENT_WINDOW="86400"
-	LAST_HOST=""
-	LAST=""
 	SKIP_ALERT=""
 	check
 }
@@ -844,8 +842,6 @@ EOF
 	BAN_DURATION="0"
 	BAN_PERMANENT_AFTER="0"
 	BAN_PERMANENT_WINDOW="86400"
-	LAST_HOST=""
-	LAST=""
 	SKIP_ALERT=""
 	# After processing rule2, IGNOREREGEX should be empty
 	check
@@ -890,8 +886,6 @@ EOF
 	BAN_DURATION="0"
 	BAN_PERMANENT_AFTER="0"
 	BAN_PERMANENT_WINDOW="86400"
-	LAST_HOST=""
-	LAST=""
 	SKIP_ALERT=""
 	check
 	[ -z "$PORTS" ]
@@ -949,8 +943,6 @@ EOF
 	BAN_DURATION="0"
 	BAN_PERMANENT_AFTER="0"
 	BAN_PERMANENT_WINDOW="86400"
-	LAST_HOST=""
-	LAST=""
 	SKIP_ALERT=""
 	check
 	# PORTS should be empty (reset by check before sourcing rule)
@@ -979,4 +971,117 @@ EOF
 	run cat "$PROJECT_ROOT/files/ignore.hosts"
 	assert_output --partial "127.0.0.1"
 	assert_output --partial "::1"
+}
+
+# --- LAST/LAST_HOST removal tests (Phase 27) ---
+
+@test "check: same IP in two rules is banned only once (state dedup)" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	# rule1: IP triggers ban
+	cat > "$rules_dir/rule1" <<'RULEEOF'
+TRIG="2"
+REQ="/bin/sh"
+RULEEOF
+	cat >> "$rules_dir/rule1" <<EOF
+LP="$logfile"
+TLOG_TF="rule1"
+ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+EOF
+	# rule2: same IP triggers ban
+	cat > "$rules_dir/rule2" <<'RULEEOF'
+TRIG="2"
+REQ="/bin/sh"
+RULEEOF
+	cat >> "$rules_dir/rule2" <<EOF
+LP="$logfile"
+TLOG_TF="rule2"
+ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+EOF
+	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
+	chown root "$rules_dir/rule1" "$rules_dir/rule2"
+	RULES_PATH="$rules_dir"
+	GLOB_TRIG="5"
+	TRIG_WINDOW="300"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="0"
+	BAN_DURATION="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	SKIP_ALERT=""
+	EMAIL_ALERTS="0"
+	SUBNET_TRIG="0"
+	run _run_check_with_stats "$rules_dir"
+	assert_success
+	# only 1 ban executed, not 2 (state_bans_active_check dedup)
+	assert_output --partial "1 bans executed"
+}
+
+@test "check: local address across two rules gets pool entry for each" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	# use 127.0.0.1 as a local address
+	cat > "$rules_dir/rule1" <<'RULEEOF'
+TRIG="2"
+REQ="/bin/sh"
+RULEEOF
+	cat >> "$rules_dir/rule1" <<EOF
+LP="$logfile"
+TLOG_TF="rule1"
+ARG_VAL="127.0.0.1 127.0.0.1 127.0.0.1"
+EOF
+	cat > "$rules_dir/rule2" <<'RULEEOF'
+TRIG="2"
+REQ="/bin/sh"
+RULEEOF
+	cat >> "$rules_dir/rule2" <<EOF
+LP="$logfile"
+TLOG_TF="rule2"
+ARG_VAL="127.0.0.1 127.0.0.1 127.0.0.1"
+EOF
+	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
+	chown root "$rules_dir/rule1" "$rules_dir/rule2"
+	# create lo_hosts with 127.0.0.1 so filter_host returns 2
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	echo "127.0.0.1" > "$LO_HOSTS"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	touch "$IGNORE_HOST_FILES"
+	RULES_PATH="$rules_dir"
+	GLOB_TRIG="5"
+	TRIG_WINDOW="300"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="1"
+	BAN_DURATION="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	SKIP_ALERT=""
+	EMAIL_ALERTS="0"
+	SUBNET_TRIG="0"
+	check
+	# pool entries from both rules should exist
+	local pool_count
+	pool_count=$(grep -c "127.0.0.1" "$INSTALL_PATH/stats/attack.pool" 2>/dev/null || echo 0)
+	[ "$pool_count" -ge 2 ]
+}
+
+@test "check: LAST_HOST and LAST variables are not used" {
+	# verify the check() function source does not reference LAST_HOST or LAST
+	local check_src
+	check_src=$(awk '/^check\(\)/ { p=1 } p { print; if (/^\}$/) exit }' "$PROJECT_ROOT/files/bfd")
+	# should not contain LAST_HOST or bare LAST assignment
+	! echo "$check_src" | grep -q 'LAST_HOST'
+	! echo "$check_src" | grep -q 'LAST="'
 }

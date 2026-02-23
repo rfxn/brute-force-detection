@@ -393,3 +393,44 @@ run_validate_output() {
 	assert_success
 	assert_output "42"
 }
+
+# --- eout tests (Phase 27) ---
+
+@test "eout: writes to stdout" {
+	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
+	touch "$BFD_LOG_PATH"
+	OUTPUT_SYSLOG="0"
+	OUTPUT_SYSLOG_FILE="/dev/null"
+	run eout "test message"
+	assert_success
+	assert_output --partial "test message"
+}
+
+@test "eout: writes to BFD_LOG_PATH with le flag" {
+	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
+	touch "$BFD_LOG_PATH"
+	OUTPUT_SYSLOG="0"
+	OUTPUT_SYSLOG_FILE="/dev/null"
+	eout "logged message" "le"
+	run cat "$BFD_LOG_PATH"
+	assert_output --partial "logged message"
+}
+
+# --- _hc_config case statement tests (Phase 27) ---
+
+@test "_hc_config: validates log paths with case statement" {
+	AUTH_LOG_PATH="/var/log/auth.log"
+	KERNEL_LOG_PATH=""
+	MAIL_LOG_PATH="/var/log/mail.log"
+	_hc_pass=0
+	_hc_warn=0
+	_hc_fail=0
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	UNBAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	UNBAN_COMMAND_V6_TEMPLATE=""
+	_FW_BACKEND="custom"
+	# just test config section's log path logic
+	run _hc_config
+	assert_output --partial "KERNEL_LOG_PATH: not configured"
+}
