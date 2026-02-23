@@ -478,6 +478,29 @@ teardown() {
 	[ "$result" = "172.16.0.1" ]
 }
 
+# --- postgresql ---
+
+@test "regex: postgresql - no pg_hba.conf entry" {
+	local result
+	result=$(echo '2026-02-22 10:15:03.123 UTC [12345] FATAL:  no pg_hba.conf entry for host "192.168.1.100", user "admin", database "testdb"' | \
+		extract_hosts 'no pg_hba.conf entry for host "<HOST>"')
+	[ "$result" = "192.168.1.100" ]
+}
+
+@test "regex: postgresql - password authentication failed (with %h prefix)" {
+	local result
+	result=$(echo '2026-02-22 10:15:05.456 UTC [12346] 10.0.0.5 FATAL:  password authentication failed for user "dbuser"' | \
+		extract_hosts "<HOST>.*FATAL.*password authentication failed")
+	[ "$result" = "10.0.0.5" ]
+}
+
+@test "regex: postgresql - no pg_hba.conf entry (no encryption suffix)" {
+	local result
+	result=$(echo '2026-02-22 10:15:07.789 UTC [12347] FATAL:  no pg_hba.conf entry for host "172.16.0.1", user "postgres", database "production", no encryption' | \
+		extract_hosts 'no pg_hba.conf entry for host "<HOST>"')
+	[ "$result" = "172.16.0.1" ]
+}
+
 # ============================================================
 # IPv6 PATTERNS — same rules, IPv6 source addresses
 # ============================================================
@@ -522,6 +545,13 @@ teardown() {
 	result=$(echo "Feb 22 10:15:03 myhost sshd: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=2001:db8::99" | \
 		extract_hosts "pam_unix.*authentication failure.*rhost=<HOST>")
 	[ "$result" = "2001:db8::99" ]
+}
+
+@test "regex: postgresql - no pg_hba.conf entry (IPv6)" {
+	local result
+	result=$(echo '2026-02-22 10:15:03.123 UTC [12345] FATAL:  no pg_hba.conf entry for host "2001:db8::db", user "admin", database "testdb"' | \
+		extract_hosts 'no pg_hba.conf entry for host "<HOST>"')
+	[ "$result" = "2001:db8::db" ]
 }
 
 @test "regex: named - query denied (IPv6)" {
