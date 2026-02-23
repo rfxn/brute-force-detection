@@ -100,7 +100,7 @@ BFD uses a log tracking system so logs are only parsed from the point at which t
 - Dry-run mode for testing rules without banning (`bfd -d`)
 - Attack pool reporting with per-service breakdown and ban status (`bfd -a`)
 - Per-run statistics logging (rules checked, events parsed, bans executed)
-- Customizable email alerting with per-rule alert suppression
+- Batched email alerts with enriched context (ban type, duration, history) and per-rule routing
 
 ### 1.1 Supported Systems
 
@@ -208,10 +208,12 @@ Leave empty when using tools that handle both protocols natively (nft with `inet
 |----------|---------|-------------|
 | `EMAIL_ALERTS` | `0` | Send email alerts (0 = off, 1 = on) |
 | `EMAIL_ADDRESS` | `root` | Alert recipient(s), comma-separated |
-| `EMAIL_SUBJECT` | `Brute Force Warning for $HOSTNAME` | Subject line for alert emails |
-| `EMAIL_LOGLINES` | `50` | Number of log lines to include in alert body |
+| `EMAIL_SUBJECT` | `Brute Force Warning for $HOSTNAME` | Subject line (auto-appends `(N bans)` when batched) |
+| `EMAIL_LOGLINES` | `50` | Number of log lines per host in alert body |
 
-The email template (`alert.bfd`) is fully customizable. Individual rules can suppress alerts by setting `SKIP_ALERT="1"` in the rule file.
+Alerts are **batched**: multiple bans in one check cycle produce a single email per recipient instead of one email per ban. Each alert includes host, service, failure count with threshold, ban type (temporary/permanent/escalated) with duration and expiry, recidivism history, the ban command, and source log lines.
+
+The email template (`alert.bfd`) is fully customizable. Individual rules can suppress alerts by setting `SKIP_ALERT="1"` in the rule file. Set `RULE_EMAIL="addr"` in a rule file to route that rule's alerts to a different recipient.
 
 ### 3.6 Log Paths
 
@@ -415,6 +417,7 @@ Each rule file supports the following variables:
 | `TRIG` | Per-service trigger threshold (overrides global `TRIG` from `conf.bfd`) |
 | `PORTS` | Service ports for port-specific blocking (e.g., `"22"` for sshd) |
 | `SKIP_ALERT` | Set to `"1"` to suppress email alerts for this service |
+| `RULE_EMAIL` | Override `EMAIL_ADDRESS` for this rule's alerts (per-rule routing) |
 | `TLOG_TF` | Tracking identifier used by tlog for state file naming (e.g., `"sshd"`, `"dovecot"`) |
 
 To customize a rule's trigger threshold:

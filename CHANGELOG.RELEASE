@@ -1,4 +1,45 @@
 2.0.1:
+[New] alert system rewrite: batched email delivery replaces per-ban
+      inline alerts; multiple bans in one check cycle produce a single
+      email per recipient instead of one email per ban
+[New] format_duration() converts seconds to human-readable duration
+      (0→permanent, 300→5m, 3661→1h 1m)
+[New] format_alert_entry() formats per-ban detail block with host,
+      service, port, failure count, threshold context, ban type
+      (temporary/permanent/escalated), duration, expiry, recidivism
+      history, and reconstructed ban command
+[New] format_alert_body() assembles full email body with ban count
+      header, per-entry details, and per-host log excerpts
+[New] send_alerts() orchestrates batched delivery: groups entries by
+      recipient, augments subject with "(N bans)" suffix for multi-ban
+      emails, sources template in subshell, logs warning on mail failure
+[New] RULE_EMAIL per-rule alert routing: set RULE_EMAIL="addr" in a
+      rule file to override EMAIL_ADDRESS for that rule's alerts;
+      comment added to all 33 rule files and conf.bfd
+[Change] check() restructured: ban expiry/action computed before state
+         recording; alert data collected to temp file instead of inline
+         alert() call; send_alerts() called after rule loop
+[Change] alert.bfd template rewritten: uses pre-formatted ALERT_ENTRIES
+         variable; all formatting logic in testable library functions;
+         backward-compatible globals (ATTACK_HOST, MOD, etc.) set for
+         single-ban case
+[Fix] alert() called before ban lifecycle state was computed — ban type,
+      expiry, and recidivism history were unavailable to alert template;
+      alert data now collected after state computation
+[Fix] inbox flooding: distributed attacks triggering N bans sent N
+      separate emails; now batched into one email per recipient
+[Fix] missing SKIP_ALERT comment in postfix and proftpd rule files
+[Change] health_check() validates email alert configuration: checks
+         mail command availability when EMAIL_ALERTS=1
+[Change] cron.daily cleans up .alerts.* temp files
+[Change] README/README.md: updated email alert documentation with
+         batched alerts, enriched content, per-rule routing, RULE_EMAIL
+         in rule customization table
+[New] tests/test_alert_format.bats with 36 tests: format_duration (8),
+      format_alert_entry (11), format_alert_body (6), send_alerts (6),
+      check pipeline integration (5)
+[New] 3 email alert health check tests in test_health_check.bats;
+      suite now 507 tests
 [New] watch mode (bfd --watch): continuous foreground operation with
       configurable polling interval (WATCH_INTERVAL, default 10s); reduces
       detection latency from ~180s (cron) to ~10s; holds flock for lifetime

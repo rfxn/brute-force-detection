@@ -190,17 +190,13 @@ fi
 echo "$UTIME" > "$LOCK_FILE"
 }
 
-alert() {
-if [ "$EMAIL_ALERTS" == "1" ]; then
-	# shellcheck disable=SC1090
-	. "$EMAIL_TEMPLATE" | mail -s "$EMAIL_SUBJECT" "$EMAIL_ADDRESS"
-fi
-}
-
-
 check() {
 	local run_start rules_count=0 events_count=0 bans_count=0
 	run_start=$(date +"%s")
+
+	# create alerts temp file for batched email delivery
+	local alerts_file
+	alerts_file=$(mktemp "$INSTALL_PATH/tmp/.alerts.XXXXXX")
 
 	# prune expired events once per run, before iterating rules
 	state_events_prune "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME"
@@ -211,6 +207,7 @@ check() {
 		TRIG=""
 		ARG_VAL=""
 		SKIP_ALERT=""
+		RULE_EMAIL=""
 		LP=""
 		TLOG_TF=""
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
@@ -267,32 +264,40 @@ check() {
 					LAST_HOST="$ATTACK_HOST"
 					if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN" "${PORTS:-all}" "${BAN_COMMAND_V6_TEMPLATE:-}"; then
 						bans_count=$((bans_count + 1))
-						if [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
-							alert
-							SKIP_ALERT=""
-						fi
-						# record ban in lifecycle state
-						local ban_expiry
+						# compute ban expiry and action
+						local ban_expiry ban_action="ban"
 						if [ "${BAN_DURATION:-0}" -eq 0 ]; then
 							ban_expiry=0
 						elif check_recidivism "$INSTALL_PATH" "$ATTACK_HOST" \
 							"${BAN_PERMANENT_WINDOW:-86400}" "$UTIME" "${BAN_PERMANENT_AFTER:-0}"; then
 							ban_expiry=0
+							ban_action="escalate"
 							eout "{$MOD} $ATTACK_HOST escalated to permanent ban (repeat offender)." le
 						else
 							ban_expiry=$((UTIME + BAN_DURATION))
 						fi
+						# record ban in lifecycle state
 						state_bans_active_append "$INSTALL_PATH" "$UTIME" "$ban_expiry" "$ATTACK_HOST" "$MOD" "${PORTS:-all}"
-						local ban_action="ban"
-						if [ "$ban_expiry" -eq 0 ] && [ "${BAN_DURATION:-0}" -gt 0 ]; then
-							ban_action="escalate"
-						fi
 						state_bans_history_append "$INSTALL_PATH" "$UTIME" "$ban_expiry" "$ATTACK_HOST" "$MOD" "$ban_action"
+						# collect alert data for batched delivery
+						if [ "$EMAIL_ALERTS" = "1" ] && [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
+							local recent_bans
+							recent_bans=$(state_bans_count_recent "$INSTALL_PATH" "$ATTACK_HOST" \
+								"${BAN_PERMANENT_WINDOW:-86400}" "$UTIME")
+							local eff_recipient="${RULE_EMAIL:-$EMAIL_ADDRESS}"
+							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${ATTACK_COUNT}|${ban_expiry}|${ban_action}|${recent_bans}|${LP}|${eff_recipient}|${TRIG}|${TRIG_WINDOW}" >> "$alerts_file"
+						fi
 					fi
 				fi
 			fi
 		done < <(echo "$HOSTS_PARSED" | uniq)
 	done
+
+	# send batched alert emails
+	if [ "$EMAIL_ALERTS" = "1" ] && [ -s "$alerts_file" ]; then
+		send_alerts "$alerts_file" "$EMAIL_SUBJECT" "$EMAIL_TEMPLATE" "${EMAIL_LOGLINES:-50}"
+	fi
+	rm -f "$alerts_file"
 
 	local run_end run_elapsed
 	run_end=$(date +"%s")

@@ -5,6 +5,9 @@ TRIG="10"
 # uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
 
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
 # detect nginx error log path
 if [ -f "/var/log/nginx/error.log" ]; then
 	LP="/var/log/nginx/error.log"

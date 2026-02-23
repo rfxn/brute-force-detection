@@ -98,7 +98,8 @@ Operational:
 - dry-run mode for testing rules without banning (bfd -d)
 - attack pool reporting with per-service breakdown and ban status (bfd -a)
 - per-run statistics logging (rules checked, events parsed, bans executed)
-- customizable email alerting with per-rule alert suppression
+- batched email alerts with enriched context (ban type, duration, history)
+- per-rule alert routing via RULE_EMAIL
 
 1.1) Introduction: Supported Systems
 BFD runs on any Linux distribution with bash 4.1+ and standard GNU utilities
@@ -217,12 +218,26 @@ EMAIL_ALERTS="0" - send email alerts (0 = off, 1 = on).
 EMAIL_ADDRESS="root" - alert recipient(s), comma-separated.
 
 EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME" - subject line for alert
-  emails.
+  emails. When multiple bans occur in a single check cycle, "(N bans)" is
+  appended automatically.
 
-EMAIL_LOGLINES="50" - number of log lines to include in alert body.
+EMAIL_LOGLINES="50" - number of log lines per host to include in alert body.
+
+Alerts are batched: multiple bans in one check cycle produce a single email
+per recipient instead of one email per ban. Each alert includes:
+  - host, service, and port information
+  - failure count with threshold context
+  - ban type (temporary/permanent/escalated) with duration and expiry
+  - recidivism history (previous bans and escalation threshold)
+  - reconstructed ban command
+  - relevant source log lines per host
 
 The email template (alert.bfd) is fully customizable. Individual rules can
 suppress alerts by setting SKIP_ALERT="1" in the rule file.
+
+Per-rule alert routing: set RULE_EMAIL="addr" in a rule file to override
+EMAIL_ADDRESS for that rule's alerts. This routes alerts for specific services
+to different recipients (e.g., mail team vs. web team).
 
 3.6) Configuration: Log Paths
 
@@ -406,6 +421,8 @@ Each rule file supports the following variables:
                conf.bfd).
   PORTS      - service ports for port-specific blocking (e.g., "22" for sshd).
   SKIP_ALERT - set to "1" to suppress email alerts for this service.
+  RULE_EMAIL - override EMAIL_ADDRESS for this rule's alerts (per-rule
+               routing).
   TLOG_TF    - tracking identifier used by tlog for state file naming
                (e.g., "sshd", "dovecot").
 

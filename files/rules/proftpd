@@ -2,6 +2,12 @@
 # uncomment to override conf.bfd trig value
 TRIG="10"
 
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
 # file must exist for rule to be active
 REQ="/usr/sbin/proftpd"
 
