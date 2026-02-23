@@ -2093,6 +2093,112 @@ show_rule() {
 	TLOG_TF="$_sv_TF" PORTS="$_sv_PORTS"
 }
 
+# test_rule install_path rule_name [log_file] — test a rule against a log file
+# Overrides TLOG_PATH with a wrapper that cats the entire file, then sources
+# the rule normally to reuse the full existing pipeline.
+test_rule() {
+	local install_path="$1" rule_name="$2" log_file="${3:-}"
+	local rules_dir="${RULES_PATH:-$install_path/rules}"
+	local rule_file="$rules_dir/$rule_name"
+	[ ! -f "$rule_file" ] && { echo "error: rule '$rule_name' not found"; return 1; }
+
+	# create test tlog wrapper that outputs entire file
+	local test_tlog stdin_file=""
+	test_tlog=$(mktemp "$install_path/tmp/.test_tlog.XXXXXX")
+	if [ "$log_file" = "-" ]; then
+		stdin_file=$(mktemp "$install_path/tmp/.test_stdin.XXXXXX")
+		cat > "$stdin_file"
+		printf '#!/bin/bash\ncat "%s"\n' "$stdin_file" > "$test_tlog"
+	elif [ -n "$log_file" ]; then
+		[ ! -f "$log_file" ] && { echo "error: file '$log_file' not found"; rm -f "$test_tlog"; return 1; }
+		printf '#!/bin/bash\ncat "%s"\n' "$log_file" > "$test_tlog"
+	else
+		printf '#!/bin/bash\ncat "$1"\n' > "$test_tlog"
+	fi
+	chmod +x "$test_tlog"
+
+	# save globals, override TLOG_PATH, source rule, restore
+	local orig_tlog="$TLOG_PATH"
+	TLOG_PATH="$test_tlog"
+	local _sv_TRIG="$TRIG" _sv_LP="${LP:-}" _sv_TF="${TLOG_TF:-}"
+	local _sv_PORTS="${PORTS:-}" _sv_ARG="${ARG_VAL:-}" _sv_IGN="${IGNOREREGEX:-}"
+	TRIG="" ARG_VAL="" LP="" TLOG_TF="" PORTS="" IGNOREREGEX=""
+	safe_source "$rule_file" "rule:$rule_name"
+	local src_rc=$?
+	TLOG_PATH="$orig_tlog"
+
+	if [ "$src_rc" -ne 0 ]; then
+		echo "error: failed to source rule '$rule_name'"
+		rm -f "$test_tlog" "$stdin_file"
+		TRIG="$_sv_TRIG" LP="$_sv_LP" TLOG_TF="$_sv_TF"
+		PORTS="$_sv_PORTS" ARG_VAL="$_sv_ARG" IGNOREREGEX="$_sv_IGN"
+		return 1
+	fi
+
+	# report
+	echo "Rule:         $rule_name"
+	echo "Log file:     ${log_file:-${LP:-n/a}}"
+	echo "Threshold:    ${TRIG:-${GLOB_TRIG:-15}}"
+	[ -n "${PORTS:-}" ] && echo "Ports:        $PORTS"
+	echo ""
+
+	local total=0 unique=0
+	if [ -n "$ARG_VAL" ]; then
+		total=$(echo "$ARG_VAL" | tr ' ' '\n' | grep -c . 2>/dev/null || echo 0)
+		unique=$(echo "$ARG_VAL" | tr ' ' '\n' | sort -u | grep -c . 2>/dev/null || echo 0)
+	fi
+	echo "Results:      $total matches, $unique unique IPs"
+	if [ "$total" -gt 0 ]; then
+		echo ""
+		echo "Top IPs:"
+		echo "$ARG_VAL" | tr ' ' '\n' | sort | uniq -c | sort -rn | head -10 | \
+			while IFS= read -r line; do
+				echo "  $(echo "$line" | awk '{print $2}') ($(echo "$line" | awk '{print $1}'))"
+			done
+	fi
+
+	rm -f "$test_tlog" "$stdin_file"
+	TRIG="$_sv_TRIG" LP="$_sv_LP" TLOG_TF="$_sv_TF"
+	PORTS="$_sv_PORTS" ARG_VAL="$_sv_ARG" IGNOREREGEX="$_sv_IGN"
+}
+
+# test_pattern pattern [log_file] — test a raw <HOST> pattern against input
+# Reads from log_file or stdin, runs through extract_hosts(), reports matches.
+test_pattern() {
+	local pattern="$1" log_file="${2:-}"
+	local input
+	if [ -z "$log_file" ] || [ "$log_file" = "-" ]; then
+		input=$(cat)
+	else
+		[ ! -f "$log_file" ] && { echo "error: file '$log_file' not found"; return 1; }
+		input=$(cat "$log_file")
+	fi
+
+	local _sv_ign="${IGNOREREGEX:-}"
+	IGNOREREGEX=""
+
+	echo "Pattern:  \"$pattern\""
+	echo ""
+	local results=""
+	[ -n "$input" ] && results=$(echo "$input" | extract_hosts "$pattern")
+	local total=0 unique=0
+	if [ -n "$results" ]; then
+		total=$(echo "$results" | grep -c . 2>/dev/null || echo 0)
+		unique=$(echo "$results" | sort -u | grep -c . 2>/dev/null || echo 0)
+	fi
+	echo "Matches:  $total"
+	echo "IPs:      $unique unique"
+	if [ "$total" -gt 0 ]; then
+		echo ""
+		echo "Top IPs:"
+		echo "$results" | sort | uniq -c | sort -rn | head -10 | \
+			while IFS= read -r line; do
+				echo "  $(echo "$line" | awk '{print $2}') ($(echo "$line" | awk '{print $1}'))"
+			done
+	fi
+	IGNOREREGEX="$_sv_ign"
+}
+
 # --- Structured output formatters ---
 
 # _json_escape str — escape string for JSON output
