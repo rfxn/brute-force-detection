@@ -1,4 +1,29 @@
 2.0.1:
+[New] watch mode (bfd --watch): continuous foreground operation with
+      configurable polling interval (WATCH_INTERVAL, default 10s); reduces
+      detection latency from ~180s (cron) to ~10s; holds flock for lifetime
+      so cron runs are automatically locked out
+[New] WATCH_INTERVAL config variable in conf.bfd (default 10s); validated
+      as positive integer by validate_config()
+[New] cleanup_watch() extends cleanup with shutdown log message
+[New] reload_watch() SIGHUP handler: re-sources conf.bfd and
+      internals.conf with safety checks, re-extracts BAN_COMMAND templates,
+      re-runs validate_config() and detect_log_paths(), refreshes local IPs
+[New] bfd-watch.service systemd unit: Type=simple with
+      Conflicts=bfd.timer, ExecReload for SIGHUP, Restart=on-failure
+[New] -w|--watch CLI option for continuous watch mode
+[Change] install.sh installs bfd-watch.service alongside bfd.service and
+         bfd.timer when systemd is available; updated echo messages to show
+         both batch and watch mode options
+[Change] uninstall.sh stops, disables, and removes bfd-watch.service in
+         systemd cleanup
+[Change] health_check() displays WATCH_INTERVAL value
+[Change] README/README.md: added -w|--watch to usage block, added section
+         5.4 Watch Mode with signal handling, systemd usage, and
+         configuration reference; updated table of contents
+[New] 6 WATCH_INTERVAL validation tests in test_config_validation.bats
+[New] 1 WATCH_INTERVAL health_check display test in test_health_check.bats;
+      suite now 468 tests
 [Fix] README/README.md: update rule count from 30 to 33; add http_401,
       pam_generic, named to rule catalog; add Auth and DNS categories
 [New] 3 new service rules: http_401 (HTTP 401 in Apache/nginx access logs,

@@ -65,14 +65,20 @@ install(){
 		cp cron /etc/cron.d/bfd
 		chmod 644 /etc/cron.d/bfd
 	fi
-	# install systemd timer if systemd is available
+	# install systemd units if systemd is available
 	if command -v systemctl >/dev/null 2>&1; then
 		if [ -f "bfd.service" ] && [ -f "bfd.timer" ]; then
 			cp bfd.service /etc/systemd/system/bfd.service
 			cp bfd.timer /etc/systemd/system/bfd.timer
 			chmod 644 /etc/systemd/system/bfd.service /etc/systemd/system/bfd.timer
+			if [ -f "bfd-watch.service" ]; then
+				cp bfd-watch.service /etc/systemd/system/bfd-watch.service
+				chmod 644 /etc/systemd/system/bfd-watch.service
+			fi
 			systemctl daemon-reload
-			echo "  systemd timer installed (enable with: systemctl enable --now bfd.timer)"
+			echo "  systemd units installed:"
+			echo "    batch mode:  systemctl enable --now bfd.timer"
+			echo "    watch mode:  systemctl enable --now bfd-watch.service"
 		fi
 	fi
 }

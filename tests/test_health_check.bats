@@ -207,3 +207,10 @@ EOF
 	assert_success
 	assert_output --partial "[PASS] Lock: no active lock"
 }
+
+@test "health_check: WATCH_INTERVAL reported" {
+	WATCH_INTERVAL="15"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[PASS] WATCH_INTERVAL: 15s (for bfd --watch)"
+}

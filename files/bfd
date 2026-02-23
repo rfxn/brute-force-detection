@@ -416,11 +416,75 @@ run() {
 	check
 }
 
+# shellcheck disable=SC2317 # called via trap
+cleanup_watch() {
+	eout "watch mode shutting down (pid=$$)" le
+	rm -f "$LOCK_FILE"
+	eval "exec $LOCK_FD>&-" 2>/dev/null
+}
+
+# shellcheck disable=SC2317 # called via trap
+reload_watch() {
+	eout "watch mode reloading configuration (SIGHUP)" le
+	# re-source config with same safety checks as startup
+	local _cnf_owner _cnf_perms _cnf_world
+	_cnf_owner=$(stat -c '%u' "$CNF")
+	_cnf_perms=$(stat -c '%a' "$CNF")
+	_cnf_world="${_cnf_perms: -1}"
+	if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
+		eout "reload aborted: conf.bfd has unsafe ownership or permissions" le
+		return 1
+	fi
+	# shellcheck disable=SC1090
+	. "$CNF"
+	if [ -f "$INTCNF" ]; then
+		local _int_owner _int_perms _int_world
+		_int_owner=$(stat -c '%u' "$INTCNF")
+		_int_perms=$(stat -c '%a' "$INTCNF")
+		_int_world="${_int_perms: -1}"
+		if [ "$_int_owner" = "0" ] && [ "$((_int_world & 2))" -eq 0 ]; then
+			# shellcheck disable=SC1090
+			. "$INTCNF"
+		fi
+	fi
+	GLOB_TRIG="$TRIG"
+	BAN_COMMAND_TEMPLATE=$(grep '^BAN_COMMAND=' "$CNF" | tail -1 | sed "s/^BAN_COMMAND=//;s/^\"//;s/\"$//")
+	UNBAN_COMMAND_TEMPLATE=$(grep '^UNBAN_COMMAND=' "$CNF" | tail -1 | sed "s/^UNBAN_COMMAND=//;s/^\"//;s/\"$//")
+	BAN_COMMAND_V6_TEMPLATE=$(grep '^BAN_COMMAND_V6=' "$CNF" | tail -1 | sed "s/^BAN_COMMAND_V6=//;s/^\"//;s/\"$//" 2>/dev/null)
+	UNBAN_COMMAND_V6_TEMPLATE=$(grep '^UNBAN_COMMAND_V6=' "$CNF" | tail -1 | sed "s/^UNBAN_COMMAND_V6=//;s/^\"//;s/\"$//" 2>/dev/null)
+	validate_config
+	detect_log_paths
+	# refresh local IPs
+	if [ -n "$IP_BIN" ]; then
+		"$IP_BIN" addr list | grep -E 'inet6? ' | tr '/' ' ' | awk '{print$2}' > "$LO_HOSTS"
+	else
+		hostname -I | tr ' ' '\n' > "$LO_HOSTS"
+	fi
+	eout "watch mode reload complete (WATCH_INTERVAL=${WATCH_INTERVAL}s)" le
+}
+
+watch() {
+	trap cleanup_watch EXIT INT TERM
+	trap reload_watch HUP
+	pre
+	get_state
+	eout "watch mode started (interval=${WATCH_INTERVAL}s, pid=$$)" le
+	while true; do
+		UTIME=$(date +"%s")
+		echo "$UTIME" > "$LOCK_FILE"
+		process_unbans "$INSTALL_PATH" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}"
+		check
+		sleep "$WATCH_INTERVAL" &
+		wait $!
+	done
+}
+
 usage() {
 	echo "usage: $0 [OPTION]"
 	echo "-s|--standard .............. run standard with output"
 	echo "-q|--quiet ................. run quiet with output hidden"
 	echo "-d|--dryrun ................ run detection without banning"
+	echo "-w|--watch ................. run in continuous watch mode (foreground)"
 	echo "-a|--attackpool [STRING] ... list addresses that have attacked this host"
 	echo "-c|--check ................. health check and diagnostics"
 	echo "-l|--list .................. list active bans"
@@ -434,6 +498,7 @@ case "$1" in
 -s|--standard)  vhead; run ;;
 -q|--quiet)     exec >/dev/null 2>&1; run ;;
 -d|--dryrun)    DRY_RUN=1; vhead; run ;;
+-w|--watch)     vhead; watch ;;
 -a|--attackpool) vhead; pre; apool_list "${2:-}" ;;
 -c|--check)     vhead; pre; health_check "$INSTALL_PATH" ;;
 -l|--list)      vhead; pre; list_bans "$INSTALL_PATH" ;;

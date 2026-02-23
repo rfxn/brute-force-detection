@@ -30,6 +30,7 @@ rule engine, sliding time-window counting, automatic ban lifecycle, and IPv4/IPv
   - [5.1 Dry Run](#51-dry-run)
   - [5.2 Health Check](#52-health-check)
   - [5.3 Attack Pool](#53-attack-pool)
+  - [5.4 Watch Mode](#54-watch-mode)
 - [6. Rule Engine](#6-rule-engine)
   - [6.1 Rule Catalog](#61-rule-catalog)
   - [6.2 Rule Customization](#62-rule-customization)
@@ -282,6 +283,7 @@ usage: bfd [OPTION]
 -s|--standard .............. run standard with output
 -q|--quiet ................. run quiet with output hidden
 -d|--dryrun ................ run detection without banning
+-w|--watch ................. run in continuous watch mode (foreground)
 -a|--attackpool [STRING] ... list addresses that have attacked this host
 -c|--check ................. health check and diagnostics
 -l|--list .................. list active bans
@@ -335,6 +337,43 @@ The report includes:
 - **Top 25 attackers today** — trigger count, IP, first/last seen, services, and ban status (active bans show `BANNED(perm)` or `BANNED(Xm)`, previous bans show `prev:N`)
 - **Per-service breakdown** — event count and unique IP count per service
 - **Top 25 attackers this week** — same format, aggregated from the weekly pool
+
+### 5.4 Watch Mode
+
+The **`-w|--watch`** option runs BFD in continuous foreground mode, polling for new log data every `WATCH_INTERVAL` seconds (default 10). This reduces detection latency from ~180 seconds (cron) to ~10 seconds.
+
+```bash
+bfd --watch
+```
+
+Watch mode holds an flock for its entire lifetime, so cron-based runs (`bfd -q`) will silently skip when watch mode is active. No cron modification is needed.
+
+**Signal handling:**
+
+| Signal | Action |
+|--------|--------|
+| `SIGTERM` / `SIGINT` | Clean shutdown (removes lock file) |
+| `SIGHUP` | Reload `conf.bfd` and `internals.conf` without restart (allows changing `WATCH_INTERVAL`, `TRIG`, ban commands, etc.) |
+
+**systemd usage:**
+
+On systemd systems, use the provided `bfd-watch.service` unit:
+
+```bash
+systemctl enable --now bfd-watch.service
+```
+
+This conflicts with `bfd.timer` — systemd prevents enabling both simultaneously. Use `systemctl reload bfd-watch` to send SIGHUP.
+
+**Non-systemd systems:**
+
+Run `bfd --watch` in a screen/tmux session or via a process supervisor. The cron entry can remain in place; it will be locked out automatically.
+
+**Configuration:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WATCH_INTERVAL` | `10` | Polling interval in seconds for watch mode |
 
 ---
 

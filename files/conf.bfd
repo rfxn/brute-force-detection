@@ -132,3 +132,6 @@ OUTPUT_SYSLOG_FILE="$KERNEL_LOG_PATH"
 
 # lock file timeout in seconds
 LOCK_FILE_TIMEOUT="300"
+
+# polling interval in seconds for watch mode (bfd --watch)
+WATCH_INTERVAL="10"

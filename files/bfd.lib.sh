@@ -196,6 +196,11 @@ validate_config() {
 		echo "error: LOG_SOURCE must be auto, file, or journal (got '$LOG_SOURCE')."
 		exit $EXIT_CONFIG_ERROR
 	fi
+	local _wi="${WATCH_INTERVAL-10}"
+	if ! [[ "$_wi" =~ $int_pattern ]] || [ "$_wi" -eq 0 ]; then
+		echo "error: WATCH_INTERVAL must be a positive integer (got '${WATCH_INTERVAL:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
 }
 
 # detect_log_paths requires: AUTH_LOG_PATH, KERNEL_LOG_PATH, MAIL_LOG_PATH,
@@ -1074,7 +1079,11 @@ health_check() {
 		pass_count=$((pass_count + 1))
 	fi
 
-	# 12. Active bans
+	# 12. WATCH_INTERVAL
+	echo "[PASS] WATCH_INTERVAL: ${WATCH_INTERVAL:-10}s (for bfd --watch)"
+	pass_count=$((pass_count + 1))
+
+	# 13. Active bans
 	local bans_file="$install_path/tmp/bans.active"
 	local ban_count=0
 	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then

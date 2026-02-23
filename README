@@ -24,6 +24,7 @@ Contents:
 5.1 ........... General Usage: Dry Run
 5.2 ........... General Usage: Health Check
 5.3 ........... General Usage: Attack Pool
+5.4 ........... General Usage: Watch Mode
 6 ............. Rule Engine
 6.1 ........... Rule Engine: Rule Catalog
 6.2 ........... Rule Engine: Rule Customization
@@ -280,6 +281,7 @@ usage: bfd [OPTION]
 -s|--standard .............. run standard with output
 -q|--quiet ................. run quiet with output hidden
 -d|--dryrun ................ run detection without banning
+-w|--watch ................. run in continuous watch mode (foreground)
 -a|--attackpool [STRING] ... list addresses that have attacked this host
 -c|--check ................. health check and diagnostics
 -l|--list .................. list active bans
@@ -333,6 +335,35 @@ The report includes:
     bans show prev:N)
   - Per-service breakdown — event count and unique IP count per service
   - Top 25 attackers this week — same format, aggregated from weekly pool
+
+5.4) General Usage: Watch Mode
+The -w|--watch option runs BFD in continuous foreground mode, polling for
+new log data every WATCH_INTERVAL seconds (default 10). This reduces
+detection latency from ~180 seconds (cron) to ~10 seconds.
+
+  bfd --watch
+
+Watch mode holds an flock for its entire lifetime, so cron-based runs
+(bfd -q) will silently skip when watch mode is active. No cron
+modification is needed.
+
+Signal handling:
+  SIGTERM / SIGINT — clean shutdown (removes lock file)
+  SIGHUP           — reload conf.bfd and internals.conf without restart
+                     (allows changing WATCH_INTERVAL, TRIG, ban commands, etc.)
+
+On systemd systems, use the provided bfd-watch.service unit:
+
+  systemctl enable --now bfd-watch.service
+
+This conflicts with bfd.timer — systemd prevents enabling both
+simultaneously. Use 'systemctl reload bfd-watch' to send SIGHUP.
+
+On non-systemd systems, run 'bfd --watch' in a screen/tmux session or
+via a process supervisor. The cron entry can remain in place; it will
+be locked out automatically.
+
+WATCH_INTERVAL="10" — polling interval in seconds. Configure in conf.bfd.
 
 6) Rule Engine
 Rules are located under /usr/local/bfd/rules/. Each rule is a shell fragment
