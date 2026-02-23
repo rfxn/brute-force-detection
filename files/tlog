@@ -30,7 +30,7 @@ BASERUN="${BASERUN:-/usr/local/bfd/tmp}"
 if [ "$1" == "" ] && [ "$2" == "" ]; then
 	echo "$0 usage: [file] [tlog]"
 	echo "file   :   path to file for tracking"
-	echo "tlog   :   data file name to store tracked sized"
+	echo "tlog   :   data file name to store tracked sizes"
 	exit 1
 else
 	FILE="$1"

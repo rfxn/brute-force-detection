@@ -252,7 +252,7 @@ validate_config() {
 		echo "error: BAN_PERMANENT_WINDOW must be a positive integer (got '${BAN_PERMANENT_WINDOW:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
+	if [ "${FIREWALL:-auto}" = "custom" ] && [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
 		echo "warning: BAN_DURATION>0 but UNBAN_COMMAND is empty; auto-unban will only remove state, not firewall rules."
 	fi
 	if [ "$EMAIL_ALERTS" != "0" ] && [ "$EMAIL_ALERTS" != "1" ]; then
@@ -304,6 +304,14 @@ validate_config() {
 	fi
 	if ! [[ "${BAN_ESCALATION_CAP:-0}" =~ $int_pattern ]]; then
 		echo "error: BAN_ESCALATION_CAP must be a non-negative integer (got '${BAN_ESCALATION_CAP:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "${BAN_RETRY_COUNT:-0}" =~ $int_pattern ]]; then
+		echo "error: BAN_RETRY_COUNT must be a non-negative integer (got '${BAN_RETRY_COUNT:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if ! [[ "${EMAIL_LOGLINES:-50}" =~ $int_pattern ]] || [ "${EMAIL_LOGLINES:-50}" -eq 0 ]; then
+		echo "error: EMAIL_LOGLINES must be a positive integer (got '${EMAIL_LOGLINES:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
 }
@@ -580,8 +588,8 @@ validate_rule() {
 	return 0
 }
 
-# filter_host host ignore_host_files lo_hosts — check if host should be processed
-# returns 0 if host should be processed, 1 if ignored
+# filter_host host ignore_host_files lo_hosts — check if host should be excluded
+# returns: 0 = not filtered (proceed), 1 = ignored (in ignore list), 2 = local address
 filter_host() {
 	local host="$1" ignore_host_files="$2" lo_hosts="$3"
 	# check ignore lists
@@ -2068,7 +2076,7 @@ show_config() {
 		echo "$val"
 	else
 		# dump all active config variables
-		local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG LOCK_FILE_TIMEOUT WATCH_INTERVAL"
+		local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL"
 		local v val
 		for v in $config_vars; do
 			eval "val=\${$v:-}"
