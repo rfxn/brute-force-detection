@@ -8,13 +8,13 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
+	bfd_common_setup
 	INSTALL_PATH="$TEST_TMPDIR/bfd"
 	mkdir -p "$INSTALL_PATH"
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 # --- state_init ---

@@ -1,4 +1,22 @@
 2.0.1:
+[Change] test suite: rename 25 test files from test_*.bats to numbered
+         NN-name.bats convention for deterministic ordering and parallel
+         distribution
+[Change] test suite: refactor all test files to use shared setup/teardown
+         helpers (bfd_common_setup, bfd_standard_setup, bfd_teardown),
+         eliminating duplicated boilerplate across 22 files
+[New] tests/helpers/assert-bfd.bash: domain-specific BATS assertions
+      (assert_banned, refute_banned, assert_ban_count, assert_event_count,
+      assert_history_count, assert_pool_count)
+[New] tests/helpers/bfd-mock.bash: mock helpers (create_mock_bin,
+      create_mock_rule) for test isolation
+[Change] tests/helpers/bfd-common.bash: expanded from minimal 3-line loader
+         to full helper infrastructure with setup/teardown functions
+[Change] tests/run-tests.sh: rewritten with --parallel [N] flag for
+         multi-container round-robin distribution matching APF pattern
+[Change] tests/Makefile: rewritten with parallel-by-default targets,
+         grouped OS targets (modern, legacy, deep-legacy), and parallel
+         cross-OS execution via xargs
 [Fix] install.sh: support INSTALL_PATH/BIN_PATH env var override for custom
       install locations; sed replacement of hardcoded paths at install time
 [Fix] install.sh: chmod 640 for rules/* (was missed) and alert.bfd (was 750,

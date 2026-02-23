@@ -8,23 +8,13 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	INSTALL_PATH="$TEST_TMPDIR/bfd"
-	mkdir -p "$INSTALL_PATH"
-	state_init "$INSTALL_PATH"
-
-	# minimal config for functions that need it
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd_log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="$TEST_TMPDIR/syslog"
+	bfd_standard_setup
 	TRIG="15"
 	TRIG_WINDOW="300"
 	TRIG_GLOBAL="0"
 	BAN_DURATION="300"
 	BAN_PERMANENT_AFTER="5"
 	BAN_PERMANENT_WINDOW="86400"
-	BAN_RETRY_COUNT="0"
 	EMAIL_ALERTS="0"
 	EMAIL_ADDRESS="root"
 	EMAIL_SUBJECT="Test"
@@ -36,18 +26,11 @@ setup() {
 	OUTPUT_SYSLOG="1"
 	LOCK_FILE_TIMEOUT="300"
 	WATCH_INTERVAL="10"
-	BAN_COMMAND_TEMPLATE="/bin/true"
-	UNBAN_COMMAND_TEMPLATE="/bin/true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	UNBAN_COMMAND_V6_TEMPLATE=""
 	GLOB_TRIG="$TRIG"
-	# firewall backend — custom mode for test compatibility
-	_FW_BACKEND="custom"
 
 	# create rules directory with a test rule
 	RULES_PATH="$INSTALL_PATH/rules"
 	mkdir -p "$RULES_PATH"
-	# sshd rule that's "active" (REQ points to an existing binary)
 	cat > "$RULES_PATH/sshd" <<-'RULE'
 	REQ="/bin/sh"
 	LP="/var/log/auth.log"
@@ -61,7 +44,7 @@ setup() {
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 # --- show_status ---

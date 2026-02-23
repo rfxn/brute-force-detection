@@ -8,15 +8,14 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")" && pwd)"
-	TLOG="$SCRIPT_DIR/../files/tlog"
-	TEST_TMPDIR=$(mktemp -d)
+	bfd_common_setup
+	TLOG="$PROJECT_ROOT/files/tlog"
 	export BASERUN="$TEST_TMPDIR/tracking"
 	mkdir -p "$BASERUN"
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 @test "tlog: first run initializes tracking file and outputs nothing" {

@@ -8,20 +8,12 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	INSTALL_PATH="$TEST_TMPDIR/bfd"
-	state_init "$INSTALL_PATH"
-	mkdir -p "$INSTALL_PATH/rules"
-	# eout dependencies
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="/dev/null"
-	# config defaults
+	bfd_standard_setup
 	GLOB_TRIG="15"
 	TRIG=""
 	TLOG_PATH="/bin/cat"
 	RULES_PATH="$INSTALL_PATH/rules"
+	mkdir -p "$RULES_PATH"
 	LOG_SOURCE="file"
 	# create sample log file with known sshd patterns
 	SAMPLE_LOG="$TEST_TMPDIR/sample.log"
@@ -48,7 +40,7 @@ RULEEOF
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 @test "test_rule: reports rule name" {

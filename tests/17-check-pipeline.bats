@@ -9,26 +9,12 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	INSTALL_PATH="$TEST_TMPDIR/bfd"
-	state_init "$INSTALL_PATH"
-	# eout dependencies
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="/dev/null"
+	bfd_standard_setup
 	MOD="sshd"
-	BAN_RETRY_COUNT="0"
-	# firewall backend — custom mode for test compatibility
-	_FW_BACKEND="custom"
-	BAN_COMMAND_TEMPLATE="/bin/true"
-	UNBAN_COMMAND_TEMPLATE="/bin/true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	UNBAN_COMMAND_V6_TEMPLATE=""
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 # --- count_failures (windowed replacement) ---

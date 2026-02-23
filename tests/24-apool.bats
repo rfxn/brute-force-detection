@@ -15,19 +15,12 @@ eval "$(awk '/^_apool_ban_status\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' 
 eval "$(awk '/^_apool_service_summary\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	INSTALL_PATH="$TEST_TMPDIR/bfd"
-	state_init "$INSTALL_PATH"
-	# eout dependencies
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="/dev/null"
+	bfd_standard_setup
 	UTIME=$(date +"%s")
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 # --- per-service breakdown ---

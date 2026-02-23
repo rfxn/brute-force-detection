@@ -8,12 +8,7 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	# eout dependencies
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="/dev/null"
+	bfd_common_setup
 	# create ignore infrastructure
 	IGNORE_LIST="$TEST_TMPDIR/ignore.hosts"
 	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
@@ -22,7 +17,7 @@ setup() {
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 # --- basic pass-through ---

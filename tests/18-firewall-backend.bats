@@ -11,32 +11,14 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	INSTALL_PATH="$TEST_TMPDIR/bfd"
-	mkdir -p "$INSTALL_PATH"
-	state_init "$INSTALL_PATH"
-
-	# eout dependencies
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="$TEST_TMPDIR/syslog"
-
-	# config defaults for execute_ban/unban
-	BAN_RETRY_COUNT="0"
-	BAN_COMMAND_TEMPLATE="/bin/true"
-	UNBAN_COMMAND_TEMPLATE="/bin/true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	UNBAN_COMMAND_V6_TEMPLATE=""
-	_FW_BACKEND="custom"
-
+	bfd_standard_setup
 	# mock command directory
 	MOCK_DIR="$TEST_TMPDIR/mock_bin"
 	mkdir -p "$MOCK_DIR"
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 # ============================================================

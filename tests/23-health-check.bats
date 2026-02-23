@@ -8,16 +8,8 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	INSTALL_PATH="$TEST_TMPDIR/bfd"
-	mkdir -p "$INSTALL_PATH/tmp" "$INSTALL_PATH/stats" "$INSTALL_PATH/rules"
-	state_init "$INSTALL_PATH"
-
-	# eout dependencies
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="/dev/null"
+	bfd_standard_setup
+	mkdir -p "$INSTALL_PATH/rules"
 
 	# config variables needed by validate_config and health_check
 	TRIG="15"
@@ -29,11 +21,7 @@ setup() {
 	EMAIL_ALERTS="0"
 	LOCK_FILE_TIMEOUT="300"
 	BAN_COMMAND_TEMPLATE="/bin/true -d \$ATTACK_HOST"
-	UNBAN_COMMAND_TEMPLATE=""
-	BAN_COMMAND_V6_TEMPLATE=""
-	UNBAN_COMMAND_V6_TEMPLATE=""
 	GLOB_TRIG="$TRIG"
-	_FW_BACKEND="custom"
 	RULES_PATH="$INSTALL_PATH/rules"
 	TLOG_PATH="$INSTALL_PATH/tlog"
 	LOCK_FILE="$INSTALL_PATH/lock.utime"
@@ -50,7 +38,7 @@ setup() {
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 @test "health_check: PASS for valid config" {

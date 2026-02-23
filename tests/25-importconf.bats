@@ -5,14 +5,15 @@
 
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
+load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
-	IMPORTCONF="$BATS_TEST_DIRNAME/../importconf"
+	bfd_common_setup
+	IMPORTCONF="$PROJECT_ROOT/importconf"
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 # --- fresh install (no backup dir) ---

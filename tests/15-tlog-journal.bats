@@ -9,15 +9,9 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 setup() {
-	TEST_TMPDIR=$(mktemp -d)
+	bfd_common_setup
 	export BASERUN="$TEST_TMPDIR/tracking"
 	mkdir -p "$BASERUN"
-
-	# eout dependencies
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="/dev/null"
 
 	# create mock journalctl
 	MOCK_BIN="$TEST_TMPDIR/bin"
@@ -31,7 +25,7 @@ setup() {
 }
 
 teardown() {
-	rm -rf "$TEST_TMPDIR"
+	bfd_teardown
 }
 
 # Helper: create a mock journalctl that outputs syslog-format lines
