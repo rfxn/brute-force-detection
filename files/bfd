@@ -503,6 +503,8 @@ usage() {
 	echo "-S|--status [SERVICE] ...... system or per-service status"
 	echo "-C|--config [VAR] .......... show config values"
 	echo "-R|--rules [RULE] .......... list rules or show rule details"
+	echo "-T|--test RULE [FILE] ...... test rule patterns against log file"
+	echo "   --test-pattern PAT [FILE]  test a raw <HOST> pattern"
 	echo "   --flush-temp ............ unban all temporary bans"
 	echo "   --flush-all ............. unban all bans"
 	echo "   --json .................. output in JSON format (with -l)"
@@ -564,6 +566,8 @@ case "${1:-}" in
 		list_rules "$INSTALL_PATH"
 	fi
 	;;
+-T|--test)      vhead; pre; test_rule "$INSTALL_PATH" "${2:?'Rule name required'}" "${3:-}" ;;
+--test-pattern) vhead; test_pattern "${2:?'Pattern required'}" "${3:-}" ;;
 --flush-temp)   vhead; pre; flush_bans "$INSTALL_PATH" "temp" "$UTIME" ;;
 --flush-all)    vhead; pre; flush_bans "$INSTALL_PATH" "all" "$UTIME" ;;
 -v|--version)   vhead ;;

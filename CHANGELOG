@@ -1,4 +1,17 @@
 2.0.1:
+[New] Rule testing tool: bfd --test RULE [FILE] tests rule patterns
+      against log files using the full existing pipeline; overrides
+      TLOG_PATH with a wrapper that cats the entire file
+[New] Pattern testing: bfd --test-pattern PATTERN [FILE] tests a raw
+      <HOST> pattern against a log file or stdin via extract_hosts()
+[New] test_rule() sources rule with overridden TLOG_PATH, reports rule
+      name, log file, threshold, ports, match count, unique IPs, and
+      top 10 IPs with hit counts
+[New] test_pattern() runs extract_hosts() on input, reports match count,
+      unique IPs, and top 10 IPs; clears IGNOREREGEX to prevent leakage
+[New] -T|--test and --test-pattern CLI flags
+[New] tests/test_rule_test.bats: 12 tests for test_rule and test_pattern;
+      suite now 632 tests
 [New] Incremental ban time escalation: BAN_ESCALATION config variable
       supports none (fixed duration), linear (base * count), and
       exponential (base * 2^(count-1)) modes for repeat offenders
