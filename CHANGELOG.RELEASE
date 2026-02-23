@@ -1,4 +1,20 @@
 2.0.1:
+[Fix] show_config() eval injection: unsanitized CLI input passed to eval
+      allowed arbitrary command execution; now validates against config
+      variable whitelist before eval
+[Fix] bfd.lib.sh sourced without ownership/permission checks; added stat
+      validation matching conf.bfd pattern (root-owned, non-world-writable)
+[Fix] alert template sourced without safety checks; send_alerts() now
+      validates ownership/permissions before sourcing alert.bfd
+[Fix] state_bans_active_remove and state_events_prune ran awk+mv without
+      flock; wrapped in flock -x subshells for atomicity
+[Fix] IGNOREREGEX and PORTS not reset between rules in check(); dovecot
+      IGNOREREGEX leaked into subsequent rules; PORTS leaked similarly
+[Fix] postgresql rule tested log path with [ -f ] && [ -d ] (impossible);
+      changed to [ -d ] so Debian log path is reachable
+[Fix] vsftpd2 rule TLOG_TF="vsftpd" collided with vsftpd rule cursor;
+      changed to TLOG_TF="vsftpd2"
+[Fix] ignore.hosts missing IPv6 loopback; added ::1
 [Fix] eliminated command injection in BAN_COMMAND execution; template now
       extracted raw from conf.bfd preventing premature variable expansion
 [Fix] temp files secured with mktemp replacing predictable PID-based names

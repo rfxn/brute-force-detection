@@ -163,10 +163,10 @@ teardown() {
 	assert_output "15"
 }
 
-@test "show_config: shows empty for unset variable" {
+@test "show_config: rejects unknown variable" {
 	run show_config "NONEXISTENT_VAR"
-	assert_success
-	assert_output ""
+	assert_failure
+	assert_output --partial "unknown config variable"
 }
 
 # --- flush_bans ---

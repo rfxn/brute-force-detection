@@ -361,3 +361,35 @@ run_validate_output() {
 	run run_validate 'unset SUBNET_MASK_V6'
 	assert_success
 }
+
+# --- show_config injection tests (Phase 26) ---
+
+@test "show_config: rejects \$(cmd) injection attempt" {
+	TRIG="15"
+	run show_config '$(touch /tmp/pwned)'
+	assert_failure
+	assert_output --partial "unknown config variable"
+	[ ! -f "/tmp/pwned" ]
+}
+
+@test "show_config: rejects backtick injection attempt" {
+	TRIG="15"
+	run show_config '`touch /tmp/pwned2`'
+	assert_failure
+	assert_output --partial "unknown config variable"
+	[ ! -f "/tmp/pwned2" ]
+}
+
+@test "show_config: rejects unknown variable name" {
+	TRIG="15"
+	run show_config "NONEXISTENT_VAR"
+	assert_failure
+	assert_output --partial "unknown config variable"
+}
+
+@test "show_config: accepts valid config var TRIG" {
+	TRIG="42"
+	run show_config "TRIG"
+	assert_success
+	assert_output "42"
+}

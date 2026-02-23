@@ -1152,8 +1152,11 @@ state_bans_active_remove() {
 	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
 		return 0
 	fi
-	awk -v ip="$host" '$3 != ip' "$bans_file" > "$bans_file.new" || true
-	mv "$bans_file.new" "$bans_file"
+	(
+		flock -x 200
+		awk -v ip="$host" '$3 != ip' "$bans_file" > "$bans_file.new" || true
+		mv "$bans_file.new" "$bans_file"
+	) 200>>"$bans_file"
 }
 
 # state_bans_active_check install_path host — return 0 if host has active ban
@@ -1272,8 +1275,12 @@ state_events_prune() {
 		return 0
 	fi
 	local cutoff=$((now - window))
-	awk -v cutoff="$cutoff" '$1+0 >= cutoff' "$events_file" | tail -n "$max_lines" > "$events_file.new"
-	mv "$events_file.new" "$events_file"
+	(
+		flock -x 200
+		awk -v cutoff="$cutoff" '$1+0 >= cutoff' "$events_file" \
+			| tail -n "$max_lines" > "$events_file.new"
+		mv "$events_file.new" "$events_file"
+	) 200>>"$events_file"
 }
 
 # count_failures host hosts_parsed install_path window now mod — count windowed failures
@@ -1810,6 +1817,22 @@ send_alerts() {
 		return 0
 	fi
 
+	# validate template safety before sourcing
+	if [ ! -f "$template" ]; then
+		eout "alert template '$template' not found, skipping alerts." le
+		rm -f "$alerts_file"
+		return 1
+	fi
+	local _tmpl_owner _tmpl_perms _tmpl_world
+	_tmpl_owner=$(stat -c '%u' "$template")
+	_tmpl_perms=$(stat -c '%a' "$template")
+	_tmpl_world="${_tmpl_perms: -1}"
+	if [ "$_tmpl_owner" != "0" ] || [ "$((_tmpl_world & 2))" -ne 0 ]; then
+		eout "alert template has unsafe ownership or permissions, skipping alerts." le
+		rm -f "$alerts_file"
+		return 1
+	fi
+
 	# get unique recipients (field 9)
 	local recipients
 	recipients=$(awk -F'|' '{print $9}' "$alerts_file" | sort -u)
@@ -2069,14 +2092,25 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
+	local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL"
 	if [ -n "$var" ]; then
-		# single variable lookup — only allow known config vars
+		# validate against whitelist before eval
+		local _found=0 _v
+		for _v in $config_vars; do
+			if [ "$var" = "$_v" ]; then
+				_found=1
+				break
+			fi
+		done
+		if [ "$_found" -eq 0 ]; then
+			echo "error: unknown config variable '$var'."
+			return 1
+		fi
 		local val
-		eval "val=\${$var:-}" 2>/dev/null || { echo "error: invalid variable name."; return 1; }
+		eval "val=\${$var:-}"
 		echo "$val"
 	else
 		# dump all active config variables
-		local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL"
 		local v val
 		for v in $config_vars; do
 			eval "val=\${$v:-}"

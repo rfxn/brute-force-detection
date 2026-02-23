@@ -14,7 +14,7 @@ TRIG="10"
 # Note: PostgreSQL must have log_line_prefix including %h or %r
 # for password auth failures. The "no pg_hba.conf entry" pattern
 # embeds the IP in the message text and works with any prefix.
-if [ -f "/var/log/postgresql" ] && [ -d "/var/log/postgresql" ]; then
+if [ -d "/var/log/postgresql" ]; then
 	# Debian/Ubuntu — find newest log file
 	LP=$(ls -t /var/log/postgresql/postgresql-*.log 2>/dev/null | head -1)
 elif [ -d "/var/lib/pgsql" ]; then

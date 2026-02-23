@@ -98,3 +98,42 @@ teardown() {
 	run safe_source "$TEST_TMPDIR/exec641.conf" "test:641"
 	assert_success
 }
+
+# --- Alert template safety tests (Phase 26) ---
+
+@test "send_alerts: world-writable template skips alerts" {
+	local alerts_file="$TEST_TMPDIR/alerts.tmp"
+	echo "10.0.0.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	local template="$TEST_TMPDIR/alert.bfd"
+	echo 'echo "alert"' > "$template"
+	chmod 666 "$template"
+	run send_alerts "$alerts_file" "BFD Alert" "$template" "50"
+	assert_failure
+	# alerts_file should be cleaned up
+	[ ! -f "$alerts_file" ]
+}
+
+@test "send_alerts: missing template skips alerts" {
+	local alerts_file="$TEST_TMPDIR/alerts.tmp"
+	echo "10.0.0.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	run send_alerts "$alerts_file" "BFD Alert" "$TEST_TMPDIR/nonexistent_template" "50"
+	assert_failure
+	# alerts_file should be cleaned up
+	[ ! -f "$alerts_file" ]
+}
+
+@test "send_alerts: root-owned 644 template passes safety check" {
+	local alerts_file="$TEST_TMPDIR/alerts.tmp"
+	echo "10.0.0.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	local template="$TEST_TMPDIR/alert.bfd"
+	echo 'echo "alert body"' > "$template"
+	chmod 644 "$template"
+	# mail command likely not available in test, but we're testing safety check passes
+	# send_alerts will get past the safety check (return 0 path or fail on mail)
+	run send_alerts "$alerts_file" "BFD Alert" "$template" "50"
+	# If it gets past the safety check, it won't return 1 with "unsafe" message
+	if [ "$status" -ne 0 ]; then
+		refute_output --partial "unsafe ownership"
+		refute_output --partial "not found"
+	fi
+}

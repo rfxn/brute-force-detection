@@ -802,3 +802,181 @@ EOF
 	run cat "$INSTALL_PATH/tmp/bans.history"
 	assert_output --partial "unban"
 }
+
+# --- IGNOREREGEX/PORTS reset tests (Phase 26) ---
+
+@test "check: IGNOREREGEX does not leak between rules" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	# rule1 sets IGNOREREGEX
+	cat > "$rules_dir/rule1" <<EOF
+TRIG="100"
+REQ="/bin/sh"
+LP="$logfile"
+TLOG_TF="rule1"
+IGNOREREGEX="no auth attempts"
+ARG_VAL=""
+EOF
+	# rule2 should NOT inherit IGNOREREGEX from rule1
+	cat > "$rules_dir/rule2" <<EOF
+TRIG="100"
+REQ="/bin/sh"
+LP="$logfile"
+TLOG_TF="rule2"
+ARG_VAL=""
+EOF
+	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
+	chown root "$rules_dir/rule1" "$rules_dir/rule2"
+	# run check and verify IGNOREREGEX is empty after rule2
+	RULES_PATH="$rules_dir"
+	GLOB_TRIG="5"
+	TRIG_WINDOW="300"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	BAN_COMMAND_TEMPLATE="true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="1"
+	BAN_DURATION="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	LAST_HOST=""
+	LAST=""
+	SKIP_ALERT=""
+	# After processing rule2, IGNOREREGEX should be empty
+	check
+	[ -z "$IGNOREREGEX" ]
+}
+
+@test "check: PORTS does not leak between rules" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	# rule1 sets PORTS
+	cat > "$rules_dir/rule1" <<EOF
+TRIG="100"
+REQ="/bin/sh"
+LP="$logfile"
+TLOG_TF="rule1"
+PORTS="22"
+ARG_VAL=""
+EOF
+	# rule2 should NOT inherit PORTS from rule1
+	cat > "$rules_dir/rule2" <<EOF
+TRIG="100"
+REQ="/bin/sh"
+LP="$logfile"
+TLOG_TF="rule2"
+ARG_VAL=""
+EOF
+	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
+	chown root "$rules_dir/rule1" "$rules_dir/rule2"
+	RULES_PATH="$rules_dir"
+	GLOB_TRIG="5"
+	TRIG_WINDOW="300"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	BAN_COMMAND_TEMPLATE="true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="1"
+	BAN_DURATION="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	LAST_HOST=""
+	LAST=""
+	SKIP_ALERT=""
+	check
+	[ -z "$PORTS" ]
+}
+
+@test "check: IGNOREREGEX set in rule applies correctly" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	cat > "$rules_dir/testrule" <<EOF
+TRIG="100"
+REQ="/bin/sh"
+LP="$logfile"
+TLOG_TF="testrule"
+IGNOREREGEX="filter_this"
+ARG_VAL=""
+EOF
+	chmod 644 "$rules_dir/testrule"
+	chown root "$rules_dir/testrule"
+	# Source the rule through safe_source to verify IGNOREREGEX is set
+	IGNOREREGEX=""
+	safe_source "$rules_dir/testrule" "rule:testrule"
+	[ "$IGNOREREGEX" = "filter_this" ]
+}
+
+@test "check: PORTS reset after rule without PORTS" {
+	# Set PORTS to a value, then source a rule without PORTS
+	# After check() resets, PORTS should be empty
+	PORTS="9999"
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	cat > "$rules_dir/testrule" <<EOF
+TRIG="100"
+REQ="/bin/sh"
+LP="$logfile"
+TLOG_TF="testrule"
+ARG_VAL=""
+EOF
+	chmod 644 "$rules_dir/testrule"
+	chown root "$rules_dir/testrule"
+	RULES_PATH="$rules_dir"
+	GLOB_TRIG="5"
+	TRIG_WINDOW="300"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	BAN_COMMAND_TEMPLATE="true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="1"
+	BAN_DURATION="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	LAST_HOST=""
+	LAST=""
+	SKIP_ALERT=""
+	check
+	# PORTS should be empty (reset by check before sourcing rule)
+	[ -z "$PORTS" ]
+}
+
+# --- Rule file correctness tests (Phase 26) ---
+
+@test "rule: postgresql uses [ -d ] for Debian log path" {
+	run cat "$PROJECT_ROOT/files/rules/postgresql"
+	# must contain [ -d "/var/log/postgresql" ] not [ -f "/var/log/postgresql" ]
+	assert_output --partial '[ -d "/var/log/postgresql" ]'
+	refute_output --partial '[ -f "/var/log/postgresql" ]'
+}
+
+@test "rule: vsftpd and vsftpd2 have different TLOG_TF values" {
+	local tf1 tf2
+	tf1=$(grep -E '^[[:space:]]*TLOG_TF=' "$PROJECT_ROOT/files/rules/vsftpd" | tail -1 | sed 's/.*="\?\([^"]*\)"\?/\1/')
+	tf2=$(grep -E '^[[:space:]]*TLOG_TF=' "$PROJECT_ROOT/files/rules/vsftpd2" | tail -1 | sed 's/.*="\?\([^"]*\)"\?/\1/')
+	[ "$tf1" != "$tf2" ]
+	[ "$tf1" = "vsftpd" ]
+	[ "$tf2" = "vsftpd2" ]
+}
+
+@test "rule: ignore.hosts contains both 127.0.0.1 and ::1" {
+	run cat "$PROJECT_ROOT/files/ignore.hosts"
+	assert_output --partial "127.0.0.1"
+	assert_output --partial "::1"
+}

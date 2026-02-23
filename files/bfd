@@ -27,7 +27,14 @@ V="2.0.1"
 APPN="BFD"
 UTIME=$(date +"%s")
 
-# source function library
+# validate library safety before sourcing
+_lib_owner=$(stat -c '%u' "$INSTALL_PATH/bfd.lib.sh")
+_lib_perms=$(stat -c '%a' "$INSTALL_PATH/bfd.lib.sh")
+_lib_world="${_lib_perms: -1}"
+if [ "$_lib_owner" != "0" ] || [ "$((_lib_world & 2))" -ne 0 ]; then
+	echo "bfd.lib.sh has unsafe ownership (uid=$_lib_owner) or permissions ($_lib_perms), aborting."
+	exit 1
+fi
 # shellcheck source=files/bfd.lib.sh
 . "$INSTALL_PATH/bfd.lib.sh"
 
@@ -210,6 +217,8 @@ check() {
 		RULE_EMAIL=""
 		LP=""
 		TLOG_TF=""
+		IGNOREREGEX=""
+		PORTS=""
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
 		if [ -z "$TRIG" ]; then
 			TRIG="$GLOB_TRIG"
