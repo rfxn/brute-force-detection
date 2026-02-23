@@ -133,7 +133,7 @@ The included `install.sh` script handles all installation tasks:
 This will:
 - Install BFD to `/usr/local/bfd`
 - Place the `bfd` command at `/usr/local/sbin/bfd`
-- Install a 3-minute cronjob in `/etc/cron.d/bfd`
+- Install a 2-minute cronjob in `/etc/cron.d/bfd`
 - On systemd systems, install `bfd.service` and `bfd.timer` (not enabled by default)
 - If upgrading, run `importconf` to import settings from the previous installation
 
@@ -146,7 +146,7 @@ Previous installations are backed up before overwriting.
 
 **Cron (default, all systems):**
 
-The installer places a cronjob at `/etc/cron.d/bfd` that runs BFD every 3 minutes in quiet mode. This works on all supported distributions including CentOS 6 and Ubuntu 14.04.
+The installer places a cronjob at `/etc/cron.d/bfd` that runs BFD every 2 minutes in quiet mode. This works on all supported distributions including CentOS 6 and Ubuntu 14.04.
 
 **systemd timer (optional):**
 
@@ -342,7 +342,7 @@ The report includes:
 
 ### 5.4 Watch Mode
 
-The **`-w|--watch`** option runs BFD in continuous foreground mode, polling for new log data every `WATCH_INTERVAL` seconds (default 10). This reduces detection latency from ~180 seconds (cron) to ~10 seconds.
+The **`-w|--watch`** option runs BFD in continuous foreground mode, polling for new log data every `WATCH_INTERVAL` seconds (default 10). This reduces detection latency from ~120 seconds (cron) to ~10 seconds.
 
 ```bash
 bfd --watch

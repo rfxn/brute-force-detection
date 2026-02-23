@@ -1,4 +1,7 @@
 2.0.1:
+[Change] default cron interval reduced from 3 minutes to 2 minutes for
+         faster detection; cron entry updated to */2, bfd.timer updated to
+         OnUnitActiveSec=2min
 [New] alert system rewrite: batched email delivery replaces per-ban
       inline alerts; multiple bans in one check cycle produce a single
       email per recipient instead of one email per ban
@@ -42,7 +45,7 @@
       suite now 507 tests
 [New] watch mode (bfd --watch): continuous foreground operation with
       configurable polling interval (WATCH_INTERVAL, default 10s); reduces
-      detection latency from ~180s (cron) to ~10s; holds flock for lifetime
+      detection latency from ~120s (cron) to ~10s; holds flock for lifetime
       so cron runs are automatically locked out
 [New] WATCH_INTERVAL config variable in conf.bfd (default 10s); validated
       as positive integer by validate_config()
