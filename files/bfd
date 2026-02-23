@@ -483,27 +483,80 @@ usage() {
 	echo "-q|--quiet ................. run quiet with output hidden"
 	echo "-d|--dryrun ................ run detection without banning"
 	echo "-w|--watch ................. run in continuous watch mode (foreground)"
-	echo "-a|--attackpool [STRING] ... list addresses that have attacked this host"
+	echo "-a|--attackpool [IP|STR] ... attack pool report or IP search"
 	echo "-c|--check ................. health check and diagnostics"
 	echo "-l|--list .................. list active bans"
 	echo "-u|--unban IP .............. unban an IP address"
 	echo "-b|--ban IP [SERVICE] ...... manually ban an IP address"
+	echo "-S|--status [SERVICE] ...... system or per-service status"
+	echo "-C|--config [VAR] .......... show config values"
+	echo "-R|--rules [RULE] .......... list rules or show rule details"
+	echo "   --flush-temp ............ unban all temporary bans"
+	echo "   --flush-all ............. unban all bans"
+	echo "   --json .................. output in JSON format (with -l)"
+	echo "   --csv ................... output in CSV format (with -l)"
 	echo "-v|--version ............... display version"
 	echo "-h|--help .................. display this help"
 }
 
-case "$1" in
+# Pre-process global modifier flags (--json, --csv)
+OUTPUT_FORMAT="table"
+declare -a _bfd_args=()
+for _arg in "$@"; do
+	case "$_arg" in
+		--json) OUTPUT_FORMAT="json" ;;
+		--csv)  OUTPUT_FORMAT="csv" ;;
+		*)      _bfd_args+=("$_arg") ;;
+	esac
+done
+set -- "${_bfd_args[@]+"${_bfd_args[@]}"}"
+
+case "${1:-}" in
 -s|--standard)  vhead; run ;;
 -q|--quiet)     exec >/dev/null 2>&1; run ;;
 -d|--dryrun)    DRY_RUN=1; vhead; run ;;
 -w|--watch)     vhead; watch ;;
--a|--attackpool) vhead; pre; apool_list "${2:-}" ;;
+-a|--attackpool)
+	vhead; pre
+	if [ -n "${2:-}" ] && validate_ip_any "$2" >/dev/null 2>&1; then
+		search_ip "$INSTALL_PATH" "$2"
+	else
+		apool_list "${2:-}"
+	fi
+	;;
 -c|--check)     vhead; pre; health_check "$INSTALL_PATH" ;;
--l|--list)      vhead; pre; list_bans "$INSTALL_PATH" ;;
+-l|--list)
+	vhead; pre
+	case "$OUTPUT_FORMAT" in
+		json) list_bans_json "$INSTALL_PATH" ;;
+		csv)  list_bans_csv "$INSTALL_PATH" ;;
+		*)    list_bans "$INSTALL_PATH" ;;
+	esac
+	;;
 -u|--unban)     vhead; pre; manual_unban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}" ;;
 -b|--ban)       vhead; pre; manual_ban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$BAN_COMMAND_TEMPLATE" "${3:-manual}" "all" "${BAN_COMMAND_V6_TEMPLATE:-}" ;;
+-S|--status)
+	vhead; pre
+	if [ -n "${2:-}" ]; then
+		show_service_status "$INSTALL_PATH" "$2"
+	else
+		show_status "$INSTALL_PATH"
+	fi
+	;;
+-C|--config)    show_config "${2:-}" ;;
+-R|--rules)
+	vhead; pre
+	if [ -n "${2:-}" ]; then
+		show_rule "$INSTALL_PATH" "$2"
+	else
+		list_rules "$INSTALL_PATH"
+	fi
+	;;
+--flush-temp)   vhead; pre; flush_bans "$INSTALL_PATH" "temp" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}" ;;
+--flush-all)    vhead; pre; flush_bans "$INSTALL_PATH" "all" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}" ;;
 -v|--version)   vhead ;;
 -h|--help)      vhead; usage ;;
+"")             vhead; usage ;;
 *)              vhead; echo "error: unknown option '$1'"; echo; usage; exit $EXIT_CONFIG_ERROR ;;
 esac
 exit $EXIT_OK
