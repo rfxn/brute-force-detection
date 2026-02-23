@@ -1,4 +1,9 @@
 2.0.1:
+[New] postgresql rule: detects PostgreSQL/MariaDB authentication failures
+      via "no pg_hba.conf entry" (IP in message) and "password authentication
+      failed" (requires %h in log_line_prefix); auto-detects Debian
+      (/var/log/postgresql/) and RHEL (/var/lib/pgsql/) log paths;
+      TRIG=10, PORTS=5432; 34 total rules
 [Change] default cron interval reduced from 3 minutes to 2 minutes for
          faster detection; cron entry updated to */2, bfd.timer updated to
          OnUnitActiveSec=2min

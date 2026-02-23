@@ -1,0 +1,37 @@
+# failed logins from a single address before ban
+# uncomment to override conf.bfd trig value
+TRIG="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# detect postgresql log path
+# Debian/Ubuntu: /var/log/postgresql/postgresql-VERSION-CLUSTER.log
+# RHEL/Rocky: /var/lib/pgsql/VERSION/data/log/postgresql-*.log
+# Note: PostgreSQL must have log_line_prefix including %h or %r
+# for password auth failures. The "no pg_hba.conf entry" pattern
+# embeds the IP in the message text and works with any prefix.
+if [ -f "/var/log/postgresql" ] && [ -d "/var/log/postgresql" ]; then
+	# Debian/Ubuntu — find newest log file
+	LP=$(ls -t /var/log/postgresql/postgresql-*.log 2>/dev/null | head -1)
+elif [ -d "/var/lib/pgsql" ]; then
+	# RHEL/Rocky — find newest log in any version's data/log dir
+	LP=$(ls -t /var/lib/pgsql/*/data/log/postgresql-*.log 2>/dev/null | head -1)
+fi
+
+# file must exist for rule to be active
+REQ="${LP:-}"
+if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+	PORTS="5432"
+	TLOG_TF="postgresql"
+
+	## PostgreSQL authentication failures
+	# Pattern 1: no pg_hba.conf entry — IP embedded in message
+	# Pattern 2: password authentication failed — requires %h or %r in log_line_prefix
+	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+		'no pg_hba.conf entry for host "<HOST>"' \
+		"<HOST>.*FATAL.*password authentication failed")
+fi

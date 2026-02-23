@@ -130,6 +130,11 @@ named|192.168.1.100|Feb 22 10:15:03 ns1 named[12345]: client @0x7f 192.168.1.100
 named|10.0.0.5|Feb 22 10:15:05 ns1 named[12345]: client @0x7f 10.0.0.5#12345: zone transfer 'example.com/IN' denied
 named|172.16.0.1|Feb 22 10:15:07 ns1 named[6789]: client 172.16.0.1#9999 (test.com): query (cache) 'test.com/AAAA/IN' denied
 
+# --- postgresql (2 patterns: no pg_hba.conf entry, password auth failed) ---
+postgresql|192.168.1.100|2026-02-22 10:15:03.123 UTC [12345] FATAL:  no pg_hba.conf entry for host "192.168.1.100", user "admin", database "testdb"
+postgresql|10.0.0.5|2026-02-22 10:15:05.456 UTC [12346] 10.0.0.5 FATAL:  password authentication failed for user "dbuser"
+postgresql|172.16.0.1|2026-02-22 10:15:07.789 UTC [12347] FATAL:  no pg_hba.conf entry for host "172.16.0.1", user "postgres", database "production", no encryption
+
 # ============================================================
 # IPv6 SAMPLES — same rules, IPv6 source addresses
 # ============================================================
@@ -149,6 +154,9 @@ nginx-http-auth|2001:db8::50|2024/02/22 10:15:03 [error] 5596#560: *3 user "admi
 
 # --- pam_generic (IPv6) ---
 pam_generic|2001:db8::99|Feb 22 10:15:03 myhost sshd: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=2001:db8::99
+
+# --- postgresql (IPv6) ---
+postgresql|2001:db8::db|2026-02-22 10:15:03.123 UTC [12345] FATAL:  no pg_hba.conf entry for host "2001:db8::db", user "admin", database "testdb"
 
 # --- named (IPv6) ---
 named|2001:db8::abcd|Feb 22 10:15:03 ns1 named[12345]: client @0x7f 2001:db8::abcd#54321 (example.com): query (cache) 'example.com/A/IN' denied
