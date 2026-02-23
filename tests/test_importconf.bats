@@ -21,7 +21,7 @@ teardown() {
 	# override INSTALL_PATH to a non-existent path
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$TEST_TMPDIR/bfd\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$TEST_TMPDIR/bfd"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -57,7 +57,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -89,7 +89,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -120,7 +120,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -152,7 +152,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -185,7 +185,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -219,7 +219,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -258,7 +258,7 @@ INTEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -305,7 +305,7 @@ INTEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
@@ -341,7 +341,7 @@ NEWEOF
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed "s|INSTALL_PATH=\"/usr/local/bfd\"|INSTALL_PATH=\"$inst\"|" "$IMPORTCONF" > "$script"
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
 	chmod +x "$script"
 	run bash "$script"
 	assert_success

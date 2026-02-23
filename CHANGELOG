@@ -1,4 +1,16 @@
 2.0.1:
+[Fix] install.sh: support INSTALL_PATH/BIN_PATH env var override for custom
+      install locations; sed replacement of hardcoded paths at install time
+[Fix] install.sh: chmod 640 for rules/* (was missed) and alert.bfd (was 750,
+      should be 640 — sourced template, not executable)
+[Fix] firewall backends: replace hardcoded /etc/apf/apf and /usr/sbin/csf
+      with command -v discovery cached in _FW_APF_BIN/_FW_CSF_BIN
+[Fix] firewall backends: iptables/ip6tables resolved via command -v in setup
+      phase, cached in _FW_IPT_BIN/_FW_IP6T_BIN
+[Fix] detect_firewall: replace hardcoded path checks for apf/csf with
+      command -v (consistent with all other backend detection)
+[Change] uninstall.sh, importconf: honor INSTALL_PATH/BIN_PATH env vars for
+         custom install locations
 [New] record_ban() helper extracts ban lifecycle logic (expiry computation,
       recidivism escalation, state recording) from check() and
       check_distributed(), eliminating 20-line duplication

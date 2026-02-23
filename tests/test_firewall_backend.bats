@@ -404,34 +404,39 @@ SCRIPT
 # ============================================================
 
 @test "_fw_iptables_ban: adds DROP rule to bfd chain" {
-	iptables() {
-		echo "iptables $*" >> "$TEST_TMPDIR/ipt.log"
-		return 0
-	}
-	export -f iptables
+	cat > "$MOCK_DIR/mock_iptables" <<SCRIPT
+#!/bin/bash
+echo "iptables \$*" >> "$TEST_TMPDIR/ipt.log"
+exit 0
+SCRIPT
+	chmod +x "$MOCK_DIR/mock_iptables"
+	_FW_IPT_BIN="$MOCK_DIR/mock_iptables"
 	_fw_iptables_ban "10.0.0.1"
 	run cat "$TEST_TMPDIR/ipt.log"
 	assert_output --partial "-A bfd -s 10.0.0.1 -j DROP"
 }
 
 @test "_fw_iptables_ban: uses ip6tables for IPv6" {
-	iptables() { return 0; }
-	ip6tables() {
-		echo "ip6tables $*" >> "$TEST_TMPDIR/ipt.log"
-		return 0
-	}
-	export -f iptables ip6tables
+	cat > "$MOCK_DIR/mock_ip6tables" <<SCRIPT
+#!/bin/bash
+echo "ip6tables \$*" >> "$TEST_TMPDIR/ipt.log"
+exit 0
+SCRIPT
+	chmod +x "$MOCK_DIR/mock_ip6tables"
+	_FW_IP6T_BIN="$MOCK_DIR/mock_ip6tables"
 	_fw_iptables_ban "2001:db8::1"
 	run cat "$TEST_TMPDIR/ipt.log"
 	assert_output --partial "ip6tables -A bfd -s 2001:db8::1 -j DROP"
 }
 
 @test "_fw_iptables_unban: removes rule from bfd chain" {
-	iptables() {
-		echo "iptables $*" >> "$TEST_TMPDIR/ipt.log"
-		return 0
-	}
-	export -f iptables
+	cat > "$MOCK_DIR/mock_iptables" <<SCRIPT
+#!/bin/bash
+echo "iptables \$*" >> "$TEST_TMPDIR/ipt.log"
+exit 0
+SCRIPT
+	chmod +x "$MOCK_DIR/mock_iptables"
+	_FW_IPT_BIN="$MOCK_DIR/mock_iptables"
 	_fw_iptables_unban "10.0.0.1"
 	run cat "$TEST_TMPDIR/ipt.log"
 	assert_output --partial "-D bfd -s 10.0.0.1 -j DROP"
@@ -770,4 +775,155 @@ NEWCONF
 	# FIREWALL should remain auto (importconf merges values separately)
 	run grep '^FIREWALL=' "$new"
 	assert_output 'FIREWALL="auto"'
+}
+
+# ============================================================
+# Backend binary discovery (command -v)
+# ============================================================
+
+@test "detect_firewall: finds apf via PATH (command -v)" {
+	cat > "$MOCK_DIR/apf" <<'SCRIPT'
+#!/bin/bash
+exit 0
+SCRIPT
+	chmod +x "$MOCK_DIR/apf"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		export PATH='$MOCK_DIR'
+		detect_firewall
+	"
+	assert_success
+	assert_output "apf"
+}
+
+@test "detect_firewall: finds csf via PATH (command -v)" {
+	cat > "$MOCK_DIR/csf" <<'SCRIPT'
+#!/bin/bash
+exit 0
+SCRIPT
+	chmod +x "$MOCK_DIR/csf"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		export PATH='$MOCK_DIR'
+		detect_firewall
+	"
+	assert_success
+	assert_output "csf"
+}
+
+@test "_fw_apf_setup: sets _FW_APF_BIN via command -v" {
+	cat > "$MOCK_DIR/apf" <<'SCRIPT'
+#!/bin/bash
+exit 0
+SCRIPT
+	chmod +x "$MOCK_DIR/apf"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
+		export PATH='$MOCK_DIR:/usr/bin:/bin'
+		_fw_apf_setup
+		echo \"\$_FW_APF_BIN\"
+	"
+	assert_success
+	assert_output "$MOCK_DIR/apf"
+}
+
+@test "_fw_apf_setup: fails when apf not in PATH" {
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
+		export PATH='$MOCK_DIR'
+		_fw_apf_setup
+	"
+	assert_failure
+}
+
+@test "_fw_csf_setup: sets _FW_CSF_BIN via command -v" {
+	cat > "$MOCK_DIR/csf" <<'SCRIPT'
+#!/bin/bash
+exit 0
+SCRIPT
+	chmod +x "$MOCK_DIR/csf"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
+		export PATH='$MOCK_DIR:/usr/bin:/bin'
+		_fw_csf_setup
+		echo \"\$_FW_CSF_BIN\"
+	"
+	assert_success
+	assert_output "$MOCK_DIR/csf"
+}
+
+@test "_fw_csf_setup: fails when csf not in PATH" {
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
+		export PATH='$MOCK_DIR'
+		_fw_csf_setup
+	"
+	assert_failure
+}
+
+@test "_fw_iptables_setup: sets _FW_IPT_BIN via command -v" {
+	cat > "$MOCK_DIR/iptables" <<'SCRIPT'
+#!/bin/bash
+# mock: accept any args silently
+exit 0
+SCRIPT
+	chmod +x "$MOCK_DIR/iptables"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
+		export PATH='$MOCK_DIR:/usr/bin:/bin'
+		_fw_iptables_setup
+		echo \"\$_FW_IPT_BIN\"
+	"
+	assert_success
+	assert_output "$MOCK_DIR/iptables"
+}
+
+@test "_fw_iptables_setup: sets _FW_IP6T_BIN when ip6tables exists" {
+	cat > "$MOCK_DIR/iptables" <<'SCRIPT'
+#!/bin/bash
+exit 0
+SCRIPT
+	cat > "$MOCK_DIR/ip6tables" <<'SCRIPT'
+#!/bin/bash
+exit 0
+SCRIPT
+	chmod +x "$MOCK_DIR/iptables" "$MOCK_DIR/ip6tables"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
+		export PATH='$MOCK_DIR:/usr/bin:/bin'
+		_fw_iptables_setup
+		echo \"\$_FW_IP6T_BIN\"
+	"
+	assert_success
+	assert_output "$MOCK_DIR/ip6tables"
+}
+
+@test "_fw_iptables_setup: fails when iptables not in PATH" {
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
+		export PATH='$MOCK_DIR'
+		_fw_iptables_setup
+	"
+	assert_failure
 }

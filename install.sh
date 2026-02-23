@@ -21,8 +21,8 @@
 #
 set -eu
 
-INSPATH="/usr/local/bfd"
-BINPATH="/usr/local/sbin/bfd"
+INSPATH="${INSTALL_PATH:-/usr/local/bfd}"
+BINPATH="${BIN_PATH:-/usr/local/sbin/bfd}"
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "error: install.sh must be run as root."
@@ -54,8 +54,9 @@ install(){
         chmod 750 "$INSPATH/tlog"
         chmod 750 "$INSPATH/bfd"
 	chmod 750 "$INSPATH/rules"
+	chmod 640 "$INSPATH"/rules/*
 	chmod 750 "$INSPATH/tmp"
-	chmod 750 "$INSPATH/alert.bfd"
+	chmod 640 "$INSPATH/alert.bfd"
         ln -fs "$INSPATH/bfd" "$BINPATH"
 	if [ -f "uninstall.sh" ]; then
 		cp uninstall.sh "$INSPATH/"
@@ -79,6 +80,23 @@ install(){
 			echo "  systemd units installed:"
 			echo "    batch mode:  systemctl enable --now bfd.timer"
 			echo "    watch mode:  systemctl enable --now bfd-watch.service"
+		fi
+	fi
+	# replace default paths when installing to a custom location
+	if [ "$INSPATH" != "/usr/local/bfd" ]; then
+		sed -i "s|/usr/local/bfd|$INSPATH|g" \
+			"$INSPATH/bfd" "$INSPATH/bfd.lib.sh" \
+			"$INSPATH/internals.conf" "$INSPATH/tlog" \
+			"$INSPATH/exclude.files" /etc/cron.daily/bfd
+	fi
+	if [ "$BINPATH" != "/usr/local/sbin/bfd" ]; then
+		sed -i "s|/usr/local/sbin/bfd|$BINPATH|g" \
+			"$INSPATH/bfd" /etc/cron.d/bfd
+		if command -v systemctl >/dev/null 2>&1; then
+			sed -i "s|/usr/local/sbin/bfd|$BINPATH|g" \
+				/etc/systemd/system/bfd.service \
+				/etc/systemd/system/bfd.timer \
+				/etc/systemd/system/bfd-watch.service 2>/dev/null || true
 		fi
 	fi
 }

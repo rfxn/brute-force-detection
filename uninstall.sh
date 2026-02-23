@@ -19,8 +19,8 @@
 #    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 ###
 #
-INSPATH="/usr/local/bfd"
-BINPATH="/usr/local/sbin/bfd"
+INSPATH="${INSTALL_PATH:-/usr/local/bfd}"
+BINPATH="${BIN_PATH:-/usr/local/sbin/bfd}"
 APPN="BFD"
 
 uninstall(){
