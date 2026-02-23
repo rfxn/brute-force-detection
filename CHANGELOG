@@ -1,4 +1,6 @@
 2.0.1:
+[Fix] README/README.md: update rule count from 30 to 33; add http_401,
+      pam_generic, named to rule catalog; add Auth and DNS categories
 [New] 3 new service rules: http_401 (HTTP 401 in Apache/nginx access logs,
       TRIG=30), pam_generic (generic PAM authentication failure, TRIG=20),
       named (BIND/named query/zone transfer denied, TRIG=100); 33 rules total
