@@ -95,6 +95,9 @@ EMAIL_ADDRESS="root"
 # subject of email alerts
 EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
 
+# per-rule alert routing: set RULE_EMAIL="addr" in individual rule files
+# to override EMAIL_ADDRESS for that rule's alerts
+
 # number of log lines to include in email alerts
 EMAIL_LOGLINES="50"
 
@@ -132,3 +135,6 @@ OUTPUT_SYSLOG_FILE="$KERNEL_LOG_PATH"
 
 # lock file timeout in seconds
 LOCK_FILE_TIMEOUT="300"
+
+# polling interval in seconds for watch mode (bfd --watch)
+WATCH_INTERVAL="10"

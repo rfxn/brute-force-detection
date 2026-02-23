@@ -236,3 +236,35 @@ run_validate_output() {
 	assert_output --partial "warning"
 	assert_output --partial "UNBAN_COMMAND"
 }
+
+# --- WATCH_INTERVAL ---
+
+@test "validate_config: WATCH_INTERVAL=10 passes" {
+	run run_validate 'WATCH_INTERVAL="10"'
+	assert_success
+}
+
+@test "validate_config: WATCH_INTERVAL=1 passes" {
+	run run_validate 'WATCH_INTERVAL="1"'
+	assert_success
+}
+
+@test "validate_config: WATCH_INTERVAL=0 rejects" {
+	run run_validate 'WATCH_INTERVAL="0"'
+	assert_failure
+}
+
+@test "validate_config: WATCH_INTERVAL=abc rejects" {
+	run run_validate 'WATCH_INTERVAL="abc"'
+	assert_failure
+}
+
+@test "validate_config: WATCH_INTERVAL= rejects" {
+	run run_validate 'WATCH_INTERVAL=""'
+	assert_failure
+}
+
+@test "validate_config: WATCH_INTERVAL unset uses default (passes)" {
+	run run_validate 'unset WATCH_INTERVAL'
+	assert_success
+}

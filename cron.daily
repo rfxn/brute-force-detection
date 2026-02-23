@@ -5,6 +5,7 @@ mv -f /usr/local/bfd/stats/attack.pool "/usr/local/bfd/stats/attack.pool.$dstamp
 rm -f /usr/local/bfd/tmp/track.attack
 rm -f /usr/local/bfd/tmp/ban.list
 rm -f /usr/local/bfd/tmp/.alist.*
+rm -f /usr/local/bfd/tmp/.alerts.*
 rm -f /usr/local/bfd/tmp/.weekly.apool.*
 rm -f /usr/local/bfd/tmp/*.cursor
 rm -f /usr/local/bfd/tmp/*.jts

@@ -207,3 +207,71 @@ EOF
 	assert_success
 	assert_output --partial "[PASS] Lock: no active lock"
 }
+
+@test "health_check: WATCH_INTERVAL reported" {
+	WATCH_INTERVAL="15"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[PASS] WATCH_INTERVAL: 15s (for bfd --watch)"
+}
+
+# --- Email alert health checks (Phase 15E) ---
+
+@test "health_check: EMAIL_ALERTS=1 with mail command shows PASS" {
+	EMAIL_ALERTS="1"
+	# ensure mail is available in PATH (or mock it)
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
+	chmod +x "$TEST_TMPDIR/bin/mail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[PASS] Email alerts: enabled (mail command found)"
+}
+
+@test "health_check: EMAIL_ALERTS=1 without mail command shows WARN" {
+	EMAIL_ALERTS="1"
+	# create a restricted PATH without mail but with essential commands
+	local clean_dir
+	clean_dir=$(mktemp -d)
+	ln -s /bin/bash "$clean_dir/bash"
+	ln -s /usr/bin/stat "$clean_dir/stat"
+	ln -s /usr/bin/awk "$clean_dir/awk"
+	ln -s /usr/bin/wc "$clean_dir/wc"
+	ln -s /usr/bin/hostname "$clean_dir/hostname"
+	ln -s /usr/bin/date "$clean_dir/date"
+	ln -s /bin/cat "$clean_dir/cat"
+	ln -s /bin/grep "$clean_dir/grep"
+	# run health_check in subshell with restricted PATH
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		INSTALL_PATH='$INSTALL_PATH'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='/dev/null'
+		TRIG='15'; TRIG_WINDOW='300'; TRIG_GLOBAL='0'
+		BAN_DURATION='0'; BAN_PERMANENT_AFTER='0'; BAN_PERMANENT_WINDOW='86400'
+		EMAIL_ALERTS='1'; LOCK_FILE_TIMEOUT='300'
+		BAN_COMMAND_TEMPLATE='/bin/true'
+		UNBAN_COMMAND_TEMPLATE=''
+		BAN_COMMAND_V6_TEMPLATE=''
+		GLOB_TRIG='15'
+		RULES_PATH='$INSTALL_PATH/rules'
+		TLOG_PATH='$INSTALL_PATH/tlog'
+		LOCK_FILE='$INSTALL_PATH/lock.utime'
+		AUTH_LOG_PATH='$AUTH_LOG_PATH'
+		KERNEL_LOG_PATH='$KERNEL_LOG_PATH'
+		MAIL_LOG_PATH='$MAIL_LOG_PATH'
+		export PATH='$clean_dir'
+		health_check '$INSTALL_PATH'
+	"
+	rm -rf "$clean_dir"
+	assert_output --partial "[WARN] Email alerts: enabled but 'mail' command not found"
+}
+
+@test "health_check: EMAIL_ALERTS=0 shows disabled" {
+	EMAIL_ALERTS="0"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[PASS] Email alerts: disabled"
+}

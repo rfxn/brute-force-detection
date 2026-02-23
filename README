@@ -24,6 +24,7 @@ Contents:
 5.1 ........... General Usage: Dry Run
 5.2 ........... General Usage: Health Check
 5.3 ........... General Usage: Attack Pool
+5.4 ........... General Usage: Watch Mode
 6 ............. Rule Engine
 6.1 ........... Rule Engine: Rule Catalog
 6.2 ........... Rule Engine: Rule Customization
@@ -97,7 +98,8 @@ Operational:
 - dry-run mode for testing rules without banning (bfd -d)
 - attack pool reporting with per-service breakdown and ban status (bfd -a)
 - per-run statistics logging (rules checked, events parsed, bans executed)
-- customizable email alerting with per-rule alert suppression
+- batched email alerts with enriched context (ban type, duration, history)
+- per-rule alert routing via RULE_EMAIL
 
 1.1) Introduction: Supported Systems
 BFD runs on any Linux distribution with bash 4.1+ and standard GNU utilities
@@ -126,7 +128,7 @@ The included install.sh script handles all installation tasks:
 This will:
   - Install BFD to /usr/local/bfd
   - Place the bfd command at /usr/local/sbin/bfd
-  - Install a 3-minute cronjob in /etc/cron.d/bfd
+  - Install a 2-minute cronjob in /etc/cron.d/bfd
   - On systemd systems, install bfd.service and bfd.timer (not enabled by
     default)
   - If upgrading, run importconf to import settings from the previous
@@ -140,7 +142,7 @@ Bin Path: /usr/local/sbin/bfd
 2.1) Installation: Scheduling
 Cron (default, all systems):
 
-The installer places a cronjob at /etc/cron.d/bfd that runs BFD every 3
+The installer places a cronjob at /etc/cron.d/bfd that runs BFD every 2
 minutes in quiet mode. This works on all supported distributions including
 CentOS 6 and Ubuntu 14.04.
 
@@ -216,12 +218,26 @@ EMAIL_ALERTS="0" - send email alerts (0 = off, 1 = on).
 EMAIL_ADDRESS="root" - alert recipient(s), comma-separated.
 
 EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME" - subject line for alert
-  emails.
+  emails. When multiple bans occur in a single check cycle, "(N bans)" is
+  appended automatically.
 
-EMAIL_LOGLINES="50" - number of log lines to include in alert body.
+EMAIL_LOGLINES="50" - number of log lines per host to include in alert body.
+
+Alerts are batched: multiple bans in one check cycle produce a single email
+per recipient instead of one email per ban. Each alert includes:
+  - host, service, and port information
+  - failure count with threshold context
+  - ban type (temporary/permanent/escalated) with duration and expiry
+  - recidivism history (previous bans and escalation threshold)
+  - reconstructed ban command
+  - relevant source log lines per host
 
 The email template (alert.bfd) is fully customizable. Individual rules can
 suppress alerts by setting SKIP_ALERT="1" in the rule file.
+
+Per-rule alert routing: set RULE_EMAIL="addr" in a rule file to override
+EMAIL_ADDRESS for that rule's alerts. This routes alerts for specific services
+to different recipients (e.g., mail team vs. web team).
 
 3.6) Configuration: Log Paths
 
@@ -280,6 +296,7 @@ usage: bfd [OPTION]
 -s|--standard .............. run standard with output
 -q|--quiet ................. run quiet with output hidden
 -d|--dryrun ................ run detection without banning
+-w|--watch ................. run in continuous watch mode (foreground)
 -a|--attackpool [STRING] ... list addresses that have attacked this host
 -c|--check ................. health check and diagnostics
 -l|--list .................. list active bans
@@ -334,6 +351,35 @@ The report includes:
   - Per-service breakdown — event count and unique IP count per service
   - Top 25 attackers this week — same format, aggregated from weekly pool
 
+5.4) General Usage: Watch Mode
+The -w|--watch option runs BFD in continuous foreground mode, polling for
+new log data every WATCH_INTERVAL seconds (default 10). This reduces
+detection latency from ~120 seconds (cron) to ~10 seconds.
+
+  bfd --watch
+
+Watch mode holds an flock for its entire lifetime, so cron-based runs
+(bfd -q) will silently skip when watch mode is active. No cron
+modification is needed.
+
+Signal handling:
+  SIGTERM / SIGINT — clean shutdown (removes lock file)
+  SIGHUP           — reload conf.bfd and internals.conf without restart
+                     (allows changing WATCH_INTERVAL, TRIG, ban commands, etc.)
+
+On systemd systems, use the provided bfd-watch.service unit:
+
+  systemctl enable --now bfd-watch.service
+
+This conflicts with bfd.timer — systemd prevents enabling both
+simultaneously. Use 'systemctl reload bfd-watch' to send SIGHUP.
+
+On non-systemd systems, run 'bfd --watch' in a screen/tmux session or
+via a process supervisor. The cron entry can remain in place; it will
+be locked out automatically.
+
+WATCH_INTERVAL="10" — polling interval in seconds. Configure in conf.bfd.
+
 6) Rule Engine
 Rules are located under /usr/local/bfd/rules/. Each rule is a shell fragment
 that declares the service name, required binary, log path, and a regex pattern
@@ -375,6 +421,8 @@ Each rule file supports the following variables:
                conf.bfd).
   PORTS      - service ports for port-specific blocking (e.g., "22" for sshd).
   SKIP_ALERT - set to "1" to suppress email alerts for this service.
+  RULE_EMAIL - override EMAIL_ADDRESS for this rule's alerts (per-rule
+               routing).
   TLOG_TF    - tracking identifier used by tlog for state file naming
                (e.g., "sshd", "dovecot").
 

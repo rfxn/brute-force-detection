@@ -1,4 +1,73 @@
 2.0.1:
+[Change] default cron interval reduced from 3 minutes to 2 minutes for
+         faster detection; cron entry updated to */2, bfd.timer updated to
+         OnUnitActiveSec=2min
+[New] alert system rewrite: batched email delivery replaces per-ban
+      inline alerts; multiple bans in one check cycle produce a single
+      email per recipient instead of one email per ban
+[New] format_duration() converts seconds to human-readable duration
+      (0→permanent, 300→5m, 3661→1h 1m)
+[New] format_alert_entry() formats per-ban detail block with host,
+      service, port, failure count, threshold context, ban type
+      (temporary/permanent/escalated), duration, expiry, recidivism
+      history, and reconstructed ban command
+[New] format_alert_body() assembles full email body with ban count
+      header, per-entry details, and per-host log excerpts
+[New] send_alerts() orchestrates batched delivery: groups entries by
+      recipient, augments subject with "(N bans)" suffix for multi-ban
+      emails, sources template in subshell, logs warning on mail failure
+[New] RULE_EMAIL per-rule alert routing: set RULE_EMAIL="addr" in a
+      rule file to override EMAIL_ADDRESS for that rule's alerts;
+      comment added to all 33 rule files and conf.bfd
+[Change] check() restructured: ban expiry/action computed before state
+         recording; alert data collected to temp file instead of inline
+         alert() call; send_alerts() called after rule loop
+[Change] alert.bfd template rewritten: uses pre-formatted ALERT_ENTRIES
+         variable; all formatting logic in testable library functions;
+         backward-compatible globals (ATTACK_HOST, MOD, etc.) set for
+         single-ban case
+[Fix] alert() called before ban lifecycle state was computed — ban type,
+      expiry, and recidivism history were unavailable to alert template;
+      alert data now collected after state computation
+[Fix] inbox flooding: distributed attacks triggering N bans sent N
+      separate emails; now batched into one email per recipient
+[Fix] missing SKIP_ALERT comment in postfix and proftpd rule files
+[Change] health_check() validates email alert configuration: checks
+         mail command availability when EMAIL_ALERTS=1
+[Change] cron.daily cleans up .alerts.* temp files
+[Change] README/README.md: updated email alert documentation with
+         batched alerts, enriched content, per-rule routing, RULE_EMAIL
+         in rule customization table
+[New] tests/test_alert_format.bats with 36 tests: format_duration (8),
+      format_alert_entry (11), format_alert_body (6), send_alerts (6),
+      check pipeline integration (5)
+[New] 3 email alert health check tests in test_health_check.bats;
+      suite now 507 tests
+[New] watch mode (bfd --watch): continuous foreground operation with
+      configurable polling interval (WATCH_INTERVAL, default 10s); reduces
+      detection latency from ~120s (cron) to ~10s; holds flock for lifetime
+      so cron runs are automatically locked out
+[New] WATCH_INTERVAL config variable in conf.bfd (default 10s); validated
+      as positive integer by validate_config()
+[New] cleanup_watch() extends cleanup with shutdown log message
+[New] reload_watch() SIGHUP handler: re-sources conf.bfd and
+      internals.conf with safety checks, re-extracts BAN_COMMAND templates,
+      re-runs validate_config() and detect_log_paths(), refreshes local IPs
+[New] bfd-watch.service systemd unit: Type=simple with
+      Conflicts=bfd.timer, ExecReload for SIGHUP, Restart=on-failure
+[New] -w|--watch CLI option for continuous watch mode
+[Change] install.sh installs bfd-watch.service alongside bfd.service and
+         bfd.timer when systemd is available; updated echo messages to show
+         both batch and watch mode options
+[Change] uninstall.sh stops, disables, and removes bfd-watch.service in
+         systemd cleanup
+[Change] health_check() displays WATCH_INTERVAL value
+[Change] README/README.md: added -w|--watch to usage block, added section
+         5.4 Watch Mode with signal handling, systemd usage, and
+         configuration reference; updated table of contents
+[New] 6 WATCH_INTERVAL validation tests in test_config_validation.bats
+[New] 1 WATCH_INTERVAL health_check display test in test_health_check.bats;
+      suite now 468 tests
 [Fix] README/README.md: update rule count from 30 to 33; add http_401,
       pam_generic, named to rule catalog; add Auth and DNS categories
 [New] 3 new service rules: http_401 (HTTP 401 in Apache/nginx access logs,

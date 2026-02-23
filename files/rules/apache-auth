@@ -5,6 +5,9 @@ TRIG="10"
 # uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
 
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
 # detect apache error log path
 if [ -f "/usr/local/apache/logs/error_log" ]; then
 	LP="/usr/local/apache/logs/error_log"

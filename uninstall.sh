@@ -29,11 +29,13 @@ echo "Press any key to continue or ^C to abort."
 read -r _
 
 if [ -d "$INSPATH" ]; then
-	# clean up systemd timer if present
+	# clean up systemd units if present
 	if command -v systemctl >/dev/null 2>&1; then
 		systemctl stop bfd.timer 2>/dev/null || true
 		systemctl disable bfd.timer 2>/dev/null || true
-		rm -f /etc/systemd/system/bfd.service /etc/systemd/system/bfd.timer
+		systemctl stop bfd-watch.service 2>/dev/null || true
+		systemctl disable bfd-watch.service 2>/dev/null || true
+		rm -f /etc/systemd/system/bfd.service /etc/systemd/system/bfd.timer /etc/systemd/system/bfd-watch.service
 		systemctl daemon-reload 2>/dev/null || true
 	fi
 	rm -rf "$INSPATH" "$BINPATH" /etc/cron.d/bfd /etc/cron.daily/bfd /etc/logrotate.d/bfd /var/log/bfd_log

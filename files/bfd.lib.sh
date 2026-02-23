@@ -196,6 +196,11 @@ validate_config() {
 		echo "error: LOG_SOURCE must be auto, file, or journal (got '$LOG_SOURCE')."
 		exit $EXIT_CONFIG_ERROR
 	fi
+	local _wi="${WATCH_INTERVAL-10}"
+	if ! [[ "$_wi" =~ $int_pattern ]] || [ "$_wi" -eq 0 ]; then
+		echo "error: WATCH_INTERVAL must be a positive integer (got '${WATCH_INTERVAL:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
 }
 
 # detect_log_paths requires: AUTH_LOG_PATH, KERNEL_LOG_PATH, MAIL_LOG_PATH,
@@ -1074,7 +1079,11 @@ health_check() {
 		pass_count=$((pass_count + 1))
 	fi
 
-	# 12. Active bans
+	# 12. WATCH_INTERVAL
+	echo "[PASS] WATCH_INTERVAL: ${WATCH_INTERVAL:-10}s (for bfd --watch)"
+	pass_count=$((pass_count + 1))
+
+	# 13. Active bans
 	local bans_file="$install_path/tmp/bans.active"
 	local ban_count=0
 	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
@@ -1083,6 +1092,222 @@ health_check() {
 	echo "[PASS] Active bans: $ban_count"
 	pass_count=$((pass_count + 1))
 
+	# 14. Email alerts
+	if [ "$EMAIL_ALERTS" = "1" ]; then
+		if command -v mail >/dev/null 2>&1; then
+			echo "[PASS] Email alerts: enabled (mail command found)"
+			pass_count=$((pass_count + 1))
+		else
+			echo "[WARN] Email alerts: enabled but 'mail' command not found"
+			warn_count=$((warn_count + 1))
+		fi
+	else
+		echo "[PASS] Email alerts: disabled"
+		pass_count=$((pass_count + 1))
+	fi
+
 	echo
 	echo "Summary: $pass_count passed, $warn_count warnings, $fail_count failures"
+}
+
+# format_duration seconds — human-readable duration string
+# 0 → "permanent", 30 → "30s", 300 → "5m", 3661 → "1h 1m"
+format_duration() {
+	local seconds="$1"
+	if [ "$seconds" -eq 0 ]; then
+		echo "permanent"
+		return 0
+	fi
+	local hours minutes secs result=""
+	hours=$((seconds / 3600))
+	minutes=$(( (seconds % 3600) / 60 ))
+	secs=$((seconds % 60))
+	if [ "$hours" -gt 0 ]; then
+		result="${hours}h"
+	fi
+	if [ "$minutes" -gt 0 ]; then
+		if [ -n "$result" ]; then
+			result="$result ${minutes}m"
+		else
+			result="${minutes}m"
+		fi
+	fi
+	if [ "$secs" -gt 0 ] && [ "$hours" -eq 0 ]; then
+		if [ -n "$result" ]; then
+			result="$result ${secs}s"
+		else
+			result="${secs}s"
+		fi
+	fi
+	# edge case: exactly N hours with 0 minutes and 0 seconds
+	if [ -z "$result" ]; then
+		result="${hours}h"
+	fi
+	echo "$result"
+}
+
+# format_alert_entry n total host mod ports count expiry action recent trig trig_window
+# Format a single ban's detail block for email alerts.
+# Sets ATTACK_HOST, MOD, PORTS globals so $BAN_COMMAND_TEMPLATE expands correctly.
+format_alert_entry() {
+	local n="$1" total="$2" host="$3" mod="$4" ports="$5"
+	local count="$6" expiry="$7" action="$8" recent="$9"
+	shift 9
+	local trig="$1" trig_window="$2"
+
+	if [ "$total" -gt 1 ]; then
+		echo "--- Ban $n of $total ---"
+		echo ""
+	fi
+
+	# set globals for BAN_COMMAND_TEMPLATE expansion
+	ATTACK_HOST="$host"
+	MOD="$mod"
+	PORTS="$ports"
+
+	local ban_type ban_detail=""
+	if [ "$action" = "escalate" ]; then
+		ban_type="Permanent (escalated from repeat offenses)"
+	elif [ "$expiry" = "0" ]; then
+		ban_type="Permanent"
+	else
+		local duration=$((expiry - UTIME))
+		if [ "$duration" -lt 0 ]; then
+			duration=0
+		fi
+		ban_type="Temporary ($(format_duration "$duration"))"
+		ban_detail=$(date -d "@${expiry}" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || echo "$expiry")
+	fi
+
+	local port_display="$ports"
+	if [ "$port_display" = "all" ]; then
+		port_display="all ports"
+	else
+		port_display="port $port_display"
+	fi
+
+	echo "  Host:       $host"
+	echo "  Service:    $mod ($port_display)"
+	echo "  Failures:   $count in ${trig_window}s window (threshold: $trig)"
+	if [ -n "$ban_detail" ]; then
+		echo "  Ban:        $ban_type, expires $ban_detail"
+	else
+		echo "  Ban:        $ban_type"
+	fi
+	if [ "${BAN_PERMANENT_AFTER:-0}" -gt 0 ]; then
+		echo "  History:    $recent previous ban(s) in ${BAN_PERMANENT_WINDOW:-86400}s (permanent at ${BAN_PERMANENT_AFTER})"
+	fi
+	# reconstruct ban command display via template expansion
+	local display_cmd
+	display_cmd=$(eval echo "$BAN_COMMAND_TEMPLATE" 2>/dev/null) || display_cmd="$BAN_COMMAND_TEMPLATE"
+	echo "  Command:    $display_cmd"
+	echo ""
+}
+
+# format_alert_body alerts_file loglines — full email body content
+# Reads alerts_file, formats entries and log excerpts.
+# Output goes to stdout.
+format_alert_body() {
+	local alerts_file="$1" loglines="${2:-50}"
+	local entry_count=0
+
+	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
+		return 0
+	fi
+
+	entry_count=$(wc -l < "$alerts_file")
+
+	if [ "$entry_count" -gt 1 ]; then
+		echo "$entry_count hosts banned in this check cycle."
+	fi
+	echo ""
+
+	# format each entry
+	local n=0
+	local host mod ports count expiry action recent lp recipient trig trig_window
+	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window; do
+		[ -z "$host" ] && continue
+		n=$((n + 1))
+		format_alert_entry "$n" "$entry_count" "$host" "$mod" "$ports" \
+			"$count" "$expiry" "$action" "$recent" "$trig" "$trig_window"
+	done < "$alerts_file"
+
+	# log section
+	local has_logs=0
+	n=0
+	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window; do
+		[ -z "$host" ] && continue
+		n=$((n + 1))
+		if [ -z "$lp" ] || [ ! -f "$lp" ]; then
+			if [ "$has_logs" -eq 0 ]; then
+				echo "  Source logs: not available (logs via systemd journal)"
+				has_logs=1
+			fi
+			continue
+		fi
+		has_logs=1
+		if [ "$entry_count" -gt 1 ]; then
+			echo "  Source logs from '$mod' [$host]:"
+		else
+			echo "  Source logs from '$mod':"
+		fi
+		tail -n 5000 "$lp" | grep -Fw "$host" | tail -n "$loglines" | sed 's/^/  /'
+		echo ""
+	done < "$alerts_file"
+}
+
+# send_alerts alerts_file subject template loglines — orchestrate batched alert emails
+# Groups entries by RECIPIENT field, calls format_alert_body per recipient,
+# sources template and pipes to mail.
+send_alerts() {
+	local alerts_file="$1" subject="$2" template="$3" loglines="${4:-50}"
+
+	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
+		return 0
+	fi
+
+	# get unique recipients (field 9)
+	local recipients
+	recipients=$(awk -F'|' '{print $9}' "$alerts_file" | sort -u)
+
+	local recip
+	while IFS= read -r recip; do
+		[ -z "$recip" ] && continue
+		# create per-recipient temp file
+		local recip_file
+		recip_file=$(mktemp "${alerts_file}.recip.XXXXXX")
+		awk -F'|' -v r="$recip" '$9 == r' "$alerts_file" > "$recip_file"
+
+		local alert_count
+		alert_count=$(wc -l < "$recip_file")
+
+		# set ALERT_COUNT and ALERT_ENTRIES for template
+		ALERT_COUNT="$alert_count"
+		ALERT_ENTRIES=$(format_alert_body "$recip_file" "$loglines")
+
+		# set backward-compat globals for single-ban case
+		if [ "$alert_count" -eq 1 ]; then
+			local _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw
+			IFS='|' read -r _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw < "$recip_file"
+			ATTACK_HOST="$_host"
+			MOD="$_mod"
+			ATTACK_COUNT="$_count"
+			LP="$_lp"
+			PORTS="$_ports"
+			BAN_COMMAND=$(eval echo "$BAN_COMMAND_TEMPLATE" 2>/dev/null) || BAN_COMMAND="$BAN_COMMAND_TEMPLATE"
+		fi
+
+		# augment subject for multi-ban
+		local mail_subject="$subject"
+		if [ "$alert_count" -gt 1 ]; then
+			mail_subject="$subject ($alert_count bans)"
+		fi
+
+		# source template and pipe to mail
+		if ! (. "$template") | mail -s "$mail_subject" "$recip" 2>/dev/null; then
+			eout "alert email to $recip failed (mail command returned non-zero)." le
+		fi
+
+		rm -f "$recip_file"
+	done <<< "$recipients"
 }
