@@ -86,6 +86,65 @@ validate_ip_any() {
 	validate_ip6 "$1" 2>/dev/null
 }
 
+# ip_to_subnet ip mask — compute the network address for an IP and prefix length
+# IPv4: bit-shift arithmetic for any mask 8-32
+# IPv6: group-aligned mask (must be multiple of 16); expands :: then truncates
+ip_to_subnet() {
+	local ip="$1" mask="$2"
+	if [[ "$ip" == *:* ]]; then
+		# IPv6: group-aligned mask (multiple of 16)
+		local groups_to_keep=$((mask / 16))
+		local full_groups=() left_count=0 right_count=0
+		if [[ "$ip" == *::* ]]; then
+			local left_part="${ip%%::*}" right_part="${ip#*::}"
+			if [ -n "$left_part" ]; then
+				IFS=':' read -ra _left <<< "$left_part"
+				left_count=${#_left[@]}
+			fi
+			if [ -n "$right_part" ]; then
+				IFS=':' read -ra _right <<< "$right_part"
+				right_count=${#_right[@]}
+			fi
+			local zero_fill=$((8 - left_count - right_count))
+			local i
+			for ((i = 0; i < left_count; i++)); do
+				full_groups+=("${_left[$i]}")
+			done
+			for ((i = 0; i < zero_fill; i++)); do
+				full_groups+=("0")
+			done
+			for ((i = 0; i < right_count; i++)); do
+				full_groups+=("${_right[$i]}")
+			done
+		else
+			IFS=':' read -ra full_groups <<< "$ip"
+		fi
+		local subnet="" i
+		for ((i = 0; i < groups_to_keep; i++)); do
+			[ "$i" -gt 0 ] && subnet="${subnet}:"
+			subnet="${subnet}${full_groups[$i]}"
+		done
+		echo "${subnet}::/${mask}"
+		return 0
+	fi
+	# IPv4
+	local o1 o2 o3 o4
+	IFS='.' read -r o1 o2 o3 o4 <<< "$ip"
+	if [ "$mask" -ge 24 ]; then
+		local shift=$((32 - mask))
+		o4=$(( (o4 >> shift) << shift ))
+		echo "${o1}.${o2}.${o3}.${o4}/${mask}"
+	elif [ "$mask" -ge 16 ]; then
+		local shift=$((24 - mask))
+		o3=$(( (o3 >> shift) << shift ))
+		echo "${o1}.${o2}.${o3}.0/${mask}"
+	elif [ "$mask" -ge 8 ]; then
+		local shift=$((16 - mask))
+		o2=$(( (o2 >> shift) << shift ))
+		echo "${o1}.${o2}.0.0/${mask}"
+	fi
+}
+
 sanitize_mod() {
 	local mod="$1"
 	local mod_pattern='^[a-zA-Z0-9_-]+$'
@@ -164,6 +223,21 @@ validate_config() {
 	fi
 	if ! [[ "$TRIG_GLOBAL" =~ $int_pattern ]]; then
 		echo "error: TRIG_GLOBAL must be a non-negative integer (got '$TRIG_GLOBAL')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	local _st="${SUBNET_TRIG:-0}"
+	if ! [[ "$_st" =~ $int_pattern ]]; then
+		echo "error: SUBNET_TRIG must be a non-negative integer (got '${SUBNET_TRIG:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	local _sm="${SUBNET_MASK:-24}"
+	if ! [[ "$_sm" =~ $int_pattern ]] || [ "$_sm" -lt 8 ] || [ "$_sm" -gt 32 ]; then
+		echo "error: SUBNET_MASK must be an integer between 8 and 32 (got '${SUBNET_MASK:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	local _sm6="${SUBNET_MASK_V6:-48}"
+	if ! [[ "$_sm6" =~ $int_pattern ]] || [ "$_sm6" -lt 16 ] || [ "$_sm6" -gt 128 ] || [ $((_sm6 % 16)) -ne 0 ]; then
+		echo "error: SUBNET_MASK_V6 must be a multiple of 16 between 16 and 128 (got '${SUBNET_MASK_V6:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_DURATION:-0}" =~ $int_pattern ]]; then
@@ -707,7 +781,9 @@ _fw_route_setup() { :; }
 
 _fw_route_ban() {
 	local host="$1"
-	if [[ "$host" == *:* ]]; then
+	if [[ "$host" == */* ]]; then
+		ip route add blackhole "$host" 2>/dev/null
+	elif [[ "$host" == *:* ]]; then
 		ip route add blackhole "$host/128" 2>/dev/null
 	else
 		ip route add blackhole "$host/32" 2>/dev/null
@@ -716,7 +792,9 @@ _fw_route_ban() {
 
 _fw_route_unban() {
 	local host="$1"
-	if [[ "$host" == *:* ]]; then
+	if [[ "$host" == */* ]]; then
+		ip route del blackhole "$host" 2>/dev/null
+	elif [[ "$host" == *:* ]]; then
 		ip route del blackhole "$host/128" 2>/dev/null
 	else
 		ip route del blackhole "$host/32" 2>/dev/null
@@ -1205,6 +1283,136 @@ count_failures() {
 		state_events_append "$install_path" "$now" "$host" "$mod" "$count"
 	fi
 	state_events_count "$install_path" "$host" "$window" "$now" "$mod"
+}
+
+# count_subnet_attackers install_path window now mask mask_v6 min_unique
+# Single-pass awk over events.dat: groups events by subnet+service,
+# outputs "subnet_cidr mod unique_count" for subnets meeting threshold.
+# All subnet math done in awk (mawk-compatible) for O(n) performance.
+count_subnet_attackers() {
+	local install_path="$1" window="$2" now="$3"
+	local mask="$4" mask_v6="$5" min_unique="$6"
+	local events_file="$install_path/tmp/events.dat"
+	local cutoff=$((now - window))
+	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
+		return 0
+	fi
+	awk -v cutoff="$cutoff" -v mask="$mask" -v mask_v6="$mask_v6" \
+		-v min_unique="$min_unique" '
+	function pow2(n,    r, i) {
+		r = 1; for (i = 0; i < n; i++) r = r * 2; return r
+	}
+	function ipv4_subnet(ip, m,    parts, n, o1, o2, o3, o4, sh, divisor) {
+		n = split(ip, parts, ".")
+		if (n != 4) return ""
+		o1 = parts[1]+0; o2 = parts[2]+0; o3 = parts[3]+0; o4 = parts[4]+0
+		if (m >= 24) {
+			sh = 32 - m; divisor = pow2(sh)
+			o4 = int(o4 / divisor) * divisor
+			return o1 "." o2 "." o3 "." o4 "/" m
+		} else if (m >= 16) {
+			sh = 24 - m; divisor = pow2(sh)
+			o3 = int(o3 / divisor) * divisor
+			return o1 "." o2 "." o3 ".0/" m
+		} else if (m >= 8) {
+			sh = 16 - m; divisor = pow2(sh)
+			o2 = int(o2 / divisor) * divisor
+			return o1 "." o2 ".0.0/" m
+		}
+		return ""
+	}
+	function ipv6_subnet(ip, m,    n_keep, halves, lp, rp, nl, nr, \
+								full, zf, i, result) {
+		n_keep = int(m / 16)
+		if (index(ip, "::") > 0) {
+			split(ip, halves, "::")
+			nl = split(halves[1], lp, ":")
+			if (halves[1] == "") nl = 0
+			nr = split(halves[2], rp, ":")
+			if (halves[2] == "") nr = 0
+			for (i = 1; i <= nl; i++) full[i] = lp[i]
+			zf = 8 - nl - nr
+			for (i = nl + 1; i <= nl + zf; i++) full[i] = "0"
+			for (i = 1; i <= nr; i++) full[nl + zf + i] = rp[i]
+		} else {
+			if (split(ip, full, ":") != 8) return ""
+		}
+		result = ""
+		for (i = 1; i <= n_keep; i++) {
+			if (i > 1) result = result ":"
+			result = result full[i]
+		}
+		return result "::/" m
+	}
+	{
+		if ($1+0 < cutoff) next
+		ip = $2; mod = $3
+		if (index(ip, ":") > 0)
+			subnet = ipv6_subnet(ip, mask_v6)
+		else
+			subnet = ipv4_subnet(ip, mask)
+		if (subnet == "") next
+		key = subnet SUBSEP mod
+		ipkey = key SUBSEP ip
+		if (!(ipkey in seen)) {
+			seen[ipkey] = 1
+			unique[key]++
+		}
+		snet[key] = subnet
+		smod[key] = mod
+	}
+	END {
+		for (key in unique)
+			if (unique[key] >= min_unique)
+				print snet[key] " " smod[key] " " unique[key]
+	}' "$events_file"
+}
+
+# check_distributed install_path window now alerts_file
+# Post-loop distributed attack detection: bans entire subnets when
+# SUBNET_TRIG unique IPs from the same subnet attack the same service.
+# Echoes the number of subnet bans executed.
+check_distributed() {
+	local install_path="$1" window="$2" now="$3" alerts_file="$4"
+	local ban_count=0
+
+	local subnet mod unique_count
+	while IFS=' ' read -r subnet mod unique_count; do
+		[ -z "$subnet" ] && continue
+		if state_bans_active_check "$install_path" "$subnet"; then
+			eout "{$mod} subnet $subnet already banned, skipping." le
+			continue
+		fi
+		eout "{$mod} distributed attack detected: $unique_count unique IPs from $subnet." le
+		if execute_ban "$subnet" "$mod" "$DRY_RUN" "all"; then
+			ban_count=$((ban_count + 1))
+			local ban_expiry ban_action="subnet"
+			local recent_bans
+			recent_bans=$(state_bans_count_recent "$install_path" "$subnet" \
+				"${BAN_PERMANENT_WINDOW:-86400}" "$now")
+			if [ "${BAN_DURATION:-0}" -eq 0 ]; then
+				ban_expiry=0
+			elif check_recidivism "$install_path" "$subnet" \
+				"${BAN_PERMANENT_WINDOW:-86400}" "$now" "${BAN_PERMANENT_AFTER:-0}"; then
+				ban_expiry=0
+				ban_action="escalate"
+			else
+				local computed_duration
+				computed_duration=$(compute_ban_duration "$BAN_DURATION" "$recent_bans" \
+					"${BAN_ESCALATION:-none}" "${BAN_ESCALATION_CAP:-0}")
+				ban_expiry=$((now + computed_duration))
+			fi
+			state_bans_active_append "$install_path" "$now" "$ban_expiry" "$subnet" "$mod" "all"
+			state_bans_history_append "$install_path" "$now" "$ban_expiry" "$subnet" "$mod" "$ban_action"
+			state_pool_append "$install_path" "$now" "$subnet" "$mod"
+			if [ "$EMAIL_ALERTS" = "1" ] && [ "$DRY_RUN" != "1" ]; then
+				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}||${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}" >> "$alerts_file"
+			fi
+		fi
+	done < <(count_subnet_attackers "$install_path" "$window" "$now" \
+		"$SUBNET_MASK" "$SUBNET_MASK_V6" "$SUBNET_TRIG")
+
+	echo "$ban_count"
 }
 
 # --- Health check sub-functions ---
@@ -1860,7 +2068,7 @@ show_config() {
 		echo "$val"
 	else
 		# dump all active config variables
-		local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG LOCK_FILE_TIMEOUT WATCH_INTERVAL"
+		local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG LOCK_FILE_TIMEOUT WATCH_INTERVAL"
 		local v val
 		for v in $config_vars; do
 			eval "val=\${$v:-}"

@@ -312,3 +312,52 @@ run_validate_output() {
 	run run_validate 'BAN_ESCALATION_CAP="abc"'
 	assert_failure
 }
+
+# ============================================================
+# SUBNET_TRIG / SUBNET_MASK / SUBNET_MASK_V6 validation
+# ============================================================
+
+@test "validate_config: SUBNET_TRIG=0 passes" {
+	run run_validate 'SUBNET_TRIG="0"'
+	assert_success
+}
+
+@test "validate_config: SUBNET_TRIG=5 passes" {
+	run run_validate 'SUBNET_TRIG="5"'
+	assert_success
+}
+
+@test "validate_config: SUBNET_TRIG=abc rejects" {
+	run run_validate 'SUBNET_TRIG="abc"'
+	assert_failure
+}
+
+@test "validate_config: SUBNET_MASK=24 passes" {
+	run run_validate 'SUBNET_MASK="24"'
+	assert_success
+}
+
+@test "validate_config: SUBNET_MASK=7 rejects (below minimum)" {
+	run run_validate 'SUBNET_MASK="7"'
+	assert_failure
+}
+
+@test "validate_config: SUBNET_MASK=33 rejects (above maximum)" {
+	run run_validate 'SUBNET_MASK="33"'
+	assert_failure
+}
+
+@test "validate_config: SUBNET_MASK_V6=48 passes" {
+	run run_validate 'SUBNET_MASK_V6="48"'
+	assert_success
+}
+
+@test "validate_config: SUBNET_MASK_V6=50 rejects (not multiple of 16)" {
+	run run_validate 'SUBNET_MASK_V6="50"'
+	assert_failure
+}
+
+@test "validate_config: SUBNET_MASK_V6 unset uses default (passes)" {
+	run run_validate 'unset SUBNET_MASK_V6'
+	assert_success
+}

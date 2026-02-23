@@ -1,4 +1,29 @@
 2.0.1:
+[New] Distributed attack detection: when SUBNET_TRIG unique IPs from the
+      same subnet attack the same service within TRIG_WINDOW, the entire
+      subnet is banned; disabled by default (SUBNET_TRIG="0")
+[New] ip_to_subnet() computes network address for IPv4 (bit-shift, any
+      mask 8-32) and IPv6 (group-aligned, multiple of 16)
+[New] count_subnet_attackers() single-pass mawk-compatible awk over
+      events.dat; groups by subnet+service, outputs subnets exceeding
+      unique IP threshold
+[New] check_distributed() orchestrates subnet bans: reuses execute_ban,
+      state recording, escalation, and alert pipeline; action="subnet"
+      distinguishes from per-IP bans in bans.history
+[New] SUBNET_TRIG, SUBNET_MASK (default 24), SUBNET_MASK_V6 (default 48)
+      config variables in conf.bfd
+[Change] validate_config() validates SUBNET_TRIG (non-negative integer),
+         SUBNET_MASK (8-32), SUBNET_MASK_V6 (multiple of 16, 16-128)
+[Change] show_config() includes SUBNET_TRIG, SUBNET_MASK, SUBNET_MASK_V6
+[Change] check() calls check_distributed() after per-IP loop when
+         SUBNET_TRIG > 0
+[Fix] _fw_route_ban/_fw_route_unban: CIDR addresses (e.g., 10.0.0.0/24)
+      passed through without appending extra /32 or /128 suffix
+[New] tests/test_subnet_detection.bats: 21 tests for ip_to_subnet,
+      count_subnet_attackers, check_distributed
+[New] 9 subnet validation tests in test_config_validation.bats
+[New] 1 route backend CIDR test in test_firewall_backend.bats; suite now
+      662 tests
 [New] Rule testing tool: bfd --test RULE [FILE] tests rule patterns
       against log files using the full existing pipeline; overrides
       TLOG_PATH with a wrapper that cats the entire file

@@ -296,6 +296,13 @@ check() {
 		done < <(echo "$HOSTS_PARSED" | uniq)
 	done
 
+	# distributed attack detection
+	if [ "${SUBNET_TRIG:-0}" -gt 0 ]; then
+		local subnet_bans
+		subnet_bans=$(check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME" "$alerts_file")
+		bans_count=$((bans_count + subnet_bans))
+	fi
+
 	# send batched alert emails
 	if [ "$EMAIL_ALERTS" = "1" ] && [ -s "$alerts_file" ]; then
 		send_alerts "$alerts_file" "$EMAIL_SUBJECT" "$EMAIL_TEMPLATE" "${EMAIL_LOGLINES:-50}"

@@ -21,6 +21,22 @@ TRIG_WINDOW="300"
 TRIG_GLOBAL="0"
 
 # =============================================
+# Distributed Attack Detection
+# =============================================
+
+# unique IPs from same subnet triggering a subnet ban (0 = disabled)
+# when N unique IPs from the same subnet attack the same service
+# within TRIG_WINDOW, the entire subnet is banned
+SUBNET_TRIG="0"
+
+# IPv4 subnet mask for distributed attack aggregation
+SUBNET_MASK="24"
+
+# IPv6 subnet mask for distributed attack aggregation
+# must be a multiple of 16 (group-aligned: 16, 32, 48, 64, ...)
+SUBNET_MASK_V6="48"
+
+# =============================================
 # Ban Actions
 # =============================================
 
