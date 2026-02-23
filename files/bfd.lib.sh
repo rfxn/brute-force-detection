@@ -1293,3 +1293,508 @@ send_alerts() {
 		rm -f "$recip_file"
 	done <<< "$recipients"
 }
+
+# --- Phase 18: CLI Evolution functions ---
+
+# show_status install_path — display global system status
+show_status() {
+	local install_path="$1"
+	local now
+	now=$(date +"%s")
+
+	echo "BFD Status ($(date +"%Y-%m-%d %H:%M:%S"))"
+	echo ""
+
+	# Mode detection
+	local mode="unknown"
+	local watch_pid=""
+	watch_pid=$(pgrep -f "bfd.*--watch" 2>/dev/null | head -1) || true
+	if [ -z "$watch_pid" ]; then
+		watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true
+	fi
+	if [ -n "$watch_pid" ] && [ "$watch_pid" != "$$" ]; then
+		local uptime_secs
+		uptime_secs=$(ps -o etimes= -p "$watch_pid" 2>/dev/null | tr -d ' ') || uptime_secs=""
+		if [ -n "$uptime_secs" ]; then
+			mode="watch (pid $watch_pid, uptime $(format_duration "$uptime_secs"))"
+		else
+			mode="watch (pid $watch_pid)"
+		fi
+	elif crontab -l 2>/dev/null | grep -q 'bfd' || [ -f /etc/cron.d/bfd ]; then
+		mode="cron"
+	fi
+	echo "  Mode:           $mode"
+
+	# Active bans
+	local bans_file="$install_path/tmp/bans.active"
+	local total_bans=0 temp_bans=0 perm_bans=0
+	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
+		total_bans=$(wc -l < "$bans_file")
+		perm_bans=$(awk '$2+0 == 0' "$bans_file" | wc -l)
+		temp_bans=$((total_bans - perm_bans))
+	fi
+	echo "  Active bans:    $total_bans ($temp_bans temporary, $perm_bans permanent)"
+
+	# Events (24h) from events.dat
+	local events_file="$install_path/tmp/events.dat"
+	local cutoff_24h=$((now - 86400))
+	local event_count=0 service_count=0
+	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+		event_count=$(awk -v cutoff="$cutoff_24h" '$1+0 >= cutoff' "$events_file" | wc -l)
+		service_count=$(awk -v cutoff="$cutoff_24h" '$1+0 >= cutoff {s[$3]=1} END {for(k in s) c++; print c+0}' "$events_file")
+	fi
+	echo "  Events (24h):   $event_count across $service_count services"
+
+	# Last run from bfd_log
+	local last_run=""
+	if [ -f "${BFD_LOG_PATH:-/var/log/bfd_log}" ]; then
+		last_run=$(grep 'run complete:' "${BFD_LOG_PATH:-/var/log/bfd_log}" 2>/dev/null | tail -1)
+	fi
+	if [ -n "$last_run" ]; then
+		local run_ts run_info
+		run_ts=$(echo "$last_run" | awk '{print $1, $2, $3}')
+		run_info=$(echo "$last_run" | sed 's/.*run complete: //')
+		echo "  Last run:       $run_ts ($run_info)"
+	else
+		echo "  Last run:       unknown"
+	fi
+
+	# Top attacker
+	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+		local top_line top_count top_ip top_svc
+		top_line=$(awk -v cutoff="$cutoff_24h" '$1+0 >= cutoff {print $2}' "$events_file" \
+			| sort | uniq -c | sort -rn | head -1)
+		if [ -n "$top_line" ]; then
+			top_count=$(echo "$top_line" | awk '{print $1}')
+			top_ip=$(echo "$top_line" | awk '{print $2}')
+			top_svc=$(awk -v cutoff="$cutoff_24h" -v ip="$top_ip" \
+				'$1+0 >= cutoff && $2 == ip {print $3}' "$events_file" \
+				| sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
+			echo "  Top attacker:   $top_ip ($top_svc, $top_count events)"
+		fi
+	fi
+	echo ""
+
+	# Active rules
+	local rules_active=0 rules_total=0
+	if [ -d "${RULES_PATH:-$install_path/rules}" ]; then
+		local rule_file rule_name
+		for rule_file in "${RULES_PATH:-$install_path/rules}"/*; do
+			[ ! -f "$rule_file" ] && continue
+			rules_total=$((rules_total + 1))
+			rule_name=$(basename "$rule_file")
+			local _sv_REQ="${REQ:-}" _sv_LP="${LP:-}" _sv_TF="${TLOG_TF:-}"
+			REQ="" LP="" TLOG_TF=""
+			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+				if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+					rules_active=$((rules_active + 1))
+				fi
+			fi
+			REQ="$_sv_REQ" LP="$_sv_LP" TLOG_TF="$_sv_TF"
+		done
+	fi
+	echo "  Active Rules:   $rules_active/$rules_total"
+
+	# Top services
+	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+		local top_svcs
+		top_svcs=$(awk -v cutoff="$cutoff_24h" \
+			'$1+0 >= cutoff {s[$3]++} END {for(k in s) print s[k], k}' \
+			"$events_file" | sort -rn | head -3 \
+			| awk '{printf "%s (%s)", $2, $1; if(NR<3) printf ", "}')
+		if [ -n "$top_svcs" ]; then
+			echo "  Top services:   $top_svcs"
+		fi
+	fi
+}
+
+# show_service_status install_path service — per-service status display
+show_service_status() {
+	local install_path="$1" service="$2"
+	local now
+	now=$(date +"%s")
+
+	echo "BFD Status: $service ($(date +"%Y-%m-%d %H:%M:%S"))"
+	echo ""
+
+	# Find rule file
+	local rule_file="${RULES_PATH:-$install_path/rules}/$service"
+	if [ ! -f "$rule_file" ]; then
+		echo "  error: no rule found for '$service'"
+		return 1
+	fi
+
+	# Source rule to get config
+	local _sv_REQ="${REQ:-}" _sv_LP="${LP:-}" _sv_TRIG="${TRIG:-}"
+	local _sv_TF="${TLOG_TF:-}" _sv_PORTS="${PORTS:-}"
+	REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
+	safe_source "$rule_file" "rule:$service" 2>/dev/null
+
+	local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
+	local rule_ports="${PORTS:-all}"
+
+	# Log source
+	if [ -n "${LP:-}" ] && [ -f "$LP" ]; then
+		echo "  Log:            $LP (file)"
+	elif command -v journalctl >/dev/null 2>&1 && \
+	     tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
+		echo "  Log:            journal (${TLOG_TF:-})"
+	else
+		echo "  Log:            not available"
+	fi
+
+	echo "  Threshold:      $rule_trig failures in ${TRIG_WINDOW:-300}s"
+	echo "  Ports:          $rule_ports"
+
+	# Events (24h) for this service
+	local events_file="$install_path/tmp/events.dat"
+	local cutoff_24h=$((now - 86400))
+	local svc_events=0 svc_ips=0
+	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+		svc_events=$(awk -v cutoff="$cutoff_24h" -v svc="$service" \
+			'$1+0 >= cutoff && $3 == svc' "$events_file" | wc -l)
+		svc_ips=$(awk -v cutoff="$cutoff_24h" -v svc="$service" \
+			'$1+0 >= cutoff && $3 == svc {ips[$2]=1} END {for(k in ips) c++; print c+0}' \
+			"$events_file")
+	fi
+	echo "  Events (24h):   $svc_events from $svc_ips unique IPs"
+
+	# Active bans for this service
+	local bans_file="$install_path/tmp/bans.active"
+	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
+		local svc_bans
+		svc_bans=$(awk -v svc="$service" '$4 == svc' "$bans_file")
+		if [ -n "$svc_bans" ]; then
+			local ban_count
+			ban_count=$(echo "$svc_bans" | wc -l)
+			echo "  Active bans:    $ban_count"
+			local ts expiry ip mod ports
+			while IFS=' ' read -r ts expiry ip mod ports; do
+				[ -z "$ts" ] && continue
+				if [ "$expiry" = "0" ]; then
+					echo "    $ip (permanent)"
+				else
+					local remain=$(( (expiry - now) / 60 ))
+					[ "$remain" -lt 0 ] && remain=0
+					echo "    $ip (expires in ${remain}m)"
+				fi
+			done <<< "$svc_bans"
+		else
+			echo "  Active bans:    0"
+		fi
+	else
+		echo "  Active bans:    0"
+	fi
+
+	# Restore saved variables
+	REQ="$_sv_REQ" LP="$_sv_LP" TRIG="$_sv_TRIG"
+	TLOG_TF="$_sv_TF" PORTS="$_sv_PORTS"
+}
+
+# show_config [var] — dump active config or single variable value
+show_config() {
+	local var="${1:-}"
+	if [ -n "$var" ]; then
+		# single variable lookup — only allow known config vars
+		local val
+		eval "val=\${$var:-}" 2>/dev/null || { echo "error: invalid variable name."; return 1; }
+		echo "$val"
+	else
+		# dump all active config variables
+		local config_vars="TRIG TRIG_WINDOW TRIG_GLOBAL BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG LOCK_FILE_TIMEOUT WATCH_INTERVAL"
+		local v val
+		for v in $config_vars; do
+			eval "val=\${$v:-}"
+			echo "$v=$val"
+		done
+	fi
+}
+
+# flush_bans install_path mode utime unban_cmd_template [unban_cmd_v6_template]
+# mode: "temp" — unban temporary bans only; "all" — unban everything
+flush_bans() {
+	local install_path="$1" mode="$2" utime="$3"
+	local unban_cmd_template="$4" unban_cmd_v6="${5:-}"
+	local bans_file="$install_path/tmp/bans.active"
+	local count=0
+
+	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
+		echo "No active bans."
+		return 0
+	fi
+
+	# Read all entries first (avoid modifying file while reading)
+	local entries
+	entries=$(cat "$bans_file")
+
+	local ts expiry host mod ports
+	while IFS=' ' read -r ts expiry host mod ports; do
+		[ -z "$ts" ] && continue
+		if [ "$mode" = "all" ] || { [ "$expiry" != "0" ] && [ "$expiry" -gt 0 ]; }; then
+			if [ -n "$unban_cmd_template" ]; then
+				execute_unban "$host" "$mod" "$unban_cmd_template" "$ports" "$unban_cmd_v6"
+			fi
+			state_bans_active_remove "$install_path" "$host"
+			state_bans_history_append "$install_path" "$utime" "$expiry" "$host" "$mod" "unban"
+			count=$((count + 1))
+		fi
+	done <<< "$entries"
+
+	echo "$count bans removed."
+}
+
+# search_ip install_path ip — unified IP search across all state files
+search_ip() {
+	local install_path="$1" ip="$2"
+	local now
+	now=$(date +"%s")
+
+	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
+
+	echo "IP Report: $ip"
+	echo ""
+
+	# Ban status
+	local bans_file="$install_path/tmp/bans.active"
+	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
+		local ban_line
+		ban_line=$(awk -v ip="$ip" '$3 == ip' "$bans_file" | head -1)
+		if [ -n "$ban_line" ]; then
+			local b_ts b_expiry
+			b_ts=$(echo "$ban_line" | awk '{print $1}')
+			b_expiry=$(echo "$ban_line" | awk '{print $2}')
+			local ban_since
+			ban_since=$(date -d "@${b_ts}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$b_ts")
+			if [ "$b_expiry" = "0" ]; then
+				echo "  Status:         BANNED (permanent since $ban_since)"
+			else
+				local remain=$(( (b_expiry - now) / 60 ))
+				[ "$remain" -lt 0 ] && remain=0
+				echo "  Status:         BANNED (temporary, ${remain}m remaining)"
+			fi
+		else
+			echo "  Status:         not banned"
+		fi
+	else
+		echo "  Status:         not banned"
+	fi
+
+	# Ban history
+	local history_file="$install_path/tmp/bans.history"
+	local cutoff_24h=$((now - 86400))
+	if [ -f "$history_file" ] && [ -s "$history_file" ]; then
+		local hist_bans hist_total
+		hist_bans=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" \
+			'$3 == ip && $1+0 >= cutoff && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
+			"$history_file")
+		hist_total=$(awk -v ip="$ip" \
+			'$3 == ip && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
+			"$history_file")
+		echo "  Ban history:    $hist_bans bans in 24h ($hist_total total)"
+	else
+		echo "  Ban history:    none"
+	fi
+
+	# Events
+	local events_file="$install_path/tmp/events.dat"
+	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+		local evt_count evt_svcs
+		evt_count=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" \
+			'$1+0 >= cutoff && $2 == ip' "$events_file" | wc -l)
+		evt_svcs=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" \
+			'$1+0 >= cutoff && $2 == ip {s[$3]++} END {for(k in s) printf "%s(%s) ", k, s[k]}' \
+			"$events_file")
+		echo "  Events (24h):   $evt_count failures across $evt_svcs"
+
+		# First/last seen
+		local first_seen last_seen
+		first_seen=$(awk -v ip="$ip" '$2 == ip {print $1; exit}' "$events_file")
+		last_seen=$(awk -v ip="$ip" '$2 == ip {ts=$1} END {print ts+0}' "$events_file")
+		if [ -n "$first_seen" ] && [ "$first_seen" -gt 0 ] 2>/dev/null; then
+			echo "  First seen:     $(date -d "@${first_seen}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$first_seen")"
+		fi
+		if [ -n "$last_seen" ] && [ "$last_seen" -gt 0 ] 2>/dev/null; then
+			echo "  Last seen:      $(date -d "@${last_seen}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$last_seen")"
+		fi
+	else
+		echo "  Events (24h):   0"
+	fi
+
+	# Attack pool
+	local pool_file="$install_path/stats/attack.pool"
+	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
+		local pool_count
+		pool_count=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
+		echo "  Attack pool:    $pool_count total triggers"
+	fi
+}
+
+# list_rules install_path — list all rules with status in table format
+list_rules() {
+	local install_path="$1"
+	local rules_dir="${RULES_PATH:-$install_path/rules}"
+	local log_source="${LOG_SOURCE:-auto}"
+
+	if [ ! -d "$rules_dir" ]; then
+		echo "error: rules directory not found."
+		return 1
+	fi
+
+	local atmp
+	atmp=$(mktemp "$install_path/tmp/.rules.XXXXXX")
+	echo "RULE|STATUS|TRIG|PORTS|LOG SOURCE" > "$atmp"
+
+	local active=0 inactive=0 total=0
+	local rule_file rule_name
+	for rule_file in "$rules_dir"/*; do
+		[ ! -f "$rule_file" ] && continue
+		rule_name=$(basename "$rule_file")
+		total=$((total + 1))
+
+		local _sv_REQ="${REQ:-}" _sv_LP="${LP:-}" _sv_TRIG="${TRIG:-}"
+		local _sv_TF="${TLOG_TF:-}" _sv_PORTS="${PORTS:-}"
+		REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
+
+		if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+			local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
+			local rule_ports="${PORTS:-all}"
+			if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+				active=$((active + 1))
+				local log_info
+				if [ -n "${LP:-}" ] && [ -f "$LP" ]; then
+					log_info="$LP (file)"
+				elif [ "$log_source" != "file" ] && \
+				     command -v journalctl >/dev/null 2>&1 && \
+				     tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
+					log_info="journal"
+				else
+					log_info="${LP:-n/a}"
+				fi
+				echo "$rule_name|active|$rule_trig|$rule_ports|$log_info" >> "$atmp"
+			else
+				inactive=$((inactive + 1))
+				echo "$rule_name|inactive|-|-|(no prereq)" >> "$atmp"
+			fi
+		else
+			inactive=$((inactive + 1))
+			echo "$rule_name|error|-|-|(source failed)" >> "$atmp"
+		fi
+
+		REQ="$_sv_REQ" LP="$_sv_LP" TRIG="$_sv_TRIG"
+		TLOG_TF="$_sv_TF" PORTS="$_sv_PORTS"
+	done
+
+	format_table < "$atmp"
+	echo ""
+	echo "$active active, $inactive inactive ($total total)"
+	rm -f "$atmp"
+}
+
+# show_rule install_path rule_name — show detailed rule info
+show_rule() {
+	local install_path="$1" rule_name="$2"
+	local rule_file="${RULES_PATH:-$install_path/rules}/$rule_name"
+	local log_source="${LOG_SOURCE:-auto}"
+
+	if [ ! -f "$rule_file" ]; then
+		echo "error: rule '$rule_name' not found."
+		return 1
+	fi
+
+	echo "Rule: $rule_name"
+
+	local _sv_REQ="${REQ:-}" _sv_LP="${LP:-}" _sv_TRIG="${TRIG:-}"
+	local _sv_TF="${TLOG_TF:-}" _sv_PORTS="${PORTS:-}"
+	REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
+
+	if ! safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+		echo "  Status:     error (failed to source)"
+		REQ="$_sv_REQ" LP="$_sv_LP" TRIG="$_sv_TRIG"
+		TLOG_TF="$_sv_TF" PORTS="$_sv_PORTS"
+		return 1
+	fi
+
+	if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+		echo "  Status:     active"
+	else
+		echo "  Status:     inactive (${REQ:-unset} not found)"
+	fi
+
+	echo "  Threshold:  ${TRIG:-${GLOB_TRIG:-15}} failures in ${TRIG_WINDOW:-300}s"
+	echo "  Ports:      ${PORTS:-all}"
+
+	if [ -n "${LP:-}" ] && [ -f "$LP" ]; then
+		echo "  Log:        $LP (file mode)"
+	elif [ "$log_source" != "file" ] && \
+	     command -v journalctl >/dev/null 2>&1 && \
+	     tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
+		echo "  Log:        journal (${TLOG_TF:-})"
+	else
+		echo "  Log:        ${LP:-not configured}"
+	fi
+
+	REQ="$_sv_REQ" LP="$_sv_LP" TRIG="$_sv_TRIG"
+	TLOG_TF="$_sv_TF" PORTS="$_sv_PORTS"
+}
+
+# --- Structured output formatters ---
+
+# _json_escape str — escape string for JSON output
+_json_escape() {
+	local s="$1"
+	s="${s//\\/\\\\}"
+	s="${s//\"/\\\"}"
+	echo "$s"
+}
+
+# list_bans_json install_path — JSON formatted active ban list
+list_bans_json() {
+	local install_path="$1"
+	local bans_file="$install_path/tmp/bans.active"
+	echo "["
+	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
+		local first=1
+		local ts expiry host mod ports
+		while IFS=' ' read -r ts expiry host mod ports; do
+			[ -z "$ts" ] && continue
+			local banned_fmt expiry_fmt
+			banned_fmt=$(date -d "@${ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$ts")
+			if [ "$expiry" = "0" ]; then
+				expiry_fmt="permanent"
+			else
+				expiry_fmt=$(date -d "@${expiry}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$expiry")
+			fi
+			if [ "$first" -eq 1 ]; then
+				first=0
+			else
+				echo ","
+			fi
+			printf '  {"ip": "%s", "service": "%s", "ports": "%s", "banned": "%s", "expires": "%s"}' \
+				"$(_json_escape "$host")" "$(_json_escape "$mod")" "$(_json_escape "$ports")" \
+				"$banned_fmt" "$expiry_fmt"
+		done < "$bans_file"
+	fi
+	echo ""
+	echo "]"
+}
+
+# list_bans_csv install_path — CSV formatted active ban list
+list_bans_csv() {
+	local install_path="$1"
+	local bans_file="$install_path/tmp/bans.active"
+	echo "ip,service,ports,banned,expires"
+	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
+		local ts expiry host mod ports
+		while IFS=' ' read -r ts expiry host mod ports; do
+			[ -z "$ts" ] && continue
+			local banned_fmt expiry_fmt
+			banned_fmt=$(date -d "@${ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$ts")
+			if [ "$expiry" = "0" ]; then
+				expiry_fmt="permanent"
+			else
+				expiry_fmt=$(date -d "@${expiry}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$expiry")
+			fi
+			echo "$host,$mod,$ports,$banned_fmt,$expiry_fmt"
+		done < "$bans_file"
+	fi
+}

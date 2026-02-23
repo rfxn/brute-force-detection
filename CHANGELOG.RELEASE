@@ -1,4 +1,28 @@
 2.0.1:
+[New] Phase 18 CLI evolution: status queries, bulk operations, config
+      inspection, rule management, and structured output
+[New] -S|--status [SERVICE] flag: global system status showing mode, active
+      bans (temp/perm split), 24h event count, last run, top attacker, active
+      rules, top services; per-service status with threshold, ports, events,
+      and active bans
+[New] -C|--config [VAR] flag: dump all active config variables or show a
+      single variable value (scriptable single-value output)
+[New] -R|--rules [RULE] flag: list all rules with status, threshold, ports,
+      and log source; or show detailed info for a specific rule
+[New] --flush-temp flag: unban all temporary bans (CSF -tf parity)
+[New] --flush-all flag: unban all bans (temporary + permanent)
+[New] --json and --csv global modifier flags for structured output (with -l)
+[New] show_status(), show_service_status(), show_config(), flush_bans(),
+      search_ip(), list_rules(), show_rule(), list_bans_json(),
+      list_bans_csv(), _json_escape() library functions
+[Change] -a|--attackpool extended: when given a valid IP address, shows
+         unified IP report (ban status, history, events, attack pool) instead
+         of string search; non-IP strings still do attack pool search
+[Change] argument parser pre-processes --json/--csv as global modifiers
+         before dispatching to action handler
+[Change] empty invocation (no arguments) now shows usage instead of error
+[New] tests/test_cli.bats: 34 tests covering status, config, flush, IP
+      search, rules, JSON/CSV output; suite now 534 tests
 [Change] Phase 17 code modernization: internal cleanup with no user-facing
          behavior changes
 [Change] removed dead code: count_attacks(), state_track_append/count/trim(),
