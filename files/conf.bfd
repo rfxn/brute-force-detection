@@ -99,6 +99,16 @@ BAN_PERMANENT_WINDOW="86400"
 # 0 = no retries (fail immediately), 2 = up to 2 retries with backoff
 BAN_RETRY_COUNT="2"
 
+# ban duration escalation for repeat offenders
+# none         - fixed BAN_DURATION for all temporary bans (default)
+# linear       - BAN_DURATION * ban_count (300s, 600s, 900s, ...)
+# exponential  - BAN_DURATION * 2^(ban_count-1) (300s, 600s, 1200s, ...)
+BAN_ESCALATION="none"
+
+# maximum escalated ban duration in seconds (0 = no cap)
+# only applies when BAN_ESCALATION is not none
+BAN_ESCALATION_CAP="86400"
+
 # =============================================
 # Email Alerts
 # =============================================

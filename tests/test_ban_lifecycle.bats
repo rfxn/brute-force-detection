@@ -225,3 +225,60 @@ teardown() {
 	state_init "$new_path"
 	[ -f "$new_path/tmp/bans.history" ]
 }
+
+# --- compute_ban_duration ---
+
+@test "compute_ban_duration: none mode returns base duration" {
+	run compute_ban_duration 300 3 "none" 0
+	assert_output "300"
+}
+
+@test "compute_ban_duration: linear first offense (count=0)" {
+	run compute_ban_duration 300 0 "linear" 0
+	assert_output "300"
+}
+
+@test "compute_ban_duration: linear second offense (count=1)" {
+	run compute_ban_duration 300 1 "linear" 0
+	assert_output "600"
+}
+
+@test "compute_ban_duration: linear third offense (count=2)" {
+	run compute_ban_duration 300 2 "linear" 0
+	assert_output "900"
+}
+
+@test "compute_ban_duration: exponential first offense (count=0)" {
+	run compute_ban_duration 300 0 "exponential" 0
+	assert_output "300"
+}
+
+@test "compute_ban_duration: exponential second offense (count=1)" {
+	run compute_ban_duration 300 1 "exponential" 0
+	assert_output "600"
+}
+
+@test "compute_ban_duration: exponential third offense (count=2)" {
+	run compute_ban_duration 300 2 "exponential" 0
+	assert_output "1200"
+}
+
+@test "compute_ban_duration: linear cap enforcement" {
+	run compute_ban_duration 300 9 "linear" 1800
+	assert_output "1800"
+}
+
+@test "compute_ban_duration: exponential cap enforcement" {
+	run compute_ban_duration 300 5 "exponential" 3600
+	assert_output "3600"
+}
+
+@test "compute_ban_duration: cap=0 means no cap" {
+	run compute_ban_duration 300 5 "exponential" 0
+	assert_output "9600"
+}
+
+@test "compute_ban_duration: unknown mode defaults to base" {
+	run compute_ban_duration 300 3 "bogus" 0
+	assert_output "300"
+}

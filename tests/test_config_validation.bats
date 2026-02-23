@@ -270,3 +270,45 @@ run_validate_output() {
 	run run_validate 'unset WATCH_INTERVAL'
 	assert_success
 }
+
+# --- BAN_ESCALATION ---
+
+@test "validate_config: BAN_ESCALATION=none passes" {
+	run run_validate 'BAN_ESCALATION="none"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION=linear passes" {
+	run run_validate 'BAN_ESCALATION="linear"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION=exponential passes" {
+	run run_validate 'BAN_ESCALATION="exponential"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION=bogus rejects" {
+	run run_validate 'BAN_ESCALATION="bogus"'
+	assert_failure
+}
+
+@test "validate_config: BAN_ESCALATION unset uses default (passes)" {
+	run run_validate 'unset BAN_ESCALATION'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION_CAP=86400 passes" {
+	run run_validate 'BAN_ESCALATION_CAP="86400"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION_CAP=0 passes" {
+	run run_validate 'BAN_ESCALATION_CAP="0"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION_CAP=abc rejects" {
+	run run_validate 'BAN_ESCALATION_CAP="abc"'
+	assert_failure
+}

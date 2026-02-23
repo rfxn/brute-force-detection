@@ -263,6 +263,10 @@ check() {
 					LAST_HOST="$ATTACK_HOST"
 					if execute_ban "$ATTACK_HOST" "$MOD" "$DRY_RUN" "${PORTS:-all}"; then
 						bans_count=$((bans_count + 1))
+						# get repeat offense count
+						local recent_bans
+						recent_bans=$(state_bans_count_recent "$INSTALL_PATH" "$ATTACK_HOST" \
+							"${BAN_PERMANENT_WINDOW:-86400}" "$UTIME")
 						# compute ban expiry and action
 						local ban_expiry ban_action="ban"
 						if [ "${BAN_DURATION:-0}" -eq 0 ]; then
@@ -273,16 +277,16 @@ check() {
 							ban_action="escalate"
 							eout "{$MOD} $ATTACK_HOST escalated to permanent ban (repeat offender)." le
 						else
-							ban_expiry=$((UTIME + BAN_DURATION))
+							local computed_duration
+							computed_duration=$(compute_ban_duration "$BAN_DURATION" "$recent_bans" \
+								"${BAN_ESCALATION:-none}" "${BAN_ESCALATION_CAP:-0}")
+							ban_expiry=$((UTIME + computed_duration))
 						fi
 						# record ban in lifecycle state
 						state_bans_active_append "$INSTALL_PATH" "$UTIME" "$ban_expiry" "$ATTACK_HOST" "$MOD" "${PORTS:-all}"
 						state_bans_history_append "$INSTALL_PATH" "$UTIME" "$ban_expiry" "$ATTACK_HOST" "$MOD" "$ban_action"
 						# collect alert data for batched delivery
 						if [ "$EMAIL_ALERTS" = "1" ] && [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
-							local recent_bans
-							recent_bans=$(state_bans_count_recent "$INSTALL_PATH" "$ATTACK_HOST" \
-								"${BAN_PERMANENT_WINDOW:-86400}" "$UTIME")
 							local eff_recipient="${RULE_EMAIL:-$EMAIL_ADDRESS}"
 							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${ATTACK_COUNT}|${ban_expiry}|${ban_action}|${recent_bans}|${LP}|${eff_recipient}|${TRIG}|${TRIG_WINDOW}" >> "$alerts_file"
 						fi

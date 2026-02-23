@@ -161,6 +161,24 @@ teardown() {
 	assert_output --partial "Service:    dovecot (port 110,143,993,995)"
 }
 
+@test "format_alert_entry: escalated duration shows base context" {
+	BAN_DURATION="300"
+	BAN_ESCALATION="linear"
+	# expiry = 1000 + 600 = 1600, duration = 600, base = 300, recent > 0
+	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "1600" "ban" "1" "5" "300"
+	assert_success
+	assert_output --partial "Temporary (10m, escalated from 5m)"
+}
+
+@test "format_alert_entry: non-escalated ban does not show escalation context" {
+	BAN_DURATION="300"
+	BAN_ESCALATION="none"
+	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "1300" "ban" "0" "5" "300"
+	assert_success
+	assert_output --partial "Temporary (5m)"
+	refute_output --partial "escalated from"
+}
+
 # --- format_alert_body ---
 
 @test "format_alert_body: empty file returns nothing" {

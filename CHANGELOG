@@ -1,4 +1,23 @@
 2.0.1:
+[New] Incremental ban time escalation: BAN_ESCALATION config variable
+      supports none (fixed duration), linear (base * count), and
+      exponential (base * 2^(count-1)) modes for repeat offenders
+[New] BAN_ESCALATION_CAP config variable caps escalated ban durations
+      (default 86400s/24h, 0 = no cap)
+[New] compute_ban_duration() calculates escalated duration based on
+      repeat offense count, mode, and cap
+[Change] check() ban block restructured: recent_bans computed before
+         expiry calculation; compute_ban_duration() applied when
+         BAN_ESCALATION is not none
+[Change] format_alert_entry() shows escalation context in temporary ban
+         display ("escalated from 5m") when duration differs from base
+[Change] show_config() includes BAN_ESCALATION and BAN_ESCALATION_CAP
+[Change] validate_config() validates BAN_ESCALATION (none/linear/
+         exponential) and BAN_ESCALATION_CAP (non-negative integer)
+[New] 11 compute_ban_duration tests in test_ban_lifecycle.bats
+[New] 8 BAN_ESCALATION validation tests in test_config_validation.bats
+[New] 2 escalation display tests in test_alert_format.bats; suite now
+      620 tests
 [New] Firewall backend system: FIREWALL="auto" in conf.bfd auto-detects
       firewall (APF, CSF, firewalld, UFW, nftables, iptables, route) and
       handles ban/unban commands automatically for IPv4 and IPv6; users no
