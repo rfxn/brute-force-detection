@@ -1,4 +1,42 @@
 2.0.1:
+[New] Firewall backend system: FIREWALL="auto" in conf.bfd auto-detects
+      firewall (APF, CSF, firewalld, UFW, nftables, iptables, route) and
+      handles ban/unban commands automatically for IPv4 and IPv6; users no
+      longer need to manually edit BAN_COMMAND/UNBAN_COMMAND templates
+[New] detect_firewall() auto-detection with priority ordering:
+      APF > CSF > firewalld > UFW > nftables > iptables > route
+[New] fw_ban(), fw_unban(), fw_setup(), fw_status() dispatch layer with
+      case-statement routing to backend-specific functions
+[New] nftables backend: dedicated inet bfd table with blocked4/blocked6
+      IP sets for O(1) ban lookups
+[New] iptables backend: dedicated bfd chain isolates BFD rules from user
+      INPUT chain; ip6tables for IPv6
+[New] firewalld backend: runtime-only rich rules (no --permanent) with
+      automatic IPv4/IPv6 family detection
+[New] route backend: ip route blackhole null-routing (/32 IPv4, /128 IPv6)
+[New] APF and CSF backends: direct integration with apf -d/-u and csf -d/-dr
+[New] UFW backend: ufw insert/delete deny rules
+[New] custom backend: backward-compatible eval of BAN_COMMAND/UNBAN_COMMAND
+      templates (preserves exact pre-Phase 25 behavior)
+[Change] execute_ban/execute_unban: simplified signatures, template parameters
+         removed; ban/unban dispatch goes through fw_ban/fw_unban
+[Change] process_unbans, manual_ban, manual_unban, flush_bans: template
+         parameters removed from function signatures
+[Change] validate_config: validates FIREWALL setting (auto, apf, csf,
+         firewalld, ufw, nftables, iptables, route, custom); BAN_COMMAND
+         empty check now conditional on FIREWALL=custom
+[Change] _hc_binaries: shows detected firewall backend and status; BAN_COMMAND
+         binary check only applies in custom mode
+[Change] format_alert_entry: shows backend name instead of raw command for
+         non-custom backends
+[Change] show_status: displays firewall backend line
+[Change] show_config: includes FIREWALL in config variable list
+[Change] importconf: upgrades from pre-Phase 25 config automatically set
+         FIREWALL="custom" to preserve existing BAN_COMMAND behavior
+[New] tests/test_firewall_backend.bats: 65 tests covering auto-detection,
+      dispatch layer, all 8 backends (mocked), execute_ban/unban integration,
+      validate_config FIREWALL validation, importconf migration; suite now
+      599 tests
 [New] Phase 18 CLI evolution: status queries, bulk operations, config
       inspection, rule management, and structured output
 [New] -S|--status [SERVICE] flag: global system status showing mode, active

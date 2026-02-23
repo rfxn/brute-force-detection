@@ -38,7 +38,11 @@ setup() {
 	WATCH_INTERVAL="10"
 	BAN_COMMAND_TEMPLATE="/bin/true"
 	UNBAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	UNBAN_COMMAND_V6_TEMPLATE=""
 	GLOB_TRIG="$TRIG"
+	# firewall backend — custom mode for test compatibility
+	_FW_BACKEND="custom"
 
 	# create rules directory with a test rule
 	RULES_PATH="$INSTALL_PATH/rules"
@@ -168,7 +172,7 @@ teardown() {
 # --- flush_bans ---
 
 @test "flush_bans: no active bans" {
-	run flush_bans "$INSTALL_PATH" "all" "1700000000" "/bin/true"
+	run flush_bans "$INSTALL_PATH" "all" "1700000000"
 	assert_success
 	assert_output "No active bans."
 }
@@ -176,7 +180,7 @@ teardown() {
 @test "flush_bans: temp mode skips permanent bans" {
 	echo "1700000000 0 10.0.0.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
 	echo "1700000000 1800000000 10.0.0.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
-	run flush_bans "$INSTALL_PATH" "temp" "1700000000" "/bin/true"
+	run flush_bans "$INSTALL_PATH" "temp" "1700000000"
 	assert_success
 	assert_output --partial "1 bans removed."
 	# permanent ban should remain
@@ -187,14 +191,14 @@ teardown() {
 @test "flush_bans: all mode removes everything" {
 	echo "1700000000 0 10.0.0.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
 	echo "1700000000 1800000000 10.0.0.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
-	run flush_bans "$INSTALL_PATH" "all" "1700000000" "/bin/true"
+	run flush_bans "$INSTALL_PATH" "all" "1700000000"
 	assert_success
 	assert_output --partial "2 bans removed."
 }
 
 @test "flush_bans: records unban in history" {
 	echo "1700000000 1800000000 10.0.0.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
-	flush_bans "$INSTALL_PATH" "temp" "1700000000" "/bin/true"
+	flush_bans "$INSTALL_PATH" "temp" "1700000000"
 	run cat "$INSTALL_PATH/tmp/bans.history"
 	assert_output --partial "10.0.0.2"
 	assert_output --partial "unban"

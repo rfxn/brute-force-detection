@@ -89,7 +89,7 @@ IGNORE_HOST_FILES="${IGNORE_HOST_FILES:-$INSTALL_PATH/exclude.files}"
 LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
 TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
 GLOB_TRIG="$TRIG"
-# extract BAN_COMMAND template without shell expansion of $ATTACK_HOST/$MOD
+# extract BAN_COMMAND templates (only needed for custom backend)
 BAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND")
 UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
 BAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND_V6")
@@ -98,15 +98,21 @@ UNBAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND_V6")
 validate_config
 detect_log_paths
 
-# warn if BAN_COMMAND binary not found
-BAN_CMD_BIN=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
-if [ -n "$BAN_CMD_BIN" ] && [ ! -x "$BAN_CMD_BIN" ]; then
-	echo "warning: BAN_COMMAND binary '$BAN_CMD_BIN' not found or not executable."
-fi
-if [ -n "$BAN_COMMAND_V6_TEMPLATE" ]; then
-	BAN_CMD_V6_BIN=$(echo "$BAN_COMMAND_V6_TEMPLATE" | awk '{print $1}')
-	if [ -n "$BAN_CMD_V6_BIN" ] && [ ! -x "$BAN_CMD_V6_BIN" ]; then
-		echo "warning: BAN_COMMAND_V6 binary '$BAN_CMD_V6_BIN' not found or not executable."
+# resolve firewall backend and run setup
+fw_resolve_backend
+fw_setup
+
+# warn if BAN_COMMAND binary not found (custom mode only)
+if [ "$_FW_BACKEND" = "custom" ]; then
+	BAN_CMD_BIN=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
+	if [ -n "$BAN_CMD_BIN" ] && [ ! -x "$BAN_CMD_BIN" ]; then
+		echo "warning: BAN_COMMAND binary '$BAN_CMD_BIN' not found or not executable."
+	fi
+	if [ -n "$BAN_COMMAND_V6_TEMPLATE" ]; then
+		BAN_CMD_V6_BIN=$(echo "$BAN_COMMAND_V6_TEMPLATE" | awk '{print $1}')
+		if [ -n "$BAN_CMD_V6_BIN" ] && [ ! -x "$BAN_CMD_V6_BIN" ]; then
+			echo "warning: BAN_COMMAND_V6 binary '$BAN_CMD_V6_BIN' not found or not executable."
+		fi
 	fi
 fi
 
@@ -255,7 +261,7 @@ check() {
 				elif [ "$LAST_HOST" != "$ATTACK_HOST" ]; then
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
 					LAST_HOST="$ATTACK_HOST"
-					if execute_ban "$ATTACK_HOST" "$MOD" "$BAN_COMMAND_TEMPLATE" "$DRY_RUN" "${PORTS:-all}" "${BAN_COMMAND_V6_TEMPLATE:-}"; then
+					if execute_ban "$ATTACK_HOST" "$MOD" "$DRY_RUN" "${PORTS:-all}"; then
 						bans_count=$((bans_count + 1))
 						# compute ban expiry and action
 						local ban_expiry ban_action="ban"
@@ -410,7 +416,7 @@ apool_list() {
 run() {
 	pre
 	get_state
-	process_unbans "$INSTALL_PATH" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}"
+	process_unbans "$INSTALL_PATH" "$UTIME"
 	check
 }
 
@@ -452,6 +458,8 @@ reload_watch() {
 	UNBAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND_V6")
 	validate_config
 	detect_log_paths
+	fw_resolve_backend
+	fw_setup
 	# refresh local IPs
 	if [ -n "$IP_BIN" ]; then
 		"$IP_BIN" addr list | grep -E 'inet6? ' | tr '/' ' ' | awk '{print$2}' > "$LO_HOSTS"
@@ -470,7 +478,7 @@ watch() {
 	while true; do
 		UTIME=$(date +"%s")
 		echo "$UTIME" > "$LOCK_FILE"
-		process_unbans "$INSTALL_PATH" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}"
+		process_unbans "$INSTALL_PATH" "$UTIME"
 		check
 		sleep "$WATCH_INTERVAL" &
 		wait $!
@@ -533,8 +541,8 @@ case "${1:-}" in
 		*)    list_bans "$INSTALL_PATH" ;;
 	esac
 	;;
--u|--unban)     vhead; pre; manual_unban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}" ;;
--b|--ban)       vhead; pre; manual_ban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "$BAN_COMMAND_TEMPLATE" "${3:-manual}" "all" "${BAN_COMMAND_V6_TEMPLATE:-}" ;;
+-u|--unban)     vhead; pre; manual_unban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" ;;
+-b|--ban)       vhead; pre; manual_ban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "${3:-manual}" "all" ;;
 -S|--status)
 	vhead; pre
 	if [ -n "${2:-}" ]; then
@@ -552,8 +560,8 @@ case "${1:-}" in
 		list_rules "$INSTALL_PATH"
 	fi
 	;;
---flush-temp)   vhead; pre; flush_bans "$INSTALL_PATH" "temp" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}" ;;
---flush-all)    vhead; pre; flush_bans "$INSTALL_PATH" "all" "$UTIME" "$UNBAN_COMMAND_TEMPLATE" "${UNBAN_COMMAND_V6_TEMPLATE:-}" ;;
+--flush-temp)   vhead; pre; flush_bans "$INSTALL_PATH" "temp" "$UTIME" ;;
+--flush-all)    vhead; pre; flush_bans "$INSTALL_PATH" "all" "$UTIME" ;;
 -v|--version)   vhead ;;
 -h|--help)      vhead; usage ;;
 "")             vhead; usage ;;
