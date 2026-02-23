@@ -434,3 +434,57 @@ run_validate_output() {
 	run _hc_config
 	assert_output --partial "KERNEL_LOG_PATH: not configured"
 }
+
+# --- _save_rule_vars / _restore_rule_vars / _clear_rule_vars ---
+
+@test "_save/_restore_rule_vars: round-trip preserves values" {
+	REQ="/usr/sbin/sshd" LP="/var/log/auth.log" TRIG="10"
+	TLOG_TF="sshd" PORTS="22" ARG_VAL="1.2.3.4" IGNOREREGEX="^ignore"
+	_save_rule_vars
+	REQ="" LP="" TRIG="" TLOG_TF="" PORTS="" ARG_VAL="" IGNOREREGEX=""
+	_restore_rule_vars
+	[ "$REQ" = "/usr/sbin/sshd" ]
+	[ "$LP" = "/var/log/auth.log" ]
+	[ "$TRIG" = "10" ]
+	[ "$TLOG_TF" = "sshd" ]
+	[ "$PORTS" = "22" ]
+	[ "$ARG_VAL" = "1.2.3.4" ]
+	[ "$IGNOREREGEX" = "^ignore" ]
+}
+
+@test "_clear_rule_vars: clears all rule variables" {
+	REQ="/usr/sbin/sshd" LP="/var/log/auth.log" TRIG="10"
+	TLOG_TF="sshd" PORTS="22" ARG_VAL="1.2.3.4" IGNOREREGEX="^ignore"
+	SKIP_ALERT="1" RULE_EMAIL="test@example.com"
+	_clear_rule_vars
+	[ -z "$REQ" ]
+	[ -z "$LP" ]
+	[ -z "$TRIG" ]
+	[ -z "$TLOG_TF" ]
+	[ -z "$PORTS" ]
+	[ -z "$ARG_VAL" ]
+	[ -z "$IGNOREREGEX" ]
+	[ -z "$SKIP_ALERT" ]
+	[ -z "$RULE_EMAIL" ]
+}
+
+# --- _rule_is_active ---
+
+@test "_rule_is_active: active when REQ exists" {
+	REQ="$TEST_TMPDIR/fake_binary"
+	touch "$REQ"
+	run _rule_is_active
+	assert_success
+}
+
+@test "_rule_is_active: inactive when REQ missing" {
+	REQ="$TEST_TMPDIR/nonexistent"
+	run _rule_is_active
+	assert_failure
+}
+
+@test "_rule_is_active: inactive when REQ empty" {
+	REQ=""
+	run _rule_is_active
+	assert_failure
+}

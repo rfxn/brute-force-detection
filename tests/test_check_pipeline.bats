@@ -1077,6 +1077,78 @@ EOF
 	[ "$pool_count" -ge 2 ]
 }
 
+# --- record_ban ---
+
+@test "record_ban: normal ban with duration returns correct expiry" {
+	BAN_DURATION="600"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	BAN_ESCALATION="none"
+	BAN_ESCALATION_CAP="0"
+	run record_ban "$INSTALL_PATH" "1000" "192.0.2.1" "sshd" "all" "ban"
+	assert_success
+	assert_output "1600|ban|0"
+}
+
+@test "record_ban: permanent ban (BAN_DURATION=0) returns expiry=0" {
+	BAN_DURATION="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	BAN_ESCALATION="none"
+	BAN_ESCALATION_CAP="0"
+	run record_ban "$INSTALL_PATH" "1000" "192.0.2.2" "sshd" "all" "ban"
+	assert_success
+	assert_output "0|ban|0"
+}
+
+@test "record_ban: escalated ban overrides action to escalate" {
+	BAN_DURATION="600"
+	BAN_PERMANENT_AFTER="2"
+	BAN_PERMANENT_WINDOW="86400"
+	BAN_ESCALATION="none"
+	BAN_ESCALATION_CAP="0"
+	# seed 2 prior bans within window
+	state_bans_history_append "$INSTALL_PATH" "500" "1100" "192.0.2.3" "sshd" "ban"
+	state_bans_history_append "$INSTALL_PATH" "800" "1400" "192.0.2.3" "sshd" "ban"
+	run record_ban "$INSTALL_PATH" "1000" "192.0.2.3" "sshd" "all" "ban"
+	assert_success
+	# expiry=0 (permanent), action=escalate, recent_bans=2
+	# eout prints escalation message on stdout; check last line for result
+	local last_line
+	last_line=$(echo "$output" | tail -1)
+	[ "$last_line" = "0|escalate|2" ]
+}
+
+@test "record_ban: custom action preserved when no escalation" {
+	BAN_DURATION="300"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	BAN_ESCALATION="none"
+	BAN_ESCALATION_CAP="0"
+	run record_ban "$INSTALL_PATH" "2000" "192.0.2.4" "postfix" "25" "subnet"
+	assert_success
+	assert_output "2300|subnet|0"
+}
+
+@test "record_ban: records in bans.active and bans.history" {
+	BAN_DURATION="600"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	BAN_ESCALATION="none"
+	BAN_ESCALATION_CAP="0"
+	record_ban "$INSTALL_PATH" "5000" "192.0.2.5" "dovecot" "993" "ban" >/dev/null
+	# verify bans.active
+	local active_line
+	active_line=$(cat "$INSTALL_PATH/tmp/bans.active")
+	[[ "$active_line" == *"192.0.2.5"* ]]
+	[[ "$active_line" == *"dovecot"* ]]
+	# verify bans.history
+	local hist_line
+	hist_line=$(cat "$INSTALL_PATH/tmp/bans.history")
+	[[ "$hist_line" == *"192.0.2.5"* ]]
+	[[ "$hist_line" == *"ban"* ]]
+}
+
 @test "check: LAST_HOST and LAST variables are not used" {
 	# verify the check() function source does not reference LAST_HOST or LAST
 	local check_src

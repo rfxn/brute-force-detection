@@ -1,4 +1,11 @@
 2.0.1:
+[New] record_ban() helper extracts ban lifecycle logic (expiry computation,
+      recidivism escalation, state recording) from check() and
+      check_distributed(), eliminating 20-line duplication
+[New] _save_rule_vars(), _restore_rule_vars(), _clear_rule_vars() helpers
+      consolidate per-rule variable save/restore across 7 callers
+[New] _rule_is_active() replaces inline [ -n "$REQ" ] && [ -f "$REQ" ]
+      checks in _hc_rules(), show_status(), list_rules()
 [Fix] POSIX compliance: == in [ ] tests replaced with = in eout(), tlog
 [Fix] unquoted $EXIT_* and $LOCK_FD variables in files/bfd; all now quoted
 [Fix] _hc_config() eval replaced with case statement for log path lookup

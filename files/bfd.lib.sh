@@ -157,6 +157,29 @@ sanitize_mod() {
 	return 1
 }
 
+# _save_rule_vars / _restore_rule_vars / _clear_rule_vars
+# Save, restore, and clear the per-rule variables that rule files set.
+# Used by functions that source rules but must not clobber the caller's state.
+_save_rule_vars() {
+	_SV_REQ="${REQ:-}"; _SV_LP="${LP:-}"; _SV_TRIG="${TRIG:-}"
+	_SV_TLOG_TF="${TLOG_TF:-}"; _SV_PORTS="${PORTS:-}"
+	_SV_ARG_VAL="${ARG_VAL:-}"; _SV_IGNOREREGEX="${IGNOREREGEX:-}"
+}
+_restore_rule_vars() {
+	REQ="$_SV_REQ"; LP="$_SV_LP"; TRIG="$_SV_TRIG"
+	TLOG_TF="$_SV_TLOG_TF"; PORTS="$_SV_PORTS"
+	ARG_VAL="$_SV_ARG_VAL"; IGNOREREGEX="$_SV_IGNOREREGEX"
+}
+_clear_rule_vars() {
+	REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
+	ARG_VAL="" IGNOREREGEX="" SKIP_ALERT="" RULE_EMAIL=""
+}
+
+# _rule_is_active — true when the rule's prerequisite binary/file exists
+_rule_is_active() {
+	[ -n "${REQ:-}" ] && [ -f "$REQ" ]
+}
+
 # eout requires: BFD_LOG_PATH, OUTPUT_SYSLOG, OUTPUT_SYSLOG_FILE
 eout() {
 	local arg="${1:-}"
@@ -1023,6 +1046,36 @@ check_recidivism() {
 	return 1
 }
 
+# record_ban install_path utime host mod ports ban_action
+# Computes ban expiry, records in bans.active + bans.history.
+# Echoes "ban_expiry|ban_action|recent_bans" to stdout.
+# Reads globals: BAN_DURATION, BAN_PERMANENT_WINDOW, BAN_PERMANENT_AFTER,
+#   BAN_ESCALATION, BAN_ESCALATION_CAP
+record_ban() {
+	local install_path="$1" utime="$2" host="$3" mod="$4"
+	local ports="$5" ban_action="$6"
+	local recent_bans
+	recent_bans=$(state_bans_count_recent "$install_path" "$host" \
+		"${BAN_PERMANENT_WINDOW:-86400}" "$utime")
+	local ban_expiry
+	if [ "${BAN_DURATION:-0}" -eq 0 ]; then
+		ban_expiry=0
+	elif check_recidivism "$install_path" "$host" \
+		"${BAN_PERMANENT_WINDOW:-86400}" "$utime" "${BAN_PERMANENT_AFTER:-0}"; then
+		ban_expiry=0
+		ban_action="escalate"
+		eout "{$mod} $host escalated to permanent ban (repeat offender)." le
+	else
+		local computed_duration
+		computed_duration=$(compute_ban_duration "$BAN_DURATION" "$recent_bans" \
+			"${BAN_ESCALATION:-none}" "${BAN_ESCALATION_CAP:-0}")
+		ban_expiry=$((utime + computed_duration))
+	fi
+	state_bans_active_append "$install_path" "$utime" "$ban_expiry" "$host" "$mod" "$ports"
+	state_bans_history_append "$install_path" "$utime" "$ban_expiry" "$host" "$mod" "$ban_action"
+	echo "${ban_expiry}|${ban_action}|${recent_bans}"
+}
+
 # compute_ban_duration base_duration ban_count mode cap
 # Computes escalated ban duration based on repeat offense count.
 # ban_count = previous bans (0 for first offense)
@@ -1411,24 +1464,10 @@ check_distributed() {
 		eout "{$mod} distributed attack detected: $unique_count unique IPs from $subnet." le
 		if execute_ban "$subnet" "$mod" "$DRY_RUN" "all"; then
 			ban_count=$((ban_count + 1))
-			local ban_expiry ban_action="subnet"
-			local recent_bans
-			recent_bans=$(state_bans_count_recent "$install_path" "$subnet" \
-				"${BAN_PERMANENT_WINDOW:-86400}" "$now")
-			if [ "${BAN_DURATION:-0}" -eq 0 ]; then
-				ban_expiry=0
-			elif check_recidivism "$install_path" "$subnet" \
-				"${BAN_PERMANENT_WINDOW:-86400}" "$now" "${BAN_PERMANENT_AFTER:-0}"; then
-				ban_expiry=0
-				ban_action="escalate"
-			else
-				local computed_duration
-				computed_duration=$(compute_ban_duration "$BAN_DURATION" "$recent_bans" \
-					"${BAN_ESCALATION:-none}" "${BAN_ESCALATION_CAP:-0}")
-				ban_expiry=$((now + computed_duration))
-			fi
-			state_bans_active_append "$install_path" "$now" "$ban_expiry" "$subnet" "$mod" "all"
-			state_bans_history_append "$install_path" "$now" "$ban_expiry" "$subnet" "$mod" "$ban_action"
+			local ban_result
+			ban_result=$(record_ban "$install_path" "$now" "$subnet" "$mod" "all" "subnet")
+			local ban_expiry ban_action recent_bans
+			IFS='|' read -r ban_expiry ban_action recent_bans <<< "$ban_result"
 			state_pool_append "$install_path" "$now" "$subnet" "$mod"
 			if [ "$EMAIL_ALERTS" = "1" ] && [ "$DRY_RUN" != "1" ]; then
 				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}||${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}" >> "$alerts_file"
@@ -1553,11 +1592,10 @@ _hc_rules() {
 			[ ! -f "$rule_file" ] && continue
 			rule_name=$(basename "$rule_file")
 			rules_total=$((rules_total + 1))
-			local _saved_REQ="${REQ:-}" _saved_LP="${LP:-}" _saved_TRIG="${TRIG:-}"
-			local _saved_TLOG_TF="${TLOG_TF:-}" _saved_PORTS="${PORTS:-}"
-			REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
+			_save_rule_vars
+			_clear_rule_vars
 			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
-				if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+				if _rule_is_active; then
 					local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
 					if [ -n "${LP:-}" ] && [ ! -f "$LP" ] && [ "$_hc_has_journalctl" -eq 1 ] && \
 					   [ "$log_source" != "file" ] && \
@@ -1576,8 +1614,7 @@ _hc_rules() {
 				rules_inactive=$((rules_inactive + 1))
 				echo "  [SKIP] $rule_name: failed to source"
 			fi
-			REQ="$_saved_REQ" LP="$_saved_LP" TRIG="$_saved_TRIG"
-			TLOG_TF="$_saved_TLOG_TF" PORTS="$_saved_PORTS"
+			_restore_rule_vars
 		done
 		echo "[PASS] Rules: $rules_active active, $rules_inactive inactive ($rules_total total)"
 		_hc_pass=$((_hc_pass + 1))
@@ -1995,14 +2032,14 @@ show_status() {
 			[ ! -f "$rule_file" ] && continue
 			rules_total=$((rules_total + 1))
 			rule_name=$(basename "$rule_file")
-			local _sv_REQ="${REQ:-}" _sv_LP="${LP:-}" _sv_TF="${TLOG_TF:-}"
-			REQ="" LP="" TLOG_TF=""
+			_save_rule_vars
+			_clear_rule_vars
 			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
-				if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+				if _rule_is_active; then
 					rules_active=$((rules_active + 1))
 				fi
 			fi
-			REQ="$_sv_REQ" LP="$_sv_LP" TLOG_TF="$_sv_TF"
+			_restore_rule_vars
 		done
 	fi
 	echo "  Active Rules:   $rules_active/$rules_total"
@@ -2037,9 +2074,8 @@ show_service_status() {
 	fi
 
 	# Source rule to get config
-	local _sv_REQ="${REQ:-}" _sv_LP="${LP:-}" _sv_TRIG="${TRIG:-}"
-	local _sv_TF="${TLOG_TF:-}" _sv_PORTS="${PORTS:-}"
-	REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
+	_save_rule_vars
+	_clear_rule_vars
 	safe_source "$rule_file" "rule:$service" 2>/dev/null
 
 	local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
@@ -2099,8 +2135,7 @@ show_service_status() {
 	fi
 
 	# Restore saved variables
-	REQ="$_sv_REQ" LP="$_sv_LP" TRIG="$_sv_TRIG"
-	TLOG_TF="$_sv_TF" PORTS="$_sv_PORTS"
+	_restore_rule_vars
 }
 
 # show_config [var] — dump active config or single variable value
@@ -2271,14 +2306,13 @@ list_rules() {
 		rule_name=$(basename "$rule_file")
 		total=$((total + 1))
 
-		local _sv_REQ="${REQ:-}" _sv_LP="${LP:-}" _sv_TRIG="${TRIG:-}"
-		local _sv_TF="${TLOG_TF:-}" _sv_PORTS="${PORTS:-}"
-		REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
+		_save_rule_vars
+		_clear_rule_vars
 
 		if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
 			local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
 			local rule_ports="${PORTS:-all}"
-			if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+			if _rule_is_active; then
 				active=$((active + 1))
 				local log_info
 				if [ -n "${LP:-}" ] && [ -f "$LP" ]; then
@@ -2300,8 +2334,7 @@ list_rules() {
 			echo "$rule_name|error|-|-|(source failed)" >> "$atmp"
 		fi
 
-		REQ="$_sv_REQ" LP="$_sv_LP" TRIG="$_sv_TRIG"
-		TLOG_TF="$_sv_TF" PORTS="$_sv_PORTS"
+		_restore_rule_vars
 	done
 
 	format_table < "$atmp"
@@ -2323,14 +2356,12 @@ show_rule() {
 
 	echo "Rule: $rule_name"
 
-	local _sv_REQ="${REQ:-}" _sv_LP="${LP:-}" _sv_TRIG="${TRIG:-}"
-	local _sv_TF="${TLOG_TF:-}" _sv_PORTS="${PORTS:-}"
-	REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
+	_save_rule_vars
+	_clear_rule_vars
 
 	if ! safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
 		echo "  Status:     error (failed to source)"
-		REQ="$_sv_REQ" LP="$_sv_LP" TRIG="$_sv_TRIG"
-		TLOG_TF="$_sv_TF" PORTS="$_sv_PORTS"
+		_restore_rule_vars
 		return 1
 	fi
 
@@ -2353,8 +2384,7 @@ show_rule() {
 		echo "  Log:        ${LP:-not configured}"
 	fi
 
-	REQ="$_sv_REQ" LP="$_sv_LP" TRIG="$_sv_TRIG"
-	TLOG_TF="$_sv_TF" PORTS="$_sv_PORTS"
+	_restore_rule_vars
 }
 
 # test_rule install_path rule_name [log_file] — test a rule against a log file
@@ -2384,9 +2414,8 @@ test_rule() {
 	# save globals, override TLOG_PATH, source rule, restore
 	local orig_tlog="$TLOG_PATH"
 	TLOG_PATH="$test_tlog"
-	local _sv_TRIG="$TRIG" _sv_LP="${LP:-}" _sv_TF="${TLOG_TF:-}"
-	local _sv_PORTS="${PORTS:-}" _sv_ARG="${ARG_VAL:-}" _sv_IGN="${IGNOREREGEX:-}"
-	TRIG="" ARG_VAL="" LP="" TLOG_TF="" PORTS="" IGNOREREGEX=""
+	_save_rule_vars
+	_clear_rule_vars
 	safe_source "$rule_file" "rule:$rule_name"
 	local src_rc=$?
 	TLOG_PATH="$orig_tlog"
@@ -2394,8 +2423,7 @@ test_rule() {
 	if [ "$src_rc" -ne 0 ]; then
 		echo "error: failed to source rule '$rule_name'"
 		rm -f "$test_tlog" "$stdin_file"
-		TRIG="$_sv_TRIG" LP="$_sv_LP" TLOG_TF="$_sv_TF"
-		PORTS="$_sv_PORTS" ARG_VAL="$_sv_ARG" IGNOREREGEX="$_sv_IGN"
+		_restore_rule_vars
 		return 1
 	fi
 
@@ -2422,8 +2450,7 @@ test_rule() {
 	fi
 
 	rm -f "$test_tlog" "$stdin_file"
-	TRIG="$_sv_TRIG" LP="$_sv_LP" TLOG_TF="$_sv_TF"
-	PORTS="$_sv_PORTS" ARG_VAL="$_sv_ARG" IGNOREREGEX="$_sv_IGN"
+	_restore_rule_vars
 }
 
 # test_pattern pattern [log_file] — test a raw <HOST> pattern against input

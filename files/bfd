@@ -210,14 +210,7 @@ check() {
 	for str in "$RULES_PATH"/*; do
 		str=$(basename "$str")
 		eout "processing rule file $str"
-		TRIG=""
-		ARG_VAL=""
-		SKIP_ALERT=""
-		RULE_EMAIL=""
-		LP=""
-		TLOG_TF=""
-		IGNOREREGEX=""
-		PORTS=""
+		_clear_rule_vars
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
 		if [ -z "$TRIG" ]; then
 			TRIG="$GLOB_TRIG"
@@ -266,28 +259,10 @@ check() {
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
 					if execute_ban "$ATTACK_HOST" "$MOD" "$DRY_RUN" "${PORTS:-all}"; then
 						bans_count=$((bans_count + 1))
-						# get repeat offense count
-						local recent_bans
-						recent_bans=$(state_bans_count_recent "$INSTALL_PATH" "$ATTACK_HOST" \
-							"${BAN_PERMANENT_WINDOW:-86400}" "$UTIME")
-						# compute ban expiry and action
-						local ban_expiry ban_action="ban"
-						if [ "${BAN_DURATION:-0}" -eq 0 ]; then
-							ban_expiry=0
-						elif check_recidivism "$INSTALL_PATH" "$ATTACK_HOST" \
-							"${BAN_PERMANENT_WINDOW:-86400}" "$UTIME" "${BAN_PERMANENT_AFTER:-0}"; then
-							ban_expiry=0
-							ban_action="escalate"
-							eout "{$MOD} $ATTACK_HOST escalated to permanent ban (repeat offender)." le
-						else
-							local computed_duration
-							computed_duration=$(compute_ban_duration "$BAN_DURATION" "$recent_bans" \
-								"${BAN_ESCALATION:-none}" "${BAN_ESCALATION_CAP:-0}")
-							ban_expiry=$((UTIME + computed_duration))
-						fi
-						# record ban in lifecycle state
-						state_bans_active_append "$INSTALL_PATH" "$UTIME" "$ban_expiry" "$ATTACK_HOST" "$MOD" "${PORTS:-all}"
-						state_bans_history_append "$INSTALL_PATH" "$UTIME" "$ban_expiry" "$ATTACK_HOST" "$MOD" "$ban_action"
+						local ban_result
+						ban_result=$(record_ban "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD" "${PORTS:-all}" "ban")
+						local ban_expiry ban_action recent_bans
+						IFS='|' read -r ban_expiry ban_action recent_bans <<< "$ban_result"
 						# collect alert data for batched delivery
 						if [ "$EMAIL_ALERTS" = "1" ] && [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							local eff_recipient="${RULE_EMAIL:-$EMAIL_ADDRESS}"
