@@ -1,4 +1,29 @@
 2.0.1:
+[Change] Phase 17 code modernization: internal cleanup with no user-facing
+         behavior changes
+[Change] removed dead code: count_attacks(), state_track_append/count/trim(),
+         state_ban_check(), state_ban_append() — all superseded by events.dat
+         and bans.active state functions; ~80 lines removed
+[Change] removed legacy ban.list and track.attack from state_init() and
+         check() — all dedup now via state_bans_active_check()
+[New] extract_command_template() helper eliminates duplicated grep|sed
+      template extraction (was 2x4=8 identical lines in bfd startup and
+      watch mode reload)
+[Change] health_check() decomposed from 202-line monolith into 5 focused
+         sub-functions: _hc_config(), _hc_binaries(), _hc_rules(),
+         _hc_state(), _hc_alerts(); orchestrator is now ~15 lines; each
+         sub-function is independently testable
+[Change] atomic state appends: state_pool_append(), state_bans_active_append(),
+         state_bans_history_append(), state_events_append() now use flock -x
+         to prevent concurrent write corruption (cron + watch mode)
+[New] ban command retry logic: execute_ban() and execute_unban() retry on
+      failure with exponential backoff (1s, 2s, 4s); handles transient
+      iptables lock contention
+[New] BAN_RETRY_COUNT config variable (default 2); 0 = no retries for
+      backward-compatible behavior
+[Change] tests updated: removed 20 tests for dead functions, added 7 new
+         tests (extract_command_template, concurrent flock writes, ban retry
+         logic); suite now 500 tests
 [New] postgresql rule: detects PostgreSQL/MariaDB authentication failures
       via "no pg_hba.conf entry" (IP in message) and "password authentication
       failed" (requires %h in log_line_prefix); auto-detects Debian

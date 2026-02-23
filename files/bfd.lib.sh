@@ -141,6 +141,14 @@ safe_source() {
 	. "$file"
 }
 
+# extract_command_template config_file var_name — extract raw template value
+# Reads the last occurrence of VAR_NAME="value" from config_file without
+# shell expansion (preserves $ATTACK_HOST, $MOD, $PORTS as literals).
+extract_command_template() {
+	local config_file="$1" var_name="$2"
+	grep "^${var_name}=" "$config_file" | tail -1 | sed "s/^${var_name}=//;s/^\"//;s/\"$//"
+}
+
 # validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, BAN_DURATION,
 #   BAN_PERMANENT_AFTER, BAN_PERMANENT_WINDOW, EMAIL_ALERTS,
 #   LOCK_FILE_TIMEOUT, BAN_COMMAND_TEMPLATE, INSTALL_PATH, EXIT_CONFIG_ERROR
@@ -504,25 +512,9 @@ filter_host() {
 	return 0
 }
 
-# count_attacks host hosts_parsed install_path trig — count attacks for host
-# Counts occurrences in hosts_parsed, appends to track.attack, and if under
-# trig threshold, adds accumulated track.attack counts. Outputs total to stdout.
-count_attacks() {
-	local host="$1" hosts_parsed="$2" install_path="$3" trig="$4"
-	local count
-	count=$(echo "$hosts_parsed" | grep -cFw "$host")
-	state_track_append "$install_path" "$host" "$count" "${MOD:-unknown}"
-	if [ "$count" -lt "$trig" ]; then
-		state_track_trim "$install_path" 50
-		local accumulated
-		accumulated=$(state_track_count "$install_path" "$host")
-		count=$((accumulated + count))
-	fi
-	echo "$count"
-}
-
 # execute_ban host mod ban_cmd_template dry_run [ports] [ban_cmd_v6_template]
 # execute or log ban command; selects V6 template for IPv6 hosts
+# retries on failure with exponential backoff (BAN_RETRY_COUNT, default 2)
 # returns 0 on success, ban command exit code on failure
 execute_ban() {
 	local host="$1" mod="$2" ban_cmd_template="$3" dry_run="$4"
@@ -541,16 +533,27 @@ execute_ban() {
 		return 0
 	fi
 	eout "{$mod} $host exceeded login failures; executed ban command '$BAN_COMMAND'." le
-	eval "$BAN_COMMAND" >/dev/null 2>&1
-	local ban_rc=$?
+	local max_retries="${BAN_RETRY_COUNT:-2}"
+	local retry_delay=1 attempt=0 ban_rc=1
+	while [ "$attempt" -le "$max_retries" ] && [ "$ban_rc" -ne 0 ]; do
+		eval "$BAN_COMMAND" >/dev/null 2>&1
+		ban_rc=$?
+		if [ "$ban_rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
+			eout "{$mod} ban command for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s." le
+			sleep "$retry_delay"
+			retry_delay=$((retry_delay * 2))
+		fi
+		attempt=$((attempt + 1))
+	done
 	if [ "$ban_rc" -ne 0 ]; then
-		eout "{$mod} ban command for $host exited with code $ban_rc." le
+		eout "{$mod} ban command for $host exited with code $ban_rc after $attempt attempt(s)." le
 	fi
 	return $ban_rc
 }
 
 # execute_unban host mod unban_cmd_template [ports] [unban_cmd_v6_template]
 # execute unban command; selects V6 template for IPv6 hosts
+# retries on failure with exponential backoff (BAN_RETRY_COUNT, default 2)
 # returns 0 on success, unban command exit code on failure
 execute_unban() {
 	local host="$1" mod="$2" unban_cmd_template="$3"
@@ -563,10 +566,20 @@ execute_unban() {
 	MOD="$mod"
 	PORTS="$ports"
 	eout "{$mod} $host ban expired; executing unban command." le
-	eval "$unban_cmd_template" >/dev/null 2>&1
-	local unban_rc=$?
+	local max_retries="${BAN_RETRY_COUNT:-2}"
+	local retry_delay=1 attempt=0 unban_rc=1
+	while [ "$attempt" -le "$max_retries" ] && [ "$unban_rc" -ne 0 ]; do
+		eval "$unban_cmd_template" >/dev/null 2>&1
+		unban_rc=$?
+		if [ "$unban_rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
+			eout "{$mod} unban command for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s." le
+			sleep "$retry_delay"
+			retry_delay=$((retry_delay * 2))
+		fi
+		attempt=$((attempt + 1))
+	done
 	if [ "$unban_rc" -ne 0 ]; then
-		eout "{$mod} unban command for $host exited with code $unban_rc." le
+		eout "{$mod} unban command for $host exited with code $unban_rc after $attempt attempt(s)." le
 	fi
 	return $unban_rc
 }
@@ -659,8 +672,6 @@ manual_ban() {
 
 # --- State file I/O functions ---
 # State file formats:
-#   track.attack: "IP COUNT MOD" — per-run failure accumulator, line-capped
-#   ban.list:     "IP" — recently banned IPs for dedup, line-capped
 #   attack.pool:  "UTIME IP MOD" — persistent attack history
 
 # state_init install_path — ensure state dirs/files exist with correct perms
@@ -673,8 +684,7 @@ state_init() {
 		mkdir -p "$install_path/stats"
 	fi
 	local f
-	for f in "$install_path/tmp/track.attack" "$install_path/tmp/ban.list" \
-		 "$install_path/tmp/events.dat" "$install_path/tmp/bans.active" \
+	for f in "$install_path/tmp/events.dat" "$install_path/tmp/bans.active" \
 		 "$install_path/tmp/bans.history"; do
 		if [ ! -f "$f" ]; then
 			touch "$f"
@@ -687,63 +697,14 @@ state_init() {
 	fi
 }
 
-# state_track_append install_path host count mod — append to track.attack
-state_track_append() {
-	local install_path="$1" host="$2" count="$3" mod="$4"
-	echo "$host $count $mod" >> "$install_path/tmp/track.attack"
-}
-
-# state_track_count install_path host — sum counts for host in track.attack
-# outputs the total count to stdout
-state_track_count() {
-	local install_path="$1" host="$2"
-	local total=0
-	local i
-	while IFS= read -r i; do
-		if [ -n "$i" ]; then
-			total=$((total + i))
-		fi
-	done < <(awk -v h="$host" '$1 == h {print $2}' "$install_path/tmp/track.attack" 2>/dev/null)
-	echo "$total"
-}
-
-# state_track_trim install_path max_lines — trim track.attack to max_lines
-state_track_trim() {
-	local install_path="$1" max_lines="$2"
-	local track_file="$install_path/tmp/track.attack"
-	local cur_lines
-	cur_lines=$(wc -l < "$track_file" 2>/dev/null || echo "0")
-	if [ "$cur_lines" -gt "$max_lines" ]; then
-		tail -n "$max_lines" "$track_file" > "$track_file.new"
-		mv "$track_file.new" "$track_file"
-	fi
-}
-
-# state_ban_check install_path host — return 0 if host is in ban.list, 1 if not
-state_ban_check() {
-	local install_path="$1" host="$2"
-	if grep -qFx "$host" "$install_path/tmp/ban.list" 2>/dev/null; then
-		return 0
-	fi
-	return 1
-}
-
-# state_ban_append install_path host max_lines — append host to ban.list, trim
-state_ban_append() {
-	local install_path="$1" host="$2" max_lines="$3"
-	local ban_file="$install_path/tmp/ban.list"
-	# trim before appending
-	tail -n "$max_lines" "$ban_file" > "$ban_file.new"
-	mv "$ban_file.new" "$ban_file"
-	if ! grep -qFx "$host" "$ban_file" 2>/dev/null; then
-		echo "$host" >> "$ban_file"
-	fi
-}
-
 # state_pool_append install_path utime host mod — append to attack.pool
 state_pool_append() {
 	local install_path="$1" utime="$2" host="$3" mod="$4"
-	echo "$utime $host $mod" >> "$install_path/stats/attack.pool"
+	local pool_file="$install_path/stats/attack.pool"
+	(
+		flock -x 200
+		echo "$utime $host $mod" >> "$pool_file"
+	) 200>>"$pool_file"
 }
 
 # --- Ban state I/O functions ---
@@ -757,10 +718,13 @@ state_bans_active_append() {
 	local install_path="$1" timestamp="$2" expiry="$3"
 	local host="$4" mod="$5" ports="$6"
 	local bans_file="$install_path/tmp/bans.active"
-	if awk -v ip="$host" '$3 == ip {found=1; exit} END {exit !found}' "$bans_file" 2>/dev/null; then
-		return 0
-	fi
-	echo "$timestamp $expiry $host $mod $ports" >> "$bans_file"
+	(
+		flock -x 200
+		if awk -v ip="$host" '$3 == ip {found=1; exit} END {exit !found}' "$bans_file" 2>/dev/null; then
+			return 0
+		fi
+		echo "$timestamp $expiry $host $mod $ports" >> "$bans_file"
+	) 200>>"$bans_file"
 }
 
 # state_bans_active_remove install_path host — remove all entries for host
@@ -817,7 +781,11 @@ state_bans_active_expired() {
 state_bans_history_append() {
 	local install_path="$1" timestamp="$2" expiry="$3"
 	local host="$4" mod="$5" action="$6"
-	echo "$timestamp $expiry $host $mod $action" >> "$install_path/tmp/bans.history"
+	local history_file="$install_path/tmp/bans.history"
+	(
+		flock -x 200
+		echo "$timestamp $expiry $host $mod $action" >> "$history_file"
+	) 200>>"$history_file"
 }
 
 # state_bans_count_recent install_path host window now — count ban/escalate events in window
@@ -844,10 +812,13 @@ state_events_append() {
 	local install_path="$1" timestamp="$2" host="$3" mod="$4"
 	local count="${5:-1}"
 	local events_file="$install_path/tmp/events.dat"
-	local i
-	for ((i = 0; i < count; i++)); do
-		echo "$timestamp $host $mod"
-	done >> "$events_file"
+	(
+		flock -x 200
+		local i
+		for ((i = 0; i < count; i++)); do
+			echo "$timestamp $host $mod"
+		done >> "$events_file"
+	) 200>>"$events_file"
 }
 
 # state_events_count install_path host window now [mod] — count events in window
@@ -904,96 +875,88 @@ count_failures() {
 	state_events_count "$install_path" "$host" "$window" "$now" "$mod"
 }
 
-# health_check install_path — non-destructive diagnostic report
-# Validates configuration, paths, rules, state, and reports status.
-# Each check prints [PASS], [WARN], [FAIL], or [SKIP] with description.
-health_check() {
-	local install_path="$1"
-	local pass_count=0 warn_count=0 fail_count=0
+# --- Health check sub-functions ---
+# Each returns pass/warn/fail counts via _hc_pass/_hc_warn/_hc_fail globals.
 
-	# 1. Config validation — capture errors from validate_config
+# _hc_config — validate config and log paths
+_hc_config() {
 	local config_out config_rc=0
 	config_out=$(validate_config 2>&1) || config_rc=$?
 	if [ "$config_rc" -ne 0 ]; then
 		echo "[FAIL] Configuration: $config_out"
-		fail_count=$((fail_count + 1))
+		_hc_fail=$((_hc_fail + 1))
+	elif [ -n "$config_out" ]; then
+		echo "[WARN] Configuration: $config_out"
+		_hc_warn=$((_hc_warn + 1))
 	else
-		if [ -n "$config_out" ]; then
-			# warnings from validate_config (e.g. UNBAN_COMMAND empty)
-			echo "[WARN] Configuration: $config_out"
-			warn_count=$((warn_count + 1))
-		else
-			echo "[PASS] Configuration validated"
-			pass_count=$((pass_count + 1))
-		fi
+		echo "[PASS] Configuration validated"
+		_hc_pass=$((_hc_pass + 1))
 	fi
 
-	# 2. Log paths
 	local log_name log_path
 	for log_name in AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH; do
 		eval "log_path=\${$log_name:-}"
 		if [ -z "$log_path" ]; then
 			echo "[WARN] $log_name: not configured"
-			warn_count=$((warn_count + 1))
+			_hc_warn=$((_hc_warn + 1))
 		elif [ -f "$log_path" ] && [ -r "$log_path" ]; then
 			echo "[PASS] $log_name: $log_path (exists, readable)"
-			pass_count=$((pass_count + 1))
+			_hc_pass=$((_hc_pass + 1))
 		else
 			echo "[WARN] $log_name: $log_path (not found)"
-			warn_count=$((warn_count + 1))
+			_hc_warn=$((_hc_warn + 1))
 		fi
 	done
+}
 
-	# 3. BAN_COMMAND binary
+# _hc_binaries — validate ban/unban command binaries
+_hc_binaries() {
 	local ban_bin
 	ban_bin=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
 	if [ -z "$ban_bin" ]; then
 		echo "[FAIL] BAN_COMMAND: not configured"
-		fail_count=$((fail_count + 1))
+		_hc_fail=$((_hc_fail + 1))
 	elif [ -x "$ban_bin" ]; then
 		echo "[PASS] BAN_COMMAND binary: $ban_bin (found)"
-		pass_count=$((pass_count + 1))
+		_hc_pass=$((_hc_pass + 1))
 	else
 		echo "[WARN] BAN_COMMAND binary: $ban_bin (not found)"
-		warn_count=$((warn_count + 1))
+		_hc_warn=$((_hc_warn + 1))
 	fi
 
-	# 4. UNBAN_COMMAND consistency
 	if [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
 		echo "[WARN] UNBAN_COMMAND is empty; temp bans won't auto-unban firewall rules"
-		warn_count=$((warn_count + 1))
+		_hc_warn=$((_hc_warn + 1))
 	fi
 
-	# 5. BAN_COMMAND_V6 binary
 	if [ -n "${BAN_COMMAND_V6_TEMPLATE:-}" ]; then
 		local ban_v6_bin
 		ban_v6_bin=$(echo "$BAN_COMMAND_V6_TEMPLATE" | awk '{print $1}')
 		if [ -x "$ban_v6_bin" ]; then
 			echo "[PASS] BAN_COMMAND_V6 binary: $ban_v6_bin (found)"
-			pass_count=$((pass_count + 1))
+			_hc_pass=$((_hc_pass + 1))
 		else
 			echo "[WARN] BAN_COMMAND_V6 binary: $ban_v6_bin (not found)"
-			warn_count=$((warn_count + 1))
+			_hc_warn=$((_hc_warn + 1))
 		fi
 	else
 		echo "[PASS] BAN_COMMAND_V6: not configured (will use BAN_COMMAND for IPv6)"
-		pass_count=$((pass_count + 1))
+		_hc_pass=$((_hc_pass + 1))
 	fi
 
-	# 6. journalctl availability
 	local has_journalctl=0
 	if command -v journalctl >/dev/null 2>&1; then
 		local jctl_bin
 		jctl_bin=$(command -v journalctl)
 		echo "[PASS] journalctl: available ($jctl_bin)"
-		pass_count=$((pass_count + 1))
+		_hc_pass=$((_hc_pass + 1))
 		has_journalctl=1
 	else
 		echo "[SKIP] journalctl: not available (file-only mode)"
-		pass_count=$((pass_count + 1))
+		_hc_pass=$((_hc_pass + 1))
 	fi
+	_hc_has_journalctl="$has_journalctl"
 
-	# 7. LOG_SOURCE setting
 	local log_source="${LOG_SOURCE:-auto}"
 	if [ "$log_source" = "auto" ]; then
 		echo "[PASS] LOG_SOURCE: auto (journal fallback enabled)"
@@ -1002,25 +965,27 @@ health_check() {
 	else
 		echo "[PASS] LOG_SOURCE: file (journal disabled)"
 	fi
-	pass_count=$((pass_count + 1))
+	_hc_pass=$((_hc_pass + 1))
+}
 
-	# 8. Rule scan
+# _hc_rules install_path — scan and validate rules
+_hc_rules() {
+	local install_path="$1"
 	local rules_active=0 rules_inactive=0 rules_total=0
+	local log_source="${LOG_SOURCE:-auto}"
 	if [ -d "${RULES_PATH:-$install_path/rules}" ]; then
 		local rule_file rule_name
 		for rule_file in "${RULES_PATH:-$install_path/rules}"/*; do
 			[ ! -f "$rule_file" ] && continue
 			rule_name=$(basename "$rule_file")
 			rules_total=$((rules_total + 1))
-			# save/restore rule variables to avoid pollution
 			local _saved_REQ="${REQ:-}" _saved_LP="${LP:-}" _saved_TRIG="${TRIG:-}"
 			local _saved_TLOG_TF="${TLOG_TF:-}" _saved_PORTS="${PORTS:-}"
 			REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
 			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
 				if [ -n "$REQ" ] && [ -f "$REQ" ]; then
 					local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
-					# check if rule would use journal (LP missing but journal-capable)
-					if [ -n "${LP:-}" ] && [ ! -f "$LP" ] && [ "$has_journalctl" -eq 1 ] && \
+					if [ -n "${LP:-}" ] && [ ! -f "$LP" ] && [ "$_hc_has_journalctl" -eq 1 ] && \
 					   [ "$log_source" != "file" ] && \
 					   tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
 						rules_active=$((rules_active + 1))
@@ -1041,73 +1006,90 @@ health_check() {
 			TLOG_TF="$_saved_TLOG_TF" PORTS="$_saved_PORTS"
 		done
 		echo "[PASS] Rules: $rules_active active, $rules_inactive inactive ($rules_total total)"
-		pass_count=$((pass_count + 1))
+		_hc_pass=$((_hc_pass + 1))
 	else
 		echo "[FAIL] Rules directory not found: ${RULES_PATH:-$install_path/rules}"
-		fail_count=$((fail_count + 1))
+		_hc_fail=$((_hc_fail + 1))
 	fi
+}
 
-	# 9. tlog tracking
+# _hc_state install_path — validate tlog, state dirs, lock, active bans
+_hc_state() {
+	local install_path="$1"
+
 	local tlog="${TLOG_PATH:-$install_path/tlog}"
 	if [ -f "$tlog" ] && [ -x "$tlog" ]; then
 		echo "[PASS] tlog: $tlog (executable)"
-		pass_count=$((pass_count + 1))
+		_hc_pass=$((_hc_pass + 1))
 	elif [ -f "$tlog" ]; then
 		echo "[WARN] tlog: $tlog (exists but not executable)"
-		warn_count=$((warn_count + 1))
+		_hc_warn=$((_hc_warn + 1))
 	else
 		echo "[WARN] tlog: $tlog (not found)"
-		warn_count=$((warn_count + 1))
+		_hc_warn=$((_hc_warn + 1))
 	fi
 
-	# 10. State directories
 	if [ -d "$install_path/tmp" ] && [ -d "$install_path/stats" ]; then
 		echo "[PASS] State: tmp/ and stats/ exist"
-		pass_count=$((pass_count + 1))
+		_hc_pass=$((_hc_pass + 1))
 	else
 		echo "[WARN] State: missing tmp/ or stats/ directory"
-		warn_count=$((warn_count + 1))
+		_hc_warn=$((_hc_warn + 1))
 	fi
 
-	# 11. Lock file
 	local lock="${LOCK_FILE:-$install_path/lock.utime}"
 	if [ -f "$lock" ]; then
 		echo "[WARN] Lock: active lock file exists ($lock)"
-		warn_count=$((warn_count + 1))
+		_hc_warn=$((_hc_warn + 1))
 	else
 		echo "[PASS] Lock: no active lock"
-		pass_count=$((pass_count + 1))
+		_hc_pass=$((_hc_pass + 1))
 	fi
 
-	# 12. WATCH_INTERVAL
 	echo "[PASS] WATCH_INTERVAL: ${WATCH_INTERVAL:-10}s (for bfd --watch)"
-	pass_count=$((pass_count + 1))
+	_hc_pass=$((_hc_pass + 1))
 
-	# 13. Active bans
 	local bans_file="$install_path/tmp/bans.active"
 	local ban_count=0
 	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
 		ban_count=$(wc -l < "$bans_file")
 	fi
 	echo "[PASS] Active bans: $ban_count"
-	pass_count=$((pass_count + 1))
+	_hc_pass=$((_hc_pass + 1))
+}
 
-	# 14. Email alerts
+# _hc_alerts — validate email alert configuration
+_hc_alerts() {
 	if [ "$EMAIL_ALERTS" = "1" ]; then
 		if command -v mail >/dev/null 2>&1; then
 			echo "[PASS] Email alerts: enabled (mail command found)"
-			pass_count=$((pass_count + 1))
+			_hc_pass=$((_hc_pass + 1))
 		else
 			echo "[WARN] Email alerts: enabled but 'mail' command not found"
-			warn_count=$((warn_count + 1))
+			_hc_warn=$((_hc_warn + 1))
 		fi
 	else
 		echo "[PASS] Email alerts: disabled"
-		pass_count=$((pass_count + 1))
+		_hc_pass=$((_hc_pass + 1))
 	fi
+}
+
+# health_check install_path — non-destructive diagnostic report
+# Validates configuration, paths, rules, state, and reports status.
+# Each check prints [PASS], [WARN], [FAIL], or [SKIP] with description.
+health_check() {
+	local install_path="$1"
+	_hc_pass=0 _hc_warn=0 _hc_fail=0
+	_hc_has_journalctl=0
+
+	_hc_config
+	_hc_binaries
+	_hc_rules "$install_path"
+	_hc_state "$install_path"
+	_hc_alerts
 
 	echo
-	echo "Summary: $pass_count passed, $warn_count warnings, $fail_count failures"
+	echo "Summary: $_hc_pass passed, $_hc_warn warnings, $_hc_fail failures"
 }
 
 # format_duration seconds — human-readable duration string

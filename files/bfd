@@ -90,10 +90,10 @@ LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
 TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
 GLOB_TRIG="$TRIG"
 # extract BAN_COMMAND template without shell expansion of $ATTACK_HOST/$MOD
-BAN_COMMAND_TEMPLATE=$(grep '^BAN_COMMAND=' "$CNF" | tail -1 | sed "s/^BAN_COMMAND=//;s/^\"//;s/\"$//")
-UNBAN_COMMAND_TEMPLATE=$(grep '^UNBAN_COMMAND=' "$CNF" | tail -1 | sed "s/^UNBAN_COMMAND=//;s/^\"//;s/\"$//")
-BAN_COMMAND_V6_TEMPLATE=$(grep '^BAN_COMMAND_V6=' "$CNF" | tail -1 | sed "s/^BAN_COMMAND_V6=//;s/^\"//;s/\"$//" 2>/dev/null)
-UNBAN_COMMAND_V6_TEMPLATE=$(grep '^UNBAN_COMMAND_V6=' "$CNF" | tail -1 | sed "s/^UNBAN_COMMAND_V6=//;s/^\"//;s/\"$//" 2>/dev/null)
+BAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND")
+UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
+BAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND_V6")
+UNBAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND_V6")
 
 validate_config
 detect_log_paths
@@ -136,12 +136,6 @@ if [ -f "$APOOL_LIST" ]; then
 else
 	touch "$APOOL_LIST"
 	chmod 600 "$APOOL_LIST"
-fi
-
-BAN_LIST="$INSTALL_PATH/tmp/ban.list"
-if [ ! -f "$BAN_LIST" ]; then
-	touch "$BAN_LIST"
-	chmod 600 "$BAN_LIST"
 fi
 
 state_init "$INSTALL_PATH"
@@ -250,7 +244,6 @@ check() {
 				if state_bans_active_check "$INSTALL_PATH" "$ATTACK_HOST"; then
 					continue
 				fi
-				state_ban_append "$INSTALL_PATH" "$ATTACK_HOST" 50
 				if [ "$filter_rc" -eq 2 ]; then
 					# local address
 					eout "{$MOD} $ATTACK_HOST is equal to a local address." le
@@ -453,10 +446,10 @@ reload_watch() {
 		fi
 	fi
 	GLOB_TRIG="$TRIG"
-	BAN_COMMAND_TEMPLATE=$(grep '^BAN_COMMAND=' "$CNF" | tail -1 | sed "s/^BAN_COMMAND=//;s/^\"//;s/\"$//")
-	UNBAN_COMMAND_TEMPLATE=$(grep '^UNBAN_COMMAND=' "$CNF" | tail -1 | sed "s/^UNBAN_COMMAND=//;s/^\"//;s/\"$//")
-	BAN_COMMAND_V6_TEMPLATE=$(grep '^BAN_COMMAND_V6=' "$CNF" | tail -1 | sed "s/^BAN_COMMAND_V6=//;s/^\"//;s/\"$//" 2>/dev/null)
-	UNBAN_COMMAND_V6_TEMPLATE=$(grep '^UNBAN_COMMAND_V6=' "$CNF" | tail -1 | sed "s/^UNBAN_COMMAND_V6=//;s/^\"//;s/\"$//" 2>/dev/null)
+	BAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND")
+	UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
+	BAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND_V6")
+	UNBAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND_V6")
 	validate_config
 	detect_log_paths
 	# refresh local IPs

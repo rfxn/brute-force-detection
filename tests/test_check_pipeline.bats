@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # Integration tests for the check() pipeline:
-# count_attacks, count_failures, execute_ban, and end-to-end flow
+# count_failures, execute_ban, and end-to-end flow
 #
 
 load '/usr/local/lib/bats/bats-support/load'
@@ -18,70 +18,11 @@ setup() {
 	OUTPUT_SYSLOG="0"
 	OUTPUT_SYSLOG_FILE="/dev/null"
 	MOD="sshd"
+	BAN_RETRY_COUNT="0"
 }
 
 teardown() {
 	rm -rf "$TEST_TMPDIR"
-}
-
-# --- count_attacks (legacy, still in bfd.lib.sh) ---
-
-@test "count_attacks: counts host occurrence with accumulation" {
-	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n10.0.0.2\n10.0.0.1\n")
-	# 2 occurrences in hosts_parsed; appended to track.attack then accumulated
-	# yields 2 (parsed) + 2 (from track entry just written) = 4
-	run count_attacks "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "10"
-	assert_success
-	assert_output "4"
-}
-
-@test "count_attacks: counts zero for absent host" {
-	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n10.0.0.2\n")
-	run count_attacks "10.0.0.3" "$hosts_parsed" "$INSTALL_PATH" "10"
-	assert_success
-	assert_output "0"
-}
-
-@test "count_attacks: accumulates across runs when under trig" {
-	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n10.0.0.1\n10.0.0.1\n")
-	# first run: 3 hits
-	count_attacks "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "10" >/dev/null
-	# second run: 3 more hits, should accumulate to 6 + 3 = 9
-	# (3 already in track.attack + 3 new occurrences in hosts_parsed)
-	run count_attacks "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "10"
-	assert_success
-	# 3 (from hosts_parsed) + 6 (3 from first run's track entry + 3 from second run's track entry)
-	local result="$output"
-	[ "$result" -gt 3 ]
-}
-
-@test "count_attacks: skips accumulation when at or above trig" {
-	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n10.0.0.1\n10.0.0.1\n10.0.0.1\n10.0.0.1\n")
-	# 5 hits, trig is 5 — count should be exactly 5 (no accumulation needed)
-	run count_attacks "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "5"
-	assert_success
-	assert_output "5"
-}
-
-@test "count_attacks: appends to track.attack" {
-	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n10.0.0.1\n")
-	count_attacks "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "10" >/dev/null
-	run cat "$INSTALL_PATH/tmp/track.attack"
-	assert_output --partial "10.0.0.1 2 sshd"
-}
-
-@test "count_attacks: does not match partial IPs" {
-	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n10.0.0.10\n10.0.0.100\n")
-	# 1 occurrence in hosts_parsed + 1 from track accumulation = 2
-	run count_attacks "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "10"
-	assert_success
-	assert_output "2"
 }
 
 # --- count_failures (windowed replacement) ---
@@ -200,9 +141,59 @@ teardown() {
 	assert_output ""
 }
 
+# --- ban retry logic ---
+
+@test "execute_ban: retries on failure with BAN_RETRY_COUNT" {
+	BAN_RETRY_COUNT="2"
+	# create a script that fails twice then succeeds
+	local counter="$TEST_TMPDIR/attempt_counter"
+	echo "0" > "$counter"
+	local cmd="$TEST_TMPDIR/retry_cmd.sh"
+	cat > "$cmd" <<'EOF'
+#!/bin/bash
+c=$(cat "$1")
+c=$((c + 1))
+echo "$c" > "$1"
+[ "$c" -ge 3 ] && exit 0
+exit 1
+EOF
+	chmod +x "$cmd"
+	run execute_ban "10.0.0.1" "sshd" "$cmd $counter" "0"
+	assert_success
+	# verify it took 3 attempts
+	local attempts
+	attempts=$(cat "$counter")
+	[ "$attempts" -eq 3 ]
+}
+
+@test "execute_ban: no retries when BAN_RETRY_COUNT=0" {
+	BAN_RETRY_COUNT="0"
+	run execute_ban "10.0.0.1" "sshd" "false" "0"
+	[ "$status" -ne 0 ]
+	assert_output --partial "after 1 attempt"
+}
+
+@test "execute_unban: retries on failure with BAN_RETRY_COUNT" {
+	BAN_RETRY_COUNT="1"
+	local counter="$TEST_TMPDIR/unban_counter"
+	echo "0" > "$counter"
+	local cmd="$TEST_TMPDIR/retry_unban.sh"
+	cat > "$cmd" <<'EOF'
+#!/bin/bash
+c=$(cat "$1")
+c=$((c + 1))
+echo "$c" > "$1"
+[ "$c" -ge 2 ] && exit 0
+exit 1
+EOF
+	chmod +x "$cmd"
+	run execute_unban "10.0.0.1" "sshd" "$cmd $counter"
+	assert_success
+}
+
 # --- end-to-end pipeline ---
 
-@test "pipeline: filter_host + count_failures + state_ban_append" {
+@test "pipeline: filter_host + count_failures + ban state" {
 	# setup ignore infrastructure
 	local ignore_files="$TEST_TMPDIR/exclude.files"
 	local lo_hosts="$TEST_TMPDIR/lo_hosts"
@@ -223,11 +214,12 @@ teardown() {
 	[ "$count" -ge 5 ]
 
 	# ban and record
-	state_ban_append "$INSTALL_PATH" "$host" 50
 	state_pool_append "$INSTALL_PATH" "1700000000" "$host" "sshd"
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "$host" "sshd" "22"
 
 	# verify state
-	state_ban_check "$INSTALL_PATH" "$host"
+	run state_bans_active_check "$INSTALL_PATH" "$host"
+	assert_success
 	run cat "$INSTALL_PATH/stats/attack.pool"
 	assert_output --partial "10.0.0.1"
 }
@@ -244,8 +236,8 @@ teardown() {
 	filter_host "10.0.0.1" "$ignore_files" "$lo_hosts" || filter_rc=$?
 	[ "$filter_rc" -eq 1 ]
 
-	# ban.list and attack.pool should be empty
-	run cat "$INSTALL_PATH/tmp/ban.list"
+	# bans.active and attack.pool should be empty
+	run cat "$INSTALL_PATH/tmp/bans.active"
 	assert_output ""
 	run cat "$INSTALL_PATH/stats/attack.pool"
 	assert_output ""
@@ -265,8 +257,8 @@ teardown() {
 	state_pool_append "$INSTALL_PATH" "1700000000" "192.168.1.1" "sshd"
 	run cat "$INSTALL_PATH/stats/attack.pool"
 	assert_output --partial "192.168.1.1"
-	# ban.list should be empty
-	run cat "$INSTALL_PATH/tmp/ban.list"
+	# bans.active should be empty
+	run cat "$INSTALL_PATH/tmp/bans.active"
 	assert_output ""
 }
 
@@ -489,11 +481,12 @@ teardown() {
 	[ "$count" -ge 5 ]
 
 	# ban and record
-	state_ban_append "$INSTALL_PATH" "$host" 50
 	state_pool_append "$INSTALL_PATH" "1700000000" "$host" "sshd"
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "$host" "sshd" "22"
 
 	# verify state
-	state_ban_check "$INSTALL_PATH" "$host"
+	run state_bans_active_check "$INSTALL_PATH" "$host"
+	assert_success
 	run cat "$INSTALL_PATH/stats/attack.pool"
 	assert_output --partial "2001:db8::1"
 }
@@ -737,16 +730,6 @@ EOF
 	local count
 	count=$(grep -c "2001:db8::1" "$INSTALL_PATH/tmp/bans.active")
 	[ "$count" -eq 1 ]
-}
-
-@test "state_ban_check: IPv6 does not false-match prefix in ban.list" {
-	echo "2001:db8::1" >> "$INSTALL_PATH/tmp/ban.list"
-	# 2001:db8::10 is a different address
-	run state_ban_check "$INSTALL_PATH" "2001:db8::10"
-	assert_failure
-	# exact match should work
-	run state_ban_check "$INSTALL_PATH" "2001:db8::1"
-	assert_success
 }
 
 @test "filter_host: IPv6 does not false-match prefix in ignore list" {
