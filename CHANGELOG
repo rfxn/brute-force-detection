@@ -279,6 +279,14 @@
 [Fix] README: example IPs changed from 10.0.0.x to RFC 5737 192.0.2.x
 [Change] CLI help: -b clarified as "(permanent)"; -a describes dual behavior;
          -T/--test-pattern document stdin via -
+[Fix] install.sh: chmod 640 glob briefly removes execute bit from subdirectories;
+      replaced with find -maxdepth 1 -type f scoped to files only
+[Fix] install.sh: remove no-op BINPATH sed target on $INSPATH/bfd (file contains
+      no /usr/local/sbin/bfd references)
+[Fix] uninstall.sh: backup directories ($INSPATH.bk.*) left behind after each
+      upgrade; added glob cleanup before main rm -rf
+[Fix] cron.daily: cursor/JTS file deletion caused journal re-read on next run;
+      preserved cursor files as event-tracking state
 
 1.5-2:
 [Change] simplified dovecot rule regex matching

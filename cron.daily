@@ -15,8 +15,6 @@ fi
 rm -f "$INSTALL_PATH"/tmp/.alist.*
 rm -f "$INSTALL_PATH"/tmp/.alerts.*
 rm -f "$INSTALL_PATH"/tmp/.weekly.apool.*
-rm -f "$INSTALL_PATH"/tmp/*.cursor
-rm -f "$INSTALL_PATH"/tmp/*.jts
 # rotate bans.history (append-only, rotated daily)
 if [ -f "$INSTALL_PATH/tmp/bans.history" ]; then
 	cp "$INSTALL_PATH/tmp/bans.history" "$INSTALL_PATH/tmp/bans.history.$(date +%m%d%y)"

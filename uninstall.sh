@@ -45,7 +45,7 @@ if [ -d "$INSPATH" ]; then
 		rm -f /etc/systemd/system/bfd.service /etc/systemd/system/bfd.timer /etc/systemd/system/bfd-watch.service
 		systemctl daemon-reload 2>/dev/null || true
 	fi
-	rm -rf "$INSPATH" "$BINPATH" /etc/cron.d/bfd /etc/cron.daily/bfd /etc/logrotate.d/bfd /var/log/bfd_log
+	rm -rf "$INSPATH".bk.* "$INSPATH" "$BINPATH" /etc/cron.d/bfd /etc/cron.daily/bfd /etc/logrotate.d/bfd /var/log/bfd_log
 	echo "$APPN has been uninstalled."
 else
 	echo "$APPN does not appear to be installed."
