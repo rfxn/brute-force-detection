@@ -152,7 +152,8 @@ EOF
 @test "health_check: state dirs checked" {
 	run health_check "$INSTALL_PATH"
 	assert_success
-	assert_output --partial "[PASS] State: tmp/ and stats/ exist"
+	assert_output --partial "[PASS] State: TLOG_BASERUN="
+	assert_output --partial "and stats/ exist"
 }
 
 @test "health_check: lock file detection" {

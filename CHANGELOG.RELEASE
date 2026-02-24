@@ -1,4 +1,36 @@
 2.0.1:
+[New] _rule_tlog(): in-process tlog wrapper for rule execution; replaces
+      $TLOG_PATH subprocess with tlog_read() call; _TLOG_PASSTHROUGH variable
+      for test_rule() passthrough mode
+[New] TLOG_BASERUN variable in internals.conf for tracking file directory;
+      fallback in files/bfd, pre() validation, reload_watch() refresh
+[Change] _hc_state(): health check reports TLOG_BASERUN path instead of
+         hardcoded tmp/ reference
+[New] tests/14-tlog.bats: 6 _rule_tlog unit tests (delta, first-run,
+      passthrough modes, missing file/baserun)
+[Change] tlog getsize(): replace cat subprocess with read builtin for tracking
+         file reads; matches tlog_read() pattern in bfd.lib.sh
+[Change] tlog_read(): replace cat subprocess with read builtin for tracking
+         file reads; matches tlog getsize() pattern
+[Change] tlog: simplify growth condition from NOT-less-than AND NOT-equal to
+         single greater-than test; aligns with tlog_read() in bfd.lib.sh
+[Change] tlog: annotate vestigial PATH export with rationale (standalone
+         subprocess invocation, cron.daily, manual use)
+[Change] exclude.files: add header and inline comments grouping entries by source
+         (APF, TCP wrappers, BFD ignore lists, cPanel/WHM/Plesk)
+[Change] bfd-watch.service: add SyslogIdentifier=bfd-watch and TimeoutStopSec=15
+[Change] bfd.service: add SyslogIdentifier=bfd
+[New] tests/28-install-paths.bats: 16 tests for install.sh INSPATH/BINPATH sed
+      replacement logic (source file presence, replacement correctness, no stray
+      defaults, combined replacement, bash -n validity, exclude.files paths,
+      conditional guard)
+[Change] Dockerfiles: add COPY lines for bfd-watch.service, bfd.service, cron,
+         cron.daily, install.sh (all 9) for install-path tests
+[Fix] tlog getsize(): eliminate pre-create block and duplicate branches; single
+      size read on first run prevents spurious delta output from double-read race;
+      semantics now match tlog_read() in bfd.lib.sh
+[Change] tlog/bfd.lib.sh: update convergence comments cross-referencing both
+         implementations and documenting migration path
 [New] thresholds.conf: centralized per-rule threshold management; colon-
       delimited KEY=VALUE format supporting TRIG, SKIP_ALERT, RULE_EMAIL;
       three-tier precedence: rule file > thresholds.conf > conf.bfd

@@ -482,10 +482,10 @@ format_table() {
 }
 
 # tlog_read file tlog_name baserun — read new content from a log file
-# Production log reading uses the standalone files/tlog script; this function
-# is the library equivalent for testability and future convergence.
-# Implements the same byte-offset tracking as files/tlog but as a function,
-# avoiding subprocess overhead when called from bfd.
+# Library equivalent of the standalone files/tlog script; both implementations
+# use identical logic (single size read on init, no output on first run) and
+# must stay in sync. Future: callers should migrate here; files/tlog remains
+# for standalone/cron compatibility.
 # Outputs new content to stdout; returns 0 on success, 1 on error.
 tlog_read() {
 	local file="$1" tlog_name="$2" baserun="$3"
@@ -507,7 +507,7 @@ tlog_read() {
 	fi
 	local tsize size newsize
 	if [ -f "$baserun/$tlog_name" ]; then
-		tsize=$(cat "$baserun/$tlog_name" 2>/dev/null)
+		read -r tsize < "$baserun/$tlog_name" 2>/dev/null || tsize=""
 	else
 		tsize=""
 	fi
@@ -548,6 +548,25 @@ tlog_read() {
 	fi
 	# newsize == size — no change, output nothing
 	return 0
+}
+
+# _rule_tlog lp tlog_tf — in-process tlog for rule execution.
+# Replaces the subprocess call: $("$TLOG_PATH" "$LP" "$TLOG_TF")
+# When _TLOG_PASSTHROUGH is set, outputs the entire file instead of a delta
+# (used by test_rule() to feed full test data through the rule pipeline).
+# Requires: TLOG_BASERUN (set in internals.conf / files/bfd fallback).
+_rule_tlog() {
+	local lp="$1" tlog_tf="$2"
+	if [ -n "${_TLOG_PASSTHROUGH:-}" ]; then
+		# test mode: output entire file (or specific file)
+		if [ "$_TLOG_PASSTHROUGH" = "1" ]; then
+			cat "$lp"
+		else
+			cat "$_TLOG_PASSTHROUGH"
+		fi
+		return 0
+	fi
+	tlog_read "$lp" "$tlog_tf" "${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
 }
 
 # tlog_journal_filter tlog_name — map TLOG_TF to journalctl filter argument
@@ -1776,8 +1795,9 @@ _hc_state() {
 		_hc_warn=$((_hc_warn + 1))
 	fi
 
-	if [ -d "$install_path/tmp" ] && [ -d "$install_path/stats" ]; then
-		echo "[PASS] State: tmp/ and stats/ exist"
+	local _tlog_br="${TLOG_BASERUN:-$install_path/tmp}"
+	if [ -d "$_tlog_br" ] && [ -d "$install_path/stats" ]; then
+		echo "[PASS] State: TLOG_BASERUN=$_tlog_br and stats/ exist"
 		_hc_pass=$((_hc_pass + 1))
 	else
 		echo "[WARN] State: missing tmp/ or stats/ directory"

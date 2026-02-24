@@ -20,7 +20,9 @@
 #    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 ###
 #
-# Just a global PATH so we can find common binaries
+# PATH export: standalone tlog runs as a subprocess with no inherited PATH.
+# When rules migrate to in-process _rule_tlog(), this script remains for
+# cron.daily and manual invocation where PATH may not be set.
 PATH=/sbin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/local/sbin:$PATH ; export PATH
 
 
@@ -69,30 +71,29 @@ get_file_size() {
 	stat -c %s "$file" 2>/dev/null || wc -c < "$file"
 }
 
-if [ ! -f "$BASERUN/$TLOG" ]; then
-	echo "0" > "$BASERUN/$TLOG"
-fi
-
-TSIZE=$(cat "$BASERUN/$TLOG" 2>/dev/null)
-
+# getsize — read tracked size and current file size into SIZE and NEWSIZE.
+# tlog_read() in bfd.lib.sh is the library equivalent; both must stay in sync.
+# Future: tlog callers should migrate to tlog_read(); this script remains for
+# standalone/cron compatibility.
 getsize() {
-if [ ! -f "$BASERUN/$TLOG" ]; then
-	SIZE=$(get_file_size "$FILE")
-	echo "$SIZE" > "$BASERUN/$TLOG"
-	NEWSIZE=$(get_file_size "$FILE")
-elif [ -f "$BASERUN/$TLOG" ] && [ "$TSIZE" = "0" ]; then
-	SIZE=$(get_file_size "$FILE")
-	echo "$SIZE" > "$BASERUN/$TLOG"
-	NEWSIZE=$(get_file_size "$FILE")
-else
-	SIZE=$(cat "$BASERUN/$TLOG")
-	NEWSIZE=$(get_file_size "$FILE")
-fi
+	local tsize=""
+	if [ -f "$BASERUN/$TLOG" ]; then
+		read -r tsize < "$BASERUN/$TLOG" 2>/dev/null || tsize=""
+	fi
+	if [ -z "$tsize" ] || [ "$tsize" = "0" ]; then
+		# first run or reset — record current size, no output
+		SIZE=$(get_file_size "$FILE")
+		echo "$SIZE" > "$BASERUN/$TLOG"
+		NEWSIZE="$SIZE"
+	else
+		SIZE="$tsize"
+		NEWSIZE=$(get_file_size "$FILE")
+	fi
 }
 
 getsize
 
-if [ ! "$NEWSIZE" -lt "$SIZE" ] && [ "$NEWSIZE" -ne "$SIZE" ]; then
+if [ "$NEWSIZE" -gt "$SIZE" ]; then
 	tail -c $((NEWSIZE - SIZE)) "$FILE"
 	echo "$NEWSIZE" > "$BASERUN/$TLOG"
 elif [ "$NEWSIZE" -lt "$SIZE" ]; then

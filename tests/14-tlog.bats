@@ -147,3 +147,65 @@ teardown() {
 	run tlog_read "$TEST_TMPDIR/test.log" "lib_test_nobase" "$TEST_TMPDIR/nonexistent"
 	assert_failure
 }
+
+# --- _rule_tlog() wrapper tests ---
+
+@test "_rule_tlog: returns delta on growth" {
+	TLOG_BASERUN="$BASERUN"
+	_TLOG_PASSTHROUGH=""
+	echo "line one" > "$TEST_TMPDIR/test.log"
+	# first call — init tracking, outputs nothing
+	run _rule_tlog "$TEST_TMPDIR/test.log" "rt_test1"
+	assert_success
+	assert_output ""
+	# append and call again — should output new content
+	echo "line two" >> "$TEST_TMPDIR/test.log"
+	run _rule_tlog "$TEST_TMPDIR/test.log" "rt_test1"
+	assert_success
+	assert_output "line two"
+}
+
+@test "_rule_tlog: returns nothing on first run" {
+	TLOG_BASERUN="$BASERUN"
+	_TLOG_PASSTHROUGH=""
+	echo "some content" > "$TEST_TMPDIR/test.log"
+	run _rule_tlog "$TEST_TMPDIR/test.log" "rt_test2"
+	assert_success
+	assert_output ""
+}
+
+@test "_rule_tlog: PASSTHROUGH=1 outputs entire file" {
+	_TLOG_PASSTHROUGH="1"
+	echo "full file content" > "$TEST_TMPDIR/test.log"
+	run _rule_tlog "$TEST_TMPDIR/test.log" "rt_test3"
+	assert_success
+	assert_output "full file content"
+	_TLOG_PASSTHROUGH=""
+}
+
+@test "_rule_tlog: PASSTHROUGH=/path outputs specific file" {
+	local alt_file="$TEST_TMPDIR/alt.log"
+	echo "alternate content" > "$alt_file"
+	_TLOG_PASSTHROUGH="$alt_file"
+	run _rule_tlog "$TEST_TMPDIR/test.log" "rt_test4"
+	assert_success
+	assert_output "alternate content"
+	_TLOG_PASSTHROUGH=""
+}
+
+@test "_rule_tlog: handles missing log file" {
+	TLOG_BASERUN="$BASERUN"
+	_TLOG_PASSTHROUGH=""
+	run _rule_tlog "$TEST_TMPDIR/nonexistent.log" "rt_test5"
+	assert_failure
+	assert_output --partial "not a valid file"
+}
+
+@test "_rule_tlog: handles missing baserun" {
+	TLOG_BASERUN="$TEST_TMPDIR/nonexistent_dir"
+	_TLOG_PASSTHROUGH=""
+	echo "test" > "$TEST_TMPDIR/test.log"
+	run _rule_tlog "$TEST_TMPDIR/test.log" "rt_test6"
+	assert_failure
+	assert_output --partial "not a valid operating path"
+}
