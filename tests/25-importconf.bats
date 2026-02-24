@@ -360,3 +360,95 @@ NEWEOF
 	run cat "$inst/ignore.hosts"
 	assert_output "192.0.2.1"
 }
+
+# --- thresholds.conf migration ---
+
+@test "importconf: pre-thresholds upgrade migrates old rule TRIG to thresholds.conf" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+TRIG="15"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+TRIG="15"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# old rules with uncommented TRIG (pre-thresholds format)
+	cat > "$inst.bk.last/rules/sshd" <<'EOF'
+TRIG="3"
+REQ="/usr/sbin/sshd"
+EOF
+	cat > "$inst.bk.last/rules/dovecot" <<'EOF'
+TRIG="20"
+REQ="/usr/sbin/dovecot"
+EOF
+
+	# new thresholds.conf with defaults
+	cat > "$inst/thresholds.conf" <<'EOF'
+sshd:TRIG=5
+dovecot:TRIG=10
+EOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Migrated 2 per-rule thresholds"
+
+	# verify thresholds.conf was updated with old values
+	run grep '^sshd:' "$inst/thresholds.conf"
+	assert_output "sshd:TRIG=3"
+	run grep '^dovecot:' "$inst/thresholds.conf"
+	assert_output "dovecot:TRIG=20"
+}
+
+@test "importconf: post-thresholds upgrade preserves existing thresholds.conf" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+TRIG="15"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+TRIG="15"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# old install had thresholds.conf with user customizations
+	cat > "$inst.bk.last/thresholds.conf" <<'EOF'
+sshd:TRIG=3
+dovecot:TRIG=25:SKIP_ALERT=1
+EOF
+
+	# new thresholds.conf with defaults
+	cat > "$inst/thresholds.conf" <<'EOF'
+sshd:TRIG=5
+dovecot:TRIG=10
+EOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Preserved thresholds.conf"
+
+	# verify old thresholds.conf was copied over new one
+	run grep '^sshd:' "$inst/thresholds.conf"
+	assert_output "sshd:TRIG=3"
+	run grep '^dovecot:' "$inst/thresholds.conf"
+	assert_output "dovecot:TRIG=25:SKIP_ALERT=1"
+}

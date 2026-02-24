@@ -1,4 +1,24 @@
 2.0.1:
+[New] thresholds.conf: centralized per-rule threshold management; colon-
+      delimited KEY=VALUE format supporting TRIG, SKIP_ALERT, RULE_EMAIL;
+      three-tier precedence: rule file > thresholds.conf > conf.bfd
+[New] _load_thresholds(): parse thresholds.conf into associative arrays with
+      root-ownership and permission safety validation; graceful degradation
+      on missing file
+[New] _apply_thresholds(): fill empty threshold variables from thresholds.conf
+      after rule sourcing; integrated into check(), 6 display functions, and
+      SIGHUP reload
+[Change] rules/*: TRIG commented out in all 34 rule files; thresholds now
+         managed centrally via thresholds.conf with rule-file uncomment override
+[Change] importconf: migrate per-rule TRIG values from old rule files (pre-
+         thresholds upgrade) or preserve existing thresholds.conf (post-
+         thresholds upgrade)
+[New] tests/27-thresholds.bats: 15 tests for _load_thresholds and
+      _apply_thresholds (parsing, safety, precedence)
+[New] tests/17-check-pipeline.bats: 2 precedence integration tests for
+      thresholds.conf in the check() pipeline
+[New] tests/25-importconf.bats: 2 migration tests for thresholds.conf
+      (pre-thresholds rule TRIG extraction, post-thresholds preservation)
 [Fix] importconf: add cleanup trap for temp files on interrupt (SIGINT/SIGTERM);
       removes mktemp and merge_conf intermediate files on EXIT/INT/TERM
 [Note] EXIT_USAGE_ERROR constant: FALSE POSITIVE — EXIT_CONFIG_ERROR is
