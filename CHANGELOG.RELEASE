@@ -1,4 +1,7 @@
 2.0.1:
+[Fix] get_state(): PID liveness check — when lock is fresh but holder PID is
+      dead (OOM, SIGKILL), clear and re-acquire instead of waiting for timeout;
+      cron recovers from dead watch daemon within one cycle (~2 min)
 [Fix] tlog: mixed tab/space indentation in getsize(); normalized to tabs
 [Fix] tlog: [ "$1" = "" ] idiom replaced with [ -z "$1" ] for project consistency
 [Change] conf.bfd: add validation constraint notes to 9 variable comments
