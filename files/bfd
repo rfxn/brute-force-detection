@@ -89,6 +89,7 @@ fi
 # fallbacks for internals.conf variables (backward compat with pre-split installs)
 RULES_PATH="${RULES_PATH:-$INSTALL_PATH/rules}"
 TLOG_PATH="${TLOG_PATH:-$INSTALL_PATH/tlog}"
+TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
 EMAIL_TEMPLATE="${EMAIL_TEMPLATE:-$INSTALL_PATH/alert.bfd}"
 IGNORE_HOST_FILES="${IGNORE_HOST_FILES:-$INSTALL_PATH/exclude.files}"
 LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
@@ -134,6 +135,10 @@ fi
 if [ ! -d "$RULES_PATH" ]; then
 	eout "could not locate \$RULES_PATH, aborting."
 	exit "$EXIT_PREREQ_ERROR"
+fi
+if [ ! -d "$TLOG_BASERUN" ]; then
+	mkdir -p "$TLOG_BASERUN"
+	chmod 750 "$TLOG_BASERUN"
 fi
 if [ ! -f "$BFD_LOG_PATH" ]; then
 	touch "$BFD_LOG_PATH"
@@ -455,6 +460,7 @@ reload_watch() {
 			. "$INTCNF"
 		fi
 	fi
+	TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
 	GLOB_TRIG="$TRIG"
 	_load_thresholds "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
 	# shellcheck disable=SC2034  # templates used by _fw_custom_ban/unban

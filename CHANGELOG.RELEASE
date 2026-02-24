@@ -1,4 +1,13 @@
 2.0.1:
+[New] _rule_tlog(): in-process tlog wrapper for rule execution; replaces
+      $TLOG_PATH subprocess with tlog_read() call; _TLOG_PASSTHROUGH variable
+      for test_rule() passthrough mode
+[New] TLOG_BASERUN variable in internals.conf for tracking file directory;
+      fallback in files/bfd, pre() validation, reload_watch() refresh
+[Change] _hc_state(): health check reports TLOG_BASERUN path instead of
+         hardcoded tmp/ reference
+[New] tests/14-tlog.bats: 6 _rule_tlog unit tests (delta, first-run,
+      passthrough modes, missing file/baserun)
 [Change] tlog getsize(): replace cat subprocess with read builtin for tracking
          file reads; matches tlog_read() pattern in bfd.lib.sh
 [Change] tlog_read(): replace cat subprocess with read builtin for tracking
