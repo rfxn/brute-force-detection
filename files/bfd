@@ -533,29 +533,53 @@ case "${1:-}" in
 		*)    list_bans "$INSTALL_PATH" ;;
 	esac
 	;;
--u|--unban)     vhead; pre; manual_unban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" ;;
--b|--ban)       vhead; pre; manual_ban "$INSTALL_PATH" "${2:?'IP address required'}" "$UTIME" "${3:-manual}" "all" ;;
+-u|--unban)
+	vhead; pre
+	if [ -z "${2:-}" ]; then
+		echo "error: -u requires an IP address."; echo; usage; exit "$EXIT_CONFIG_ERROR"
+	fi
+	manual_unban "$INSTALL_PATH" "$2" "$UTIME" || exit "$?"
+	;;
+-b|--ban)
+	vhead; pre
+	if [ -z "${2:-}" ]; then
+		echo "error: -b requires an IP address."; echo; usage; exit "$EXIT_CONFIG_ERROR"
+	fi
+	manual_ban "$INSTALL_PATH" "$2" "$UTIME" "${3:-manual}" "all" || exit "$?"
+	;;
 -S|--status)
 	vhead; pre
 	if [ -n "${2:-}" ]; then
-		show_service_status "$INSTALL_PATH" "$2"
+		show_service_status "$INSTALL_PATH" "$2" || exit "$?"
 	else
-		show_status "$INSTALL_PATH"
+		show_status "$INSTALL_PATH" || exit "$?"
 	fi
 	;;
--C|--config)    show_config "${2:-}" ;;
+-C|--config)    show_config "${2:-}" || exit "$?" ;;
 -R|--rules)
 	vhead; pre
 	if [ -n "${2:-}" ]; then
-		show_rule "$INSTALL_PATH" "$2"
+		show_rule "$INSTALL_PATH" "$2" || exit "$?"
 	else
-		list_rules "$INSTALL_PATH"
+		list_rules "$INSTALL_PATH" || exit "$?"
 	fi
 	;;
--T|--test)      vhead; pre; test_rule "$INSTALL_PATH" "${2:?'Rule name required'}" "${3:-}" ;;
---test-pattern) vhead; test_pattern "${2:?'Pattern required'}" "${3:-}" ;;
---flush-temp)   vhead; pre; flush_bans "$INSTALL_PATH" "temp" "$UTIME" ;;
---flush-all)    vhead; pre; flush_bans "$INSTALL_PATH" "all" "$UTIME" ;;
+-T|--test)
+	vhead; pre
+	if [ -z "${2:-}" ]; then
+		echo "error: -T requires a rule name."; echo; usage; exit "$EXIT_CONFIG_ERROR"
+	fi
+	test_rule "$INSTALL_PATH" "$2" "${3:-}" || exit "$?"
+	;;
+--test-pattern)
+	vhead
+	if [ -z "${2:-}" ]; then
+		echo "error: --test-pattern requires a pattern."; echo; usage; exit "$EXIT_CONFIG_ERROR"
+	fi
+	test_pattern "$2" "${3:-}" || exit "$?"
+	;;
+--flush-temp)   vhead; pre; flush_bans "$INSTALL_PATH" "temp" "$UTIME" || exit "$?" ;;
+--flush-all)    vhead; pre; flush_bans "$INSTALL_PATH" "all" "$UTIME" || exit "$?" ;;
 -v|--version)   vhead ;;
 -h|--help)      vhead; usage ;;
 "")             vhead; usage ;;

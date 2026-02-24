@@ -8,6 +8,11 @@
       custom backend eval in _fw_custom_ban() and _fw_custom_unban()
 [Fix] tlog sources bfd.lib.sh without ownership/permission checks; added
       stat validation matching files/bfd pattern (root-owned, non-world-writable)
+[Fix] route backend bare ip calls replaced with $_FW_ROUTE_IP_BIN discovered
+      via command -v in _fw_route_setup()
+[Fix] CLI exit code propagation: -u, -b, -T, --test-pattern validate required
+      args with explicit messages; all dispatch branches propagate callee exit
+      codes via || exit "$?"
 [Change] test suite: rename 25 test files from test_*.bats to numbered
          NN-name.bats convention for deterministic ordering and parallel
          distribution

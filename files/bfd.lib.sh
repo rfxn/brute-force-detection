@@ -850,33 +850,39 @@ _fw_iptables_status() {
 }
 
 # --- route backend (ip route null-route / blackhole) ---
-_fw_route_setup() { :; }
+_fw_route_setup() {
+	_FW_ROUTE_IP_BIN=$(command -v ip 2>/dev/null) || _FW_ROUTE_IP_BIN=""
+	if [ -z "$_FW_ROUTE_IP_BIN" ]; then
+		eout "{glob} ip binary not found" "le"
+		return 1
+	fi
+}
 
 _fw_route_ban() {
 	local host="$1"
 	if [[ "$host" == */* ]]; then
-		ip route add blackhole "$host" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route add blackhole "$host" 2>/dev/null
 	elif [[ "$host" == *:* ]]; then
-		ip route add blackhole "$host/128" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route add blackhole "$host/128" 2>/dev/null
 	else
-		ip route add blackhole "$host/32" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route add blackhole "$host/32" 2>/dev/null
 	fi
 }
 
 _fw_route_unban() {
 	local host="$1"
 	if [[ "$host" == */* ]]; then
-		ip route del blackhole "$host" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route del blackhole "$host" 2>/dev/null
 	elif [[ "$host" == *:* ]]; then
-		ip route del blackhole "$host/128" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route del blackhole "$host/128" 2>/dev/null
 	else
-		ip route del blackhole "$host/32" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route del blackhole "$host/32" 2>/dev/null
 	fi
 }
 
 _fw_route_status() {
 	local count=0
-	count=$(ip route list type blackhole 2>/dev/null | wc -l) || count=0
+	count=$("$_FW_ROUTE_IP_BIN" route list type blackhole 2>/dev/null | wc -l) || count=0
 	echo "route ($count blackhole routes)"
 }
 
