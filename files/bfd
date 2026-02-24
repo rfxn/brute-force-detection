@@ -470,7 +470,7 @@ watch() {
 		process_unbans "$INSTALL_PATH" "$UTIME"
 		check
 		sleep "$WATCH_INTERVAL" &
-		wait $!
+		wait "$!"
 	done
 }
 

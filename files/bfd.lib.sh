@@ -583,7 +583,7 @@ tlog_journal_read() {
 
 # extract_hosts pattern1 [pattern2 ...] — extract IPs from tlog output on stdin
 # Each pattern is a grep -E regex with <HOST> marking the IP position.
-# <HOST> is replaced with an IP-matching capture group for sed -r.
+# <HOST> is replaced with an IP-matching capture group for sed -E.
 # Outputs one validated IP per line.
 #
 # Rules must NOT use () groups before <HOST> in a pattern.
@@ -610,10 +610,10 @@ extract_hosts() {
 		sed_pat="${pattern//<HOST>/($ip4_re)}"
 		# (^|.*[^0-9.]) boundary prevents greedy .* from consuming
 		# leading digits of the IP address; IP capture becomes \2
-		echo "$tlog_input" | sed -rn "s#(^|.*[^0-9.])${sed_pat}.*#\2#p"
+		echo "$tlog_input" | sed -En "s#(^|.*[^0-9.])${sed_pat}.*#\2#p"
 		# IPv6 extraction — inner group in ip6_re pushes IP to \2
 		sed_pat="${pattern//<HOST>/($ip6_re)}"
-		echo "$tlog_input" | sed -rn "s#(^|.*[^0-9a-fA-F:])${sed_pat}.*#\2#p"
+		echo "$tlog_input" | sed -En "s#(^|.*[^0-9a-fA-F:])${sed_pat}.*#\2#p"
 	done | tr -d '[]' | while IFS= read -r ip; do
 		[ -z "$ip" ] && continue
 		validate_ip_any "$ip" 2>/dev/null || true
@@ -2441,7 +2441,7 @@ show_rule() {
 		return 1
 	fi
 
-	if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+	if _rule_is_active; then
 		echo "  Status:     active"
 	else
 		echo "  Status:     inactive (${REQ:-unset} not found)"

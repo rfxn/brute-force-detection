@@ -287,6 +287,11 @@
       upgrade; added glob cleanup before main rm -rf
 [Fix] cron.daily: cursor/JTS file deletion caused journal re-read on next run;
       preserved cursor files as event-tracking state
+[Change] show_rule(): replace inline REQ check with _rule_is_active() helper
+         for consistency with _hc_rules(), show_status(), list_rules()
+[Change] extract_hosts(): sed -r → sed -E for POSIX portability (GNU sed 4.2+
+         supports -E; aligns with BSD/macOS sed)
+[Fix] watch mode: quote $! → "$!" for variable quoting consistency
 
 1.5-2:
 [Change] simplified dovecot rule regex matching
