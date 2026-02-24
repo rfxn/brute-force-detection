@@ -44,8 +44,8 @@ DRY_RUN=0
 
 # shellcheck disable=SC2317 # called via trap
 cleanup() {
-	rm -f "$LOCK_FILE"
-	eval "exec $LOCK_FD>&-" 2>/dev/null
+	rm -rf "$LOCK_FILE.lk" 2>/dev/null
+	rm -f "$LOCK_FILE" 2>/dev/null
 }
 trap cleanup EXIT INT TERM
 
@@ -169,30 +169,29 @@ else
 fi
 }
 
-LOCK_FD=9
-
 get_state() {
-eval "exec $LOCK_FD>\"$LOCK_FILE\""
-if ! flock -n "$LOCK_FD"; then
-	# flock failed — check for stale lock as secondary safety net
+if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
+	# lock dir exists — check staleness
 	if [ -f "$LOCK_FILE" ]; then
 		OVAL=$(cat "$LOCK_FILE")
 		DIFF=$((UTIME - OVAL))
 		if [ "$DIFF" -gt "$LOCK_FILE_TIMEOUT" ]; then
-			eout "cleared stale lock file (flock held by dead process)."
-			# force-acquire by removing and re-opening
-			rm -f "$LOCK_FILE"
-			eval "exec $LOCK_FD>\"$LOCK_FILE\""
-			flock -n "$LOCK_FD" || { eout "unable to acquire lock after stale cleanup, aborting."; exit "$EXIT_LOCK_ERROR"; }
+			eout "cleared stale lock (${DIFF}s old, pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null || echo unknown))."
+			rm -rf "$LOCK_FILE.lk"
+			mkdir "$LOCK_FILE.lk" 2>/dev/null || {
+				eout "unable to acquire lock after stale cleanup, aborting."
+				exit "$EXIT_LOCK_ERROR"
+			}
 		else
 			eout "locked subsystem, already running ? ($LOCK_FILE is $DIFF seconds old), aborting."
 			exit "$EXIT_LOCK_ERROR"
 		fi
 	else
-		eout "unable to acquire lock, aborting."
+		eout "lock directory exists but no timestamp file, aborting."
 		exit "$EXIT_LOCK_ERROR"
 	fi
 fi
+echo "$$" > "$LOCK_FILE.lk/pid"
 echo "$UTIME" > "$LOCK_FILE"
 }
 
@@ -412,8 +411,8 @@ run() {
 # shellcheck disable=SC2317 # called via trap
 cleanup_watch() {
 	eout "watch mode shutting down (pid=$$)" le
-	rm -f "$LOCK_FILE"
-	eval "exec $LOCK_FD>&-" 2>/dev/null
+	rm -rf "$LOCK_FILE.lk" 2>/dev/null
+	rm -f "$LOCK_FILE" 2>/dev/null
 }
 
 # shellcheck disable=SC2317 # called via trap
