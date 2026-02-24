@@ -139,7 +139,7 @@ fi
 
 if [ ! -d "$INSTALL_PATH/stats" ]; then
 	mkdir -p "$INSTALL_PATH/stats"
-	chmod 750 "$INSTALL_PATH"
+	chmod 750 "$INSTALL_PATH/stats"
 fi
 
 APOOL_LIST="$INSTALL_PATH/stats/attack.pool"

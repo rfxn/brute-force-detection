@@ -10,7 +10,7 @@
 # Detection Thresholds
 # =============================================
 
-# failure events before an address is blocked (per-rule override in rules/)
+# failure events before an address is blocked; must be > 0 (per-rule override in rules/)
 TRIG="15"
 
 # sliding window in seconds for counting failures (default 5 min)
@@ -26,13 +26,13 @@ TRIG_GLOBAL="0"
 
 # unique IPs from same subnet triggering a subnet ban (0 = disabled)
 # when N unique IPs from the same subnet attack the same service
-# within TRIG_WINDOW, the entire subnet is banned
+# within TRIG_WINDOW, the entire subnet is banned (see SUBNET_MASK)
 SUBNET_TRIG="0"
 
-# IPv4 subnet mask for distributed attack aggregation
+# IPv4 subnet mask for distributed attack aggregation (8-32)
 SUBNET_MASK="24"
 
-# IPv6 subnet mask for distributed attack aggregation
+# IPv6 subnet mask for distributed attack aggregation (16-128)
 # must be a multiple of 16 (group-aligned: 16, 32, 48, 64, ...)
 SUBNET_MASK_V6="48"
 
@@ -105,10 +105,10 @@ UNBAN_COMMAND_V6=""
 # auto-unban requires UNBAN_COMMAND when using FIREWALL="custom"
 BAN_DURATION="300"
 
-# number of temporary bans before permanent (0 = disabled)
+# number of temporary bans before permanent; 0 = disabled
 BAN_PERMANENT_AFTER="5"
 
-# window in seconds for counting repeat offenses (default 24 hours)
+# window in seconds for counting repeat offenses; must be > 0 (default 24 hours)
 BAN_PERMANENT_WINDOW="86400"
 
 # ban command retry count on failure (e.g., iptables lock contention)
@@ -141,7 +141,7 @@ EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
 # per-rule alert routing: set RULE_EMAIL="addr" in individual rule files
 # to override EMAIL_ADDRESS for that rule's alerts
 
-# number of log lines to include in email alerts
+# number of log lines to include in email alerts; must be > 0
 EMAIL_LOGLINES="50"
 
 # =============================================
@@ -176,8 +176,8 @@ OUTPUT_SYSLOG="1"
 # log file path for syslog logging
 OUTPUT_SYSLOG_FILE="$KERNEL_LOG_PATH"
 
-# lock file timeout in seconds
+# lock file timeout in seconds; must be > 0
 LOCK_FILE_TIMEOUT="300"
 
-# polling interval in seconds for watch mode (bfd --watch)
+# polling interval in seconds for watch mode (bfd --watch); must be > 0
 WATCH_INTERVAL="10"

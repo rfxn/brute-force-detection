@@ -1,4 +1,11 @@
 2.0.1:
+[Fix] tlog: mixed tab/space indentation in getsize(); normalized to tabs
+[Fix] tlog: [ "$1" = "" ] idiom replaced with [ -z "$1" ] for project consistency
+[Change] conf.bfd: add validation constraint notes to 9 variable comments
+      (TRIG, SUBNET_TRIG, SUBNET_MASK, SUBNET_MASK_V6, BAN_PERMANENT_AFTER,
+      BAN_PERMANENT_WINDOW, EMAIL_LOGLINES, LOCK_FILE_TIMEOUT, WATCH_INTERVAL)
+[Fix] pre(): chmod 750 targeted $INSTALL_PATH instead of $INSTALL_PATH/stats;
+      stats/ directory was left at umask default (755) instead of 750
 [Fix] validate_config() header comment: list all 24 validated variables
       (12 were missing from the original 11-variable comment)
 [Fix] importconf: add user-visible message when FIREWALL is silently changed
