@@ -1,4 +1,9 @@
 2.0.1:
+[Fix] importconf: add cleanup trap for temp files on interrupt (SIGINT/SIGTERM);
+      removes mktemp and merge_conf intermediate files on EXIT/INT/TERM
+[Note] EXIT_USAGE_ERROR constant: FALSE POSITIVE — EXIT_CONFIG_ERROR is
+       semantically correct for unknown CLI options; adding a new constant would
+       change exit codes (backward compat freeze)
 [Fix] get_state(): PID liveness check — when lock is fresh but holder PID is
       dead (OOM, SIGKILL), clear and re-acquire instead of waiting for timeout;
       cron recovers from dead watch daemon within one cycle (~2 min)
