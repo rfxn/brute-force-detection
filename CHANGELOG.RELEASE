@@ -18,6 +18,13 @@
          fallback; section 5.4 adds SysVinit service management examples
          and dead-PID recovery explanation; Quick Start includes watch mode
          enable step after configure
+[New] tests/26-init-script.bats: 20 tests — init script structural checks
+      (syntax, LSB/chkconfig headers, case actions, paths) and get_state()
+      PID liveness lock tests (dead PID recovery, live PID blocking, stale
+      timeout, missing PID file, lock dir without timestamp)
+[Change] Dockerfiles: add COPY bfd-watch.init for init script tests (all 9)
+[Fix] tests/25-importconf.bats: version extraction test uses --partial to
+      accommodate FIREWALL migration message on pre-2.0.1 configs
 [Fix] tlog: mixed tab/space indentation in getsize(); normalized to tabs
 [Fix] tlog: [ "$1" = "" ] idiom replaced with [ -z "$1" ] for project consistency
 [Change] conf.bfd: add validation constraint notes to 9 variable comments
