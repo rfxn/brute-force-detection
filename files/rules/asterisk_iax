@@ -16,6 +16,6 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="asterisk.iax"
 
 	## ASTERISK: IAX2 auth failed
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"Host <HOST> failed MD5 authentication")
 fi

@@ -30,7 +30,7 @@ if [ -n "$REQ" ] && [ -f "$REQ" ]; then
 	## PostgreSQL authentication failures
 	# Pattern 1: no pg_hba.conf entry — IP embedded in message
 	# Pattern 2: password authentication failed — requires %h or %r in log_line_prefix
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		'no pg_hba.conf entry for host "<HOST>"' \
 		"<HOST>.*FATAL.*password authentication failed")
 fi

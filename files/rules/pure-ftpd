@@ -16,6 +16,6 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="pure-ftpd"
 
 	## PURE-FTPD
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"pure-ftpd.*@<HOST>.*WARNING.*Authentication failed")
 fi

@@ -1,4 +1,11 @@
 2.0.1:
+[Change] rules/*: migrate all 34 rule files from $TLOG_PATH subprocess to
+         in-process _rule_tlog() call; eliminates 34 fork+exec pairs per
+         detection cycle
+[Change] test_rule(): rewrite to use _TLOG_PASSTHROUGH instead of mktemp
+         tlog script; no temp file creation, no chmod, no TLOG_PATH override
+[Change] tests/21-rule-test.bats: update mock rule pattern and setup to match
+         _rule_tlog() migration
 [New] _rule_tlog(): in-process tlog wrapper for rule execution; replaces
       $TLOG_PATH subprocess with tlog_read() call; _TLOG_PASSTHROUGH variable
       for test_rule() passthrough mode

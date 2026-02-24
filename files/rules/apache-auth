@@ -23,7 +23,7 @@ if [ -n "$REQ" ] && [ -f "$REQ" ]; then
 	TLOG_TF="httpd.auth"
 
 	## Apache HTTP authentication failures (2.4 + 2.2)
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"\[client <HOST>.*AH0161[78]" \
 		"\[client <HOST>\].*authentication failure")
 fi

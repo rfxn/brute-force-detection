@@ -16,6 +16,6 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="asterisk"
 
 	## ASTERISK BADAUTH
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"Wrong password.*'<HOST>'")
 fi

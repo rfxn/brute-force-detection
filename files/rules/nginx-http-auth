@@ -21,7 +21,7 @@ if [ -n "$REQ" ] && [ -f "$REQ" ]; then
 	TLOG_TF="nginx.auth"
 
 	## nginx HTTP authentication failures
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"password mismatch, client: <HOST>" \
 		"was not found in .*, client: <HOST>" \
 		"no user/password was provided.*, client: <HOST>")

@@ -16,7 +16,7 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="vpopmail"
 
 	## vpopmail [qmail]
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"vchkpw-pop3.*password fail.*:<HOST>" \
 		"vchkpw-pop3.*user not found.*:<HOST>")
 fi

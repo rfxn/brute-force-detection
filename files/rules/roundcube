@@ -23,7 +23,7 @@ if [ -n "$REQ" ] && [ -f "$REQ" ]; then
 	TLOG_TF="roundcube"
 
 	## Roundcube webmail authentication failures
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"Login failed for .+ from <HOST>" \
 		"Failed login for .+ from <HOST>")
 fi

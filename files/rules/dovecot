@@ -17,7 +17,7 @@ if [ -f "$REQ" ]; then
 
 	## DOVECOT IMAP/POP3
 	IGNOREREGEX="no auth attempts"
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"pop3-login.*auth failed.*rip=<HOST>" \
 		"imap-login.*auth failed.*rip=<HOST>")
 fi
