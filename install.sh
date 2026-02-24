@@ -20,6 +20,7 @@
 ###
 #
 set -eu
+cd "$(dirname "$0")"
 
 INSPATH="${INSTALL_PATH:-/usr/local/bfd}"
 BINPATH="${BIN_PATH:-/usr/local/sbin/bfd}"
@@ -59,6 +60,7 @@ install(){
 	chmod 750 "$INSPATH/tmp"
 	chmod 750 "$INSPATH/stats"
 	chmod 640 "$INSPATH/alert.bfd"
+	mkdir -p "$(dirname "$BINPATH")"
         ln -fs "$INSPATH/bfd" "$BINPATH"
 	if [ -f "uninstall.sh" ]; then
 		cp uninstall.sh "$INSPATH/"
