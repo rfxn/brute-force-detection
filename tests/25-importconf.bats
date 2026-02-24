@@ -334,11 +334,11 @@ INSTALL_PATH="/usr/local/bfd"
 NEWEOF
 
 	# create state files in old backup
-	echo "1.2.3.4 1700000000 0 sshd all" > "$inst.bk.last/tmp/bans.active"
-	echo "1.2.3.4 1700000000 ban sshd all" > "$inst.bk.last/tmp/bans.history"
-	echo "1.2.3.4 1700000000 sshd" > "$inst.bk.last/tmp/events.dat"
-	echo "1.2.3.4;5;sshd" > "$inst.bk.last/stats/attack.pool"
-	echo "10.0.0.1" > "$inst.bk.last/ignore.hosts"
+	echo "192.0.2.4 1700000000 0 sshd all" > "$inst.bk.last/tmp/bans.active"
+	echo "192.0.2.4 1700000000 ban sshd all" > "$inst.bk.last/tmp/bans.history"
+	echo "192.0.2.4 1700000000 sshd" > "$inst.bk.last/tmp/events.dat"
+	echo "192.0.2.4;5;sshd" > "$inst.bk.last/stats/attack.pool"
+	echo "192.0.2.1" > "$inst.bk.last/ignore.hosts"
 
 	local script
 	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
@@ -356,7 +356,7 @@ NEWEOF
 
 	# verify content
 	run cat "$inst/tmp/bans.active"
-	assert_output "1.2.3.4 1700000000 0 sshd all"
+	assert_output "192.0.2.4 1700000000 0 sshd all"
 	run cat "$inst/ignore.hosts"
-	assert_output "10.0.0.1"
+	assert_output "192.0.2.1"
 }

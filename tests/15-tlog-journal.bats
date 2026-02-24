@@ -69,8 +69,8 @@ if [ "$NULL_RUN" = "1" ]; then
 fi
 
 if [ "$LINES_OUTPUT" = "subsequent" ]; then
-	echo "Feb 20 10:15:01 server sshd[12345]: Failed password for root from 192.168.1.100 port 22 ssh2"
-	echo "Feb 20 10:15:02 server sshd[12346]: Invalid user admin from 10.0.0.5 port 22 ssh2"
+	echo "Feb 20 10:15:01 server sshd[12345]: Failed password for root from 203.0.113.100 port 22 ssh2"
+	echo "Feb 20 10:15:02 server sshd[12346]: Invalid user admin from 192.0.2.5 port 22 ssh2"
 	if [ "$SHOW_CURSOR" = "1" ]; then
 		echo "-- cursor: s=abc123;i=3;b=def456"
 	fi
@@ -78,7 +78,7 @@ if [ "$LINES_OUTPUT" = "subsequent" ]; then
 fi
 
 if [ "$LINES_OUTPUT" = "timestamp_fallback" ]; then
-	echo "Feb 20 10:20:01 server sshd[12347]: Failed password for user1 from 172.16.0.1 port 22 ssh2"
+	echo "Feb 20 10:20:01 server sshd[12347]: Failed password for user1 from 198.51.100.1 port 22 ssh2"
 	if [ "$SHOW_CURSOR" = "1" ]; then
 		echo "-- cursor: s=abc123;i=5;b=def456"
 	fi
@@ -86,7 +86,7 @@ if [ "$LINES_OUTPUT" = "timestamp_fallback" ]; then
 fi
 
 # default: output some lines
-echo "Feb 20 10:00:01 server sshd[12340]: Failed password for root from 192.168.1.50 port 22 ssh2"
+echo "Feb 20 10:00:01 server sshd[12340]: Failed password for root from 203.0.113.50 port 22 ssh2"
 if [ "$SHOW_CURSOR" = "1" ]; then
 	echo "-- cursor: s=abc123;i=2;b=def456"
 fi
@@ -165,8 +165,8 @@ MOCK
 	# second run — should output lines from --after-cursor
 	run tlog_journal_read "sshd" "$BASERUN"
 	assert_success
-	assert_output --partial "Failed password for root from 192.168.1.100"
-	assert_output --partial "Invalid user admin from 10.0.0.5"
+	assert_output --partial "Failed password for root from 203.0.113.100"
+	assert_output --partial "Invalid user admin from 192.0.2.5"
 }
 
 @test "tlog_journal_read: cursor file updated on subsequent reads" {
@@ -197,7 +197,7 @@ MOCK
 	echo "1700000000" > "$BASERUN/sshd.jts"
 	run tlog_journal_read "sshd" "$BASERUN"
 	assert_success
-	assert_output --partial "Failed password for user1 from 172.16.0.1"
+	assert_output --partial "Failed password for user1 from 198.51.100.1"
 }
 
 @test "tlog_journal_read: missing journalctl returns error" {
@@ -282,7 +282,7 @@ MOCK
 @test "validate_rule: LP missing + journal available + mapping passes" {
 	LP="/nonexistent/auth.log"
 	TLOG_TF="sshd"
-	ARG_VAL="10.0.0.1"
+	ARG_VAL="192.0.2.1"
 	LOG_SOURCE="auto"
 	run validate_rule "sshd"
 	assert_success
@@ -297,7 +297,7 @@ MOCK
 		export OUTPUT_SYSLOG_FILE='/dev/null'
 		LP='/nonexistent/auth.log'
 		TLOG_TF='sshd'
-		ARG_VAL='10.0.0.1'
+		ARG_VAL='192.0.2.1'
 		LOG_SOURCE='auto'
 		validate_rule 'sshd'
 	"
@@ -308,7 +308,7 @@ MOCK
 @test "validate_rule: LP missing + LOG_SOURCE=file fails" {
 	LP="/nonexistent/auth.log"
 	TLOG_TF="sshd"
-	ARG_VAL="10.0.0.1"
+	ARG_VAL="192.0.2.1"
 	LOG_SOURCE="file"
 	run validate_rule "sshd"
 	assert_failure
@@ -318,7 +318,7 @@ MOCK
 @test "validate_rule: LP missing + no mapping fails" {
 	LP="/nonexistent/error.log"
 	TLOG_TF="apache-auth"
-	ARG_VAL="10.0.0.1"
+	ARG_VAL="192.0.2.1"
 	LOG_SOURCE="auto"
 	run validate_rule "apache-auth"
 	assert_failure

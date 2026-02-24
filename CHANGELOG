@@ -22,6 +22,9 @@
       using BFD's lock file; copy-and-truncate preserves inodes; INSTALL_PATH
       variable replaces hardcoded paths; attack.pool rotation purge added
 [Fix] Dockerfiles missing COPY importconf; added to all 9 test Dockerfiles
+[Change] test IPs: replace private/example ranges (10.0.0.x, 172.16.x, 192.168.1.x,
+         1.2.3.4, 5.6.7.8) with RFC 5737 documentation ranges (192.0.2.0/24,
+         198.51.100.0/24, 203.0.113.0/24) across all 25 test files
 [Change] test suite: rename 25 test files from test_*.bats to numbered
          NN-name.bats convention for deterministic ordering and parallel
          distribution

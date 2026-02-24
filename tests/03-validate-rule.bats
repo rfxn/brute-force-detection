@@ -20,7 +20,7 @@ teardown() {
 @test "validate_rule: all required variables set returns 0" {
 	LP="$TEST_TMPDIR/test.log"
 	TLOG_TF="sshd"
-	ARG_VAL="10.0.0.1:user"
+	ARG_VAL="192.0.2.1:user"
 	run validate_rule "sshd"
 	assert_success
 }
@@ -28,7 +28,7 @@ teardown() {
 @test "validate_rule: LP unset returns 1" {
 	unset LP
 	TLOG_TF="sshd"
-	ARG_VAL="10.0.0.1:user"
+	ARG_VAL="192.0.2.1:user"
 	run validate_rule "sshd"
 	assert_failure
 	assert_output --partial "LP not set"
@@ -37,7 +37,7 @@ teardown() {
 @test "validate_rule: LP empty returns 1" {
 	LP=""
 	TLOG_TF="sshd"
-	ARG_VAL="10.0.0.1:user"
+	ARG_VAL="192.0.2.1:user"
 	run validate_rule "sshd"
 	assert_failure
 	assert_output --partial "LP not set"
@@ -46,7 +46,7 @@ teardown() {
 @test "validate_rule: LP file does not exist returns 1" {
 	LP="$TEST_TMPDIR/nonexistent.log"
 	TLOG_TF="sshd"
-	ARG_VAL="10.0.0.1:user"
+	ARG_VAL="192.0.2.1:user"
 	LOG_SOURCE="file"
 	run validate_rule "sshd"
 	assert_failure
@@ -56,7 +56,7 @@ teardown() {
 @test "validate_rule: TLOG_TF unset returns 1" {
 	LP="$TEST_TMPDIR/test.log"
 	unset TLOG_TF
-	ARG_VAL="10.0.0.1:user"
+	ARG_VAL="192.0.2.1:user"
 	run validate_rule "sshd"
 	assert_failure
 	assert_output --partial "TLOG_TF not set"
@@ -65,7 +65,7 @@ teardown() {
 @test "validate_rule: TLOG_TF empty returns 1" {
 	LP="$TEST_TMPDIR/test.log"
 	TLOG_TF=""
-	ARG_VAL="10.0.0.1:user"
+	ARG_VAL="192.0.2.1:user"
 	run validate_rule "sshd"
 	assert_failure
 	assert_output --partial "TLOG_TF not set"
@@ -92,7 +92,7 @@ teardown() {
 @test "validate_rule: rule name appears in log messages" {
 	LP=""
 	TLOG_TF="sshd"
-	ARG_VAL="10.0.0.1:user"
+	ARG_VAL="192.0.2.1:user"
 	run validate_rule "dovecot"
 	assert_output --partial "dovecot"
 }

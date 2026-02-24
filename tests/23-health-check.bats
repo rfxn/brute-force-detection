@@ -164,9 +164,9 @@ EOF
 }
 
 @test "health_check: active bans counted" {
-	state_bans_active_append "$INSTALL_PATH" "1000" "0" "10.0.0.1" "sshd" "22"
-	state_bans_active_append "$INSTALL_PATH" "1000" "0" "10.0.0.2" "dovecot" "110"
-	state_bans_active_append "$INSTALL_PATH" "1000" "0" "10.0.0.3" "sshd" "22"
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "192.0.2.1" "sshd" "22"
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "192.0.2.2" "dovecot" "110"
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "192.0.2.3" "sshd" "22"
 	run health_check "$INSTALL_PATH"
 	assert_success
 	assert_output --partial "Active bans: 3"

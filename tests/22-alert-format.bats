@@ -80,47 +80,47 @@ teardown() {
 # --- format_alert_entry ---
 
 @test "format_alert_entry: single ban has no prefix" {
-	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "1300" "ban" "0" "5" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "sshd" "22" "5" "1300" "ban" "0" "5" "300"
 	assert_success
 	refute_output --partial "--- Ban"
-	assert_output --partial "Host:       10.0.0.1"
+	assert_output --partial "Host:       192.0.2.1"
 	assert_output --partial "Service:    sshd (port 22)"
 }
 
 @test "format_alert_entry: multi-ban has prefix" {
-	run format_alert_entry 2 3 "10.0.0.1" "sshd" "22" "5" "1300" "ban" "0" "5" "300"
+	run format_alert_entry 2 3 "192.0.2.1" "sshd" "22" "5" "1300" "ban" "0" "5" "300"
 	assert_success
 	assert_output --partial "--- Ban 2 of 3 ---"
 }
 
 @test "format_alert_entry: permanent ban shows Permanent" {
-	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "0" "ban" "0" "5" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "sshd" "22" "5" "0" "ban" "0" "5" "300"
 	assert_success
 	assert_output --partial "Ban:        Permanent"
 	refute_output --partial "expires"
 }
 
 @test "format_alert_entry: temporary ban shows duration and expiry" {
-	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "1300" "ban" "0" "5" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "sshd" "22" "5" "1300" "ban" "0" "5" "300"
 	assert_success
 	assert_output --partial "Temporary (5m)"
 	assert_output --partial "expires"
 }
 
 @test "format_alert_entry: escalated ban shows escalation" {
-	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "0" "escalate" "4" "5" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "sshd" "22" "5" "0" "escalate" "4" "5" "300"
 	assert_success
 	assert_output --partial "Permanent (escalated from repeat offenses)"
 }
 
 @test "format_alert_entry: shows failure count and threshold" {
-	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "0" "ban" "0" "5" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "sshd" "22" "5" "0" "ban" "0" "5" "300"
 	assert_success
 	assert_output --partial "Failures:   5 in 300s window (threshold: 5)"
 }
 
 @test "format_alert_entry: shows history when BAN_PERMANENT_AFTER set" {
-	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "0" "ban" "2" "5" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "sshd" "22" "5" "0" "ban" "2" "5" "300"
 	assert_success
 	assert_output --partial "History:    2 previous ban(s)"
 	assert_output --partial "permanent at 5"
@@ -128,26 +128,26 @@ teardown() {
 
 @test "format_alert_entry: no history line when BAN_PERMANENT_AFTER=0" {
 	BAN_PERMANENT_AFTER="0"
-	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "0" "ban" "0" "5" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "sshd" "22" "5" "0" "ban" "0" "5" "300"
 	assert_success
 	refute_output --partial "History:"
 }
 
 @test "format_alert_entry: shows reconstructed command" {
 	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
-	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "0" "ban" "0" "5" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "sshd" "22" "5" "0" "ban" "0" "5" "300"
 	assert_success
-	assert_output --partial "Command:    echo ban 10.0.0.1"
+	assert_output --partial "Command:    echo ban 192.0.2.1"
 }
 
 @test "format_alert_entry: all ports shows 'all ports'" {
-	run format_alert_entry 1 1 "10.0.0.1" "sshd" "all" "5" "0" "ban" "0" "5" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "sshd" "all" "5" "0" "ban" "0" "5" "300"
 	assert_success
 	assert_output --partial "Service:    sshd (all ports)"
 }
 
 @test "format_alert_entry: multi-port display" {
-	run format_alert_entry 1 1 "10.0.0.1" "dovecot" "110,143,993,995" "10" "0" "ban" "0" "10" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "dovecot" "110,143,993,995" "10" "0" "ban" "0" "10" "300"
 	assert_success
 	assert_output --partial "Service:    dovecot (port 110,143,993,995)"
 }
@@ -156,7 +156,7 @@ teardown() {
 	BAN_DURATION="300"
 	BAN_ESCALATION="linear"
 	# expiry = 1000 + 600 = 1600, duration = 600, base = 300, recent > 0
-	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "1600" "ban" "1" "5" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "sshd" "22" "5" "1600" "ban" "1" "5" "300"
 	assert_success
 	assert_output --partial "Temporary (10m, escalated from 5m)"
 }
@@ -164,7 +164,7 @@ teardown() {
 @test "format_alert_entry: non-escalated ban does not show escalation context" {
 	BAN_DURATION="300"
 	BAN_ESCALATION="none"
-	run format_alert_entry 1 1 "10.0.0.1" "sshd" "22" "5" "1300" "ban" "0" "5" "300"
+	run format_alert_entry 1 1 "192.0.2.1" "sshd" "22" "5" "1300" "ban" "0" "5" "300"
 	assert_success
 	assert_output --partial "Temporary (5m)"
 	refute_output --partial "escalated from"
@@ -182,18 +182,18 @@ teardown() {
 
 @test "format_alert_body: single entry produces output" {
 	local af="$TEST_TMPDIR/alerts_single"
-	echo "10.0.0.1|sshd|22|5|0|ban|0|/dev/null|root|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5|0|ban|0|/dev/null|root|5|300" > "$af"
 	run format_alert_body "$af" "50"
 	assert_success
-	assert_output --partial "Host:       10.0.0.1"
+	assert_output --partial "Host:       192.0.2.1"
 	assert_output --partial "Service:    sshd"
 	refute_output --partial "hosts banned"
 }
 
 @test "format_alert_body: multi entry shows count header" {
 	local af="$TEST_TMPDIR/alerts_multi"
-	echo "10.0.0.1|sshd|22|5|0|ban|0|/dev/null|root|5|300" > "$af"
-	echo "10.0.0.2|dovecot|143|10|0|ban|0|/dev/null|root|10|300" >> "$af"
+	echo "192.0.2.1|sshd|22|5|0|ban|0|/dev/null|root|5|300" > "$af"
+	echo "192.0.2.2|dovecot|143|10|0|ban|0|/dev/null|root|10|300" >> "$af"
 	run format_alert_body "$af" "50"
 	assert_success
 	assert_output --partial "2 hosts banned in this check cycle."
@@ -203,7 +203,7 @@ teardown() {
 
 @test "format_alert_body: missing log file shows journal message" {
 	local af="$TEST_TMPDIR/alerts_nolog"
-	echo "10.0.0.1|sshd|22|5|0|ban|0||root|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5|0|ban|0||root|5|300" > "$af"
 	run format_alert_body "$af" "50"
 	assert_success
 	assert_output --partial "logs via systemd journal"
@@ -211,29 +211,29 @@ teardown() {
 
 @test "format_alert_body: existing log file extracts lines" {
 	local logfile="$TEST_TMPDIR/test.log"
-	echo "Feb 22 14:29:58 host sshd[1234]: Failed password for root from 10.0.0.1" > "$logfile"
-	echo "Feb 22 14:29:59 host sshd[1235]: Failed password for admin from 10.0.0.1" >> "$logfile"
-	echo "Feb 22 14:30:00 host sshd[1236]: Failed password for test from 10.0.0.2" >> "$logfile"
+	echo "Feb 22 14:29:58 host sshd[1234]: Failed password for root from 192.0.2.1" > "$logfile"
+	echo "Feb 22 14:29:59 host sshd[1235]: Failed password for admin from 192.0.2.1" >> "$logfile"
+	echo "Feb 22 14:30:00 host sshd[1236]: Failed password for test from 192.0.2.2" >> "$logfile"
 	local af="$TEST_TMPDIR/alerts_log"
-	echo "10.0.0.1|sshd|22|5|0|ban|0|$logfile|root|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5|0|ban|0|$logfile|root|5|300" > "$af"
 	run format_alert_body "$af" "50"
 	assert_success
 	assert_output --partial "Source logs from 'sshd':"
-	assert_output --partial "10.0.0.1"
-	refute_output --partial "10.0.0.2"
+	assert_output --partial "192.0.2.1"
+	refute_output --partial "192.0.2.2"
 }
 
 @test "format_alert_body: multi entry log section includes host labels" {
 	local logfile="$TEST_TMPDIR/test.log"
-	echo "10.0.0.1 sshd line" > "$logfile"
-	echo "10.0.0.2 dovecot line" >> "$logfile"
+	echo "192.0.2.1 sshd line" > "$logfile"
+	echo "192.0.2.2 dovecot line" >> "$logfile"
 	local af="$TEST_TMPDIR/alerts_multi_log"
-	echo "10.0.0.1|sshd|22|5|0|ban|0|$logfile|root|5|300" > "$af"
-	echo "10.0.0.2|dovecot|143|10|0|ban|0|$logfile|root|10|300" >> "$af"
+	echo "192.0.2.1|sshd|22|5|0|ban|0|$logfile|root|5|300" > "$af"
+	echo "192.0.2.2|dovecot|143|10|0|ban|0|$logfile|root|10|300" >> "$af"
 	run format_alert_body "$af" "50"
 	assert_success
-	assert_output --partial "Source logs from 'sshd' [10.0.0.1]:"
-	assert_output --partial "Source logs from 'dovecot' [10.0.0.2]:"
+	assert_output --partial "Source logs from 'sshd' [192.0.2.1]:"
+	assert_output --partial "Source logs from 'dovecot' [192.0.2.2]:"
 }
 
 # --- send_alerts ---
@@ -258,7 +258,7 @@ MOCK
 
 @test "send_alerts: single entry sends one mail with unchanged subject" {
 	local af="$TEST_TMPDIR/alerts_one"
-	echo "10.0.0.1|sshd|22|5|0|ban|0|/dev/null|root|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5|0|ban|0|/dev/null|root|5|300" > "$af"
 	# mock mail
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	mkdir -p "$TEST_TMPDIR/bin"
@@ -280,8 +280,8 @@ MOCK
 
 @test "send_alerts: multiple entries same recipient sends one mail with ban count" {
 	local af="$TEST_TMPDIR/alerts_multi"
-	echo "10.0.0.1|sshd|22|5|0|ban|0|/dev/null|root|5|300" > "$af"
-	echo "10.0.0.2|dovecot|143|10|0|ban|0|/dev/null|root|10|300" >> "$af"
+	echo "192.0.2.1|sshd|22|5|0|ban|0|/dev/null|root|5|300" > "$af"
+	echo "192.0.2.2|dovecot|143|10|0|ban|0|/dev/null|root|10|300" >> "$af"
 	# mock mail
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	mkdir -p "$TEST_TMPDIR/bin"
@@ -306,8 +306,8 @@ MOCK
 
 @test "send_alerts: different recipients get separate emails" {
 	local af="$TEST_TMPDIR/alerts_diff"
-	echo "10.0.0.1|sshd|22|5|0|ban|0|/dev/null|admin@example.com|5|300" > "$af"
-	echo "10.0.0.2|dovecot|143|10|0|ban|0|/dev/null|security@example.com|10|300" >> "$af"
+	echo "192.0.2.1|sshd|22|5|0|ban|0|/dev/null|admin@example.com|5|300" > "$af"
+	echo "192.0.2.2|dovecot|143|10|0|ban|0|/dev/null|security@example.com|10|300" >> "$af"
 	# mock mail
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	mkdir -p "$TEST_TMPDIR/bin"
@@ -329,7 +329,7 @@ MOCK
 
 @test "send_alerts: RULE_EMAIL override routes to different recipient" {
 	local af="$TEST_TMPDIR/alerts_rule_email"
-	echo "10.0.0.1|sshd|22|5|0|ban|0|/dev/null|special@example.com|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5|0|ban|0|/dev/null|special@example.com|5|300" > "$af"
 	# mock mail
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	mkdir -p "$TEST_TMPDIR/bin"
@@ -348,7 +348,7 @@ MOCK
 
 @test "send_alerts: single-ban backward compat sets ATTACK_HOST global" {
 	local af="$TEST_TMPDIR/alerts_compat"
-	echo "10.0.0.1|sshd|22|5|0|ban|0|/dev/null|root|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5|0|ban|0|/dev/null|root|5|300" > "$af"
 	# mock mail (just succeed)
 	mkdir -p "$TEST_TMPDIR/bin"
 	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
@@ -356,7 +356,7 @@ MOCK
 	chmod +x "$TEST_TMPDIR/bin/mail"
 	export PATH="$TEST_TMPDIR/bin:$PATH"
 	send_alerts "$af" "$EMAIL_SUBJECT" "$EMAIL_TEMPLATE" "50"
-	[ "$ATTACK_HOST" = "10.0.0.1" ]
+	[ "$ATTACK_HOST" = "192.0.2.1" ]
 	[ "$MOD" = "sshd" ]
 	[ "$ATTACK_COUNT" = "5" ]
 }
@@ -409,7 +409,7 @@ RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
 LP="$logfile"
 TLOG_TF="testrule"
-ARG_VAL="10.0.0.1 10.0.0.1 10.0.0.1"
+ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="1"
@@ -441,7 +441,7 @@ RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
 LP="$logfile"
 TLOG_TF="testrule"
-ARG_VAL="10.0.0.1 10.0.0.1 10.0.0.1"
+ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="1"
@@ -470,7 +470,7 @@ RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
 LP="$logfile"
 TLOG_TF="testrule"
-ARG_VAL="10.0.0.1 10.0.0.1 10.0.0.1"
+ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="1"
@@ -500,7 +500,7 @@ RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
 LP="$logfile"
 TLOG_TF="testrule"
-ARG_VAL="10.0.0.1 10.0.0.1 10.0.0.1"
+ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="0"

@@ -21,41 +21,41 @@ teardown() {
 
 @test "count_failures: counts host in windowed mode" {
 	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n10.0.0.2\n10.0.0.1\n")
-	run count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
+	hosts_parsed=$(printf "192.0.2.1\n192.0.2.2\n192.0.2.1\n")
+	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
 	assert_success
 	assert_output "2"
 }
 
 @test "count_failures: accumulates within window" {
 	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n10.0.0.1\n10.0.0.1\n")
+	hosts_parsed=$(printf "192.0.2.1\n192.0.2.1\n192.0.2.1\n")
 	# first run at t=900
-	count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "900" "sshd" >/dev/null
+	count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "900" "sshd" >/dev/null
 	# second run at t=1000 (within window)
-	run count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
+	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
 	assert_success
 	assert_output "6"
 }
 
 @test "count_failures: old events expire outside window" {
 	# seed old events at t=100
-	state_events_append "$INSTALL_PATH" "100" "10.0.0.1" "sshd" "5"
+	state_events_append "$INSTALL_PATH" "100" "192.0.2.1" "sshd" "5"
 	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n10.0.0.1\n")
+	hosts_parsed=$(printf "192.0.2.1\n192.0.2.1\n")
 	# now=1000, window=300, cutoff=700 => old events at t=100 excluded
-	run count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
+	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
 	assert_success
 	assert_output "2"
 }
 
 @test "count_failures: per-service isolation in windowed mode" {
 	# seed dovecot events in window
-	state_events_append "$INSTALL_PATH" "900" "10.0.0.1" "dovecot" "10"
+	state_events_append "$INSTALL_PATH" "900" "192.0.2.1" "dovecot" "10"
 	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n10.0.0.1\n")
+	hosts_parsed=$(printf "192.0.2.1\n192.0.2.1\n")
 	# count sshd only
-	run count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
+	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
 	assert_success
 	assert_output "2"
 }
@@ -64,11 +64,11 @@ teardown() {
 
 @test "pipeline: TRIG_GLOBAL triggers ban across services" {
 	# seed dovecot events (3) and sshd events (3) in window, total = 6
-	state_events_append "$INSTALL_PATH" "900" "10.0.0.1" "dovecot" "3"
-	state_events_append "$INSTALL_PATH" "900" "10.0.0.1" "sshd" "3"
+	state_events_append "$INSTALL_PATH" "900" "192.0.2.1" "dovecot" "3"
+	state_events_append "$INSTALL_PATH" "900" "192.0.2.1" "sshd" "3"
 	# TRIG_GLOBAL=5: cross-service total of 6 >= 5
 	local global_count
-	global_count=$(state_events_count "$INSTALL_PATH" "10.0.0.1" "300" "1000")
+	global_count=$(state_events_count "$INSTALL_PATH" "192.0.2.1" "300" "1000")
 	[ "$global_count" -ge 5 ]
 }
 
@@ -89,45 +89,45 @@ teardown() {
 # --- execute_ban ---
 
 @test "execute_ban: dry run logs without executing" {
-	run execute_ban "10.0.0.1" "sshd" "1"
+	run execute_ban "192.0.2.1" "sshd" "1"
 	assert_success
 	assert_output --partial "dry-run"
-	assert_output --partial "10.0.0.1"
+	assert_output --partial "192.0.2.1"
 }
 
 @test "execute_ban: sets ATTACK_HOST global" {
-	execute_ban "10.0.0.1" "sshd" "1" >/dev/null
-	[ "$ATTACK_HOST" = "10.0.0.1" ]
+	execute_ban "192.0.2.1" "sshd" "1" >/dev/null
+	[ "$ATTACK_HOST" = "192.0.2.1" ]
 }
 
 @test "execute_ban: sets BAN_COMMAND global for custom backend" {
 	BAN_COMMAND_TEMPLATE="echo test_cmd"
-	execute_ban "10.0.0.1" "sshd" "1" >/dev/null
+	execute_ban "192.0.2.1" "sshd" "1" >/dev/null
 	[ "$BAN_COMMAND" = "echo test_cmd" ]
 }
 
 @test "execute_ban: executes command in live mode" {
 	local marker="$TEST_TMPDIR/ban_executed"
 	BAN_COMMAND_TEMPLATE="touch $marker"
-	execute_ban "10.0.0.1" "sshd" "0" >/dev/null
+	execute_ban "192.0.2.1" "sshd" "0" >/dev/null
 	[ -f "$marker" ]
 }
 
 @test "execute_ban: returns non-zero on command failure" {
 	BAN_COMMAND_TEMPLATE="false"
-	run execute_ban "10.0.0.1" "sshd" "0"
+	run execute_ban "192.0.2.1" "sshd" "0"
 	[ "$status" -ne 0 ]
 }
 
 @test "execute_ban: logs ban command failure" {
 	BAN_COMMAND_TEMPLATE="false"
-	run execute_ban "10.0.0.1" "sshd" "0"
+	run execute_ban "192.0.2.1" "sshd" "0"
 	assert_output --partial "failed after"
 }
 
 @test "execute_ban: failed ban skips lifecycle recording" {
 	BAN_COMMAND_TEMPLATE="false"
-	run execute_ban "10.0.0.1" "sshd" "0"
+	run execute_ban "192.0.2.1" "sshd" "0"
 	[ "$status" -ne 0 ]
 
 	# bans.active and bans.history must remain empty
@@ -155,7 +155,7 @@ exit 1
 EOF
 	chmod +x "$cmd"
 	BAN_COMMAND_TEMPLATE="$cmd $counter"
-	run execute_ban "10.0.0.1" "sshd" "0"
+	run execute_ban "192.0.2.1" "sshd" "0"
 	assert_success
 	# verify it took 3 attempts
 	local attempts
@@ -166,7 +166,7 @@ EOF
 @test "execute_ban: no retries when BAN_RETRY_COUNT=0" {
 	BAN_RETRY_COUNT="0"
 	BAN_COMMAND_TEMPLATE="false"
-	run execute_ban "10.0.0.1" "sshd" "0"
+	run execute_ban "192.0.2.1" "sshd" "0"
 	[ "$status" -ne 0 ]
 	assert_output --partial "after 1 attempt"
 }
@@ -186,7 +186,7 @@ exit 1
 EOF
 	chmod +x "$cmd"
 	UNBAN_COMMAND_TEMPLATE="$cmd $counter"
-	run execute_unban "10.0.0.1" "sshd"
+	run execute_unban "192.0.2.1" "sshd"
 	assert_success
 }
 
@@ -198,9 +198,9 @@ EOF
 	local lo_hosts="$TEST_TMPDIR/lo_hosts"
 	touch "$ignore_files" "$lo_hosts"
 
-	local host="10.0.0.1"
+	local host="192.0.2.1"
 	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n10.0.0.1\n10.0.0.1\n10.0.0.1\n10.0.0.1\n")
+	hosts_parsed=$(printf "192.0.2.1\n192.0.2.1\n192.0.2.1\n192.0.2.1\n192.0.2.1\n")
 
 	# host passes filter
 	filter_host "$host" "$ignore_files" "$lo_hosts"
@@ -220,19 +220,19 @@ EOF
 	run state_bans_active_check "$INSTALL_PATH" "$host"
 	assert_success
 	run cat "$INSTALL_PATH/stats/attack.pool"
-	assert_output --partial "10.0.0.1"
+	assert_output --partial "192.0.2.1"
 }
 
 @test "pipeline: ignored host skips ban entirely" {
 	local ignore_list="$TEST_TMPDIR/ignore.hosts"
 	local ignore_files="$TEST_TMPDIR/exclude.files"
 	local lo_hosts="$TEST_TMPDIR/lo_hosts"
-	echo "10.0.0.1" > "$ignore_list"
+	echo "192.0.2.1" > "$ignore_list"
 	echo "$ignore_list" > "$ignore_files"
 	touch "$lo_hosts"
 
 	local filter_rc=0
-	filter_host "10.0.0.1" "$ignore_files" "$lo_hosts" || filter_rc=$?
+	filter_host "192.0.2.1" "$ignore_files" "$lo_hosts" || filter_rc=$?
 	[ "$filter_rc" -eq 1 ]
 
 	# bans.active and attack.pool should be empty
@@ -246,16 +246,16 @@ EOF
 	local ignore_files="$TEST_TMPDIR/exclude.files"
 	local lo_hosts="$TEST_TMPDIR/lo_hosts"
 	touch "$ignore_files"
-	echo "192.168.1.1" > "$lo_hosts"
+	echo "203.0.113.1" > "$lo_hosts"
 
 	local filter_rc=0
-	filter_host "192.168.1.1" "$ignore_files" "$lo_hosts" || filter_rc=$?
+	filter_host "203.0.113.1" "$ignore_files" "$lo_hosts" || filter_rc=$?
 	[ "$filter_rc" -eq 2 ]
 
 	# record in pool but do not ban
-	state_pool_append "$INSTALL_PATH" "1700000000" "192.168.1.1" "sshd"
+	state_pool_append "$INSTALL_PATH" "1700000000" "203.0.113.1" "sshd"
 	run cat "$INSTALL_PATH/stats/attack.pool"
-	assert_output --partial "192.168.1.1"
+	assert_output --partial "203.0.113.1"
 	# bans.active should be empty
 	run cat "$INSTALL_PATH/tmp/bans.active"
 	assert_output ""
@@ -266,49 +266,49 @@ EOF
 @test "execute_unban: runs command and sets globals" {
 	local marker="$TEST_TMPDIR/unban_executed"
 	UNBAN_COMMAND_TEMPLATE="touch $marker"
-	execute_unban "10.0.0.1" "sshd" >/dev/null
+	execute_unban "192.0.2.1" "sshd" >/dev/null
 	[ -f "$marker" ]
-	[ "$ATTACK_HOST" = "10.0.0.1" ]
+	[ "$ATTACK_HOST" = "192.0.2.1" ]
 }
 
 @test "execute_unban: returns non-zero on command failure" {
 	UNBAN_COMMAND_TEMPLATE="false"
-	run execute_unban "10.0.0.1" "sshd"
+	run execute_unban "192.0.2.1" "sshd"
 	[ "$status" -ne 0 ]
 }
 
 # --- process_unbans ---
 
 @test "process_unbans: removes expired bans" {
-	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "22"
+	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "192.0.2.1" "sshd" "22"
 	process_unbans "$INSTALL_PATH" "1400" >/dev/null
-	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	run state_bans_active_check "$INSTALL_PATH" "192.0.2.1"
 	assert_failure
 }
 
 @test "process_unbans: skips permanent bans (expiry=0)" {
-	state_bans_active_append "$INSTALL_PATH" "1000" "0" "10.0.0.1" "sshd" "22"
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "192.0.2.1" "sshd" "22"
 	process_unbans "$INSTALL_PATH" "9999999" >/dev/null
-	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	run state_bans_active_check "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 }
 
 @test "process_unbans: with empty UNBAN_COMMAND still removes from state" {
 	UNBAN_COMMAND_TEMPLATE=""
-	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "22"
+	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "192.0.2.1" "sshd" "22"
 	process_unbans "$INSTALL_PATH" "1400" >/dev/null
-	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	run state_bans_active_check "$INSTALL_PATH" "192.0.2.1"
 	assert_failure
 	# verify history recorded
 	run cat "$INSTALL_PATH/tmp/bans.history"
-	assert_output --partial "10.0.0.1"
+	assert_output --partial "192.0.2.1"
 	assert_output --partial "unban"
 }
 
 @test "process_unbans: executes unban command when set" {
 	local marker="$TEST_TMPDIR/unban_ran"
 	UNBAN_COMMAND_TEMPLATE="touch $marker"
-	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "22"
+	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "192.0.2.1" "sshd" "22"
 	process_unbans "$INSTALL_PATH" "1400" >/dev/null
 	[ -f "$marker" ]
 }
@@ -319,21 +319,21 @@ EOF
 	# seed 5 ban events in window
 	local i
 	for i in 1 2 3 4 5; do
-		state_bans_history_append "$INSTALL_PATH" "$((800 + i))" "1100" "10.0.0.1" "sshd" "ban"
+		state_bans_history_append "$INSTALL_PATH" "$((800 + i))" "1100" "192.0.2.1" "sshd" "ban"
 	done
-	run check_recidivism "$INSTALL_PATH" "10.0.0.1" "500" "1000" "5"
+	run check_recidivism "$INSTALL_PATH" "192.0.2.1" "500" "1000" "5"
 	assert_success
 }
 
 @test "check_recidivism: returns 1 when below threshold" {
-	state_bans_history_append "$INSTALL_PATH" "900" "1200" "10.0.0.1" "sshd" "ban"
-	run check_recidivism "$INSTALL_PATH" "10.0.0.1" "500" "1000" "5"
+	state_bans_history_append "$INSTALL_PATH" "900" "1200" "192.0.2.1" "sshd" "ban"
+	run check_recidivism "$INSTALL_PATH" "192.0.2.1" "500" "1000" "5"
 	assert_failure
 }
 
 @test "check_recidivism: returns 1 when disabled (permanent_after=0)" {
-	state_bans_history_append "$INSTALL_PATH" "900" "1200" "10.0.0.1" "sshd" "ban"
-	run check_recidivism "$INSTALL_PATH" "10.0.0.1" "500" "1000" "0"
+	state_bans_history_append "$INSTALL_PATH" "900" "1200" "192.0.2.1" "sshd" "ban"
+	run check_recidivism "$INSTALL_PATH" "192.0.2.1" "500" "1000" "0"
 	assert_failure
 }
 
@@ -341,19 +341,19 @@ EOF
 
 @test "pipeline: ban → record → expire → unban flow" {
 	# simulate a ban
-	execute_ban "10.0.0.1" "sshd" "0" >/dev/null
-	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "22"
-	state_bans_history_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "ban"
+	execute_ban "192.0.2.1" "sshd" "0" >/dev/null
+	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "192.0.2.1" "sshd" "22"
+	state_bans_history_append "$INSTALL_PATH" "1000" "1300" "192.0.2.1" "sshd" "ban"
 
 	# verify active
-	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	run state_bans_active_check "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 
 	# process unbans at time past expiry
 	process_unbans "$INSTALL_PATH" "1400" >/dev/null
 
 	# verify removed from active
-	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	run state_bans_active_check "$INSTALL_PATH" "192.0.2.1"
 	assert_failure
 
 	# verify unban recorded in history
@@ -364,33 +364,33 @@ EOF
 # --- manual_ban / manual_unban ---
 
 @test "manual_ban: bans IP and records in state" {
-	manual_ban "$INSTALL_PATH" "10.0.0.1" "1000" "sshd" >/dev/null
-	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	manual_ban "$INSTALL_PATH" "192.0.2.1" "1000" "sshd" >/dev/null
+	run state_bans_active_check "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	run cat "$INSTALL_PATH/tmp/bans.history"
-	assert_output --partial "10.0.0.1"
+	assert_output --partial "192.0.2.1"
 	assert_output --partial "ban"
 }
 
 @test "manual_ban: rejects already banned IP" {
-	state_bans_active_append "$INSTALL_PATH" "900" "0" "10.0.0.1" "sshd" "22"
-	run manual_ban "$INSTALL_PATH" "10.0.0.1" "1000" "sshd"
+	state_bans_active_append "$INSTALL_PATH" "900" "0" "192.0.2.1" "sshd" "22"
+	run manual_ban "$INSTALL_PATH" "192.0.2.1" "1000" "sshd"
 	assert_failure
 	assert_output --partial "already banned"
 }
 
 @test "manual_unban: unbans IP and records in history" {
-	state_bans_active_append "$INSTALL_PATH" "900" "0" "10.0.0.1" "sshd" "22"
-	run manual_unban "$INSTALL_PATH" "10.0.0.1" "1000"
+	state_bans_active_append "$INSTALL_PATH" "900" "0" "192.0.2.1" "sshd" "22"
+	run manual_unban "$INSTALL_PATH" "192.0.2.1" "1000"
 	assert_success
 	assert_output --partial "unbanned"
 	# verify removed from active
-	run state_bans_active_check "$INSTALL_PATH" "10.0.0.1"
+	run state_bans_active_check "$INSTALL_PATH" "192.0.2.1"
 	assert_failure
 }
 
 @test "manual_unban: rejects IP not in ban list" {
-	run manual_unban "$INSTALL_PATH" "10.0.0.99" "1000"
+	run manual_unban "$INSTALL_PATH" "192.0.2.99" "1000"
 	assert_failure
 	assert_output --partial "not in the active ban list"
 }
@@ -398,42 +398,42 @@ EOF
 # --- PORTS enforcement ---
 
 @test "execute_ban: sets PORTS global" {
-	execute_ban "10.0.0.1" "sshd" "1" "22" >/dev/null
+	execute_ban "192.0.2.1" "sshd" "1" "22" >/dev/null
 	[ "$PORTS" = "22" ]
 }
 
 @test "execute_ban: PORTS available in template expansion" {
 	local marker="$TEST_TMPDIR/ports_check"
 	BAN_COMMAND_TEMPLATE="echo \$PORTS > $marker"
-	execute_ban "10.0.0.1" "sshd" "0" "110,143,993,995" >/dev/null
+	execute_ban "192.0.2.1" "sshd" "0" "110,143,993,995" >/dev/null
 	run cat "$marker"
 	assert_output "110,143,993,995"
 }
 
 @test "execute_ban: defaults PORTS to all when not provided" {
-	execute_ban "10.0.0.1" "sshd" "1" >/dev/null
+	execute_ban "192.0.2.1" "sshd" "1" >/dev/null
 	[ "$PORTS" = "all" ]
 }
 
 @test "execute_ban: sets MOD global" {
-	execute_ban "10.0.0.1" "dovecot" "1" "22" >/dev/null
+	execute_ban "192.0.2.1" "dovecot" "1" "22" >/dev/null
 	[ "$MOD" = "dovecot" ]
 }
 
 @test "execute_unban: sets PORTS global" {
-	execute_unban "10.0.0.1" "sshd" "22" >/dev/null
+	execute_unban "192.0.2.1" "sshd" "22" >/dev/null
 	[ "$PORTS" = "22" ]
 }
 
 @test "execute_unban: defaults PORTS to all when not provided" {
-	execute_unban "10.0.0.1" "sshd" >/dev/null
+	execute_unban "192.0.2.1" "sshd" >/dev/null
 	[ "$PORTS" = "all" ]
 }
 
 @test "process_unbans: passes PORTS from state to unban command" {
 	local marker="$TEST_TMPDIR/unban_ports"
 	UNBAN_COMMAND_TEMPLATE="echo \$PORTS > $marker"
-	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "10.0.0.1" "sshd" "22"
+	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "192.0.2.1" "sshd" "22"
 	process_unbans "$INSTALL_PATH" "1400" >/dev/null
 	run cat "$marker"
 	assert_output "22"
@@ -442,8 +442,8 @@ EOF
 @test "manual_unban: reads and passes PORTS from state" {
 	local marker="$TEST_TMPDIR/manual_unban_ports"
 	UNBAN_COMMAND_TEMPLATE="echo \$PORTS > $marker"
-	state_bans_active_append "$INSTALL_PATH" "900" "0" "10.0.0.1" "dovecot" "110,143,993,995"
-	manual_unban "$INSTALL_PATH" "10.0.0.1" "1000" >/dev/null
+	state_bans_active_append "$INSTALL_PATH" "900" "0" "192.0.2.1" "dovecot" "110,143,993,995"
+	manual_unban "$INSTALL_PATH" "192.0.2.1" "1000" >/dev/null
 	run cat "$marker"
 	assert_output "110,143,993,995"
 }
@@ -452,7 +452,7 @@ EOF
 
 @test "count_failures: counts IPv6 host with grep -cxF" {
 	local hosts_parsed
-	hosts_parsed=$(printf "2001:db8::1\n10.0.0.1\n2001:db8::1\n")
+	hosts_parsed=$(printf "2001:db8::1\n192.0.2.1\n2001:db8::1\n")
 	run count_failures "2001:db8::1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
 	assert_success
 	assert_output "2"
@@ -499,9 +499,9 @@ EOF
 
 @test "pipeline: mixed IPv4+IPv6 counted independently" {
 	local hosts_parsed
-	hosts_parsed=$(printf "10.0.0.1\n2001:db8::1\n10.0.0.1\n2001:db8::1\n10.0.0.1\n")
+	hosts_parsed=$(printf "192.0.2.1\n2001:db8::1\n192.0.2.1\n2001:db8::1\n192.0.2.1\n")
 	local v4_count
-	v4_count=$(count_failures "10.0.0.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
+	v4_count=$(count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
 	[ "$v4_count" -eq 3 ]
 	local v6_count
 	v6_count=$(count_failures "2001:db8::1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
@@ -526,7 +526,7 @@ EOF
 	local marker_v6="$TEST_TMPDIR/ban_v6"
 	BAN_COMMAND_TEMPLATE="touch $marker_v4"
 	BAN_COMMAND_V6_TEMPLATE="touch $marker_v6"
-	execute_ban "10.0.0.1" "sshd" "0" "22" >/dev/null
+	execute_ban "192.0.2.1" "sshd" "0" "22" >/dev/null
 	# V4 command should have run, not V6
 	[ -f "$marker_v4" ]
 	[ ! -f "$marker_v6" ]
@@ -554,7 +554,7 @@ EOF
 	local marker_v6="$TEST_TMPDIR/unban_v6"
 	UNBAN_COMMAND_TEMPLATE="touch $marker_v4"
 	UNBAN_COMMAND_V6_TEMPLATE="touch $marker_v6"
-	execute_unban "10.0.0.1" "sshd" "22" >/dev/null
+	execute_unban "192.0.2.1" "sshd" "22" >/dev/null
 	[ -f "$marker_v4" ]
 	[ ! -f "$marker_v6" ]
 }
@@ -683,7 +683,7 @@ RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
 LP="$logfile"
 TLOG_TF="testrule"
-ARG_VAL="10.0.0.1 10.0.0.2 10.0.0.1"
+ARG_VAL="192.0.2.1 192.0.2.2 192.0.2.1"
 EOF
 	run _run_check_with_stats "$rules_dir"
 	assert_success

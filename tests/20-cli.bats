@@ -56,8 +56,8 @@ teardown() {
 }
 
 @test "show_status: reports active bans count" {
-	echo "1700000000 0 10.0.0.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
-	echo "1700000000 1800000000 10.0.0.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 1800000000 192.0.2.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
 	run show_status "$INSTALL_PATH"
 	assert_success
 	assert_output --partial "2 (1 temporary, 1 permanent)"
@@ -66,9 +66,9 @@ teardown() {
 @test "show_status: reports events count" {
 	local now
 	now=$(date +"%s")
-	echo "$now 10.0.0.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 10.0.0.2 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 10.0.0.3 postfix" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.2 sshd" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.3 postfix" >> "$INSTALL_PATH/tmp/events.dat"
 	run show_status "$INSTALL_PATH"
 	assert_success
 	assert_output --partial "3 across 2 services"
@@ -105,9 +105,9 @@ teardown() {
 @test "show_service_status: shows events for service" {
 	local now
 	now=$(date +"%s")
-	echo "$now 10.0.0.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 10.0.0.2 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 10.0.0.3 postfix" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.2 sshd" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.3 postfix" >> "$INSTALL_PATH/tmp/events.dat"
 	run show_service_status "$INSTALL_PATH" "sshd"
 	assert_success
 	assert_output --partial "2 from 2 unique IPs"
@@ -116,11 +116,11 @@ teardown() {
 @test "show_service_status: shows active bans for service" {
 	local now
 	now=$(date +"%s")
-	echo "$now 0 10.0.0.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "$now 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
 	run show_service_status "$INSTALL_PATH" "sshd"
 	assert_success
 	assert_output --partial "Active bans:    1"
-	assert_output --partial "10.0.0.1 (permanent)"
+	assert_output --partial "192.0.2.1 (permanent)"
 }
 
 @test "show_service_status: error for unknown service" {
@@ -161,44 +161,44 @@ teardown() {
 }
 
 @test "flush_bans: temp mode skips permanent bans" {
-	echo "1700000000 0 10.0.0.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
-	echo "1700000000 1800000000 10.0.0.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 1800000000 192.0.2.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
 	run flush_bans "$INSTALL_PATH" "temp" "1700000000"
 	assert_success
 	assert_output --partial "1 bans removed."
 	# permanent ban should remain
 	run cat "$INSTALL_PATH/tmp/bans.active"
-	assert_output --partial "10.0.0.1"
+	assert_output --partial "192.0.2.1"
 }
 
 @test "flush_bans: all mode removes everything" {
-	echo "1700000000 0 10.0.0.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
-	echo "1700000000 1800000000 10.0.0.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 1800000000 192.0.2.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
 	run flush_bans "$INSTALL_PATH" "all" "1700000000"
 	assert_success
 	assert_output --partial "2 bans removed."
 }
 
 @test "flush_bans: records unban in history" {
-	echo "1700000000 1800000000 10.0.0.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 1800000000 192.0.2.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
 	flush_bans "$INSTALL_PATH" "temp" "1700000000"
 	run cat "$INSTALL_PATH/tmp/bans.history"
-	assert_output --partial "10.0.0.2"
+	assert_output --partial "192.0.2.2"
 	assert_output --partial "unban"
 }
 
 # --- search_ip ---
 
 @test "search_ip: shows not banned for unknown IP" {
-	run search_ip "$INSTALL_PATH" "10.0.0.99"
+	run search_ip "$INSTALL_PATH" "192.0.2.99"
 	assert_success
-	assert_output --partial "IP Report: 10.0.0.99"
+	assert_output --partial "IP Report: 192.0.2.99"
 	assert_output --partial "not banned"
 }
 
 @test "search_ip: shows permanent ban status" {
-	echo "1700000000 0 10.0.0.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
-	run search_ip "$INSTALL_PATH" "10.0.0.1"
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	assert_output --partial "BANNED (permanent"
 }
@@ -206,8 +206,8 @@ teardown() {
 @test "search_ip: shows ban history" {
 	local now
 	now=$(date +"%s")
-	echo "$now 0 10.0.0.1 sshd ban" >> "$INSTALL_PATH/tmp/bans.history"
-	run search_ip "$INSTALL_PATH" "10.0.0.1"
+	echo "$now 0 192.0.2.1 sshd ban" >> "$INSTALL_PATH/tmp/bans.history"
+	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	assert_output --partial "Ban history:"
 	assert_output --partial "1 bans in 24h"
@@ -216,17 +216,17 @@ teardown() {
 @test "search_ip: shows events" {
 	local now
 	now=$(date +"%s")
-	echo "$now 10.0.0.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 10.0.0.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	run search_ip "$INSTALL_PATH" "10.0.0.1"
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
+	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	assert_output --partial "2 failures"
 }
 
 @test "search_ip: shows attack pool triggers" {
-	echo "1700000000 10.0.0.1 sshd" >> "$INSTALL_PATH/stats/attack.pool"
-	echo "1700000001 10.0.0.1 sshd" >> "$INSTALL_PATH/stats/attack.pool"
-	run search_ip "$INSTALL_PATH" "10.0.0.1"
+	echo "1700000000 192.0.2.1 sshd" >> "$INSTALL_PATH/stats/attack.pool"
+	echo "1700000001 192.0.2.1 sshd" >> "$INSTALL_PATH/stats/attack.pool"
+	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	assert_output --partial "2 total triggers"
 }
@@ -294,21 +294,21 @@ teardown() {
 }
 
 @test "list_bans_json: formats ban as JSON object" {
-	echo "1700000000 0 10.0.0.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
 	run list_bans_json "$INSTALL_PATH"
 	assert_success
-	assert_output --partial '"ip": "10.0.0.1"'
+	assert_output --partial '"ip": "192.0.2.1"'
 	assert_output --partial '"service": "sshd"'
 	assert_output --partial '"expires": "permanent"'
 }
 
 @test "list_bans_json: multiple bans separated by comma" {
-	echo "1700000000 0 10.0.0.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
-	echo "1700000000 1800000000 10.0.0.2 postfix 25" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 1800000000 192.0.2.2 postfix 25" >> "$INSTALL_PATH/tmp/bans.active"
 	run list_bans_json "$INSTALL_PATH"
 	assert_success
-	assert_output --partial '"ip": "10.0.0.1"'
-	assert_output --partial '"ip": "10.0.0.2"'
+	assert_output --partial '"ip": "192.0.2.1"'
+	assert_output --partial '"ip": "192.0.2.2"'
 	assert_output --partial ","
 }
 
@@ -321,11 +321,11 @@ teardown() {
 }
 
 @test "list_bans_csv: formats ban as CSV row" {
-	echo "1700000000 0 10.0.0.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
 	run list_bans_csv "$INSTALL_PATH"
 	assert_success
 	assert_line --index 0 "ip,service,ports,banned,expires"
-	assert_line --index 1 --partial "10.0.0.1,sshd,22,"
+	assert_line --index 1 --partial "192.0.2.1,sshd,22,"
 	assert_line --index 1 --partial ",permanent"
 }
 

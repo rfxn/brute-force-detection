@@ -27,10 +27,10 @@ teardown() {
 
 @test "service summary: counts correct" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 10.0.0.1 sshd" >> "$pool"
-	echo "1001 10.0.0.1 sshd" >> "$pool"
-	echo "1002 10.0.0.2 sshd" >> "$pool"
-	echo "1003 10.0.0.1 dovecot" >> "$pool"
+	echo "1000 192.0.2.1 sshd" >> "$pool"
+	echo "1001 192.0.2.1 sshd" >> "$pool"
+	echo "1002 192.0.2.2 sshd" >> "$pool"
+	echo "1003 192.0.2.1 dovecot" >> "$pool"
 	run _apool_service_summary "$pool"
 	assert_success
 	assert_output --partial "sshd"
@@ -39,10 +39,10 @@ teardown() {
 
 @test "service summary: unique IP count correct" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 10.0.0.1 sshd" >> "$pool"
-	echo "1001 10.0.0.1 sshd" >> "$pool"
-	echo "1002 10.0.0.2 sshd" >> "$pool"
-	echo "1003 10.0.0.3 dovecot" >> "$pool"
+	echo "1000 192.0.2.1 sshd" >> "$pool"
+	echo "1001 192.0.2.1 sshd" >> "$pool"
+	echo "1002 192.0.2.2 sshd" >> "$pool"
+	echo "1003 192.0.2.3 dovecot" >> "$pool"
 	run _apool_service_summary "$pool"
 	assert_success
 	# sshd: 3 events, 2 unique IPs; dovecot: 1 event, 1 unique IP
@@ -53,10 +53,10 @@ teardown() {
 
 @test "service summary: multiple services sorted by count" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 10.0.0.1 dovecot" >> "$pool"
-	echo "1001 10.0.0.1 sshd" >> "$pool"
-	echo "1002 10.0.0.2 sshd" >> "$pool"
-	echo "1003 10.0.0.3 sshd" >> "$pool"
+	echo "1000 192.0.2.1 dovecot" >> "$pool"
+	echo "1001 192.0.2.1 sshd" >> "$pool"
+	echo "1002 192.0.2.2 sshd" >> "$pool"
+	echo "1003 192.0.2.3 sshd" >> "$pool"
 	run _apool_service_summary "$pool"
 	assert_success
 	# sshd has 3 events (sorted first), dovecot has 1
@@ -75,8 +75,8 @@ teardown() {
 # --- ban status ---
 
 @test "ban status: BANNED(perm) shown for permanent ban" {
-	state_bans_active_append "$INSTALL_PATH" "1000" "0" "10.0.0.1" "sshd" "22"
-	run _apool_ban_status "10.0.0.1"
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "192.0.2.1" "sshd" "22"
+	run _apool_ban_status "192.0.2.1"
 	assert_success
 	assert_output "BANNED(perm)"
 }
@@ -85,8 +85,8 @@ teardown() {
 	local now future
 	now=$(date +"%s")
 	future=$((now + 600))  # 10 minutes from now
-	state_bans_active_append "$INSTALL_PATH" "$now" "$future" "10.0.0.2" "sshd" "22"
-	run _apool_ban_status "10.0.0.2"
+	state_bans_active_append "$INSTALL_PATH" "$now" "$future" "192.0.2.2" "sshd" "22"
+	run _apool_ban_status "192.0.2.2"
 	assert_success
 	# should show BANNED(Xm) where X is roughly 10 (or 9 due to rounding)
 	assert_output --partial "BANNED("
@@ -95,16 +95,16 @@ teardown() {
 
 @test "ban status: prev:N shown for historical bans" {
 	# not in bans.active, but in bans.history
-	state_bans_history_append "$INSTALL_PATH" "900" "1200" "10.0.0.3" "sshd" "ban"
-	state_bans_history_append "$INSTALL_PATH" "1300" "1600" "10.0.0.3" "sshd" "ban"
-	state_bans_history_append "$INSTALL_PATH" "1700" "2000" "10.0.0.3" "sshd" "ban"
-	run _apool_ban_status "10.0.0.3"
+	state_bans_history_append "$INSTALL_PATH" "900" "1200" "192.0.2.3" "sshd" "ban"
+	state_bans_history_append "$INSTALL_PATH" "1300" "1600" "192.0.2.3" "sshd" "ban"
+	state_bans_history_append "$INSTALL_PATH" "1700" "2000" "192.0.2.3" "sshd" "ban"
+	run _apool_ban_status "192.0.2.3"
 	assert_success
 	assert_output "prev:3"
 }
 
 @test "ban status: no status for unknown IP" {
-	run _apool_ban_status "10.0.0.99"
+	run _apool_ban_status "192.0.2.99"
 	assert_success
 	assert_output ""
 }
@@ -113,7 +113,7 @@ teardown() {
 
 @test "apool report: header includes STATUS column" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 10.0.0.1 sshd" >> "$pool"
+	echo "1000 192.0.2.1 sshd" >> "$pool"
 	run _apool_report "$pool" "Test report"
 	assert_success
 	assert_output --partial "STATUS"
@@ -121,8 +121,8 @@ teardown() {
 
 @test "apool report: banned IP shows status in output" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 10.0.0.1 sshd" >> "$pool"
-	state_bans_active_append "$INSTALL_PATH" "1000" "0" "10.0.0.1" "sshd" "22"
+	echo "1000 192.0.2.1 sshd" >> "$pool"
+	state_bans_active_append "$INSTALL_PATH" "1000" "0" "192.0.2.1" "sshd" "22"
 	run _apool_report "$pool" "Test report"
 	assert_success
 	assert_output --partial "BANNED(perm)"
@@ -155,11 +155,11 @@ teardown() {
 
 @test "apool report: search uses literal matching not regex" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 10.0.0.1 sshd" >> "$pool"
+	echo "1000 192.0.2.1 sshd" >> "$pool"
 	echo "1001 10x0x0x1 sshd" >> "$pool"
-	# search for literal "10.0.0.1" — dots should NOT match "x"
-	run _apool_report "$pool" "Test" "10.0.0.1"
+	# search for literal "192.0.2.1" — dots should NOT match "x"
+	run _apool_report "$pool" "Test" "192.0.2.1"
 	assert_success
-	assert_output --partial "10.0.0.1"
+	assert_output --partial "192.0.2.1"
 	refute_output --partial "10x0x0x1"
 }

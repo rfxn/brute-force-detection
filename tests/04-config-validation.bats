@@ -439,7 +439,7 @@ run_validate_output() {
 
 @test "_save/_restore_rule_vars: round-trip preserves values" {
 	REQ="/usr/sbin/sshd" LP="/var/log/auth.log" TRIG="10"
-	TLOG_TF="sshd" PORTS="22" ARG_VAL="1.2.3.4" IGNOREREGEX="^ignore"
+	TLOG_TF="sshd" PORTS="22" ARG_VAL="192.0.2.4" IGNOREREGEX="^ignore"
 	_save_rule_vars
 	REQ="" LP="" TRIG="" TLOG_TF="" PORTS="" ARG_VAL="" IGNOREREGEX=""
 	_restore_rule_vars
@@ -448,13 +448,13 @@ run_validate_output() {
 	[ "$TRIG" = "10" ]
 	[ "$TLOG_TF" = "sshd" ]
 	[ "$PORTS" = "22" ]
-	[ "$ARG_VAL" = "1.2.3.4" ]
+	[ "$ARG_VAL" = "192.0.2.4" ]
 	[ "$IGNOREREGEX" = "^ignore" ]
 }
 
 @test "_clear_rule_vars: clears all rule variables" {
 	REQ="/usr/sbin/sshd" LP="/var/log/auth.log" TRIG="10"
-	TLOG_TF="sshd" PORTS="22" ARG_VAL="1.2.3.4" IGNOREREGEX="^ignore"
+	TLOG_TF="sshd" PORTS="22" ARG_VAL="192.0.2.4" IGNOREREGEX="^ignore"
 	SKIP_ALERT="1" RULE_EMAIL="test@example.com"
 	_clear_rule_vars
 	[ -z "$REQ" ]

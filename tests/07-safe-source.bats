@@ -98,7 +98,7 @@ teardown() {
 
 @test "send_alerts: world-writable template skips alerts" {
 	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "10.0.0.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
 	local template="$TEST_TMPDIR/alert.bfd"
 	echo 'echo "alert"' > "$template"
 	chmod 666 "$template"
@@ -110,7 +110,7 @@ teardown() {
 
 @test "send_alerts: missing template skips alerts" {
 	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "10.0.0.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
 	run send_alerts "$alerts_file" "BFD Alert" "$TEST_TMPDIR/nonexistent_template" "50"
 	assert_failure
 	# alerts_file should be cleaned up
@@ -119,7 +119,7 @@ teardown() {
 
 @test "send_alerts: root-owned 644 template passes safety check" {
 	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "10.0.0.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
 	local template="$TEST_TMPDIR/alert.bfd"
 	echo 'echo "alert body"' > "$template"
 	chmod 644 "$template"
