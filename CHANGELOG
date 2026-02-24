@@ -1,4 +1,13 @@
 2.0.1:
+[Fix] alert eval echo injection: replace eval echo "$BAN_COMMAND_TEMPLATE"
+      with safe expand_command_template() using ${var//pat/rep} substitution
+      in format_alert_entry() and send_alerts()
+[New] expand_command_template() helper expands $ATTACK_HOST, $MOD, $PORTS
+      in command templates without eval
+[New] sanitize_ports() validates PORTS values (numeric CSV or "all") before
+      custom backend eval in _fw_custom_ban() and _fw_custom_unban()
+[Fix] tlog sources bfd.lib.sh without ownership/permission checks; added
+      stat validation matching files/bfd pattern (root-owned, non-world-writable)
 [Change] test suite: rename 25 test files from test_*.bats to numbered
          NN-name.bats convention for deterministic ordering and parallel
          distribution

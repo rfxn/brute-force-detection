@@ -41,6 +41,13 @@ fi
 if [ "${LOG_SOURCE:-auto}" != "file" ] && [ ! -f "$FILE" ]; then
 	_LIB="${INSTALL_PATH:-/usr/local/bfd}/bfd.lib.sh"
 	if [ -f "$_LIB" ]; then
+		_lib_owner=$(stat -c '%u' "$_LIB" 2>/dev/null) || _lib_owner=""
+		_lib_perms=$(stat -c '%a' "$_LIB" 2>/dev/null) || _lib_perms=""
+		_lib_world="${_lib_perms: -1}"
+		if [ "$_lib_owner" != "0" ] || [ "$((_lib_world & 2))" -ne 0 ]; then
+			echo "error: bfd.lib.sh has unsafe ownership or permissions, aborting." >&2
+			exit 1
+		fi
 		# shellcheck disable=SC1090
 		. "$_LIB"
 		if tlog_journal_read "$TLOG" "$BASERUN" 2>/dev/null; then

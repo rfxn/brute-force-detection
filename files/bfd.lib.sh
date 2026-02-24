@@ -157,6 +157,16 @@ sanitize_mod() {
 	return 1
 }
 
+sanitize_ports() {
+	local ports="$1"
+	local ports_pattern='^(all|[0-9]+(,[0-9]+)*)$'
+	if [[ "$ports" =~ $ports_pattern ]]; then
+		echo "$ports"
+		return 0
+	fi
+	return 1
+}
+
 # _save_rule_vars / _restore_rule_vars / _clear_rule_vars
 # Save, restore, and clear the per-rule variables that rule files set.
 # Used by functions that source rules but must not clobber the caller's state.
@@ -231,6 +241,16 @@ safe_source() {
 extract_command_template() {
 	local config_file="$1" var_name="$2"
 	grep "^${var_name}=" "$config_file" | tail -1 | sed "s/^${var_name}=//;s/^\"//;s/\"$//"
+}
+
+# expand_command_template template — expand $ATTACK_HOST, $MOD, $PORTS
+# in a BAN_COMMAND template string without eval. Uses safe ${var//pat/rep}.
+expand_command_template() {
+	local cmd="$1"
+	cmd="${cmd//\$ATTACK_HOST/$ATTACK_HOST}"
+	cmd="${cmd//\$MOD/$MOD}"
+	cmd="${cmd//\$PORTS/$PORTS}"
+	echo "$cmd"
 }
 
 # validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, BAN_DURATION,
@@ -865,6 +885,7 @@ _fw_custom_setup() { :; }
 
 _fw_custom_ban() {
 	local host="$1" mod="$2" ports="$3"
+	ports=$(sanitize_ports "$ports") || { eout "invalid PORTS value '$3'" "le"; return 1; }
 	local cmd="$BAN_COMMAND_TEMPLATE"
 	if [ -n "${BAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]]; then
 		cmd="$BAN_COMMAND_V6_TEMPLATE"
@@ -872,7 +893,7 @@ _fw_custom_ban() {
 	ATTACK_HOST="$host"; MOD="$mod"; PORTS="$ports"
 	# Security: $cmd is from BAN_COMMAND_TEMPLATE, extracted raw from conf.bfd
 	# by extract_command_template(). $host is validated by validate_ip_any(),
-	# $mod by sanitize_mod(), $ports by rule files. conf.bfd is root-owned
+	# $mod by sanitize_mod(), $ports by sanitize_ports(). conf.bfd is root-owned
 	# and verified by safe_source(). This eval is intentional for user-defined
 	# firewall commands.
 	eval "$cmd" >/dev/null 2>&1
@@ -880,6 +901,7 @@ _fw_custom_ban() {
 
 _fw_custom_unban() {
 	local host="$1" mod="$2" ports="$3"
+	ports=$(sanitize_ports "$ports") || { eout "invalid PORTS value '$3'" "le"; return 1; }
 	local cmd="$UNBAN_COMMAND_TEMPLATE"
 	if [ -n "${UNBAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]]; then
 		cmd="$UNBAN_COMMAND_V6_TEMPLATE"
@@ -1816,7 +1838,7 @@ format_alert_entry() {
 	# reconstruct ban command display
 	local display_cmd
 	if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
-		display_cmd=$(eval echo "$BAN_COMMAND_TEMPLATE" 2>/dev/null) || display_cmd="$BAN_COMMAND_TEMPLATE"
+		display_cmd=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
 	else
 		display_cmd="fw_ban $host ($_FW_BACKEND)"
 	fi
@@ -1931,7 +1953,7 @@ send_alerts() {
 			LP="$_lp"
 			PORTS="$_ports"
 			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
-				BAN_COMMAND=$(eval echo "$BAN_COMMAND_TEMPLATE" 2>/dev/null) || BAN_COMMAND="$BAN_COMMAND_TEMPLATE"
+				BAN_COMMAND=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
 			else
 				BAN_COMMAND="fw_ban $_host ($_FW_BACKEND)"
 			fi
