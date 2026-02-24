@@ -13,6 +13,11 @@
 [Change] install.sh: BINPATH sed also updates init script when installed
 [New] uninstall.sh: SysVinit init script cleanup — stop service, remove
       chkconfig/update-rc.d entries, clean pidfile and subsys lock
+[Change] README/README.md: reframe watch mode as recommended primary mode;
+         section 2.1 leads with watch mode, cron presented as automatic
+         fallback; section 5.4 adds SysVinit service management examples
+         and dead-PID recovery explanation; Quick Start includes watch mode
+         enable step after configure
 [Fix] tlog: mixed tab/space indentation in getsize(); normalized to tabs
 [Fix] tlog: [ "$1" = "" ] idiom replaced with [ -z "$1" ] for project consistency
 [Change] conf.bfd: add validation constraint notes to 9 variable comments

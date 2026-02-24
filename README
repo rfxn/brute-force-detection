@@ -43,6 +43,10 @@ Quick Start:
   # Configure — set your firewall ban command
   vi /usr/local/bfd/conf.bfd
 
+  # Enable watch mode (recommended — ~10s detection latency)
+  systemctl enable --now bfd-watch.service    # systemd
+  service bfd-watch start                     # SysVinit
+
   # Health check — validate config, log paths, and rules
   bfd -c
 
@@ -140,20 +144,28 @@ Install Path: /usr/local/bfd
 Bin Path: /usr/local/sbin/bfd
 
 2.1) Installation: Scheduling
-Cron (default, all systems):
+
+Watch mode (recommended):
+
+BFD's watch mode runs as a persistent daemon, polling for new log data
+every WATCH_INTERVAL seconds (default 10). Detection latency is ~10
+seconds, comparable to fail2ban and other daemon-based tools.
+
+  systemd (Rocky 8+, Debian 12, Ubuntu 20+):
+    systemctl enable --now bfd-watch.service
+
+  SysVinit (CentOS 6/7, Ubuntu 14.04):
+    service bfd-watch start
+    chkconfig bfd-watch on    # enable at boot (RHEL)
+
+Cron (automatic fallback):
 
 The installer places a cronjob at /etc/cron.d/bfd that runs BFD every 2
-minutes in quiet mode. This works on all supported distributions including
-CentOS 6 and Ubuntu 14.04.
+minutes in quiet mode. This serves as a fallback — when watch mode is
+active, cron runs detect the lock and silently skip. If the watch daemon
+exits, cron automatically resumes detection within 2 minutes.
 
-systemd timer (optional):
-
-On systems with systemd, a timer unit is installed but not enabled. To use
-it instead of cron:
-
-  systemctl enable --now bfd.timer
-
-It is not recommended to use both scheduling methods simultaneously.
+The cron entry does not need to be removed when using watch mode.
 
 3) Configuration
 The main configuration file is /usr/local/bfd/conf.bfd. Each option has a
@@ -361,14 +373,17 @@ The report includes:
   - Top 25 attackers this week — same format, aggregated from weekly pool
 
 5.4) General Usage: Watch Mode
-The -w|--watch option runs BFD in continuous foreground mode, polling for
-new log data every WATCH_INTERVAL seconds (default 10). This reduces
-detection latency from ~120 seconds (cron) to ~10 seconds.
+The -w|--watch option runs BFD as a continuous daemon, polling for new log
+data every WATCH_INTERVAL seconds (default 10). This is the recommended
+operating mode — detection latency is ~10 seconds, comparable to fail2ban
+and other daemon-based tools.
 
   bfd --watch
 
 Watch mode holds an flock for its entire lifetime, so cron-based runs
-(bfd -q) will silently skip when watch mode is active. No cron
+(bfd -q) will silently skip when watch mode is active. If the watch
+daemon exits unexpectedly (OOM, crash), cron automatically detects the
+dead PID and resumes detection within one cycle (~2 minutes). No cron
 modification is needed.
 
 Signal handling:
@@ -376,16 +391,21 @@ Signal handling:
   SIGHUP           — reload conf.bfd and internals.conf without restart
                      (allows changing WATCH_INTERVAL, TRIG, ban commands, etc.)
 
-On systemd systems, use the provided bfd-watch.service unit:
+Service management:
 
-  systemctl enable --now bfd-watch.service
+  systemd (Rocky 8+, Debian 12, Ubuntu 20+):
+    systemctl enable --now bfd-watch.service
+    systemctl reload bfd-watch     # send SIGHUP
+    systemctl status bfd-watch
 
-This conflicts with bfd.timer — systemd prevents enabling both
-simultaneously. Use 'systemctl reload bfd-watch' to send SIGHUP.
+  This conflicts with bfd.timer — systemd prevents enabling both
+  simultaneously.
 
-On non-systemd systems, run 'bfd --watch' in a screen/tmux session or
-via a process supervisor. The cron entry can remain in place; it will
-be locked out automatically.
+  SysVinit (CentOS 6/7, Ubuntu 14.04):
+    service bfd-watch start
+    service bfd-watch reload        # send SIGHUP
+    service bfd-watch status
+    chkconfig bfd-watch on          # enable at boot (RHEL)
 
 WATCH_INTERVAL="10" — polling interval in seconds. Configure in conf.bfd.
 
