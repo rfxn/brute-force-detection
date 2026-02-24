@@ -44,6 +44,7 @@ install(){
         rm -rf "$INSPATH"
         mkdir "$INSPATH"
         mkdir -p "$INSPATH/tmp"
+        mkdir -p "$INSPATH/stats"
 	cp logrotate.d.bfd /etc/logrotate.d/bfd
         cp -R files/* "$INSPATH"
 	cp README CHANGELOG COPYING.GPL "$INSPATH"
@@ -56,6 +57,7 @@ install(){
 	chmod 750 "$INSPATH/rules"
 	chmod 640 "$INSPATH"/rules/*
 	chmod 750 "$INSPATH/tmp"
+	chmod 750 "$INSPATH/stats"
 	chmod 640 "$INSPATH/alert.bfd"
         ln -fs "$INSPATH/bfd" "$BINPATH"
 	if [ -f "uninstall.sh" ]; then
@@ -76,7 +78,6 @@ install(){
 				cp bfd-watch.service /etc/systemd/system/bfd-watch.service
 				chmod 644 /etc/systemd/system/bfd-watch.service
 			fi
-			systemctl daemon-reload
 			echo "  systemd units installed:"
 			echo "    batch mode:  systemctl enable --now bfd.timer"
 			echo "    watch mode:  systemctl enable --now bfd-watch.service"
@@ -98,6 +99,10 @@ install(){
 				/etc/systemd/system/bfd.timer \
 				/etc/systemd/system/bfd-watch.service 2>/dev/null || true
 		fi
+	fi
+	# daemon-reload after sed so systemd sees final paths
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl daemon-reload 2>/dev/null || true
 	fi
 }
 

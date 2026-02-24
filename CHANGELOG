@@ -13,6 +13,11 @@
 [Fix] CLI exit code propagation: -u, -b, -T, --test-pattern validate required
       args with explicit messages; all dispatch branches propagate callee exit
       codes via || exit "$?"
+[Fix] install.sh missing stats/ mkdir; added mkdir -p and chmod 750
+[Fix] install.sh daemon-reload ordering: moved systemctl daemon-reload after
+      sed path replacement so systemd sees final paths
+[Fix] logrotate.d.bfd: add copytruncate, weekly rotation, compress, create
+      directive; preserves log file inode for tail -f consumers
 [Change] test suite: rename 25 test files from test_*.bats to numbered
          NN-name.bats convention for deterministic ordering and parallel
          distribution
