@@ -224,7 +224,7 @@ NEWEOF
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
-	assert_output "  Imported config and state from BFD 1.5-2 to 2.0.1."
+	assert_output --partial "Imported config and state from BFD 1.5-2 to 2.0.1."
 }
 
 @test "importconf: pre-split conf.bfd variables migrate to internals.conf" {

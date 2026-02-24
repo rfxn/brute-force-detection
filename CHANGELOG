@@ -1,4 +1,35 @@
 2.0.1:
+[Fix] importconf: add cleanup trap for temp files on interrupt (SIGINT/SIGTERM);
+      removes mktemp and merge_conf intermediate files on EXIT/INT/TERM
+[Note] EXIT_USAGE_ERROR constant: FALSE POSITIVE — EXIT_CONFIG_ERROR is
+       semantically correct for unknown CLI options; adding a new constant would
+       change exit codes (backward compat freeze)
+[Fix] get_state(): PID liveness check — when lock is fresh but holder PID is
+      dead (OOM, SIGKILL), clear and re-acquire instead of waiting for timeout;
+      cron recovers from dead watch daemon within one cycle (~2 min)
+[New] bfd-watch.init: SysVinit init script for CentOS 6 / Ubuntu 14.04;
+      cross-distro support (RHEL /etc/init.d/functions, Debian
+      /lib/lsb/init-functions, bare fallback); start/stop/restart/reload/
+      status/condrestart actions; SIGHUP reload, graceful SIGTERM shutdown
+[New] install.sh: SysVinit init script installation on non-systemd systems;
+      auto-detects /etc/rc.d/init.d (RHEL) or /etc/init.d (Debian)
+[New] install.sh: post-install watch mode recommendation with init-system-
+      appropriate command (systemctl or service)
+[Change] install.sh: BINPATH sed also updates init script when installed
+[New] uninstall.sh: SysVinit init script cleanup — stop service, remove
+      chkconfig/update-rc.d entries, clean pidfile and subsys lock
+[Change] README/README.md: reframe watch mode as recommended primary mode;
+         section 2.1 leads with watch mode, cron presented as automatic
+         fallback; section 5.4 adds SysVinit service management examples
+         and dead-PID recovery explanation; Quick Start includes watch mode
+         enable step after configure
+[New] tests/26-init-script.bats: 20 tests — init script structural checks
+      (syntax, LSB/chkconfig headers, case actions, paths) and get_state()
+      PID liveness lock tests (dead PID recovery, live PID blocking, stale
+      timeout, missing PID file, lock dir without timestamp)
+[Change] Dockerfiles: add COPY bfd-watch.init for init script tests (all 9)
+[Fix] tests/25-importconf.bats: version extraction test uses --partial to
+      accommodate FIREWALL migration message on pre-2.0.1 configs
 [Fix] tlog: mixed tab/space indentation in getsize(); normalized to tabs
 [Fix] tlog: [ "$1" = "" ] idiom replaced with [ -z "$1" ] for project consistency
 [Change] conf.bfd: add validation constraint notes to 9 variable comments

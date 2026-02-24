@@ -34,6 +34,20 @@ echo "Press any key to continue or ^C to abort."
 read -r _
 
 if [ -d "$INSPATH" ]; then
+	# clean up SysVinit init script if present
+	local _initdir
+	for _initdir in /etc/rc.d/init.d /etc/init.d; do
+		if [ -f "$_initdir/bfd-watch" ]; then
+			"$_initdir/bfd-watch" stop 2>/dev/null || true
+			if command -v chkconfig >/dev/null 2>&1; then
+				chkconfig --del bfd-watch 2>/dev/null || true
+			elif command -v update-rc.d >/dev/null 2>&1; then
+				update-rc.d -f bfd-watch remove 2>/dev/null || true
+			fi
+			rm -f "$_initdir/bfd-watch"
+		fi
+	done
+	rm -f /var/run/bfd-watch.pid /var/lock/subsys/bfd-watch
 	# clean up systemd units if present
 	if command -v systemctl >/dev/null 2>&1; then
 		systemctl stop bfd.service 2>/dev/null || true

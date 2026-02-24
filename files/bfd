@@ -183,8 +183,20 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 				exit "$EXIT_LOCK_ERROR"
 			}
 		else
-			eout "locked subsystem, already running ? ($LOCK_FILE is $DIFF seconds old), aborting."
-			exit "$EXIT_LOCK_ERROR"
+			# lock is fresh — verify the holder is still alive
+			local _lock_pid
+			_lock_pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null)
+			if [ -n "$_lock_pid" ] && ! kill -0 "$_lock_pid" 2>/dev/null; then
+				eout "cleared dead lock (pid=$_lock_pid exited, lock ${DIFF}s old)."
+				rm -rf "$LOCK_FILE.lk"
+				mkdir "$LOCK_FILE.lk" 2>/dev/null || {
+					eout "unable to acquire lock after dead-pid cleanup, aborting."
+					exit "$EXIT_LOCK_ERROR"
+				}
+			else
+				eout "locked subsystem, already running ? ($LOCK_FILE is $DIFF seconds old), aborting."
+				exit "$EXIT_LOCK_ERROR"
+			fi
 		fi
 	else
 		eout "lock directory exists but no timestamp file, aborting."

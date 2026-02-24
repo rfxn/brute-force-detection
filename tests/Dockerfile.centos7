@@ -35,6 +35,7 @@ RUN mkdir -p /opt/bats && \
 # Copy BFD source and tests
 COPY files/ /opt/bfd/files/
 COPY importconf /opt/bfd/importconf
+COPY bfd-watch.init /opt/bfd/bfd-watch.init
 COPY tests/ /opt/bfd/tests/
 
 WORKDIR /opt/bfd/tests
