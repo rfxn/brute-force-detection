@@ -22,7 +22,7 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="named"
 
 	## BIND/named query denied and zone transfer denied
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"named.* <HOST>[#][0-9]+.*query.*denied" \
 		"named.* <HOST>[#][0-9]+.*zone transfer.*denied")
 fi

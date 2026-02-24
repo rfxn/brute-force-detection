@@ -26,6 +26,6 @@ if [ -n "$REQ" ] && [ -f "$REQ" ]; then
 	TLOG_TF="http.401"
 
 	## HTTP 401 Unauthorized in access logs (Apache combined / nginx)
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		'<HOST> -.*" 401 ')
 fi

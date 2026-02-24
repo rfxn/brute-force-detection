@@ -17,7 +17,7 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="wordpress"
 
 	## WordPress authentication failures (via wp-fail2ban plugin)
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"wordpress.*Authentication failure .* from <HOST>" \
 		"wordpress.*Blocked authentication attempt .* from <HOST>" \
 		"wordpress.*XML-RPC authentication .* from <HOST>")

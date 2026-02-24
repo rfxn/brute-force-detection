@@ -16,7 +16,7 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="webmin"
 
 	## Webmin authentication failures
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"webmin.*Invalid login as .* from <HOST>" \
 		"webmin.*Non-existent login as .* from <HOST>")
 fi

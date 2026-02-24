@@ -23,6 +23,6 @@ if [ -n "$REQ" ] && [ -f "$REQ" ]; then
 	TLOG_TF="httpd.modsec"
 
 	## ModSecurity
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"\[client <HOST>.*ModSecurity: Access denied")
 fi

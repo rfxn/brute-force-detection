@@ -23,6 +23,6 @@ if [ -n "$REQ" ] && [ -f "$REQ" ]; then
 	TLOG_TF="mysqld.auth"
 
 	## MySQL/MariaDB authentication failures
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"Access denied for user '[^']+'@'<HOST>'")
 fi

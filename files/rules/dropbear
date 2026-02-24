@@ -16,7 +16,7 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="dropbear"
 
 	## Dropbear SSH authentication failures
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"dropbear.*Bad password attempt .* from <HOST>" \
 		"dropbear.*Login attempt for nonexistent user from <HOST>")
 fi

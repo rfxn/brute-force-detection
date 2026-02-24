@@ -2562,41 +2562,37 @@ show_rule() {
 }
 
 # test_rule install_path rule_name [log_file] — test a rule against a log file
-# Overrides TLOG_PATH with a wrapper that cats the entire file, then sources
-# the rule normally to reuse the full existing pipeline.
+# Sets _TLOG_PASSTHROUGH so _rule_tlog() outputs the full file content, then
+# sources the rule normally to reuse the full existing pipeline.
 test_rule() {
 	local install_path="$1" rule_name="$2" log_file="${3:-}"
 	local rules_dir="${RULES_PATH:-$install_path/rules}"
 	local rule_file="$rules_dir/$rule_name"
 	[ ! -f "$rule_file" ] && { echo "error: rule '$rule_name' not found"; return 1; }
 
-	# create test tlog wrapper that outputs entire file
-	local test_tlog stdin_file=""
-	test_tlog=$(mktemp "$install_path/tmp/.test_tlog.XXXXXX")
+	local stdin_file=""
 	if [ "$log_file" = "-" ]; then
 		stdin_file=$(mktemp "$install_path/tmp/.test_stdin.XXXXXX")
 		cat > "$stdin_file"
-		printf '#!/bin/bash\ncat "%s"\n' "$stdin_file" > "$test_tlog"
+		_TLOG_PASSTHROUGH="$stdin_file"
 	elif [ -n "$log_file" ]; then
-		[ ! -f "$log_file" ] && { echo "error: file '$log_file' not found"; rm -f "$test_tlog"; return 1; }
-		printf '#!/bin/bash\ncat "%s"\n' "$log_file" > "$test_tlog"
+		[ ! -f "$log_file" ] && { echo "error: file '$log_file' not found"; return 1; }
+		_TLOG_PASSTHROUGH="$log_file"
 	else
-		printf '#!/bin/bash\ncat "$1"\n' > "$test_tlog"
+		_TLOG_PASSTHROUGH="1"
 	fi
-	chmod +x "$test_tlog"
 
-	# save globals, override TLOG_PATH, source rule, restore
-	local orig_tlog="$TLOG_PATH"
-	TLOG_PATH="$test_tlog"
+	# save globals, source rule, restore
 	_save_rule_vars
 	_clear_rule_vars
+	TLOG_BASERUN="${TLOG_BASERUN:-$install_path/tmp}"
 	safe_source "$rule_file" "rule:$rule_name"
 	local src_rc=$?
-	TLOG_PATH="$orig_tlog"
+	_TLOG_PASSTHROUGH=""
 
 	if [ "$src_rc" -ne 0 ]; then
 		echo "error: failed to source rule '$rule_name'"
-		rm -f "$test_tlog" "$stdin_file"
+		rm -f "$stdin_file"
 		_restore_rule_vars
 		return 1
 	fi
@@ -2624,7 +2620,7 @@ test_rule() {
 			done
 	fi
 
-	rm -f "$test_tlog" "$stdin_file"
+	rm -f "$stdin_file"
 	_restore_rule_vars
 }
 

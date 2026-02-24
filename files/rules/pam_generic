@@ -16,6 +16,6 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="pam"
 
 	## Generic PAM authentication failures (catches any PAM service)
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"pam_unix.*authentication failure.*rhost=<HOST>")
 fi

@@ -16,6 +16,6 @@ if [ -f "$REQ" ]; then
 	TLOG_TF="rh_ipop3"
 
 	## ipop3d
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"ipop3d.*Login failed.*\[<HOST>\]")
 fi

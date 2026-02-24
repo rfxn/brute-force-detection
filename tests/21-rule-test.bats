@@ -11,7 +11,6 @@ setup() {
 	bfd_standard_setup
 	GLOB_TRIG="15"
 	TRIG=""
-	TLOG_PATH="/bin/cat"
 	RULES_PATH="$INSTALL_PATH/rules"
 	mkdir -p "$RULES_PATH"
 	LOG_SOURCE="file"
@@ -31,7 +30,7 @@ REQ="/bin/sh"
 PORTS="22"
 LP="$SAMPLE_LOG"
 TLOG_TF="sshd"
-ARG_VAL=\$("\$TLOG_PATH" "\$LP" "\$TLOG_TF" | extract_hosts \\
+ARG_VAL=\$(_rule_tlog "\$LP" "\$TLOG_TF" | extract_hosts \\
 	"sshd.*Failed password for .* from <HOST>" \\
 	"sshd.*Invalid user .* from <HOST>")
 RULEEOF

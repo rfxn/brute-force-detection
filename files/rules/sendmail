@@ -17,6 +17,6 @@ if [ -f "$REQ" ]; then
 
 	## SENDMAIL
 	IGNOREREGEX="IP name lookup"
-	ARG_VAL=$("$TLOG_PATH" "$LP" "$TLOG_TF" | extract_hosts \
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"sendmail.*relay=\[<HOST>\]")
 fi
