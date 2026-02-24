@@ -187,6 +187,76 @@ _clear_rule_vars() {
 	ARG_VAL="" IGNOREREGEX="" SKIP_ALERT="" RULE_EMAIL=""
 }
 
+# _load_thresholds conf_file — parse thresholds.conf into associative arrays
+# Populates _THRESH_TRIG[], _THRESH_SKIP_ALERT[], _THRESH_RULE_EMAIL[].
+# Skips comments, blank lines, and unknown keys. Validates file safety.
+# Returns 0 even if file is missing (graceful degradation).
+_load_thresholds() {
+	local conf_file="${1:-}"
+	# clear arrays (caller must have declared them)
+	_THRESH_TRIG=()
+	_THRESH_SKIP_ALERT=()
+	_THRESH_RULE_EMAIL=()
+
+	[ -z "$conf_file" ] && return 0
+	[ ! -f "$conf_file" ] && return 0
+
+	# validate ownership and permissions (same checks as safe_source)
+	local _tc_owner _tc_perms _tc_world
+	_tc_owner=$(stat -c '%u' "$conf_file")
+	_tc_perms=$(stat -c '%a' "$conf_file")
+	_tc_world="${_tc_perms: -1}"
+	if [ "$_tc_owner" != "0" ] || [ "$((_tc_world & 2))" -ne 0 ]; then
+		eout "thresholds.conf has unsafe ownership (uid=$_tc_owner) or permissions ($_tc_perms), skipping" le
+		return 0
+	fi
+
+	local line rule_name fields key val pair
+	while IFS= read -r line; do
+		# skip comments and blank lines
+		case "$line" in
+			''|\#*) continue ;;
+		esac
+		# extract rule name (before first colon)
+		rule_name="${line%%:*}"
+		[ -z "$rule_name" ] && continue
+		# extract fields (after first colon)
+		fields="${line#*:}"
+		[ -z "$fields" ] && continue
+		# parse colon-delimited KEY=value pairs
+		while [ -n "$fields" ]; do
+			# extract next field
+			case "$fields" in
+				*:*) pair="${fields%%:*}"; fields="${fields#*:}" ;;
+				*)   pair="$fields"; fields="" ;;
+			esac
+			key="${pair%%=*}"
+			val="${pair#*=}"
+			case "$key" in
+				TRIG)       _THRESH_TRIG["$rule_name"]="$val" ;;
+				SKIP_ALERT) _THRESH_SKIP_ALERT["$rule_name"]="$val" ;;
+				RULE_EMAIL) _THRESH_RULE_EMAIL["$rule_name"]="$val" ;;
+			esac
+		done
+	done < "$conf_file"
+}
+
+# _apply_thresholds rule_name — fill empty threshold vars from _THRESH arrays
+# Called after safe_source of a rule file. Only sets variables the rule left
+# empty, preserving rule-file precedence (rule > thresholds.conf > conf.bfd).
+_apply_thresholds() {
+	local rule_name="$1"
+	if [ -z "$TRIG" ] && [ "${_THRESH_TRIG[$rule_name]+x}" = "x" ]; then
+		TRIG="${_THRESH_TRIG[$rule_name]}"
+	fi
+	if [ -z "$SKIP_ALERT" ] && [ "${_THRESH_SKIP_ALERT[$rule_name]+x}" = "x" ]; then
+		SKIP_ALERT="${_THRESH_SKIP_ALERT[$rule_name]}"
+	fi
+	if [ -z "$RULE_EMAIL" ] && [ "${_THRESH_RULE_EMAIL[$rule_name]+x}" = "x" ]; then
+		RULE_EMAIL="${_THRESH_RULE_EMAIL[$rule_name]}"
+	fi
+}
+
 # _rule_is_active — true when the rule's prerequisite binary/file exists
 _rule_is_active() {
 	[ -n "${REQ:-}" ] && [ -f "$REQ" ]
