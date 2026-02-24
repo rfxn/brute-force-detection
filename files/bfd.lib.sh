@@ -1730,6 +1730,7 @@ _hc_rules() {
 			_save_rule_vars
 			_clear_rule_vars
 			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+				_apply_thresholds "$rule_name"
 				if _rule_is_active; then
 					local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
 					if [ -n "${LP:-}" ] && [ ! -f "$LP" ] && [ "$_hc_has_journalctl" -eq 1 ] && \
@@ -2212,6 +2213,7 @@ show_service_status() {
 	_save_rule_vars
 	_clear_rule_vars
 	safe_source "$rule_file" "rule:$service" 2>/dev/null
+	_apply_thresholds "$service"
 
 	local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
 	local rule_ports="${PORTS:-all}"
@@ -2276,7 +2278,7 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
-	local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL"
+	local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL THRESHOLDS_CONF"
 	if [ -n "$var" ]; then
 		# validate against whitelist before eval
 		local _found=0 _v
@@ -2460,6 +2462,7 @@ list_rules() {
 		_clear_rule_vars
 
 		if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+			_apply_thresholds "$rule_name"
 			local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
 			local rule_ports="${PORTS:-all}"
 			if _rule_is_active; then
@@ -2514,6 +2517,7 @@ show_rule() {
 		_restore_rule_vars
 		return 1
 	fi
+	_apply_thresholds "$rule_name"
 
 	if _rule_is_active; then
 		echo "  Status:     active"
@@ -2576,6 +2580,7 @@ test_rule() {
 		_restore_rule_vars
 		return 1
 	fi
+	_apply_thresholds "$rule_name"
 
 	# report
 	echo "Rule:         $rule_name"
