@@ -187,6 +187,76 @@ _clear_rule_vars() {
 	ARG_VAL="" IGNOREREGEX="" SKIP_ALERT="" RULE_EMAIL=""
 }
 
+# _load_thresholds conf_file — parse thresholds.conf into associative arrays
+# Populates _THRESH_TRIG[], _THRESH_SKIP_ALERT[], _THRESH_RULE_EMAIL[].
+# Skips comments, blank lines, and unknown keys. Validates file safety.
+# Returns 0 even if file is missing (graceful degradation).
+_load_thresholds() {
+	local conf_file="${1:-}"
+	# clear arrays (caller must have declared them)
+	_THRESH_TRIG=()
+	_THRESH_SKIP_ALERT=()
+	_THRESH_RULE_EMAIL=()
+
+	[ -z "$conf_file" ] && return 0
+	[ ! -f "$conf_file" ] && return 0
+
+	# validate ownership and permissions (same checks as safe_source)
+	local _tc_owner _tc_perms _tc_world
+	_tc_owner=$(stat -c '%u' "$conf_file")
+	_tc_perms=$(stat -c '%a' "$conf_file")
+	_tc_world="${_tc_perms: -1}"
+	if [ "$_tc_owner" != "0" ] || [ "$((_tc_world & 2))" -ne 0 ]; then
+		eout "thresholds.conf has unsafe ownership (uid=$_tc_owner) or permissions ($_tc_perms), skipping" le
+		return 0
+	fi
+
+	local line rule_name fields key val pair
+	while IFS= read -r line; do
+		# skip comments and blank lines
+		case "$line" in
+			''|\#*) continue ;;
+		esac
+		# extract rule name (before first colon)
+		rule_name="${line%%:*}"
+		[ -z "$rule_name" ] && continue
+		# extract fields (after first colon)
+		fields="${line#*:}"
+		[ -z "$fields" ] && continue
+		# parse colon-delimited KEY=value pairs
+		while [ -n "$fields" ]; do
+			# extract next field
+			case "$fields" in
+				*:*) pair="${fields%%:*}"; fields="${fields#*:}" ;;
+				*)   pair="$fields"; fields="" ;;
+			esac
+			key="${pair%%=*}"
+			val="${pair#*=}"
+			case "$key" in
+				TRIG)       _THRESH_TRIG["$rule_name"]="$val" ;;
+				SKIP_ALERT) _THRESH_SKIP_ALERT["$rule_name"]="$val" ;;
+				RULE_EMAIL) _THRESH_RULE_EMAIL["$rule_name"]="$val" ;;
+			esac
+		done
+	done < "$conf_file"
+}
+
+# _apply_thresholds rule_name — fill empty threshold vars from _THRESH arrays
+# Called after safe_source of a rule file. Only sets variables the rule left
+# empty, preserving rule-file precedence (rule > thresholds.conf > conf.bfd).
+_apply_thresholds() {
+	local rule_name="$1"
+	if [ -z "$TRIG" ] && [ "${_THRESH_TRIG[$rule_name]+x}" = "x" ]; then
+		TRIG="${_THRESH_TRIG[$rule_name]}"
+	fi
+	if [ -z "$SKIP_ALERT" ] && [ "${_THRESH_SKIP_ALERT[$rule_name]+x}" = "x" ]; then
+		SKIP_ALERT="${_THRESH_SKIP_ALERT[$rule_name]}"
+	fi
+	if [ -z "$RULE_EMAIL" ] && [ "${_THRESH_RULE_EMAIL[$rule_name]+x}" = "x" ]; then
+		RULE_EMAIL="${_THRESH_RULE_EMAIL[$rule_name]}"
+	fi
+}
+
 # _rule_is_active — true when the rule's prerequisite binary/file exists
 _rule_is_active() {
 	[ -n "${REQ:-}" ] && [ -f "$REQ" ]
@@ -1660,6 +1730,7 @@ _hc_rules() {
 			_save_rule_vars
 			_clear_rule_vars
 			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+				_apply_thresholds "$rule_name"
 				if _rule_is_active; then
 					local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
 					if [ -n "${LP:-}" ] && [ ! -f "$LP" ] && [ "$_hc_has_journalctl" -eq 1 ] && \
@@ -2142,6 +2213,7 @@ show_service_status() {
 	_save_rule_vars
 	_clear_rule_vars
 	safe_source "$rule_file" "rule:$service" 2>/dev/null
+	_apply_thresholds "$service"
 
 	local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
 	local rule_ports="${PORTS:-all}"
@@ -2206,7 +2278,7 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
-	local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL"
+	local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL THRESHOLDS_CONF"
 	if [ -n "$var" ]; then
 		# validate against whitelist before eval
 		local _found=0 _v
@@ -2390,6 +2462,7 @@ list_rules() {
 		_clear_rule_vars
 
 		if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+			_apply_thresholds "$rule_name"
 			local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
 			local rule_ports="${PORTS:-all}"
 			if _rule_is_active; then
@@ -2444,6 +2517,7 @@ show_rule() {
 		_restore_rule_vars
 		return 1
 	fi
+	_apply_thresholds "$rule_name"
 
 	if _rule_is_active; then
 		echo "  Status:     active"
@@ -2506,6 +2580,7 @@ test_rule() {
 		_restore_rule_vars
 		return 1
 	fi
+	_apply_thresholds "$rule_name"
 
 	# report
 	echo "Rule:         $rule_name"

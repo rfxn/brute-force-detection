@@ -71,7 +71,7 @@ BEGIN {
 # (for pre-split installs, all variables are in conf.bfd; for post-split,
 # internals.conf has the internal variables)
 old_combined=$(mktemp "$INSTALL_PATH/tmp/.importconf.XXXXXX")
-trap 'rm -f "$old_combined" "$INSTALL_PATH/conf.bfd.tmp" "$INSTALL_PATH/internals.conf.tmp"' EXIT INT TERM
+trap 'rm -f "$old_combined" "$INSTALL_PATH/conf.bfd.tmp" "$INSTALL_PATH/internals.conf.tmp" "$INSTALL_PATH/thresholds.conf.tmp"' EXIT INT TERM
 cat "$old_conf" > "$old_combined"
 if [ -f "$INSTALL_PATH.bk.last/internals.conf" ]; then
 	cat "$INSTALL_PATH.bk.last/internals.conf" >> "$old_combined"
@@ -93,6 +93,37 @@ rm -f "$old_combined"
 if ! grep -q '^FIREWALL=' "$old_conf" 2>/dev/null; then
 	sed -i 's/^FIREWALL="auto"/FIREWALL="custom"/' "$new_conf"
 	echo "  Note: FIREWALL set to 'custom' (preserves existing BAN_COMMAND behavior)."
+fi
+
+# migrate per-rule thresholds
+new_thresh="$INSTALL_PATH/thresholds.conf"
+if [ -f "$INSTALL_PATH.bk.last/thresholds.conf" ]; then
+	# post-thresholds upgrade: preserve user's thresholds.conf
+	cp -f "$INSTALL_PATH.bk.last/thresholds.conf" "$new_thresh"
+	echo "  Preserved thresholds.conf from previous install."
+elif [ -f "$new_thresh" ] && [ -d "$INSTALL_PATH.bk.last/rules" ]; then
+	# pre-thresholds upgrade: extract uncommented TRIG values from old rules
+	_migrated=0
+	for _rule_file in "$INSTALL_PATH.bk.last/rules"/*; do
+		[ ! -f "$_rule_file" ] && continue
+		_rule_name=$(basename "$_rule_file")
+		_old_trig=$(grep -E '^TRIG="[0-9]+"' "$_rule_file" 2>/dev/null | head -1)
+		if [ -n "$_old_trig" ]; then
+			# extract numeric value
+			_old_trig="${_old_trig#TRIG=\"}"
+			_old_trig="${_old_trig%\"}"
+			# update thresholds.conf entry for this rule
+			if grep -q "^${_rule_name}:" "$new_thresh" 2>/dev/null; then
+				sed -i "s|^${_rule_name}:TRIG=[0-9]*|${_rule_name}:TRIG=${_old_trig}|" "$new_thresh"
+			else
+				echo "${_rule_name}:TRIG=${_old_trig}" >> "$new_thresh"
+			fi
+			_migrated=$((_migrated + 1))
+		fi
+	done
+	if [ "$_migrated" -gt 0 ]; then
+		echo "  Migrated $_migrated per-rule thresholds to thresholds.conf."
+	fi
 fi
 
 # preserve user's ignore lists

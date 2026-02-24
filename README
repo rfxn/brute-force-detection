@@ -28,6 +28,7 @@ Contents:
 6 ............. Rule Engine
 6.1 ........... Rule Engine: Rule Catalog
 6.2 ........... Rule Engine: Rule Customization
+6.3 ........... Rule Engine: Threshold Management
 7 ............. Ignore Lists
 8 ............. Ban Management
 9 ............. IPv6 Support
@@ -446,8 +447,8 @@ Each rule file supports the following variables:
                $AUTH_LOG_PATH).
   ARG_VAL    - regex pattern for matching failures. Uses <HOST> as IP
                placeholder.
-  TRIG       - per-service trigger threshold (overrides global TRIG from
-               conf.bfd).
+  TRIG       - per-service trigger threshold. Uncomment in the rule file to
+               override thresholds.conf and conf.bfd (highest precedence).
   PORTS      - service ports for port-specific blocking (e.g., "22" for sshd).
   SKIP_ALERT - set to "1" to suppress email alerts for this service.
   RULE_EMAIL - override EMAIL_ADDRESS for this rule's alerts (per-rule
@@ -455,9 +456,40 @@ Each rule file supports the following variables:
   TLOG_TF    - tracking identifier used by tlog for state file naming
                (e.g., "sshd", "dovecot").
 
-To customize a rule's trigger threshold, edit the rule file:
-  # In /usr/local/bfd/rules/sshd
-  TRIG="5"
+To override a threshold, either edit thresholds.conf (recommended) or
+uncomment the TRIG line in the rule file (highest precedence). See section
+6.3 for details on the three-tier threshold system.
+
+6.3) Rule Engine: Threshold Management
+BFD uses a three-tier precedence system for per-rule thresholds:
+
+  1. Rule file (highest) — uncomment TRIG="N" in /usr/local/bfd/rules/<rule>
+  2. thresholds.conf    — /usr/local/bfd/thresholds.conf
+  3. conf.bfd (lowest)  — global TRIG value in /usr/local/bfd/conf.bfd
+
+thresholds.conf provides centralized threshold management in a colon-delimited
+format. Each line specifies a rule name followed by KEY=VALUE pairs:
+
+  # Format: rule_name:KEY=value[:KEY=value...]
+  sshd:TRIG=5
+  postfix:TRIG=20:SKIP_ALERT=1:RULE_EMAIL=sec@example.com
+
+Supported keys:
+  TRIG       - failure count before ban
+  SKIP_ALERT - suppress email alerts (0/1)
+  RULE_EMAIL - alternate alert recipient
+
+Rules not listed in thresholds.conf inherit the global TRIG from conf.bfd.
+
+To change the sshd threshold from 5 to 10:
+  # In /usr/local/bfd/thresholds.conf
+  sshd:TRIG=10
+
+To suppress alerts for a noisy service:
+  named:TRIG=100:SKIP_ALERT=1
+
+On upgrade, importconf migrates per-rule thresholds from old rule files into
+thresholds.conf automatically, preserving any customizations.
 
 7) Ignore Lists
 BFD provides two mechanisms for excluding addresses from bans:

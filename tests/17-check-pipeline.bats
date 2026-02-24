@@ -1143,3 +1143,101 @@ EOF
 	! echo "$check_src" | grep -q 'LAST_HOST'
 	! echo "$check_src" | grep -q 'LAST="'
 }
+
+# --- thresholds.conf precedence integration ---
+
+@test "check: thresholds.conf TRIG used when rule TRIG commented out" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	# rule with TRIG commented out (empty after _clear_rule_vars)
+	cat > "$rules_dir/testrule" <<'RULEEOF'
+# TRIG="5"
+REQ="/bin/sh"
+RULEEOF
+	cat >> "$rules_dir/testrule" <<EOF
+LP="$logfile"
+TLOG_TF="testrule"
+ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+EOF
+	chmod 644 "$rules_dir/testrule"
+	chown root "$rules_dir/testrule"
+	# set up thresholds.conf with TRIG=2 for testrule
+	local thresh_conf="$TEST_TMPDIR/thresholds.conf"
+	echo "testrule:TRIG=2" > "$thresh_conf"
+	chown root "$thresh_conf"
+	chmod 640 "$thresh_conf"
+	# load thresholds
+	declare -gA _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
+	_load_thresholds "$thresh_conf"
+	# GLOB_TRIG is high so it would NOT trigger ban
+	GLOB_TRIG="999"
+	RULES_PATH="$rules_dir"
+	TRIG_WINDOW="300"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="0"
+	BAN_DURATION="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	SKIP_ALERT=""
+	EMAIL_ALERTS="0"
+	SUBNET_TRIG="0"
+	run _run_check_with_stats "$rules_dir"
+	assert_success
+	# thresholds.conf TRIG=2, 3 events → should ban (1 ban executed)
+	assert_output --partial "1 bans executed"
+}
+
+@test "check: rule file TRIG overrides thresholds.conf TRIG" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	# rule with explicit TRIG=999 (very high, should NOT trigger ban)
+	cat > "$rules_dir/testrule" <<'RULEEOF'
+TRIG="999"
+REQ="/bin/sh"
+RULEEOF
+	cat >> "$rules_dir/testrule" <<EOF
+LP="$logfile"
+TLOG_TF="testrule"
+ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+EOF
+	chmod 644 "$rules_dir/testrule"
+	chown root "$rules_dir/testrule"
+	# thresholds.conf says TRIG=1 (low), but rule file should override
+	local thresh_conf="$TEST_TMPDIR/thresholds.conf"
+	echo "testrule:TRIG=1" > "$thresh_conf"
+	chown root "$thresh_conf"
+	chmod 640 "$thresh_conf"
+	declare -gA _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
+	_load_thresholds "$thresh_conf"
+	GLOB_TRIG="999"
+	RULES_PATH="$rules_dir"
+	TRIG_WINDOW="300"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="0"
+	BAN_DURATION="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_PERMANENT_WINDOW="86400"
+	SKIP_ALERT=""
+	EMAIL_ALERTS="0"
+	SUBNET_TRIG="0"
+	run _run_check_with_stats "$rules_dir"
+	assert_success
+	# rule TRIG=999 overrides thresholds.conf TRIG=1, so 0 bans
+	assert_output --partial "0 bans executed"
+}

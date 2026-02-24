@@ -94,6 +94,9 @@ IGNORE_HOST_FILES="${IGNORE_HOST_FILES:-$INSTALL_PATH/exclude.files}"
 LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
 TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
 GLOB_TRIG="$TRIG"
+# load per-rule threshold overrides
+declare -A _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
+_load_thresholds "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
 # extract BAN_COMMAND templates (only needed for custom backend)
 BAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND")
 UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
@@ -223,6 +226,7 @@ check() {
 		eout "processing rule file $str"
 		_clear_rule_vars
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
+		_apply_thresholds "$str"
 		if [ -z "$TRIG" ]; then
 			TRIG="$GLOB_TRIG"
 		fi
@@ -452,6 +456,7 @@ reload_watch() {
 		fi
 	fi
 	GLOB_TRIG="$TRIG"
+	_load_thresholds "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
 	# shellcheck disable=SC2034  # templates used by _fw_custom_ban/unban
 	BAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND")
 	UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
