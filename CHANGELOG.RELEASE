@@ -25,6 +25,8 @@
 [Change] test IPs: replace private/example ranges (10.0.0.x, 172.16.x, 192.168.1.x,
          1.2.3.4, 5.6.7.8) with RFC 5737 documentation ranges (192.0.2.0/24,
          198.51.100.0/24, 203.0.113.0/24) across all 25 test files
+[Change] route backend tests: replace mock ip() shell functions with mock
+         scripts using $_FW_ROUTE_IP_BIN (matches new binary discovery)
 [Change] test suite: rename 25 test files from test_*.bats to numbered
          NN-name.bats convention for deterministic ordering and parallel
          distribution

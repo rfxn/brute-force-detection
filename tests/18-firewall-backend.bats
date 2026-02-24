@@ -429,44 +429,36 @@ SCRIPT
 # ============================================================
 
 @test "_fw_route_ban: adds blackhole route /32" {
-	ip() {
-		echo "ip $*" >> "$TEST_TMPDIR/ip.log"
-		return 0
-	}
-	export -f ip
+	printf '#!/bin/bash\necho "ip $*" >> "%s/ip.log"\n' "$TEST_TMPDIR" > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
+	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
 	_fw_route_ban "192.0.2.1"
 	run cat "$TEST_TMPDIR/ip.log"
 	assert_output --partial "route add blackhole 192.0.2.1/32"
 }
 
 @test "_fw_route_ban: adds blackhole route /128 for IPv6" {
-	ip() {
-		echo "ip $*" >> "$TEST_TMPDIR/ip.log"
-		return 0
-	}
-	export -f ip
+	printf '#!/bin/bash\necho "ip $*" >> "%s/ip.log"\n' "$TEST_TMPDIR" > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
+	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
 	_fw_route_ban "2001:db8::1"
 	run cat "$TEST_TMPDIR/ip.log"
 	assert_output --partial "route add blackhole 2001:db8::1/128"
 }
 
 @test "_fw_route_unban: removes blackhole route" {
-	ip() {
-		echo "ip $*" >> "$TEST_TMPDIR/ip.log"
-		return 0
-	}
-	export -f ip
+	printf '#!/bin/bash\necho "ip $*" >> "%s/ip.log"\n' "$TEST_TMPDIR" > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
+	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
 	_fw_route_unban "192.0.2.1"
 	run cat "$TEST_TMPDIR/ip.log"
 	assert_output --partial "route del blackhole 192.0.2.1/32"
 }
 
 @test "_fw_route_ban: CIDR passed through without extra suffix" {
-	ip() {
-		echo "ip $*" >> "$TEST_TMPDIR/ip.log"
-		return 0
-	}
-	export -f ip
+	printf '#!/bin/bash\necho "ip $*" >> "%s/ip.log"\n' "$TEST_TMPDIR" > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
+	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
 	_fw_route_ban "192.0.2.0/24"
 	run cat "$TEST_TMPDIR/ip.log"
 	assert_output --partial "route add blackhole 192.0.2.0/24"
@@ -524,11 +516,9 @@ SCRIPT
 
 @test "execute_ban: calls fw_ban for non-custom backend" {
 	_FW_BACKEND="route"
-	ip() {
-		echo "ip $*" >> "$TEST_TMPDIR/ip.log"
-		return 0
-	}
-	export -f ip
+	printf '#!/bin/bash\necho "ip $*" >> "%s/ip.log"\n' "$TEST_TMPDIR" > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
+	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
 	run execute_ban "192.0.2.1" "sshd" "0" "22"
 	assert_success
 	run cat "$TEST_TMPDIR/ip.log"
@@ -537,11 +527,9 @@ SCRIPT
 
 @test "execute_ban: dry run logs without calling fw_ban" {
 	_FW_BACKEND="route"
-	ip() {
-		echo "ip $*" >> "$TEST_TMPDIR/ip.log"
-		return 0
-	}
-	export -f ip
+	printf '#!/bin/bash\necho "ip $*" >> "%s/ip.log"\n' "$TEST_TMPDIR" > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
+	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
 	run execute_ban "192.0.2.1" "sshd" "1" "22"
 	assert_success
 	# ip should not have been called
@@ -553,16 +541,10 @@ SCRIPT
 	BAN_RETRY_COUNT="2"
 	local attempt_file="$TEST_TMPDIR/attempts"
 	echo "0" > "$attempt_file"
-	ip() {
-		local n
-		n=$(cat "$attempt_file")
-		n=$((n + 1))
-		echo "$n" > "$attempt_file"
-		# fail first 2 attempts, succeed on 3rd
-		if [ "$n" -lt 3 ]; then return 1; fi
-		return 0
-	}
-	export -f ip
+	printf '#!/bin/bash\nn=$(cat "%s/attempts"); n=$((n + 1)); echo "$n" > "%s/attempts"; if [ "$n" -lt 3 ]; then exit 1; fi; exit 0\n' \
+		"$TEST_TMPDIR" "$TEST_TMPDIR" > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
+	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
 	run execute_ban "192.0.2.1" "sshd" "0" "22"
 	assert_success
 	local final
@@ -588,8 +570,9 @@ SCRIPT
 
 @test "execute_ban: sets BAN_COMMAND for non-custom backend" {
 	_FW_BACKEND="route"
-	ip() { return 0; }
-	export -f ip
+	printf '#!/bin/bash\nexit 0\n' > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
+	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
 	execute_ban "192.0.2.1" "sshd" "0" "22"
 	[[ "$BAN_COMMAND" == *"fw_ban"* ]]
 }
@@ -600,11 +583,9 @@ SCRIPT
 
 @test "execute_unban: calls fw_unban for non-custom backend" {
 	_FW_BACKEND="route"
-	ip() {
-		echo "ip $*" >> "$TEST_TMPDIR/ip.log"
-		return 0
-	}
-	export -f ip
+	printf '#!/bin/bash\necho "ip $*" >> "%s/ip.log"\n' "$TEST_TMPDIR" > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
+	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
 	run execute_unban "192.0.2.1" "sshd" "22"
 	assert_success
 	run cat "$TEST_TMPDIR/ip.log"
