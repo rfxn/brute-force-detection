@@ -1,4 +1,12 @@
 2.0.1:
+[Change] tlog getsize(): replace cat subprocess with read builtin for tracking
+         file reads; matches tlog_read() pattern in bfd.lib.sh
+[Change] tlog_read(): replace cat subprocess with read builtin for tracking
+         file reads; matches tlog getsize() pattern
+[Change] tlog: simplify growth condition from NOT-less-than AND NOT-equal to
+         single greater-than test; aligns with tlog_read() in bfd.lib.sh
+[Change] tlog: annotate vestigial PATH export with rationale (standalone
+         subprocess invocation, cron.daily, manual use)
 [Change] exclude.files: add header and inline comments grouping entries by source
          (APF, TCP wrappers, BFD ignore lists, cPanel/WHM/Plesk)
 [Change] bfd-watch.service: add SyslogIdentifier=bfd-watch and TimeoutStopSec=15

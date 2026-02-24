@@ -507,7 +507,7 @@ tlog_read() {
 	fi
 	local tsize size newsize
 	if [ -f "$baserun/$tlog_name" ]; then
-		tsize=$(cat "$baserun/$tlog_name" 2>/dev/null)
+		read -r tsize < "$baserun/$tlog_name" 2>/dev/null || tsize=""
 	else
 		tsize=""
 	fi

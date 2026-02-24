@@ -20,7 +20,9 @@
 #    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 ###
 #
-# Just a global PATH so we can find common binaries
+# PATH export: standalone tlog runs as a subprocess with no inherited PATH.
+# When rules migrate to in-process _rule_tlog(), this script remains for
+# cron.daily and manual invocation where PATH may not be set.
 PATH=/sbin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/local/sbin:$PATH ; export PATH
 
 
@@ -76,7 +78,7 @@ get_file_size() {
 getsize() {
 	local tsize=""
 	if [ -f "$BASERUN/$TLOG" ]; then
-		tsize=$(cat "$BASERUN/$TLOG" 2>/dev/null)
+		read -r tsize < "$BASERUN/$TLOG" 2>/dev/null || tsize=""
 	fi
 	if [ -z "$tsize" ] || [ "$tsize" = "0" ]; then
 		# first run or reset — record current size, no output
@@ -91,7 +93,7 @@ getsize() {
 
 getsize
 
-if [ ! "$NEWSIZE" -lt "$SIZE" ] && [ "$NEWSIZE" -ne "$SIZE" ]; then
+if [ "$NEWSIZE" -gt "$SIZE" ]; then
 	tail -c $((NEWSIZE - SIZE)) "$FILE"
 	echo "$NEWSIZE" > "$BASERUN/$TLOG"
 elif [ "$NEWSIZE" -lt "$SIZE" ]; then
