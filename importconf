@@ -91,6 +91,7 @@ rm -f "$old_combined"
 # to preserve existing BAN_COMMAND behavior
 if ! grep -q '^FIREWALL=' "$old_conf" 2>/dev/null; then
 	sed -i 's/^FIREWALL="auto"/FIREWALL="custom"/' "$new_conf"
+	echo "  Note: FIREWALL set to 'custom' (preserves existing BAN_COMMAND behavior)."
 fi
 
 # preserve user's ignore lists
