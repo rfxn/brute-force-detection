@@ -18,6 +18,10 @@
       sed path replacement so systemd sees final paths
 [Fix] logrotate.d.bfd: add copytruncate, weekly rotation, compress, create
       directive; preserves log file inode for tail -f consumers
+[Fix] cron.daily state rotation races: wrap state-file operations in flock -x
+      using BFD's lock file; copy-and-truncate preserves inodes; INSTALL_PATH
+      variable replaces hardcoded paths; attack.pool rotation purge added
+[Fix] Dockerfiles missing COPY importconf; added to all 9 test Dockerfiles
 [Change] test suite: rename 25 test files from test_*.bats to numbered
          NN-name.bats convention for deterministic ordering and parallel
          distribution
