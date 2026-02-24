@@ -482,10 +482,10 @@ format_table() {
 }
 
 # tlog_read file tlog_name baserun — read new content from a log file
-# Production log reading uses the standalone files/tlog script; this function
-# is the library equivalent for testability and future convergence.
-# Implements the same byte-offset tracking as files/tlog but as a function,
-# avoiding subprocess overhead when called from bfd.
+# Library equivalent of the standalone files/tlog script; both implementations
+# use identical logic (single size read on init, no output on first run) and
+# must stay in sync. Future: callers should migrate here; files/tlog remains
+# for standalone/cron compatibility.
 # Outputs new content to stdout; returns 0 on success, 1 on error.
 tlog_read() {
 	local file="$1" tlog_name="$2" baserun="$3"

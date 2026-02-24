@@ -1,4 +1,9 @@
 2.0.1:
+[Fix] tlog getsize(): eliminate pre-create block and duplicate branches; single
+      size read on first run prevents spurious delta output from double-read race;
+      semantics now match tlog_read() in bfd.lib.sh
+[Change] tlog/bfd.lib.sh: update convergence comments cross-referencing both
+         implementations and documenting migration path
 [New] thresholds.conf: centralized per-rule threshold management; colon-
       delimited KEY=VALUE format supporting TRIG, SKIP_ALERT, RULE_EMAIL;
       three-tier precedence: rule file > thresholds.conf > conf.bfd
