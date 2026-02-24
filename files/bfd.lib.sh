@@ -174,11 +174,13 @@ _save_rule_vars() {
 	_SV_REQ="${REQ:-}"; _SV_LP="${LP:-}"; _SV_TRIG="${TRIG:-}"
 	_SV_TLOG_TF="${TLOG_TF:-}"; _SV_PORTS="${PORTS:-}"
 	_SV_ARG_VAL="${ARG_VAL:-}"; _SV_IGNOREREGEX="${IGNOREREGEX:-}"
+	_SV_SKIP_ALERT="${SKIP_ALERT:-}"; _SV_RULE_EMAIL="${RULE_EMAIL:-}"
 }
 _restore_rule_vars() {
 	REQ="$_SV_REQ"; LP="$_SV_LP"; TRIG="$_SV_TRIG"
 	TLOG_TF="$_SV_TLOG_TF"; PORTS="$_SV_PORTS"
 	ARG_VAL="$_SV_ARG_VAL"; IGNOREREGEX="$_SV_IGNOREREGEX"
+	SKIP_ALERT="$_SV_SKIP_ALERT"; RULE_EMAIL="$_SV_RULE_EMAIL"
 }
 _clear_rule_vars() {
 	REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
@@ -253,9 +255,13 @@ expand_command_template() {
 	echo "$cmd"
 }
 
-# validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, BAN_DURATION,
-#   BAN_PERMANENT_AFTER, BAN_PERMANENT_WINDOW, EMAIL_ALERTS,
-#   LOCK_FILE_TIMEOUT, BAN_COMMAND_TEMPLATE, INSTALL_PATH, EXIT_CONFIG_ERROR
+# validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, SUBNET_TRIG,
+#   SUBNET_MASK, SUBNET_MASK_V6, BAN_DURATION, BAN_PERMANENT_AFTER,
+#   BAN_PERMANENT_WINDOW, BAN_ESCALATION, BAN_ESCALATION_CAP,
+#   BAN_RETRY_COUNT, FIREWALL, BAN_COMMAND_TEMPLATE, EMAIL_ALERTS,
+#   EMAIL_ADDRESS (when EMAIL_ALERTS=1), EMAIL_LOGLINES, OUTPUT_SYSLOG,
+#   BFD_LOG_PATH, LOG_SOURCE, LOCK_FILE_TIMEOUT, WATCH_INTERVAL,
+#   INSTALL_PATH, EXIT_CONFIG_ERROR
 validate_config() {
 	local int_pattern='^[0-9]+$'
 	if ! [[ "$TRIG" =~ $int_pattern ]] || [ "$TRIG" -eq 0 ]; then
@@ -304,6 +310,15 @@ validate_config() {
 		echo "error: EMAIL_ALERTS must be 0 or 1 (got '$EMAIL_ALERTS')."
 		exit $EXIT_CONFIG_ERROR
 	fi
+	if [ "$EMAIL_ALERTS" = "1" ] && [ -z "${EMAIL_ADDRESS:-}" ]; then
+		echo "error: EMAIL_ADDRESS must be set when EMAIL_ALERTS=1."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	local _os="${OUTPUT_SYSLOG:-0}"
+	if [ "$_os" != "0" ] && [ "$_os" != "1" ]; then
+		echo "error: OUTPUT_SYSLOG must be 0 or 1 (got '${OUTPUT_SYSLOG:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
 	if ! [[ "$LOCK_FILE_TIMEOUT" =~ $int_pattern ]] || [ "$LOCK_FILE_TIMEOUT" -eq 0 ]; then
 		echo "error: LOCK_FILE_TIMEOUT must be a positive integer (got '$LOCK_FILE_TIMEOUT')."
 		exit $EXIT_CONFIG_ERROR
@@ -330,6 +345,10 @@ validate_config() {
 		echo "error: INSTALL_PATH '$INSTALL_PATH' does not exist."
 		exit $EXIT_CONFIG_ERROR
 	fi
+	if [ -z "${BFD_LOG_PATH:-}" ]; then
+		echo "error: BFD_LOG_PATH must not be empty."
+		exit $EXIT_CONFIG_ERROR
+	fi
 	if [ -n "${LOG_SOURCE:-}" ] && \
 	   [ "$LOG_SOURCE" != "auto" ] && \
 	   [ "$LOG_SOURCE" != "file" ] && \
@@ -337,7 +356,7 @@ validate_config() {
 		echo "error: LOG_SOURCE must be auto, file, or journal (got '$LOG_SOURCE')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	local _wi="${WATCH_INTERVAL-10}"
+	local _wi="${WATCH_INTERVAL:-10}"
 	if ! [[ "$_wi" =~ $int_pattern ]] || [ "$_wi" -eq 0 ]; then
 		echo "error: WATCH_INTERVAL must be a positive integer (got '${WATCH_INTERVAL:-}')."
 		exit $EXIT_CONFIG_ERROR
@@ -568,7 +587,7 @@ tlog_journal_read() {
 
 # extract_hosts pattern1 [pattern2 ...] — extract IPs from tlog output on stdin
 # Each pattern is a grep -E regex with <HOST> marking the IP position.
-# <HOST> is replaced with an IP-matching capture group for sed -r.
+# <HOST> is replaced with an IP-matching capture group for sed -E.
 # Outputs one validated IP per line.
 #
 # Rules must NOT use () groups before <HOST> in a pattern.
@@ -595,10 +614,10 @@ extract_hosts() {
 		sed_pat="${pattern//<HOST>/($ip4_re)}"
 		# (^|.*[^0-9.]) boundary prevents greedy .* from consuming
 		# leading digits of the IP address; IP capture becomes \2
-		echo "$tlog_input" | sed -rn "s#(^|.*[^0-9.])${sed_pat}.*#\2#p"
+		echo "$tlog_input" | sed -En "s#(^|.*[^0-9.])${sed_pat}.*#\2#p"
 		# IPv6 extraction — inner group in ip6_re pushes IP to \2
 		sed_pat="${pattern//<HOST>/($ip6_re)}"
-		echo "$tlog_input" | sed -rn "s#(^|.*[^0-9a-fA-F:])${sed_pat}.*#\2#p"
+		echo "$tlog_input" | sed -En "s#(^|.*[^0-9a-fA-F:])${sed_pat}.*#\2#p"
 	done | tr -d '[]' | while IFS= read -r ip; do
 		[ -z "$ip" ] && continue
 		validate_ip_any "$ip" 2>/dev/null || true
@@ -2187,7 +2206,7 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
-	local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL"
+	local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL"
 	if [ -n "$var" ]; then
 		# validate against whitelist before eval
 		local _found=0 _v
@@ -2201,15 +2220,30 @@ show_config() {
 			echo "error: unknown config variable '$var'."
 			return 1
 		fi
+		# map user-facing BAN_COMMAND names to _TEMPLATE variants
+		# (conf.bfd expands $ATTACK_HOST at source time; templates have raw text)
+		case "$var" in
+			BAN_COMMAND)      var="BAN_COMMAND_TEMPLATE" ;;
+			UNBAN_COMMAND)    var="UNBAN_COMMAND_TEMPLATE" ;;
+			BAN_COMMAND_V6)   var="BAN_COMMAND_V6_TEMPLATE" ;;
+			UNBAN_COMMAND_V6) var="UNBAN_COMMAND_V6_TEMPLATE" ;;
+		esac
 		local val
 		eval "val=\${$var:-}"
 		echo "$val"
 	else
 		# dump all active config variables
-		local v val
+		local v val _display
 		for v in $config_vars; do
+			_display="$v"
+			case "$v" in
+				BAN_COMMAND)      v="BAN_COMMAND_TEMPLATE" ;;
+				UNBAN_COMMAND)    v="UNBAN_COMMAND_TEMPLATE" ;;
+				BAN_COMMAND_V6)   v="BAN_COMMAND_V6_TEMPLATE" ;;
+				UNBAN_COMMAND_V6) v="UNBAN_COMMAND_V6_TEMPLATE" ;;
+			esac
 			eval "val=\${$v:-}"
-			echo "$v=$val"
+			echo "$_display=$val"
 		done
 	fi
 }
@@ -2411,7 +2445,7 @@ show_rule() {
 		return 1
 	fi
 
-	if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+	if _rule_is_active; then
 		echo "  Status:     active"
 	else
 		echo "  Status:     inactive (${REQ:-unset} not found)"

@@ -139,7 +139,7 @@ fi
 
 if [ ! -d "$INSTALL_PATH/stats" ]; then
 	mkdir -p "$INSTALL_PATH/stats"
-	chmod 750 "$INSTALL_PATH"
+	chmod 750 "$INSTALL_PATH/stats"
 fi
 
 APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
@@ -470,7 +470,7 @@ watch() {
 		process_unbans "$INSTALL_PATH" "$UTIME"
 		check
 		sleep "$WATCH_INTERVAL" &
-		wait $!
+		wait "$!"
 	done
 }
 
@@ -480,16 +480,16 @@ usage() {
 	echo "-q|--quiet ................. run quiet with output hidden"
 	echo "-d|--dryrun ................ run detection without banning"
 	echo "-w|--watch ................. run in continuous watch mode (foreground)"
-	echo "-a|--attackpool [IP|STR] ... attack pool report or IP search"
+	echo "-a|--attackpool [IP|STR] ... attack pool; valid IP shows full report"
 	echo "-c|--check ................. health check and diagnostics"
 	echo "-l|--list .................. list active bans"
 	echo "-u|--unban IP .............. unban an IP address"
-	echo "-b|--ban IP [SERVICE] ...... manually ban an IP address"
+	echo "-b|--ban IP [SERVICE] ...... manually ban an IP (permanent)"
 	echo "-S|--status [SERVICE] ...... system or per-service status"
 	echo "-C|--config [VAR] .......... show config values"
 	echo "-R|--rules [RULE] .......... list rules or show rule details"
-	echo "-T|--test RULE [FILE] ...... test rule patterns against log file"
-	echo "   --test-pattern PAT [FILE] . test a raw <HOST> pattern"
+	echo "-T|--test RULE [FILE|-] .... test rule patterns against log or stdin"
+	echo "   --test-pattern PAT [FILE|-] test a raw <HOST> pattern against log or stdin"
 	echo "   --flush-temp ............ unban all temporary bans"
 	echo "   --flush-all ............. unban all bans"
 	echo "   --json .................. output in JSON format (with -l)"

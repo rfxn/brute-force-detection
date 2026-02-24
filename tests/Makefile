@@ -1,4 +1,4 @@
-.PHONY: test test-serial test-verbose \
+.PHONY: test test-serial test-verbose test-debian12 \
        test-centos6 test-centos7 test-rocky8 test-rocky9 test-rocky10 \
        test-ubuntu1204 test-ubuntu2004 test-ubuntu2404 \
        test-all test-modern test-legacy test-deep-legacy \
@@ -17,6 +17,10 @@ test-serial:
 # Verbose: parallel with pretty formatter
 test-verbose:
 	./run-tests.sh --formatter pretty
+
+# Explicit Debian 12 target (same as default but named)
+test-debian12:
+	./run-tests.sh --os debian12 --parallel
 
 # Individual OS targets (parallel within OS)
 test-centos6:

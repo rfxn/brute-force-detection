@@ -25,12 +25,15 @@ rule engine, sliding time-window counting, automatic ban lifecycle, and IPv4/IPv
   - [3.4 IPv6](#34-ipv6)
   - [3.5 Email Alerts](#35-email-alerts)
   - [3.6 Log Paths](#36-log-paths)
+  - [3.7 Logging & Advanced](#37-logging--advanced)
 - [4. Firewall Integration](#4-firewall-integration)
 - [5. General Usage](#5-general-usage)
   - [5.1 Dry Run](#51-dry-run)
   - [5.2 Health Check](#52-health-check)
   - [5.3 Attack Pool](#53-attack-pool)
   - [5.4 Watch Mode](#54-watch-mode)
+  - [5.5 Flush Bans](#55-flush-bans)
+  - [5.6 Structured Output](#56-structured-output)
 - [6. Rule Engine](#6-rule-engine)
   - [6.1 Rule Catalog](#61-rule-catalog)
   - [6.2 Rule Customization](#62-rule-customization)
@@ -66,8 +69,8 @@ bfd -a
 
 # Manage bans
 bfd -l               # list active bans
-bfd -b 10.0.0.1 sshd # manually ban an IP
-bfd -u 10.0.0.1      # unban an IP
+bfd -b 192.0.2.1 sshd # manually ban an IP
+bfd -u 192.0.2.1      # unban an IP
 ```
 
 ---
@@ -142,6 +145,12 @@ Previous installations are backed up before overwriting.
 - **Install Path:** `/usr/local/bfd`
 - **Bin Path:** `/usr/local/sbin/bfd`
 
+Custom install paths via environment variables:
+
+```bash
+INSTALL_PATH=/opt/bfd BIN_PATH=/usr/sbin/bfd ./install.sh
+```
+
 ### 2.1 Scheduling
 
 **Cron (default, all systems):**
@@ -174,6 +183,16 @@ Use `bfd -c` to validate your configuration without banning anything.
 | `TRIG_WINDOW` | `300` | Sliding window in seconds (default 5 min). Only failures within this window count toward the threshold |
 | `TRIG_GLOBAL` | `0` | Cross-service aggregate threshold (0 = disabled). When set, failures from ALL services count toward this single threshold |
 
+#### 3.1.1 Distributed Attack Detection
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SUBNET_TRIG` | `0` | Unique IPs from same subnet to trigger subnet ban (0 = disabled) |
+| `SUBNET_MASK` | `24` | IPv4 subnet mask for distributed detection |
+| `SUBNET_MASK_V6` | `48` | IPv6 subnet mask (must be multiple of 16) |
+
+When `SUBNET_TRIG` unique IPs from the same subnet attack the same service within `TRIG_WINDOW`, the entire subnet is banned instead of individual IPs.
+
 ### 3.2 Ban Command & Duration
 
 | Variable | Default | Description |
@@ -181,6 +200,8 @@ Use `bfd -c` to validate your configuration without banning anything.
 | `BAN_COMMAND` | APF deny | Command to execute when banning a host. See [section 4](#4-firewall-integration) for examples |
 | `BAN_DURATION` | `300` | Ban duration in seconds (0 = permanent). Temporary bans require `UNBAN_COMMAND` |
 | `UNBAN_COMMAND` | *(empty)* | Command to remove a ban. Required for temporary bans to auto-remove firewall rules on expiry |
+
+| `BAN_RETRY_COUNT` | `2` | Retries with exponential backoff on transient firewall errors |
 
 The variables `$ATTACK_HOST`, `$MOD` (service name), and `$PORTS` (from rule file) are available in ban/unban commands.
 
@@ -191,7 +212,10 @@ The variables `$ATTACK_HOST`, `$MOD` (service name), and `$PORTS` (from rule fil
 | `BAN_PERMANENT_AFTER` | `5` | Number of temporary bans before escalating to permanent (0 = disabled) |
 | `BAN_PERMANENT_WINDOW` | `86400` | Window in seconds for counting repeat offenses (default 24 hours) |
 
-When an IP accumulates `BAN_PERMANENT_AFTER` temporary bans within `BAN_PERMANENT_WINDOW` seconds, subsequent bans are automatically escalated to permanent.
+| `BAN_ESCALATION` | `none` | Escalation mode: `none`, `linear`, `exponential` |
+| `BAN_ESCALATION_CAP` | `86400` | Maximum ban duration in seconds (0 = no cap) |
+
+When an IP accumulates `BAN_PERMANENT_AFTER` temporary bans within `BAN_PERMANENT_WINDOW` seconds, subsequent bans are automatically escalated to permanent. With `BAN_ESCALATION` set to `linear` or `exponential`, ban durations increase progressively before reaching permanent.
 
 ### 3.4 IPv6
 
@@ -226,13 +250,40 @@ The email template (`alert.bfd`) is fully customizable. Individual rules can sup
 
 Log paths are auto-detected based on the distribution. Override in `conf.bfd` if your system uses non-standard paths.
 
+### 3.7 Logging & Advanced
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FIREWALL` | `auto` | Firewall backend (see [section 4](#4-firewall-integration)) |
+| `LOG_SOURCE` | `auto` | Log source: `auto`, `file`, `journal` |
+| `OUTPUT_SYSLOG` | `1` | Log to syslog (0 = off, 1 = on) |
+| `OUTPUT_SYSLOG_FILE` | `$KERNEL_LOG_PATH` | Syslog target file |
+| `LOCK_FILE_TIMEOUT` | `300` | Lock staleness threshold in seconds |
+| `WATCH_INTERVAL` | `10` | Watch mode polling interval in seconds |
+
 ---
 
 ## 4. Firewall Integration
 
-Configure `BAN_COMMAND` in `conf.bfd` for your firewall. The variable `$ATTACK_HOST` is replaced with the offending IP address at ban time. For temporary bans, also set `UNBAN_COMMAND` to the reverse operation.
+BFD supports automatic firewall detection via `FIREWALL="auto"` (default). When set to auto, BFD probes for installed firewalls in priority order: APF > CSF > firewalld > UFW > nftables > iptables > ip route.
 
-**APF (default):**
+| `FIREWALL` Value | Description |
+|------------------|-------------|
+| `auto` | Auto-detect (default) |
+| `apf` | Advanced Policy Firewall |
+| `csf` | ConfigServer Security & Firewall |
+| `firewalld` | firewalld rich rules |
+| `ufw` | Uncomplicated Firewall |
+| `nftables` | nftables sets (inet bfd table) |
+| `iptables` | iptables/ip6tables chains |
+| `route` | ip route blackhole |
+| `custom` | User-defined BAN_COMMAND/UNBAN_COMMAND |
+
+When `FIREWALL="auto"` or a named backend is configured, BFD handles ban/unban natively — `BAN_COMMAND` and `UNBAN_COMMAND` are only used with `FIREWALL="custom"`.
+
+The following examples are for `FIREWALL="custom"` mode. The variable `$ATTACK_HOST` is replaced with the offending IP address at ban time. For temporary bans, also set `UNBAN_COMMAND` to the reverse operation.
+
+**APF:**
 ```bash
 BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
 UNBAN_COMMAND="/etc/apf/apf -u $ATTACK_HOST"
@@ -286,16 +337,16 @@ usage: bfd [OPTION]
 -q|--quiet ................. run quiet with output hidden
 -d|--dryrun ................ run detection without banning
 -w|--watch ................. run in continuous watch mode (foreground)
--a|--attackpool [IP|STR] ... attack pool report or IP search
+-a|--attackpool [IP|STR] ... attack pool; valid IP shows full report
 -c|--check ................. health check and diagnostics
 -l|--list .................. list active bans
 -u|--unban IP .............. unban an IP address
--b|--ban IP [SERVICE] ...... manually ban an IP address
+-b|--ban IP [SERVICE] ...... manually ban an IP (permanent)
 -S|--status [SERVICE] ...... system or per-service status
 -C|--config [VAR] .......... show config values
 -R|--rules [RULE] .......... list rules or show rule details
--T|--test RULE [FILE] ...... test rule patterns against log file
-   --test-pattern PAT [FILE] . test a raw <HOST> pattern
+-T|--test RULE [FILE|-] .... test rule patterns against log or stdin
+   --test-pattern PAT [FILE|-] test a raw <HOST> pattern against log or stdin
    --flush-temp ............ unban all temporary bans
    --flush-all ............. unban all bans
    --json .................. output in JSON format (with -l)
@@ -341,7 +392,7 @@ The **`-a|--attackpool`** option displays the top brute force attackers with per
 
 ```bash
 bfd -a           # show top attackers
-bfd -a 10.0.0    # search for a specific string
+bfd -a 192.0.2   # search for a specific string
 ```
 
 The report includes:
@@ -386,6 +437,36 @@ Run `bfd --watch` in a screen/tmux session or via a process supervisor. The cron
 |----------|---------|-------------|
 | `WATCH_INTERVAL` | `10` | Polling interval in seconds for watch mode |
 
+### 5.5 Flush Bans
+
+Remove multiple bans at once:
+
+```bash
+bfd --flush-temp    # remove all temporary bans (keep permanent)
+bfd --flush-all     # remove all bans (temporary + permanent)
+```
+
+Flushed bans are recorded in the ban history.
+
+### 5.6 Structured Output
+
+Use `--json` or `--csv` with `-l` for machine-readable ban lists:
+
+```bash
+bfd -l --json
+bfd -l --csv
+```
+
+**JSON** outputs an array of objects:
+```json
+[{"ip": "...", "service": "...", "ports": "...", "banned": "ISO-8601", "expires": "ISO-8601|permanent"}]
+```
+
+**CSV** outputs with a header row:
+```
+ip,service,ports,banned,expires
+```
+
 ---
 
 ## 6. Rule Engine
@@ -422,12 +503,13 @@ Each rule file supports the following variables:
 |----------|-------------|
 | `REQ` | Path to required binary. Rule is active only if this binary exists |
 | `LP` | Log file path to monitor (uses config variables like `$AUTH_LOG_PATH`) |
-| `ARG_VAL` | Regex pattern for matching failures. Uses `<HOST>` as IP placeholder |
+| `ARG_VAL` | Extracted IP list — tlog + extract_hosts pipeline using `<HOST>` patterns |
 | `TRIG` | Per-service trigger threshold (overrides global `TRIG` from `conf.bfd`) |
 | `PORTS` | Service ports for port-specific blocking (e.g., `"22"` for sshd) |
 | `SKIP_ALERT` | Set to `"1"` to suppress email alerts for this service |
 | `RULE_EMAIL` | Override `EMAIL_ADDRESS` for this rule's alerts (per-rule routing) |
 | `TLOG_TF` | Tracking identifier used by tlog for state file naming (e.g., `"sshd"`, `"dovecot"`) |
+| `IGNOREREGEX` | Lines matching this ERE pattern are excluded before IP extraction (fail2ban-compatible) |
 
 To customize a rule's trigger threshold:
 ```bash
@@ -457,9 +539,9 @@ Repeat offenders are escalated to permanent bans after `BAN_PERMANENT_AFTER` tem
 **CLI commands:**
 ```bash
 bfd -l                   # list all active bans (service, ports, expiry)
-bfd -u 10.0.0.1          # unban an IP address
-bfd -b 10.0.0.1          # manually ban an IP permanently
-bfd -b 10.0.0.1 sshd     # manually ban with a service label
+bfd -u 192.0.2.1          # unban an IP address
+bfd -b 192.0.2.1          # manually ban an IP permanently
+bfd -b 192.0.2.1 sshd     # manually ban with a service label
 ```
 
 **State files** in `/usr/local/bfd/tmp/`:
@@ -468,6 +550,8 @@ bfd -b 10.0.0.1 sshd     # manually ban with a service label
 |------|-------------|
 | `bans.active` | Currently active bans (timestamp, expiry, IP, service, ports) |
 | `bans.history` | Append-only log of all ban/unban events |
+| `events.dat` | Per-IP failure events within the sliding window (timestamp, IP, service) |
+| `attack.pool` | Persistent attack pool — all detected events for reporting |
 
 The `bfd -a` attack pool report integrates with ban state — each IP shows whether it is currently banned, its ban type (permanent or time remaining), and historical ban count.
 

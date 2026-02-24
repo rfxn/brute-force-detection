@@ -26,6 +26,7 @@ run_validate() {
 		BAN_PERMANENT_WINDOW="86400"
 		UNBAN_COMMAND_TEMPLATE=""
 		EMAIL_ALERTS="0"
+		EMAIL_ADDRESS="root@localhost"
 		LOCK_FILE_TIMEOUT="300"
 		BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
 		FIREWALL="custom"
@@ -46,6 +47,7 @@ run_validate_output() {
 		BAN_PERMANENT_WINDOW="86400"
 		UNBAN_COMMAND_TEMPLATE=""
 		EMAIL_ALERTS="0"
+		EMAIL_ADDRESS="root@localhost"
 		LOCK_FILE_TIMEOUT="300"
 		BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
 		FIREWALL="custom"
@@ -105,6 +107,31 @@ run_validate_output() {
 	assert_success
 }
 
+@test "validate_config: EMAIL_ALERTS=1 EMAIL_ADDRESS= rejects" {
+	run run_validate 'EMAIL_ALERTS="1"; EMAIL_ADDRESS=""'
+	assert_failure
+}
+
+@test "validate_config: OUTPUT_SYSLOG=0 passes" {
+	run run_validate 'OUTPUT_SYSLOG="0"'
+	assert_success
+}
+
+@test "validate_config: OUTPUT_SYSLOG=1 passes" {
+	run run_validate 'OUTPUT_SYSLOG="1"'
+	assert_success
+}
+
+@test "validate_config: OUTPUT_SYSLOG=2 rejects" {
+	run run_validate 'OUTPUT_SYSLOG="2"'
+	assert_failure
+}
+
+@test "validate_config: OUTPUT_SYSLOG=abc rejects" {
+	run run_validate 'OUTPUT_SYSLOG="abc"'
+	assert_failure
+}
+
 @test "validate_config: TIMEOUT=0 rejects" {
 	run run_validate 'LOCK_FILE_TIMEOUT="0"'
 	assert_failure
@@ -132,6 +159,11 @@ run_validate_output() {
 
 @test "validate_config: bad INSTALL_PATH rejects" {
 	run run_validate 'INSTALL_PATH="/nonexistent/path"'
+	assert_failure
+}
+
+@test "validate_config: BFD_LOG_PATH= rejects" {
+	run run_validate 'BFD_LOG_PATH=""'
 	assert_failure
 }
 
@@ -261,9 +293,9 @@ run_validate_output() {
 	assert_failure
 }
 
-@test "validate_config: WATCH_INTERVAL= rejects" {
+@test "validate_config: WATCH_INTERVAL= uses default (passes)" {
 	run run_validate 'WATCH_INTERVAL=""'
-	assert_failure
+	assert_success
 }
 
 @test "validate_config: WATCH_INTERVAL unset uses default (passes)" {
@@ -359,6 +391,55 @@ run_validate_output() {
 
 @test "validate_config: SUBNET_MASK_V6 unset uses default (passes)" {
 	run run_validate 'unset SUBNET_MASK_V6'
+	assert_success
+}
+
+# --- BAN_RETRY_COUNT ---
+
+@test "validate_config: BAN_RETRY_COUNT=0 passes" {
+	run run_validate 'BAN_RETRY_COUNT="0"'
+	assert_success
+}
+
+@test "validate_config: BAN_RETRY_COUNT=2 passes" {
+	run run_validate 'BAN_RETRY_COUNT="2"'
+	assert_success
+}
+
+@test "validate_config: BAN_RETRY_COUNT=abc rejects" {
+	run run_validate 'BAN_RETRY_COUNT="abc"'
+	assert_failure
+}
+
+@test "validate_config: BAN_RETRY_COUNT= uses default (passes)" {
+	run run_validate 'BAN_RETRY_COUNT=""'
+	assert_success
+}
+
+# --- EMAIL_LOGLINES ---
+
+@test "validate_config: EMAIL_LOGLINES=50 passes" {
+	run run_validate 'EMAIL_LOGLINES="50"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_LOGLINES=1 passes" {
+	run run_validate 'EMAIL_LOGLINES="1"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_LOGLINES=0 rejects" {
+	run run_validate 'EMAIL_LOGLINES="0"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_LOGLINES=abc rejects" {
+	run run_validate 'EMAIL_LOGLINES="abc"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_LOGLINES= uses default (passes)" {
+	run run_validate 'EMAIL_LOGLINES=""'
 	assert_success
 }
 

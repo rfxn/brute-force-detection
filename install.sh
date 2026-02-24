@@ -52,7 +52,7 @@ install(){
 	rm -f /etc/cron.daily/bfd
 	cp cron.daily /etc/cron.daily/bfd
 	chmod 755 /etc/cron.daily/bfd
-        chmod 640 "$INSPATH"/*
+        find "$INSPATH" -maxdepth 1 -type f -exec chmod 640 {} +
         chmod 750 "$INSPATH/tlog"
         chmod 750 "$INSPATH/bfd"
 	chmod 750 "$INSPATH/rules"
@@ -93,8 +93,7 @@ install(){
 			"$INSPATH/exclude.files" /etc/cron.daily/bfd
 	fi
 	if [ "$BINPATH" != "/usr/local/sbin/bfd" ]; then
-		sed -i "s|/usr/local/sbin/bfd|$BINPATH|g" \
-			"$INSPATH/bfd" /etc/cron.d/bfd
+		sed -i "s|/usr/local/sbin/bfd|$BINPATH|g" /etc/cron.d/bfd
 		if command -v systemctl >/dev/null 2>&1; then
 			sed -i "s|/usr/local/sbin/bfd|$BINPATH|g" \
 				/etc/systemd/system/bfd.service \

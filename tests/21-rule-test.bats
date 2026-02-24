@@ -52,10 +52,8 @@ teardown() {
 @test "test_rule: correct match count" {
 	run test_rule "$INSTALL_PATH" "test-sshd" "$SAMPLE_LOG"
 	assert_success
-	# 3 Failed password + 1 Invalid user = 4 matches (after dedup by extract_hosts)
-	# but actually we'll get one match per line that matches: 3+1=4 matches, but
-	# extract_hosts validates each IP so we get them all
-	assert_output --partial "matches"
+	# 4 Failed password (lines 1,2,4,5) + 1 Invalid user (line 3) = 5 matches, 2 unique IPs
+	assert_output --partial "5 matches, 2 unique IPs"
 }
 
 @test "test_rule: correct unique IP count" {
@@ -124,8 +122,9 @@ teardown() {
 @test "test_pattern: IPv6 match" {
 	local v6_log="$TEST_TMPDIR/v6.log"
 	echo "Feb 20 10:01:01 server sshd[1234]: Failed password for root from 2001:db8::1 port 22 ssh2" > "$v6_log"
-	echo "Feb 20 10:01:02 server sshd[1235]: Failed password for admin from 2001:db8::1 port 22 ssh2" > "$v6_log"
+	echo "Feb 20 10:01:02 server sshd[1235]: Failed password for admin from 2001:db8::1 port 22 ssh2" >> "$v6_log"
 	run test_pattern "sshd.*Failed password for .* from <HOST>" "$v6_log"
 	assert_success
+	assert_output --partial "Matches:  2"
 	assert_output --partial "2001:db8::1"
 }

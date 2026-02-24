@@ -1,4 +1,36 @@
 2.0.1:
+[Fix] tlog: mixed tab/space indentation in getsize(); normalized to tabs
+[Fix] tlog: [ "$1" = "" ] idiom replaced with [ -z "$1" ] for project consistency
+[Change] conf.bfd: add validation constraint notes to 9 variable comments
+      (TRIG, SUBNET_TRIG, SUBNET_MASK, SUBNET_MASK_V6, BAN_PERMANENT_AFTER,
+      BAN_PERMANENT_WINDOW, EMAIL_LOGLINES, LOCK_FILE_TIMEOUT, WATCH_INTERVAL)
+[Fix] pre(): chmod 750 targeted $INSTALL_PATH instead of $INSTALL_PATH/stats;
+      stats/ directory was left at umask default (755) instead of 750
+[Fix] validate_config() header comment: list all 24 validated variables
+      (12 were missing from the original 11-variable comment)
+[Fix] importconf: add user-visible message when FIREWALL is silently changed
+      from "auto" to "custom" during pre-2.0.1 upgrade
+[Fix] tlog version string: "track log 0.4" → standard project header format
+[Fix] alert.bfd: normalize email spacing "< bfd@rfxn.com >" → "<bfd@rfxn.com>"
+[Fix] CHANGELOG statistics: update function count (~78 → 106) and test count
+      (662 → 731) to reflect current codebase
+[New] cron.daily: add standard GPL copyright header (was the only project
+      script without one)
+[Fix] global lock: replace FD-based flock with mkdir-based file lock;
+      eliminates eval "exec $LOCK_FD" and the fd-0-close risk on early exit
+[Fix] install.sh: create BINPATH parent directory before symlink
+[Fix] install.sh: cd to script directory for portability from any CWD
+[Fix] uninstall.sh: add root privilege check matching install.sh pattern
+[Fix] uninstall.sh: stop bfd.service before unit file removal
+[Fix] show_config() whitelist: add BAN_COMMAND, UNBAN_COMMAND, BAN_COMMAND_V6,
+      UNBAN_COMMAND_V6 mapped to _TEMPLATE variants for raw template display
+[Fix] validate_config(): add OUTPUT_SYSLOG 0/1 validation
+[Fix] validate_config(): require EMAIL_ADDRESS when EMAIL_ALERTS=1
+[Fix] validate_config(): require non-empty BFD_LOG_PATH
+[Fix] _save_rule_vars/_restore_rule_vars: add SKIP_ALERT and RULE_EMAIL
+      to match _clear_rule_vars (prevents variable leakage across rules)
+[Fix] WATCH_INTERVAL fallback: change ${WATCH_INTERVAL-10} to
+      ${WATCH_INTERVAL:-10} to catch empty string
 [Fix] alert eval echo injection: replace eval echo "$BAN_COMMAND_TEMPLATE"
       with safe expand_command_template() using ${var//pat/rep} substitution
       in format_alert_entry() and send_alerts()
@@ -20,7 +52,8 @@
       directive; preserves log file inode for tail -f consumers
 [Fix] cron.daily state rotation races: wrap state-file operations in flock -x
       using BFD's lock file; copy-and-truncate preserves inodes; INSTALL_PATH
-      variable replaces hardcoded paths; attack.pool rotation purge added
+      variable replaces hardcoded paths; bans.history and attack.pool rotation
+      with 30-day purge added
 [Fix] Dockerfiles missing COPY importconf; added to all 9 test Dockerfiles
 [Change] test IPs: replace private/example ranges (10.0.0.x, 172.16.x, 192.168.1.x,
          1.2.3.4, 5.6.7.8) with RFC 5737 documentation ranges (192.0.2.0/24,
@@ -47,8 +80,9 @@
          cross-OS execution via xargs
 [Fix] install.sh: support INSTALL_PATH/BIN_PATH env var override for custom
       install locations; sed replacement of hardcoded paths at install time
-[Fix] install.sh: chmod 640 for rules/* (was missed) and alert.bfd (was 750,
-      should be 640 — sourced template, not executable)
+[Fix] install.sh: chmod 640 for rules/ and alert.bfd (was 750, should be
+      640 — sourced template, not executable); glob replaced with
+      find -maxdepth 1 -type f to avoid stripping subdirectory execute bits
 [Fix] firewall backends: replace hardcoded /etc/apf/apf and /usr/sbin/csf
       with command -v discovery cached in _FW_APF_BIN/_FW_CSF_BIN
 [Fix] firewall backends: iptables/ip6tables resolved via command -v in setup
@@ -81,8 +115,8 @@
 [Fix] show_config() eval injection: unsanitized CLI input passed to eval
       allowed arbitrary command execution; now validates against config
       variable whitelist before eval
-[Fix] bfd.lib.sh sourced without ownership/permission checks; added stat
-      validation matching conf.bfd pattern (root-owned, non-world-writable)
+[Fix] files/bfd sources bfd.lib.sh without ownership/permission checks;
+      added stat validation matching conf.bfd pattern (root-owned, non-world-writable)
 [Fix] alert template sourced without safety checks; send_alerts() now
       validates ownership/permissions before sourcing alert.bfd
 [Fix] state_bans_active_remove and state_events_prune ran awk+mv without
@@ -94,8 +128,8 @@
 [Fix] vsftpd2 rule TLOG_TF="vsftpd" collided with vsftpd rule cursor;
       changed to TLOG_TF="vsftpd2"
 [Fix] ignore.hosts missing IPv6 loopback; added ::1
-[Fix] eliminated command injection in BAN_COMMAND execution; template now
-      extracted raw from conf.bfd preventing premature variable expansion
+[Fix] BAN_COMMAND execution in check(): template extracted raw from conf.bfd
+      preventing premature variable expansion and command injection
 [Fix] temp files secured with mktemp replacing predictable PID-based names
 [Fix] atomic locking with flock replacing TOCTOU check-then-act race condition
 [Fix] state files created with 600 permissions before first use
@@ -116,7 +150,6 @@
 [New] fw_ban/fw_unban/fw_setup/fw_status dispatch layer routes to backends
 [New] validate_ip6() IPv6 validation (8-group, :: compression, zone ID
       stripping, injection rejection); validate_ip_any() dual-stack wrapper
-[New] extract_hosts() dual IPv4/IPv6 extraction with boundary-aware regex
 [New] BAN_COMMAND_V6 and UNBAN_COMMAND_V6 config variables for IPv6-specific
       custom commands; empty = use standard commands for both
 [Change] full pipeline (detection, banning, manual operations, local address
@@ -125,7 +158,8 @@
       prefix false positives; replaced with awk field-exact matching and
       grep -Fx for single-IP files
 [New] extract_hosts() declarative rule engine with fail2ban-compatible <HOST>
-      placeholder patterns and IGNOREREGEX per-rule exclusion
+      placeholder patterns, dual IPv4/IPv6 boundary-aware regex, and
+      IGNOREREGEX per-rule exclusion
 [Change] all rules converted from ad-hoc grep/sed/awk pipelines to
          extract_hosts() with FAILREGEX patterns
 [New] time-windowed failure counting via events.dat; count_failures() returns
@@ -204,7 +238,7 @@
 [New] validate_config() validates all config variables at startup with clear
       error messages; meaningful exit codes replace bare exit 1
 [New] detect_log_paths() auto-detects AUTH/KERNEL/MAIL log paths across distros
-[New] bfd.lib.sh function library (~78 functions) extracted for testability
+[New] bfd.lib.sh function library (106 functions) extracted for testability
 [Change] backtick substitution → $(), $[expr] → $(( )), egrep → grep -E,
          for-cat/for-ls → while-read, systematic variable quoting, hardcoded
          paths → command -v discovery across all files
@@ -217,7 +251,7 @@
          rule catalog, ban management lifecycle, IPv6, troubleshooting
 [New] .shellcheckrc and full shellcheck compliance across all scripts
 [New] .github/workflows/ci.yml with 8-OS Docker matrix, Buildx caching
-[New] BATS 1.11.0 test suite: 662 tests across 25 .bats files
+[New] BATS 1.11.0 test suite: 731 tests across 25 .bats files
 [New] 9 Dockerfiles (Debian 12, CentOS 6/7, Rocky 8/9/10, Ubuntu 12-24)
 [New] bfd.service, bfd.timer, bfd-watch.service systemd units
 [Fix] tlog log rotation: duplicate output and misplaced redirection
@@ -235,3 +269,43 @@
 [Change] show_config() includes OUTPUT_SYSLOG_FILE
 [Change] README/README.md CLI usage blocks updated with all 20 flags
 [Change] cron.daily removed dead track.attack/ban.list cleanup
+[New] tests/Makefile: add test-debian12 target for explicit Debian 12 runs
+[Fix] tests/21-rule-test.bats: IPv6 test_pattern used > instead of >> for
+      second echo, losing first log line; assertion now checks 2 matches
+[Fix] tests/21-rule-test.bats: test_rule match count assertion strengthened
+      to exact "5 matches, 2 unique IPs"
+[New] tests/04-config-validation.bats: BAN_RETRY_COUNT and EMAIL_LOGLINES
+      validation test coverage (9 tests: valid, invalid, empty defaults)
+[New] tests/20-cli.bats: list_bans() table format tests (empty, single,
+      multiple bans)
+[New] tests/20-cli.bats: _json_escape() tests (plain, backslash, quote,
+      empty, mixed)
+[New] tests/20-cli.bats: flush_bans non-standard mode test
+[Change] tests/20-cli.bats: list_bans_json tests strengthened from loose
+         --partial checks to structural JSON assertions
+[New] README: FIREWALL="auto" backend documentation with detection priority
+      and 8-backend table
+[New] README: distributed attack detection variables (SUBNET_TRIG/MASK)
+[New] README: BAN_RETRY_COUNT, BAN_ESCALATION/CAP config variables
+[New] README: section 3.7 Logging & Advanced (FIREWALL, LOG_SOURCE,
+      OUTPUT_SYSLOG, LOCK_FILE_TIMEOUT, WATCH_INTERVAL)
+[New] README: sections 5.5 Flush Bans and 5.6 Structured Output (JSON/CSV)
+[New] README: INSTALL_PATH/BIN_PATH custom install documentation
+[New] README: events.dat and attack.pool in state files table
+[New] README: IGNOREREGEX in rule customization table
+[Fix] README: ARG_VAL description corrected from "regex pattern" to
+      "extracted IP list — tlog + extract_hosts pipeline"
+[Fix] README: example IPs changed from 10.0.0.x to RFC 5737 192.0.2.x
+[Change] CLI help: -b clarified as "(permanent)"; -a describes dual behavior;
+         -T/--test-pattern document stdin via -
+[Fix] install.sh: remove no-op BINPATH sed target on $INSPATH/bfd (file contains
+      no /usr/local/sbin/bfd references)
+[Fix] uninstall.sh: backup directories ($INSPATH.bk.*) left behind after each
+      upgrade; added glob cleanup before main rm -rf
+[Fix] cron.daily: cursor/JTS file deletion caused journal re-read on next run;
+      preserved cursor files as event-tracking state
+[Change] show_rule(): replace inline REQ check with _rule_is_active() helper
+         for consistency with _hc_rules(), show_status(), list_rules()
+[Change] extract_hosts(): sed -r → sed -E for POSIX portability (GNU sed 4.2+
+         supports -E; aligns with BSD/macOS sed)
+[Fix] watch mode: quote $! → "$!" for variable quoting consistency

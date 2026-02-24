@@ -15,6 +15,6 @@ BFD Alert for $HOSTNAME ($(date +"%Y-%m-%d %H:%M:%S") GMT $TIME_ZONE)
 
 $ALERT_ENTRIES
 -----------------------------------------------
-BFD (Brute Force Detection) 2.0.1 < bfd@rfxn.com >
+BFD (Brute Force Detection) 2.0.1 <bfd@rfxn.com>
 
 EOF
