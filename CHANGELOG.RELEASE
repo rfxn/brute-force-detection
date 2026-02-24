@@ -250,3 +250,32 @@
 [Change] show_config() includes OUTPUT_SYSLOG_FILE
 [Change] README/README.md CLI usage blocks updated with all 20 flags
 [Change] cron.daily removed dead track.attack/ban.list cleanup
+[New] tests/Makefile: add test-debian12 target for explicit Debian 12 runs
+[Fix] tests/21-rule-test.bats: IPv6 test_pattern used > instead of >> for
+      second echo, losing first log line; assertion now checks 2 matches
+[Fix] tests/21-rule-test.bats: test_rule match count assertion strengthened
+      to exact "5 matches, 2 unique IPs"
+[New] tests/04-config-validation.bats: BAN_RETRY_COUNT and EMAIL_LOGLINES
+      validation test coverage (9 tests: valid, invalid, empty defaults)
+[New] tests/20-cli.bats: list_bans() table format tests (empty, single,
+      multiple bans)
+[New] tests/20-cli.bats: _json_escape() tests (plain, backslash, quote,
+      empty, mixed)
+[New] tests/20-cli.bats: flush_bans non-standard mode test
+[Change] tests/20-cli.bats: list_bans_json tests strengthened from loose
+         --partial checks to structural JSON assertions
+[New] README: FIREWALL="auto" backend documentation with detection priority
+      and 8-backend table
+[New] README: distributed attack detection variables (SUBNET_TRIG/MASK)
+[New] README: BAN_RETRY_COUNT, BAN_ESCALATION/CAP config variables
+[New] README: section 3.7 Logging & Advanced (FIREWALL, LOG_SOURCE,
+      OUTPUT_SYSLOG, LOCK_FILE_TIMEOUT, WATCH_INTERVAL)
+[New] README: sections 5.5 Flush Bans and 5.6 Structured Output (JSON/CSV)
+[New] README: INSTALL_PATH/BIN_PATH custom install documentation
+[New] README: events.dat and attack.pool in state files table
+[New] README: IGNOREREGEX in rule customization table
+[Fix] README: ARG_VAL description corrected from "regex pattern" to
+      "extracted IP list — tlog + extract_hosts pipeline"
+[Fix] README: example IPs changed from 10.0.0.x to RFC 5737 192.0.2.x
+[Change] CLI help: -b clarified as "(permanent)"; -a describes dual behavior;
+         -T/--test-pattern document stdin via -

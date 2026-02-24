@@ -337,16 +337,16 @@ usage: bfd [OPTION]
 -q|--quiet ................. run quiet with output hidden
 -d|--dryrun ................ run detection without banning
 -w|--watch ................. run in continuous watch mode (foreground)
--a|--attackpool [IP|STR] ... attack pool report or IP search
+-a|--attackpool [IP|STR] ... attack pool; valid IP shows full report
 -c|--check ................. health check and diagnostics
 -l|--list .................. list active bans
 -u|--unban IP .............. unban an IP address
--b|--ban IP [SERVICE] ...... manually ban an IP address
+-b|--ban IP [SERVICE] ...... manually ban an IP (permanent)
 -S|--status [SERVICE] ...... system or per-service status
 -C|--config [VAR] .......... show config values
 -R|--rules [RULE] .......... list rules or show rule details
--T|--test RULE [FILE] ...... test rule patterns against log file
-   --test-pattern PAT [FILE] . test a raw <HOST> pattern
+-T|--test RULE [FILE|-] .... test rule patterns against log or stdin
+   --test-pattern PAT [FILE|-] test a raw <HOST> pattern against log or stdin
    --flush-temp ............ unban all temporary bans
    --flush-all ............. unban all bans
    --json .................. output in JSON format (with -l)
