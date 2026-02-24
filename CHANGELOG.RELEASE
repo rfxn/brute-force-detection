@@ -45,7 +45,8 @@
       directive; preserves log file inode for tail -f consumers
 [Fix] cron.daily state rotation races: wrap state-file operations in flock -x
       using BFD's lock file; copy-and-truncate preserves inodes; INSTALL_PATH
-      variable replaces hardcoded paths; attack.pool rotation purge added
+      variable replaces hardcoded paths; bans.history and attack.pool rotation
+      with 30-day purge added
 [Fix] Dockerfiles missing COPY importconf; added to all 9 test Dockerfiles
 [Change] test IPs: replace private/example ranges (10.0.0.x, 172.16.x, 192.168.1.x,
          1.2.3.4, 5.6.7.8) with RFC 5737 documentation ranges (192.0.2.0/24,
@@ -72,8 +73,9 @@
          cross-OS execution via xargs
 [Fix] install.sh: support INSTALL_PATH/BIN_PATH env var override for custom
       install locations; sed replacement of hardcoded paths at install time
-[Fix] install.sh: chmod 640 for rules/* (was missed) and alert.bfd (was 750,
-      should be 640 — sourced template, not executable)
+[Fix] install.sh: chmod 640 for rules/ and alert.bfd (was 750, should be
+      640 — sourced template, not executable); glob replaced with
+      find -maxdepth 1 -type f to avoid stripping subdirectory execute bits
 [Fix] firewall backends: replace hardcoded /etc/apf/apf and /usr/sbin/csf
       with command -v discovery cached in _FW_APF_BIN/_FW_CSF_BIN
 [Fix] firewall backends: iptables/ip6tables resolved via command -v in setup
@@ -106,8 +108,8 @@
 [Fix] show_config() eval injection: unsanitized CLI input passed to eval
       allowed arbitrary command execution; now validates against config
       variable whitelist before eval
-[Fix] bfd.lib.sh sourced without ownership/permission checks; added stat
-      validation matching conf.bfd pattern (root-owned, non-world-writable)
+[Fix] files/bfd sources bfd.lib.sh without ownership/permission checks;
+      added stat validation matching conf.bfd pattern (root-owned, non-world-writable)
 [Fix] alert template sourced without safety checks; send_alerts() now
       validates ownership/permissions before sourcing alert.bfd
 [Fix] state_bans_active_remove and state_events_prune ran awk+mv without
@@ -119,8 +121,8 @@
 [Fix] vsftpd2 rule TLOG_TF="vsftpd" collided with vsftpd rule cursor;
       changed to TLOG_TF="vsftpd2"
 [Fix] ignore.hosts missing IPv6 loopback; added ::1
-[Fix] eliminated command injection in BAN_COMMAND execution; template now
-      extracted raw from conf.bfd preventing premature variable expansion
+[Fix] BAN_COMMAND execution in check(): template extracted raw from conf.bfd
+      preventing premature variable expansion and command injection
 [Fix] temp files secured with mktemp replacing predictable PID-based names
 [Fix] atomic locking with flock replacing TOCTOU check-then-act race condition
 [Fix] state files created with 600 permissions before first use
@@ -141,7 +143,6 @@
 [New] fw_ban/fw_unban/fw_setup/fw_status dispatch layer routes to backends
 [New] validate_ip6() IPv6 validation (8-group, :: compression, zone ID
       stripping, injection rejection); validate_ip_any() dual-stack wrapper
-[New] extract_hosts() dual IPv4/IPv6 extraction with boundary-aware regex
 [New] BAN_COMMAND_V6 and UNBAN_COMMAND_V6 config variables for IPv6-specific
       custom commands; empty = use standard commands for both
 [Change] full pipeline (detection, banning, manual operations, local address
@@ -150,7 +151,8 @@
       prefix false positives; replaced with awk field-exact matching and
       grep -Fx for single-IP files
 [New] extract_hosts() declarative rule engine with fail2ban-compatible <HOST>
-      placeholder patterns and IGNOREREGEX per-rule exclusion
+      placeholder patterns, dual IPv4/IPv6 boundary-aware regex, and
+      IGNOREREGEX per-rule exclusion
 [Change] all rules converted from ad-hoc grep/sed/awk pipelines to
          extract_hosts() with FAILREGEX patterns
 [New] time-windowed failure counting via events.dat; count_failures() returns
@@ -289,8 +291,6 @@
 [Fix] README: example IPs changed from 10.0.0.x to RFC 5737 192.0.2.x
 [Change] CLI help: -b clarified as "(permanent)"; -a describes dual behavior;
          -T/--test-pattern document stdin via -
-[Fix] install.sh: chmod 640 glob briefly removes execute bit from subdirectories;
-      replaced with find -maxdepth 1 -type f scoped to files only
 [Fix] install.sh: remove no-op BINPATH sed target on $INSPATH/bfd (file contains
       no /usr/local/sbin/bfd references)
 [Fix] uninstall.sh: backup directories ($INSPATH.bk.*) left behind after each
