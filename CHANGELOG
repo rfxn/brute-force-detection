@@ -1,4 +1,19 @@
 2.0.1:
+[Fix] global lock: replace FD-based flock with mkdir-based file lock;
+      eliminates eval "exec $LOCK_FD" and the fd-0-close risk on early exit
+[Fix] install.sh: create BINPATH parent directory before symlink
+[Fix] install.sh: cd to script directory for portability from any CWD
+[Fix] uninstall.sh: add root privilege check matching install.sh pattern
+[Fix] uninstall.sh: stop bfd.service before unit file removal
+[Fix] show_config() whitelist: add BAN_COMMAND, UNBAN_COMMAND, BAN_COMMAND_V6,
+      UNBAN_COMMAND_V6 mapped to _TEMPLATE variants for raw template display
+[Fix] validate_config(): add OUTPUT_SYSLOG 0/1 validation
+[Fix] validate_config(): require EMAIL_ADDRESS when EMAIL_ALERTS=1
+[Fix] validate_config(): require non-empty BFD_LOG_PATH
+[Fix] _save_rule_vars/_restore_rule_vars: add SKIP_ALERT and RULE_EMAIL
+      to match _clear_rule_vars (prevents variable leakage across rules)
+[Fix] WATCH_INTERVAL fallback: change ${WATCH_INTERVAL-10} to
+      ${WATCH_INTERVAL:-10} to catch empty string
 [Fix] alert eval echo injection: replace eval echo "$BAN_COMMAND_TEMPLATE"
       with safe expand_command_template() using ${var//pat/rep} substitution
       in format_alert_entry() and send_alerts()
