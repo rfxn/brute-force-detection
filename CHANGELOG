@@ -6,6 +6,13 @@
       cross-distro support (RHEL /etc/init.d/functions, Debian
       /lib/lsb/init-functions, bare fallback); start/stop/restart/reload/
       status/condrestart actions; SIGHUP reload, graceful SIGTERM shutdown
+[New] install.sh: SysVinit init script installation on non-systemd systems;
+      auto-detects /etc/rc.d/init.d (RHEL) or /etc/init.d (Debian)
+[New] install.sh: post-install watch mode recommendation with init-system-
+      appropriate command (systemctl or service)
+[Change] install.sh: BINPATH sed also updates init script when installed
+[New] uninstall.sh: SysVinit init script cleanup — stop service, remove
+      chkconfig/update-rc.d entries, clean pidfile and subsys lock
 [Fix] tlog: mixed tab/space indentation in getsize(); normalized to tabs
 [Fix] tlog: [ "$1" = "" ] idiom replaced with [ -z "$1" ] for project consistency
 [Change] conf.bfd: add validation constraint notes to 9 variable comments

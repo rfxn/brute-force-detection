@@ -84,7 +84,32 @@ install(){
 			echo "    batch mode:  systemctl enable --now bfd.timer"
 			echo "    watch mode:  systemctl enable --now bfd-watch.service"
 		fi
+	else
+		# SysVinit: install init script for watch mode
+		if [ -f "bfd-watch.init" ]; then
+			local _initdir=""
+			if [ -d "/etc/rc.d/init.d" ]; then
+				_initdir="/etc/rc.d/init.d"
+			elif [ -d "/etc/init.d" ]; then
+				_initdir="/etc/init.d"
+			fi
+			if [ -n "$_initdir" ]; then
+				cp bfd-watch.init "$_initdir/bfd-watch"
+				chmod 755 "$_initdir/bfd-watch"
+				echo "  init script installed: $_initdir/bfd-watch"
+				echo "    watch mode:  service bfd-watch start"
+			fi
+		fi
 	fi
+	# watch mode recommendation
+	echo ""
+	echo "  Recommended: enable watch mode for ~10s detection latency"
+	if command -v systemctl >/dev/null 2>&1; then
+		echo "    systemctl enable --now bfd-watch.service"
+	else
+		echo "    service bfd-watch start"
+	fi
+	echo "  Cron remains active as a fallback (silently skipped when watch runs)"
 	# replace default paths when installing to a custom location
 	if [ "$INSPATH" != "/usr/local/bfd" ]; then
 		sed -i "s|/usr/local/bfd|$INSPATH|g" \
@@ -100,6 +125,13 @@ install(){
 				/etc/systemd/system/bfd.timer \
 				/etc/systemd/system/bfd-watch.service 2>/dev/null || true
 		fi
+		# update init script if installed
+		local _idir
+		for _idir in /etc/rc.d/init.d /etc/init.d; do
+			if [ -f "$_idir/bfd-watch" ]; then
+				sed -i "s|/usr/local/sbin/bfd|$BINPATH|g" "$_idir/bfd-watch"
+			fi
+		done
 	fi
 	# daemon-reload after sed so systemd sees final paths
 	if command -v systemctl >/dev/null 2>&1; then
