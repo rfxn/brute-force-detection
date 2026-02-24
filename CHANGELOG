@@ -2,6 +2,10 @@
 [Fix] get_state(): PID liveness check — when lock is fresh but holder PID is
       dead (OOM, SIGKILL), clear and re-acquire instead of waiting for timeout;
       cron recovers from dead watch daemon within one cycle (~2 min)
+[New] bfd-watch.init: SysVinit init script for CentOS 6 / Ubuntu 14.04;
+      cross-distro support (RHEL /etc/init.d/functions, Debian
+      /lib/lsb/init-functions, bare fallback); start/stop/restart/reload/
+      status/condrestart actions; SIGHUP reload, graceful SIGTERM shutdown
 [Fix] tlog: mixed tab/space indentation in getsize(); normalized to tabs
 [Fix] tlog: [ "$1" = "" ] idiom replaced with [ -z "$1" ] for project consistency
 [Change] conf.bfd: add validation constraint notes to 9 variable comments
