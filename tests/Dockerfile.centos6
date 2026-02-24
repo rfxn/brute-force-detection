@@ -39,6 +39,11 @@ RUN mkdir -p /opt/bats && \
 COPY files/ /opt/bfd/files/
 COPY importconf /opt/bfd/importconf
 COPY bfd-watch.init /opt/bfd/bfd-watch.init
+COPY bfd-watch.service /opt/bfd/bfd-watch.service
+COPY bfd.service /opt/bfd/bfd.service
+COPY cron /opt/bfd/cron
+COPY cron.daily /opt/bfd/cron.daily
+COPY install.sh /opt/bfd/install.sh
 COPY tests/ /opt/bfd/tests/
 
 WORKDIR /opt/bfd/tests

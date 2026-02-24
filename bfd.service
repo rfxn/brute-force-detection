@@ -5,3 +5,4 @@ After=network.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/bfd -s
+SyslogIdentifier=bfd

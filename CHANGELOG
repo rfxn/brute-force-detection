@@ -1,4 +1,14 @@
 2.0.1:
+[Change] exclude.files: add header and inline comments grouping entries by source
+         (APF, TCP wrappers, BFD ignore lists, cPanel/WHM/Plesk)
+[Change] bfd-watch.service: add SyslogIdentifier=bfd-watch and TimeoutStopSec=15
+[Change] bfd.service: add SyslogIdentifier=bfd
+[New] tests/28-install-paths.bats: 16 tests for install.sh INSPATH/BINPATH sed
+      replacement logic (source file presence, replacement correctness, no stray
+      defaults, combined replacement, bash -n validity, exclude.files paths,
+      conditional guard)
+[Change] Dockerfiles: add COPY lines for bfd-watch.service, bfd.service, cron,
+         cron.daily, install.sh (all 9) for install-path tests
 [Fix] tlog getsize(): eliminate pre-create block and duplicate branches; single
       size read on first run prevents spurious delta output from double-read race;
       semantics now match tlog_read() in bfd.lib.sh

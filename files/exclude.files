@@ -1,9 +1,20 @@
+# Files containing IP addresses to exclude from BFD bans.
+# BFD reads each listed file and treats every IP found as immune to banning.
+# One file path per line; lines beginning with # are ignored.
+#
+# APF (Advanced Policy Firewall) allow/deny lists
 /etc/apf/allow_hosts.rules
-/etc/hosts.allow
 /etc/apf/deny_hosts.rules
 /etc/apf/ad/ad.rules
+#
+# TCP wrappers
+/etc/hosts.allow
 /etc/hosts.deny
+#
+# BFD local ignore lists (paths updated by install.sh)
 /usr/local/bfd/ignore.hosts
 /usr/local/bfd/ignore.hosts.local
+#
+# cPanel/WHM and Plesk server IP files
 /etc/ips
 /etc/ipaliases
