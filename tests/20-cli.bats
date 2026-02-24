@@ -284,13 +284,80 @@ teardown() {
 	assert_output --partial "not found"
 }
 
+# --- list_bans (table format) ---
+
+@test "list_bans: no active bans" {
+	run list_bans "$INSTALL_PATH"
+	assert_success
+	assert_output "No active bans."
+}
+
+@test "list_bans: single ban shows table" {
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	run list_bans "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "Active bans"
+	assert_output --partial "192.0.2.1"
+	assert_output --partial "sshd"
+}
+
+@test "list_bans: multiple bans all shown" {
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 1800000000 192.0.2.2 postfix 25" >> "$INSTALL_PATH/tmp/bans.active"
+	run list_bans "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "192.0.2.1"
+	assert_output --partial "192.0.2.2"
+}
+
+# --- _json_escape ---
+
+@test "_json_escape: no special chars unchanged" {
+	run _json_escape "hello"
+	assert_output "hello"
+}
+
+@test "_json_escape: backslash escaped" {
+	run _json_escape 'back\slash'
+	assert_output 'back\\slash'
+}
+
+@test "_json_escape: double-quote escaped" {
+	run _json_escape 'say "hi"'
+	assert_output 'say \"hi\"'
+}
+
+@test "_json_escape: empty string" {
+	run _json_escape ""
+	assert_output ""
+}
+
+@test "_json_escape: mixed escaping" {
+	run _json_escape 'a\b"c'
+	assert_output 'a\\b\"c'
+}
+
+# --- flush_bans: non-standard mode ---
+
+@test "flush_bans: non-standard mode acts as temp mode" {
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 1800000000 192.0.2.2 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	run flush_bans "$INSTALL_PATH" "perm" "1700000000"
+	assert_success
+	assert_output --partial "1 bans removed."
+	# permanent ban should remain
+	run cat "$INSTALL_PATH/tmp/bans.active"
+	assert_output --partial "192.0.2.1"
+}
+
 # --- list_bans_json ---
 
 @test "list_bans_json: empty array for no bans" {
 	run list_bans_json "$INSTALL_PATH"
 	assert_success
-	assert_output --partial "["
-	assert_output --partial "]"
+	local stripped
+	stripped=$(echo "$output" | tr -d '[:space:]')
+	[ "$stripped" = "[]" ]
 }
 
 @test "list_bans_json: formats ban as JSON object" {
@@ -299,7 +366,14 @@ teardown() {
 	assert_success
 	assert_output --partial '"ip": "192.0.2.1"'
 	assert_output --partial '"service": "sshd"'
+	assert_output --partial '"ports": "22"'
 	assert_output --partial '"expires": "permanent"'
+	# verify it starts with [ and ends with ]
+	local first_char last_char
+	first_char=$(echo "$output" | head -1 | tr -d '[:space:]')
+	last_char=$(echo "$output" | tail -1 | tr -d '[:space:]')
+	[ "$first_char" = "[" ]
+	[ "$last_char" = "]" ]
 }
 
 @test "list_bans_json: multiple bans separated by comma" {
@@ -309,7 +383,10 @@ teardown() {
 	assert_success
 	assert_output --partial '"ip": "192.0.2.1"'
 	assert_output --partial '"ip": "192.0.2.2"'
-	assert_output --partial ","
+	# count JSON objects — should have exactly 2
+	local obj_count
+	obj_count=$(echo "$output" | grep -c '"ip":')
+	[ "$obj_count" -eq 2 ]
 }
 
 # --- list_bans_csv ---

@@ -394,6 +394,55 @@ run_validate_output() {
 	assert_success
 }
 
+# --- BAN_RETRY_COUNT ---
+
+@test "validate_config: BAN_RETRY_COUNT=0 passes" {
+	run run_validate 'BAN_RETRY_COUNT="0"'
+	assert_success
+}
+
+@test "validate_config: BAN_RETRY_COUNT=2 passes" {
+	run run_validate 'BAN_RETRY_COUNT="2"'
+	assert_success
+}
+
+@test "validate_config: BAN_RETRY_COUNT=abc rejects" {
+	run run_validate 'BAN_RETRY_COUNT="abc"'
+	assert_failure
+}
+
+@test "validate_config: BAN_RETRY_COUNT= uses default (passes)" {
+	run run_validate 'BAN_RETRY_COUNT=""'
+	assert_success
+}
+
+# --- EMAIL_LOGLINES ---
+
+@test "validate_config: EMAIL_LOGLINES=50 passes" {
+	run run_validate 'EMAIL_LOGLINES="50"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_LOGLINES=1 passes" {
+	run run_validate 'EMAIL_LOGLINES="1"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_LOGLINES=0 rejects" {
+	run run_validate 'EMAIL_LOGLINES="0"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_LOGLINES=abc rejects" {
+	run run_validate 'EMAIL_LOGLINES="abc"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_LOGLINES= uses default (passes)" {
+	run run_validate 'EMAIL_LOGLINES=""'
+	assert_success
+}
+
 # --- show_config injection tests (Phase 26) ---
 
 @test "show_config: rejects \$(cmd) injection attempt" {
