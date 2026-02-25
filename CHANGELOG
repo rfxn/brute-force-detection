@@ -117,7 +117,7 @@
       SyslogIdentifier
 [New] .shellcheckrc and full shellcheck compliance across all scripts
 [New] .github/workflows/ci.yml with 8-OS Docker matrix and Buildx caching
-[New] BATS test suite: 907 tests across 31 .bats files; shared helpers
+[New] BATS test suite: 929 tests across 31 .bats files; shared helpers
       (assert-bfd.bash, bfd-mock.bash, bfd-common.bash); parallel runner;
       9 Dockerfiles; RFC 5737 test IPs throughout; dedicated pressure model
       and country multiplier test suites
@@ -177,6 +177,20 @@
       attack pool regex → grep -F; local address grep -Ew fix; WATCH_INTERVAL
       ${-} → ${:-}; sed -r → sed -E; $! quoting; UNBAN_COMMAND warning gated
       on FIREWALL="custom"; firewalld examples removed --permanent flag
+[Fix] pressure alerts: format_alert_body read 11 fields from 12-field alert
+      file; weight field absorbed into half-life, corrupting email display;
+      check_distributed normalized to 12-field format for consistency
+[Fix] tab completion: bfd.bash-completion config_vars used old variable names
+      (TRIG, BAN_DURATION, THRESHOLDS_CONF); updated to match show_config()
+      whitelist (PRESSURE_TRIP, BAN_TTL, PRESSURE_CONF)
+[Fix] display fallback: 5 display functions used hardcoded trip default of 15
+      instead of documented default 20 (unreachable in practice)
+[Fix] show_status rounding: awk int(p*1000+0.5) rounding inconsistent with
+      pressure_compute printf truncation; normalized to truncation
+[Fix] reload_watch: SIGHUP config reload did not clear derived pressure vars
+      before re-sourcing, causing stale values when users edit legacy names
+[Fix] ATTACK_COUNT backward compat: send_alerts set to raw pressure_scaled
+      (e.g., 18400); now uses pressure/1000 for sensible old-template display
 
 1.5-2:
 [Change] simplified dovecot rule regex matching

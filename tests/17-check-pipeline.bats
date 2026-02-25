@@ -1309,3 +1309,157 @@ EOF
 	# rule TRIG=999 overrides pressure.conf PRESSURE_TRIP=1, so 0 bans
 	assert_output --partial "0 bans executed"
 }
+
+# --- Pressure decay integration ---
+
+@test "check: decayed events prevent ban that raw count would trigger" {
+	# Scenario: 4 old events (2 half-lives ago) + 2 new events
+	# Without decay: 6 events * weight 1 = 6.0 >= trip 5 → BAN
+	# With decay: 4 * 0.25 + 2 * 1.0 = 3.0 < trip 5 → NO BAN
+	local rules_dir="$TEST_TMPDIR/rules_decay"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test_decay.log"
+	echo "test line" > "$logfile"
+	# UTIME=1000, half_life=300, so 2 half-lives ago = 1000 - 600 = 400
+	# seed 4 old events at t=400
+	local i
+	for i in 1 2 3 4; do
+		state_events_append "$INSTALL_PATH" "400" "192.0.2.1" "testrule_decay" "1"
+	done
+	cat > "$rules_dir/testrule_decay" <<EOF
+PRESSURE_TRIP="5"
+REQ="/bin/sh"
+LP="$logfile"
+TLOG_TF="testrule_decay"
+ARG_VAL="192.0.2.1 192.0.2.1"
+EOF
+	chmod 644 "$rules_dir/testrule_decay"
+	chown root "$rules_dir/testrule_decay"
+	RULES_PATH="$rules_dir"
+	GLOB_PRESSURE_TRIP="5"
+	GLOB_TRIG="5"
+	PRESSURE_HALF_LIFE="300"
+	TRIG_WINDOW="300"
+	PRESSURE_TRIP_GLOBAL="0"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="0"
+	BAN_TTL="0"
+	BAN_DURATION="0"
+	BAN_ESCALATE_AFTER="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_ESCALATE_WINDOW="86400"
+	BAN_PERMANENT_WINDOW="86400"
+	SKIP_ALERT=""
+	EMAIL_ALERTS="0"
+	SUBNET_TRIG="0"
+	run check
+	assert_success
+	# 4 old + 2 new = 6 events total, but decayed pressure ~3.0 < 5 → no ban
+	assert_output --partial "0 bans executed"
+}
+
+@test "check: fresh events exceed trip point and trigger ban" {
+	# Scenario: 6 fresh events (at t=now) with weight 1
+	# Pressure: 6 * 1.0 = 6.0 >= trip 5 → BAN
+	local rules_dir="$TEST_TMPDIR/rules_fresh"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test_fresh.log"
+	echo "test line" > "$logfile"
+	cat > "$rules_dir/testrule_fresh" <<EOF
+PRESSURE_TRIP="5"
+REQ="/bin/sh"
+LP="$logfile"
+TLOG_TF="testrule_fresh"
+ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1 192.0.2.1 192.0.2.1 192.0.2.1"
+EOF
+	chmod 644 "$rules_dir/testrule_fresh"
+	chown root "$rules_dir/testrule_fresh"
+	RULES_PATH="$rules_dir"
+	GLOB_PRESSURE_TRIP="5"
+	GLOB_TRIG="5"
+	PRESSURE_HALF_LIFE="300"
+	TRIG_WINDOW="300"
+	PRESSURE_TRIP_GLOBAL="0"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="0"
+	BAN_TTL="0"
+	BAN_DURATION="0"
+	BAN_ESCALATE_AFTER="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_ESCALATE_WINDOW="86400"
+	BAN_PERMANENT_WINDOW="86400"
+	SKIP_ALERT=""
+	EMAIL_ALERTS="0"
+	SUBNET_TRIG="0"
+	run check
+	assert_success
+	# 6 fresh events * weight 1 = 6.0 >= 5 → ban
+	assert_output --partial "1 bans executed"
+}
+
+@test "check: PRESSURE_WEIGHT from pressure.conf affects ban decision" {
+	# Scenario: 2 events with weight=5 (from pressure.conf)
+	# Pressure: 2 * 5.0 = 10.0 >= trip 8 → BAN
+	# Without weight override: 2 * 1.0 = 2.0 < 8 → NO BAN
+	local rules_dir="$TEST_TMPDIR/rules_weight"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test_weight.log"
+	echo "test line" > "$logfile"
+	cat > "$rules_dir/testrule_weight" <<EOF
+PRESSURE_TRIP="8"
+REQ="/bin/sh"
+LP="$logfile"
+TLOG_TF="testrule_weight"
+ARG_VAL="192.0.2.1 192.0.2.1"
+EOF
+	chmod 644 "$rules_dir/testrule_weight"
+	chown root "$rules_dir/testrule_weight"
+	# pressure.conf sets weight=5 for this rule
+	local press_conf="$TEST_TMPDIR/pressure.conf"
+	echo "testrule_weight:PRESSURE_WEIGHT=5" > "$press_conf"
+	chown root "$press_conf"
+	chmod 640 "$press_conf"
+	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
+	_load_pressure_conf "$press_conf"
+	declare -gA _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
+	_load_thresholds "$press_conf"
+	RULES_PATH="$rules_dir"
+	GLOB_PRESSURE_TRIP="999"
+	GLOB_TRIG="999"
+	PRESSURE_HALF_LIFE="300"
+	TRIG_WINDOW="300"
+	PRESSURE_TRIP_GLOBAL="0"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="0"
+	BAN_TTL="0"
+	BAN_DURATION="0"
+	BAN_ESCALATE_AFTER="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_ESCALATE_WINDOW="86400"
+	BAN_PERMANENT_WINDOW="86400"
+	SKIP_ALERT=""
+	EMAIL_ALERTS="0"
+	SUBNET_TRIG="0"
+	run check
+	assert_success
+	# 2 events * weight 5 = 10.0 >= trip 8 → ban
+	assert_output --partial "1 bans executed"
+}

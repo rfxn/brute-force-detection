@@ -1882,7 +1882,7 @@ check_distributed() {
 			IFS='|' read -r ban_expiry ban_action recent_bans <<< "$ban_result"
 			state_pool_append "$install_path" "$now" "$subnet" "$mod"
 			if [ "$EMAIL_ALERTS" = "1" ] && [ "$DRY_RUN" != "1" ]; then
-				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}||${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}" >> "$alerts_file"
+				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}||${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}|1" >> "$alerts_file"
 			fi
 		fi
 	done < <(count_subnet_attackers "$install_path" "$window" "$now" \
@@ -2015,7 +2015,7 @@ _hc_rules() {
 				_apply_thresholds "$rule_name"
 				if _rule_is_active; then
 					local rule_weight="${PRESSURE_WEIGHT:-1}"
-					local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-15}}}}"
+					local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
 					if [ -n "${LP:-}" ] && [ ! -f "$LP" ] && [ "$_hc_has_journalctl" -eq 1 ] && \
 					   [ "$log_source" != "file" ] && \
 					   tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
@@ -2253,18 +2253,18 @@ format_alert_body() {
 
 	# format each entry
 	local n=0
-	local host mod ports count expiry action recent lp recipient trig trig_window
-	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window; do
+	local host mod ports count expiry action recent lp recipient trig trig_window weight
+	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window weight; do
 		[ -z "$host" ] && continue
 		n=$((n + 1))
 		format_alert_entry "$n" "$entry_count" "$host" "$mod" "$ports" \
-			"$count" "$expiry" "$action" "$recent" "$trig" "$trig_window"
+			"$count" "$expiry" "$action" "$recent" "$trig" "$trig_window" "${weight:-1}"
 	done < "$alerts_file"
 
 	# log section
 	local has_logs=0
 	n=0
-	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window; do
+	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window weight; do
 		[ -z "$host" ] && continue
 		n=$((n + 1))
 		if [ -z "$lp" ] || [ ! -f "$lp" ]; then
@@ -2332,11 +2332,14 @@ send_alerts() {
 
 		# set backward-compat globals for single-ban case
 		if [ "$alert_count" -eq 1 ]; then
-			local _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw
-			IFS='|' read -r _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw < "$recip_file"
+			local _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt
+			IFS='|' read -r _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt < "$recip_file"
 			ATTACK_HOST="$_host"
 			MOD="$_mod"
-			ATTACK_COUNT="$_count"
+			# backward compat: _count is pressure_scaled (e.g., 18400);
+			# old templates expect a count, so use whole pressure units
+			ATTACK_COUNT="$(( _count / 1000 ))"
+			if [ "$ATTACK_COUNT" -lt 1 ]; then ATTACK_COUNT=1; fi
 			LP="$_lp"
 			PORTS="$_ports"
 			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
@@ -2545,7 +2548,7 @@ show_status() {
 			}
 			END {
 				for (ip in p) {
-					scaled = int(p[ip] * 1000 + 0.5)
+					scaled = int(p[ip] * 1000)
 					if (scaled > 0)
 						printf "%d %s\n", scaled, ip
 				}
@@ -2588,7 +2591,7 @@ show_service_status() {
 	_apply_thresholds "$service"
 
 	local rule_weight="${PRESSURE_WEIGHT:-1}"
-	local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-15}}}}"
+	local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
 	local half_life="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
 	local rule_ports="${PORTS:-all}"
 
@@ -2840,7 +2843,7 @@ list_rules() {
 			_apply_pressure "$rule_name"
 			_apply_thresholds "$rule_name"
 			local rule_weight="${PRESSURE_WEIGHT:-1}"
-			local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-15}}}}"
+			local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
 			local rule_ports="${PORTS:-all}"
 			if _rule_is_active; then
 				active=$((active + 1))
@@ -2904,7 +2907,7 @@ show_rule() {
 	fi
 
 	local rule_weight="${PRESSURE_WEIGHT:-1}"
-	local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-15}}}}"
+	local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
 	local half_life="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
 	echo "  Weight:     $rule_weight"
 	echo "  Trip:       $rule_trip (half-life ${half_life}s)"
@@ -2965,7 +2968,7 @@ test_rule() {
 	echo "Rule:         $rule_name"
 	echo "Log file:     ${log_file:-${LP:-n/a}}"
 	echo "Weight:       ${PRESSURE_WEIGHT:-1}"
-	echo "Trip:         ${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-15}}}}"
+	echo "Trip:         ${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
 	[ -n "${PORTS:-}" ] && echo "Ports:        $PORTS"
 	echo ""
 

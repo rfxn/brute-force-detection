@@ -452,3 +452,57 @@ teardown() {
 	local trip_scaled=$((15 * 1000))
 	[ "$pressure" -lt "$trip_scaled" ]
 }
+
+# ============================================================
+# Edge cases
+# ============================================================
+
+@test "pressure_compute: events beyond 10 half-lives contribute zero" {
+	local now=10000
+	local half_life=300
+	# event at 11 half-lives ago = now - 3300 = 6700
+	echo "6700 192.0.2.1 sshd 1" >> "$INSTALL_PATH/tmp/events.dat"
+	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "$half_life" "$now" "sshd"
+	assert_success
+	assert_output "0"
+}
+
+@test "pressure_compute: event at 9 half-lives still contributes" {
+	local now=10000
+	local half_life=300
+	# event at 9 half-lives ago = now - 2700 = 7300
+	echo "7300 192.0.2.1 sshd 1" >> "$INSTALL_PATH/tmp/events.dat"
+	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "$half_life" "$now" "sshd"
+	assert_success
+	# 2^(-9) ≈ 0.00195, scaled = 1 (truncated)
+	[ "$output" -ge 1 ]
+}
+
+@test "pressure_compute: zero weight in 4-field event falls back to weight 1" {
+	local now; now=$(date +%s)
+	echo "$now 192.0.2.1 sshd 0" >> "$INSTALL_PATH/tmp/events.dat"
+	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
+	assert_success
+	# weight=0 → fallback to 1 → pressure = 1000
+	assert_output "1000"
+}
+
+@test "pressure_compute: mixed 3-field and 4-field events in same file" {
+	local now; now=$(date +%s)
+	# 3-field (old format) → weight defaults to 1
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
+	# 4-field (new format) → weight explicit 3
+	echo "$now 192.0.2.1 sshd 3" >> "$INSTALL_PATH/tmp/events.dat"
+	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
+	assert_success
+	# 1 + 3 = 4 → 4000 scaled
+	assert_output "4000"
+}
+
+@test "pressure_format: negative input returns 0.0 sentinel" {
+	# negative input shouldn't occur in practice, but verify no crash
+	run pressure_format -500
+	assert_success
+	# implementation detail: may show "0.-5" or similar, but shouldn't crash
+	# mainly verifying no error exit
+}

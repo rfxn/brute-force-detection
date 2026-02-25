@@ -213,6 +213,55 @@ run_validate_output() {
 	assert_failure
 }
 
+@test "validate_config: PRESSURE_TRIP_GLOBAL=-1 rejects" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL="-1"'
+	assert_failure
+}
+
+# --- PRESSURE_COUNTRY ---
+
+@test "validate_config: PRESSURE_COUNTRY=0 passes (disabled)" {
+	run run_validate 'PRESSURE_COUNTRY="0"'
+	assert_success
+}
+
+@test "validate_config: PRESSURE_COUNTRY=1 passes (enabled)" {
+	run run_validate 'PRESSURE_COUNTRY="1"'
+	assert_success
+}
+
+@test "validate_config: PRESSURE_COUNTRY=2 rejects" {
+	run run_validate 'PRESSURE_COUNTRY="2"'
+	assert_failure
+}
+
+@test "validate_config: PRESSURE_COUNTRY=abc rejects" {
+	run run_validate 'PRESSURE_COUNTRY="abc"'
+	assert_failure
+}
+
+@test "validate_config: PRESSURE_COUNTRY= defaults to 0 (passes)" {
+	run run_validate 'PRESSURE_COUNTRY=""'
+	assert_success
+}
+
+# --- backward compat: old variable names still accepted ---
+
+@test "validate_config: old TRIG= accepted via fallback to PRESSURE_TRIP" {
+	run run_validate 'unset PRESSURE_TRIP; TRIG="10"'
+	assert_success
+}
+
+@test "validate_config: old TRIG_WINDOW= accepted via fallback to PRESSURE_HALF_LIFE" {
+	run run_validate 'unset PRESSURE_HALF_LIFE; TRIG_WINDOW="300"'
+	assert_success
+}
+
+@test "validate_config: old BAN_DURATION= accepted via fallback to BAN_TTL" {
+	run run_validate 'unset BAN_TTL; BAN_DURATION="300"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
 # --- BAN_TTL ---
 
 @test "validate_config: BAN_TTL=300 passes" {

@@ -183,28 +183,31 @@ teardown() {
 
 @test "format_alert_body: single entry produces output" {
 	local af="$TEST_TMPDIR/alerts_single"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
 	run format_alert_body "$af" "50"
 	assert_success
 	assert_output --partial "Host:       192.0.2.1"
 	assert_output --partial "Service:    sshd"
+	assert_output --partial "weight 3"
 	refute_output --partial "hosts banned"
 }
 
 @test "format_alert_body: multi entry shows count header" {
 	local af="$TEST_TMPDIR/alerts_multi"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300" >> "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2" >> "$af"
 	run format_alert_body "$af" "50"
 	assert_success
 	assert_output --partial "2 hosts banned in this check cycle."
 	assert_output --partial "--- Ban 1 of 2 ---"
 	assert_output --partial "--- Ban 2 of 2 ---"
+	assert_output --partial "weight 3"
+	assert_output --partial "weight 2"
 }
 
 @test "format_alert_body: missing log file shows journal message" {
 	local af="$TEST_TMPDIR/alerts_nolog"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0||root|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0||root|5|300|1" > "$af"
 	run format_alert_body "$af" "50"
 	assert_success
 	assert_output --partial "logs via systemd journal"
@@ -216,7 +219,7 @@ teardown() {
 	echo "Feb 22 14:29:59 host sshd[1235]: Failed password for admin from 192.0.2.1" >> "$logfile"
 	echo "Feb 22 14:30:00 host sshd[1236]: Failed password for test from 192.0.2.2" >> "$logfile"
 	local af="$TEST_TMPDIR/alerts_log"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|$logfile|root|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|$logfile|root|5|300|3" > "$af"
 	run format_alert_body "$af" "50"
 	assert_success
 	assert_output --partial "Source logs from 'sshd':"
@@ -229,12 +232,20 @@ teardown() {
 	echo "192.0.2.1 sshd line" > "$logfile"
 	echo "192.0.2.2 dovecot line" >> "$logfile"
 	local af="$TEST_TMPDIR/alerts_multi_log"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|$logfile|root|5|300" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|$logfile|root|10|300" >> "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|$logfile|root|5|300|3" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|$logfile|root|10|300|2" >> "$af"
 	run format_alert_body "$af" "50"
 	assert_success
 	assert_output --partial "Source logs from 'sshd' [192.0.2.1]:"
 	assert_output --partial "Source logs from 'dovecot' [192.0.2.2]:"
+}
+
+@test "format_alert_body: missing weight field defaults to 1" {
+	local af="$TEST_TMPDIR/alerts_no_weight"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300" > "$af"
+	run format_alert_body "$af" "50"
+	assert_success
+	assert_output --partial "weight 1"
 }
 
 # --- send_alerts ---
@@ -259,7 +270,7 @@ MOCK
 
 @test "send_alerts: single entry sends one mail with unchanged subject" {
 	local af="$TEST_TMPDIR/alerts_one"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
 	# mock mail
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	mkdir -p "$TEST_TMPDIR/bin"
@@ -281,8 +292,8 @@ MOCK
 
 @test "send_alerts: multiple entries same recipient sends one mail with ban count" {
 	local af="$TEST_TMPDIR/alerts_multi"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300" >> "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2" >> "$af"
 	# mock mail
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	mkdir -p "$TEST_TMPDIR/bin"
@@ -307,8 +318,8 @@ MOCK
 
 @test "send_alerts: different recipients get separate emails" {
 	local af="$TEST_TMPDIR/alerts_diff"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|admin@example.com|5|300" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|security@example.com|10|300" >> "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|admin@example.com|5|300|3" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|security@example.com|10|300|2" >> "$af"
 	# mock mail
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	mkdir -p "$TEST_TMPDIR/bin"
@@ -330,7 +341,7 @@ MOCK
 
 @test "send_alerts: RULE_EMAIL override routes to different recipient" {
 	local af="$TEST_TMPDIR/alerts_rule_email"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|special@example.com|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|special@example.com|5|300|3" > "$af"
 	# mock mail
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	mkdir -p "$TEST_TMPDIR/bin"
@@ -349,7 +360,7 @@ MOCK
 
 @test "send_alerts: single-ban backward compat sets ATTACK_HOST global" {
 	local af="$TEST_TMPDIR/alerts_compat"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
 	# mock mail (just succeed)
 	mkdir -p "$TEST_TMPDIR/bin"
 	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
@@ -359,7 +370,21 @@ MOCK
 	send_alerts "$af" "$EMAIL_SUBJECT" "$EMAIL_TEMPLATE" "50"
 	[ "$ATTACK_HOST" = "192.0.2.1" ]
 	[ "$MOD" = "sshd" ]
-	[ "$ATTACK_COUNT" = "5000" ]
+	# ATTACK_COUNT = pressure_scaled / 1000 (approximate event count)
+	[ "$ATTACK_COUNT" = "5" ]
+}
+
+@test "send_alerts: ATTACK_COUNT minimum is 1 even for low pressure" {
+	local af="$TEST_TMPDIR/alerts_lowpressure"
+	echo "192.0.2.1|sshd|22|500|0|ban|0|/dev/null|root|5|300|1" > "$af"
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
+	echo 'cat > /dev/null' >> "$TEST_TMPDIR/bin/mail"
+	chmod +x "$TEST_TMPDIR/bin/mail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	send_alerts "$af" "$EMAIL_SUBJECT" "$EMAIL_TEMPLATE" "50"
+	# 500/1000 = 0 → clamped to 1
+	[ "$ATTACK_COUNT" = "1" ]
 }
 
 # --- check() pipeline integration ---

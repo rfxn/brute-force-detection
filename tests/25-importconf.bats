@@ -527,3 +527,88 @@ NEWEOF
 	run grep '^PRESSURE_TRIP=' "$inst/conf.bfd"
 	assert_output 'PRESSURE_TRIP="10"'
 }
+
+@test "importconf: BAN_DURATION migrated to BAN_TTL in conf.bfd" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+BAN_DURATION="300"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+BAN_TTL="600"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Migrated legacy config"
+
+	# old BAN_DURATION=300 should replace new BAN_TTL=600
+	run grep '^BAN_TTL=' "$inst/conf.bfd"
+	assert_output 'BAN_TTL="300"'
+}
+
+@test "importconf: TRIG_WINDOW migrated to PRESSURE_HALF_LIFE in conf.bfd" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+TRIG_WINDOW="600"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+PRESSURE_HALF_LIFE="300"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Migrated legacy config"
+
+	run grep '^PRESSURE_HALF_LIFE=' "$inst/conf.bfd"
+	assert_output 'PRESSURE_HALF_LIFE="600"'
+}
+
+@test "importconf: BAN_PERMANENT_AFTER migrated to BAN_ESCALATE_AFTER" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+BAN_PERMANENT_AFTER="3"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+BAN_ESCALATE_AFTER="5"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Migrated legacy config"
+
+	run grep '^BAN_ESCALATE_AFTER=' "$inst/conf.bfd"
+	assert_output 'BAN_ESCALATE_AFTER="3"'
+}
