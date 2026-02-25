@@ -43,6 +43,8 @@ COPY bfd.service /opt/bfd/bfd.service
 COPY cron /opt/bfd/cron
 COPY cron.daily /opt/bfd/cron.daily
 COPY install.sh /opt/bfd/install.sh
+COPY uninstall.sh /opt/bfd/uninstall.sh
+COPY bfd.1 /opt/bfd/bfd.1
 COPY tests/ /opt/bfd/tests/
 
 WORKDIR /opt/bfd/tests

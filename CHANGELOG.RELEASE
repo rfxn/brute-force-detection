@@ -1,4 +1,13 @@
 2.0.1:
+[New] bfd.1 nroff man page with full OPTIONS, CONFIGURATION, THRESHOLD
+      MANAGEMENT, FIREWALL INTEGRATION, RULES, FILES, SIGNALS, and
+      EXIT CODES sections; installable via man(1)
+[New] install.sh: man page installation to /usr/share/man/man1/bfd.1 with
+      INSPATH sed replacement for custom install paths
+[New] uninstall.sh: man page removal
+[New] tests/28-install-paths.bats: 4 man page tests (source tree presence,
+      default paths, install.sh section, uninstall.sh removal)
+[Change] Dockerfiles: add COPY bfd.1 and uninstall.sh to all 9 test images
 [New] detect_run_mode() function for structured run-mode identification;
       returns watch/systemd, watch/init, watch/manual, timer/systemd,
       cron, or unknown

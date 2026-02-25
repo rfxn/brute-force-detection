@@ -1,0 +1,448 @@
+.\" Brute Force Detection 2.0.1 man page
+.\" Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
+.\" Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
+.\" Licensed under the GNU General Public License v2
+.\"
+.TH BFD 1 "2026-02-24" "BFD 2.0.1" "Brute Force Detection"
+.SH NAME
+bfd \- brute force detection and IP banning
+.SH SYNOPSIS
+.B bfd
+.RB [ \-s | \-q | \-d | \-w ]
+.br
+.B bfd
+.RB [ \-b
+.IR IP " [" SERVICE ]]
+.RB [ \-u
+.IR IP ]
+.RB [ \-\-flush\-temp ]
+.RB [ \-\-flush\-all ]
+.br
+.B bfd
+.RB [ \-l ]
+.RB [ \-a
+.RI [ IP | STRING ]]
+.RB [ \-S
+.RI [ SERVICE ]]
+.RB [ \-C
+.RI [ VAR ]]
+.RB [ \-R
+.RI [ RULE ]]
+.RB [ \-c ]
+.br
+.B bfd
+.RB [ \-T
+.IR RULE " [" FILE | \- ]]
+.RB [ \-\-test\-pattern
+.IR PATTERN " [" FILE | \- ]]
+.br
+.B bfd
+.RB [ \-\-json ]
+.RB [ \-\-csv ]
+.RB [ \-V | \-\-verbose ]
+.br
+.B bfd
+.RB [ \-v ]
+.RB [ \-h ]
+.SH DESCRIPTION
+.B bfd
+(Brute Force Detection) is a shell-based intrusion detection and
+response system that monitors authentication logs for repeated login
+failures and automatically bans offending IP addresses using the
+system firewall.
+.PP
+BFD supports two operating modes.
+In
+.B batch mode
+(the default), a cron job runs BFD every 2 minutes to scan logs and
+process bans.
+In
+.B watch mode
+.RB ( \-w ),
+BFD runs continuously in the foreground, polling at a configurable
+interval (default 10 seconds) for near-real-time detection.
+Watch mode is the recommended primary mode; cron remains active as
+a fallback and is silently skipped when watch mode holds the lock.
+.PP
+Each detection cycle reads new log lines (via the
+.B tlog
+byte-offset tracker), matches them against 34 service rule files
+using the
+.B extract_hosts()
+engine with fail2ban-compatible
+.I <HOST>
+patterns, counts failures within a sliding time window, and bans
+addresses that exceed the threshold.
+Bans are applied via one of 8 firewall backends (auto-detected or
+manually configured) and can be temporary with automatic expiry,
+recidivism escalation, and distributed subnet detection.
+.SH OPTIONS
+.SS Run Modes
+.TP
+.BR \-s ", " \-\-standard
+Run a detection cycle with output to stdout and log.
+.TP
+.BR \-q ", " \-\-quiet
+Run a detection cycle silently (output redirected to /dev/null).
+.TP
+.BR \-d ", " \-\-dryrun
+Run detection without actually executing ban commands.
+Log output shows what would be banned.
+.TP
+.BR \-w ", " \-\-watch
+Run in continuous watch mode (foreground).
+Polls every
+.B WATCH_INTERVAL
+seconds.
+Supports
+.B SIGHUP
+for configuration reload and
+.B SIGTERM/SIGINT
+for clean shutdown.
+.SS Ban Management
+.TP
+.BI \-b " IP" "\fR [" SERVICE \fR]
+Manually ban an IP address (permanent).
+If
+.I SERVICE
+is given, it is recorded as the triggering rule; otherwise
+.BR manual .
+.TP
+.BI \-u " IP"
+Unban an IP address (removes from firewall and active bans).
+.TP
+.B \-\-flush\-temp
+Remove all temporary (non-permanent) bans.
+.TP
+.B \-\-flush\-all
+Remove all bans (temporary and permanent).
+.SS Information
+.TP
+.B \-l ", " \-\-list
+List all active bans.
+Combine with
+.B \-\-json
+or
+.B \-\-csv
+for structured output.
+.TP
+.BI \-a " \fR[" IP | STRING \fR]
+Attack pool report.
+Without arguments, shows top 25 attackers for today and this week.
+With a valid IP, shows an enriched report with ban status, history,
+events, and attack pool triggers.
+With a string, searches attack pool entries.
+.TP
+.BI \-S " \fR[" SERVICE \fR]
+System status overview, or per-service status when
+.I SERVICE
+is given.
+Shows run mode, firewall backend, active bans, events, and active rules.
+.TP
+.BI \-C " \fR[" VAR \fR]
+Show all configuration variables, or a single variable value.
+.TP
+.BI \-R " \fR[" RULE \fR]
+List all rules with active/inactive status, or show details for a
+specific rule.
+.TP
+.BR \-c ", " \-\-check
+Run health check diagnostics.
+Validates configuration, binaries, rules, state files, and alert
+capability.
+.SS Rule Testing
+.TP
+.BI \-T " RULE" "\fR [" FILE | \- \fR]
+Test a rule's patterns against its configured log file, a specific
+.IR FILE ,
+or stdin
+.RB ( \- ).
+Shows match count and unique IPs.
+.TP
+.BI \-\-test\-pattern " PATTERN" "\fR [" FILE | \- \fR]
+Test a raw
+.I <HOST>
+pattern against a log file or stdin.
+.SS Output Modifiers
+.TP
+.B \-\-json
+Output in JSON format (with
+.BR \-l ).
+.TP
+.B \-\-csv
+Output in CSV format (with
+.BR \-l ).
+.TP
+.BR \-V ", " \-\-verbose
+Show detailed output.
+Adds per-rule event counts and thresholds, filtered host details,
+ban execution details, per-unban information, detection method in
+status, and binary paths in health check.
+Silenced by
+.BR \-q .
+.SS General
+.TP
+.BR \-v ", " \-\-version
+Display version information.
+.TP
+.BR \-h ", " \-\-help
+Display usage help.
+.SH CONFIGURATION
+Configuration is in
+.BR conf.bfd ,
+organized into six sections.
+The file is sourced as bash; all values are shell variables.
+.SS Detection Thresholds
+.TP
+.B TRIG
+Failure count before banning (default: 15).
+Per-rule overrides in rule files or
+.BR thresholds.conf .
+.TP
+.B TRIG_WINDOW
+Sliding window in seconds for counting failures (default: 300).
+.TP
+.B TRIG_GLOBAL
+Cross-service aggregate threshold (default: 0, disabled).
+.SS Distributed Attack Detection
+.TP
+.B SUBNET_TRIG
+Unique IPs from same subnet to trigger subnet ban (default: 0, disabled).
+.TP
+.B SUBNET_MASK
+IPv4 subnet mask for aggregation, 8\-32 (default: 24).
+.TP
+.B SUBNET_MASK_V6
+IPv6 subnet mask, multiple of 16 (default: 48).
+.SS Ban Actions
+.TP
+.B FIREWALL
+Firewall backend: auto, apf, csf, firewalld, ufw, nftables,
+iptables, route, or custom (default: auto).
+.TP
+.B BAN_COMMAND
+Custom ban command template (FIREWALL=custom only).
+Supports
+.BR $ATTACK_HOST ", " $MOD ", " $PORTS
+substitution.
+.TP
+.B UNBAN_COMMAND
+Custom unban command template.
+.TP
+.B BAN_COMMAND_V6 ", " UNBAN_COMMAND_V6
+IPv6-specific command templates (empty = use standard commands).
+.TP
+.B BAN_DURATION
+Ban duration in seconds; 0 = permanent (default: 300).
+.TP
+.B BAN_PERMANENT_AFTER
+Temporary bans before permanent escalation; 0 = disabled (default: 5).
+.TP
+.B BAN_PERMANENT_WINDOW
+Window for counting repeat offenses in seconds (default: 86400).
+.TP
+.B BAN_RETRY_COUNT
+Retry count on ban command failure (default: 2).
+.TP
+.B BAN_ESCALATION
+Duration escalation: none, linear, or exponential (default: none).
+.TP
+.B BAN_ESCALATION_CAP
+Maximum escalated duration in seconds; 0 = no cap (default: 86400).
+.SS Email Alerts
+.TP
+.B EMAIL_ALERTS
+Enable email alerts: 0 or 1 (default: 0).
+.TP
+.B EMAIL_ADDRESS
+Alert recipient address (default: root).
+.TP
+.B EMAIL_SUBJECT
+Alert email subject line.
+.TP
+.B EMAIL_LOGLINES
+Log lines included in alerts (default: 50).
+.SS Log Paths
+.TP
+.B LOG_SOURCE
+Log source mode: auto, file, or journal (default: auto).
+.TP
+.B AUTH_LOG_PATH
+Auth log path (default: /var/log/secure).
+.TP
+.B KERNEL_LOG_PATH
+Kernel/messages log path (default: /var/log/messages).
+.TP
+.B MAIL_LOG_PATH
+Mail log path (default: /var/log/maillog).
+.TP
+.B BFD_LOG_PATH
+BFD application log path (default: /var/log/bfd_log).
+.SS Logging & Advanced
+.TP
+.B OUTPUT_SYSLOG
+Log to syslog: 0 or 1 (default: 1).
+.TP
+.B LOCK_FILE_TIMEOUT
+Lock file staleness timeout in seconds (default: 300).
+.TP
+.B WATCH_INTERVAL
+Watch mode polling interval in seconds (default: 10).
+.SH THRESHOLD MANAGEMENT
+BFD uses a three-tier threshold precedence system:
+.IP 1. 3
+.B Rule file
+\(em uncomment
+.B TRIG=
+in the rule file for per-rule override.
+.IP 2.
+.B thresholds.conf
+\(em centralized per-rule overrides without editing rule files.
+Format:
+.IR rule_name ": TRIG=" N .
+Also supports
+.BR SKIP_ALERT " and " RULE_EMAIL .
+.IP 3.
+.B conf.bfd
+\(em global
+.B TRIG
+value used when neither rule file nor thresholds.conf sets a value.
+.SH FIREWALL INTEGRATION
+The
+.B FIREWALL
+variable in
+.B conf.bfd
+selects the ban/unban backend.
+When set to
+.B auto
+(default), BFD probes in priority order:
+APF > CSF > firewalld > UFW > nftables > iptables > route.
+.PP
+Named backends manage their own ban/unban commands.
+The
+.B custom
+backend uses the
+.B BAN_COMMAND
+and
+.B UNBAN_COMMAND
+templates with
+.BR $ATTACK_HOST ", " $MOD ", and " $PORTS
+variable substitution.
+.SH RULES
+Rule files in
+.I /usr/local/bfd/rules/
+define service-specific detection patterns.
+Each rule sets:
+.TP
+.B REQ
+Path to a binary that must exist for the rule to be active.
+.TP
+.B LP
+Log file path to scan.
+.TP
+.B TLOG_TF
+Tracking file identifier for tlog byte-offset state.
+.TP
+.B ARG_VAL
+Set by the detection engine; contains extracted IPs from log matching.
+.PP
+Optional per-rule variables:
+.BR TRIG ", " PORTS ", " SKIP_ALERT ", " RULE_EMAIL ", " IGNOREREGEX .
+.PP
+Rules use
+.I <HOST>
+placeholder patterns processed by
+.BR extract_hosts() ,
+which generates dual IPv4/IPv6 boundary-aware regular expressions.
+.SH FILES
+.TP
+.I /usr/local/bfd/bfd
+Main executable.
+.TP
+.I /usr/local/bfd/bfd.lib.sh
+Function library (sourced by bfd).
+.TP
+.I /usr/local/bfd/conf.bfd
+User configuration.
+.TP
+.I /usr/local/bfd/internals.conf
+Internal/derived variables.
+.TP
+.I /usr/local/bfd/thresholds.conf
+Per-rule threshold overrides.
+.TP
+.I /usr/local/bfd/tlog
+Track log \(em byte-offset log reader for rotation-safe incremental reads.
+.TP
+.I /usr/local/bfd/alert.bfd
+Email alert template.
+.TP
+.I /usr/local/bfd/rules/
+Service rule files (34 rules).
+.TP
+.I /usr/local/bfd/tmp/events.dat
+Time-windowed failure event state.
+.TP
+.I /usr/local/bfd/tmp/bans.active
+Currently active bans.
+.TP
+.I /usr/local/bfd/tmp/bans.history
+Historical ban/unban records.
+.TP
+.I /usr/local/bfd/stats/attack.pool
+Daily attack pool (IP trigger log).
+.TP
+.I /usr/local/bfd/ignore.hosts
+User-managed IP ignore list.
+.TP
+.I /usr/local/bfd/exclude.files
+List of files containing hosts to ignore.
+.TP
+.I /etc/cron.d/bfd
+Cron job (batch mode, every 2 minutes).
+.TP
+.I /etc/cron.daily/bfd
+Daily maintenance (state rotation, cleanup).
+.TP
+.I /var/log/bfd_log
+Application log.
+.SH SIGNALS
+In watch mode
+.RB ( "bfd \-w" ):
+.TP
+.B SIGHUP
+Reload configuration (conf.bfd, internals.conf, thresholds.conf)
+without restarting.
+.TP
+.B SIGTERM\fR, \fBSIGINT
+Clean shutdown: release lock, exit gracefully.
+.SH EXIT CODES
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Configuration error (invalid config, unknown option).
+.TP
+.B 2
+Lock error (another instance running).
+.TP
+.B 3
+Prerequisite error (missing tlog, rules directory, etc.).
+.SH SEE ALSO
+.BR fail2ban (1),
+.BR iptables (8),
+.BR nft (8),
+.BR firewall-cmd (1),
+.BR ufw (8),
+.BR apf (1),
+.BR csf (1)
+.SH AUTHORS
+R-fx Networks
+.RI < proj@rfxn.com >,
+Ryan MacDonald
+.RI < ryan@rfxn.com >
+.SH BUGS
+Report bugs at
+.UR https://github.com/rfxn/brute-force-detection/issues
+.UE .

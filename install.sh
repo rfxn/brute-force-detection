@@ -66,6 +66,11 @@ install(){
 		cp uninstall.sh "$INSPATH/"
 		chmod 750 "$INSPATH/uninstall.sh"
 	fi
+	# install man page
+	if [ -f "bfd.1" ] && [ -d /usr/share/man/man1 ]; then
+		cp bfd.1 /usr/share/man/man1/bfd.1
+		chmod 644 /usr/share/man/man1/bfd.1
+	fi
 	if [ -f "cron" ]; then
 		cp cron /etc/cron.d/bfd
 		chmod 644 /etc/cron.d/bfd
@@ -116,6 +121,9 @@ install(){
 			"$INSPATH/bfd" "$INSPATH/bfd.lib.sh" \
 			"$INSPATH/internals.conf" "$INSPATH/tlog" \
 			"$INSPATH/exclude.files" /etc/cron.daily/bfd
+		if [ -f /usr/share/man/man1/bfd.1 ]; then
+			sed -i "s|/usr/local/bfd|$INSPATH|g" /usr/share/man/man1/bfd.1
+		fi
 	fi
 	if [ "$BINPATH" != "/usr/local/sbin/bfd" ]; then
 		sed -i "s|/usr/local/sbin/bfd|$BINPATH|g" /etc/cron.d/bfd

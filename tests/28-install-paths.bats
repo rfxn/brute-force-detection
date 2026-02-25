@@ -192,3 +192,27 @@ teardown() {
 	assert_success
 	[ "$output" -ge 1 ]
 }
+
+# --- Man page ---
+
+@test "install-paths: bfd.1 man page exists in source tree" {
+	[ -f "$PROJECT_ROOT/bfd.1" ]
+}
+
+@test "install-paths: bfd.1 contains /usr/local/bfd default paths" {
+	run grep -c '/usr/local/bfd' "$PROJECT_ROOT/bfd.1"
+	assert_success
+	[ "$output" -ge 1 ]
+}
+
+@test "install-paths: install.sh has man page install section" {
+	run grep -c 'man1/bfd.1' "$PROJECT_ROOT/install.sh"
+	assert_success
+	[ "$output" -ge 1 ]
+}
+
+@test "install-paths: uninstall.sh removes man page" {
+	run grep -c 'man1/bfd.1' "$PROJECT_ROOT/uninstall.sh"
+	assert_success
+	[ "$output" -ge 1 ]
+}
