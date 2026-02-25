@@ -71,8 +71,8 @@ using the
 .B extract_hosts()
 engine with fail2ban-compatible
 .I <HOST>
-patterns, counts failures within a sliding time window, and bans
-addresses that exceed the threshold.
+patterns, computes exponential-decay pressure scores, and bans
+addresses whose accumulated pressure exceeds the trip point.
 Bans are applied via one of 8 firewall backends (auto-detected or
 manually configured) and can be temporary with automatic expiry,
 recidivism escalation, and distributed subnet detection.
@@ -175,7 +175,7 @@ Output in CSV format (with
 .TP
 .BR \-V ", " \-\-verbose
 Show detailed output.
-Adds per-rule event counts and thresholds, filtered host details,
+Adds per-rule event counts and pressure details, filtered host details,
 ban execution details, per-unban information, detection method in
 status, and binary paths in health check.
 Silenced by
@@ -199,15 +199,25 @@ are in
 add them to
 .B conf.bfd
 to override.
-.SS Detection Thresholds
+.SS Pressure Model (Detection)
+BFD uses exponential-decay pressure scoring.
+Each failure adds pressure weighted by service severity;
+pressure decays over time via a half-life.
+A ban fires when accumulated pressure exceeds the trip point.
 .TP
-.B TRIG
-Failed logins before banning; must be > 0 (default: 15).
+.B PRESSURE_TRIP
+Accumulated pressure to trigger a ban; must be > 0 (default: 20).
 Per-rule overrides in rule files or
-.BR thresholds.conf .
+.BR pressure.conf .
 .TP
-.B TRIG_WINDOW
-Sliding window in seconds for counting failures (default: 300).
+.B PRESSURE_HALF_LIFE
+Half-life in seconds for pressure decay (default: 300).
+Shorter = more forgiving.
+.TP
+.B PRESSURE_COUNTRY
+Enable country-based pressure multipliers: 0 or 1 (default: 0).
+When enabled, weight is multiplied by the country factor
+from weights.country.
 .SS Email Alerts
 .TP
 .B EMAIL_ALERTS
@@ -227,8 +237,8 @@ Log lines from the offending service included in each alert (default: 50).
 Firewall backend: auto, apf, csf, firewalld, ufw, nftables,
 iptables, route, or custom (default: auto).
 .TP
-.B BAN_DURATION
-Ban duration in seconds; 0 = permanent (default: 300).
+.B BAN_TTL
+Ban duration in seconds; 0 = permanent (default: 600).
 Temporary bans auto-expire and the firewall rule is removed.
 .PP
 The next four settings form a repeat-offender pipeline:
@@ -236,9 +246,9 @@ The next four settings form a repeat-offender pipeline:
 controls how ban duration grows,
 .BR BAN_ESCALATION_CAP
 limits that growth,
-.BR BAN_PERMANENT_AFTER
+.BR BAN_ESCALATE_AFTER
 flips to permanent once the count is reached, and
-.BR BAN_PERMANENT_WINDOW
+.BR BAN_ESCALATE_WINDOW
 is the lookback window for all of the above.
 .TP
 .B BAN_ESCALATION
@@ -248,10 +258,10 @@ How ban duration grows for repeat offenders: none, linear, or double
 .B BAN_ESCALATION_CAP
 Maximum escalated duration in seconds; 0 = no cap (default: 86400).
 .TP
-.B BAN_PERMANENT_AFTER
+.B BAN_ESCALATE_AFTER
 Temporary bans before flipping to permanent; 0 = never (default: 5).
 .TP
-.B BAN_PERMANENT_WINDOW
+.B BAN_ESCALATE_WINDOW
 Lookback window for counting repeat offenses in seconds (default: 86400).
 .SS Custom Firewall Commands
 Only used when
@@ -284,8 +294,8 @@ Mail log path (default: /var/log/maillog).
 BFD application log path (default: /var/log/bfd_log).
 .SS Advanced
 .TP
-.B TRIG_GLOBAL
-Cross-service aggregate trigger threshold (default: 0, disabled).
+.B PRESSURE_TRIP_GLOBAL
+Cross-service aggregate pressure trip point (default: 0, disabled).
 .TP
 .B SUBNET_TRIG
 Unique IPs from same subnet to trigger subnet ban (default: 0, disabled).
@@ -301,25 +311,31 @@ Watch mode polling interval in seconds (default: 10).
 .TP
 .B OUTPUT_SYSLOG
 Echo BFD log messages to syslog: 0 or 1 (default: 1).
-.SH THRESHOLD MANAGEMENT
-BFD uses a three-tier threshold precedence system:
+.SH PRESSURE MODEL
+BFD uses a three-tier pressure precedence system:
 .IP 1. 3
 .B Rule file
 \(em uncomment
-.B TRIG=
+.B PRESSURE_WEIGHT=
+and/or
+.B PRESSURE_TRIP=
 in the rule file for per-rule override.
 .IP 2.
-.B thresholds.conf
+.B pressure.conf
 \(em centralized per-rule overrides without editing rule files.
 Format:
-.IR rule_name ": TRIG=" N .
+.IR rule_name ": PRESSURE_WEIGHT=" N ": PRESSURE_TRIP=" N .
 Also supports
 .BR SKIP_ALERT " and " RULE_EMAIL .
 .IP 3.
 .B conf.bfd
 \(em global
-.B TRIG
-value used when neither rule file nor thresholds.conf sets a value.
+.B PRESSURE_TRIP
+value used when neither rule file nor pressure.conf sets a value.
+.PP
+Pressure formula:
+pressure = SUM { weight * 2^(\-(now \- event_time) / half_life) }.
+A ban fires when pressure >= PRESSURE_TRIP.
 .SH FIREWALL INTEGRATION
 The
 .B FIREWALL
@@ -360,7 +376,7 @@ Tracking file identifier for tlog byte-offset state.
 Set by the detection engine; contains extracted IPs from log matching.
 .PP
 Optional per-rule variables:
-.BR TRIG ", " PORTS ", " SKIP_ALERT ", " RULE_EMAIL ", " IGNOREREGEX .
+.BR PRESSURE_WEIGHT ", " PRESSURE_TRIP ", " PORTS ", " SKIP_ALERT ", " RULE_EMAIL ", " IGNOREREGEX .
 .PP
 Rules use
 .I <HOST>
@@ -381,8 +397,14 @@ User configuration.
 .I /usr/local/bfd/internals.conf
 Internal/derived variables.
 .TP
-.I /usr/local/bfd/thresholds.conf
-Per-rule threshold overrides.
+.I /usr/local/bfd/pressure.conf
+Per-rule pressure weight and trip overrides.
+.TP
+.I /usr/local/bfd/weights.country
+Country pressure multiplier table (used when PRESSURE_COUNTRY=1).
+.TP
+.I /usr/local/bfd/ipcountry.dat
+IP-to-country lookup database.
 .TP
 .I /usr/local/bfd/tlog
 Track log \(em byte-offset log reader for rotation-safe incremental reads.
@@ -394,7 +416,7 @@ Email alert template.
 Service rule files (42 rules).
 .TP
 .I /usr/local/bfd/tmp/events.dat
-Time-windowed failure event state.
+Pressure-scored failure event state (timestamp, IP, service, weight).
 .TP
 .I /usr/local/bfd/tmp/bans.active
 Currently active bans.
@@ -424,7 +446,7 @@ In watch mode
 .RB ( "bfd \-w" ):
 .TP
 .B SIGHUP
-Reload configuration (conf.bfd, internals.conf, thresholds.conf)
+Reload configuration (conf.bfd, internals.conf, pressure.conf)
 without restarting.
 .TP
 .B SIGTERM\fR, \fBSIGINT

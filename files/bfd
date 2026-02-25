@@ -573,7 +573,7 @@ usage() {
 	echo "-b|--ban IP [SERVICE] ...... manually ban an IP (permanent)"
 	echo "-S|--status [SERVICE] ...... system or per-service status"
 	echo "-C|--config [VAR] .......... show config values"
-	echo "-R|--rules [RULE] .......... list rules or show rule details"
+	echo "-R|--rules [RULE] .......... list rules (weight/trip) or show rule details"
 	echo "-T|--test RULE [FILE|-] .... test rule patterns against log or stdin"
 	echo "   --test-pattern PAT [FILE|-] test a raw <HOST> pattern against log or stdin"
 	echo "   --flush-temp ............ unban all temporary bans"
