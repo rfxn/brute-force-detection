@@ -1689,6 +1689,80 @@ record_and_score() {
 	pressure_compute "$install_path" "$host" "$half_life" "$now" "$mod"
 }
 
+# --- Country multiplier functions ---
+
+# ip_to_country ip db_file — look up 2-letter country code for an IPv4 address
+# Uses awk binary search on sorted integer ranges in ipcountry.dat.
+# Returns CC to stdout, or empty string if not found or IPv6.
+ip_to_country() {
+	local ip="$1" db_file="$2"
+	# IPv6 not supported in v1
+	if [[ "$ip" == *:* ]]; then
+		echo ""
+		return 0
+	fi
+	if [ ! -f "$db_file" ] || [ ! -s "$db_file" ]; then
+		echo ""
+		return 0
+	fi
+	awk -v ip="$ip" '
+	BEGIN {
+		n = split(ip, p, ".")
+		if (n != 4) { print ""; exit }
+		target = (p[1]+0) * 16777216 + (p[2]+0) * 65536 + (p[3]+0) * 256 + (p[4]+0)
+	}
+	/^#/ { next }
+	{
+		if ($1+0 <= target && target <= $2+0) {
+			print $3
+			exit
+		}
+	}
+	END {}' "$db_file"
+}
+
+# country_weight cc weights_file — look up pressure multiplier for a country code
+# Returns integer multiplier (10 = 1.0x, 20 = 2.0x). Defaults to 10 if unlisted.
+country_weight() {
+	local cc="$1" weights_file="$2"
+	if [ -z "$cc" ] || [ ! -f "$weights_file" ]; then
+		echo "10"
+		return 0
+	fi
+	awk -F= -v cc="$cc" '
+	/^#/ { next }
+	/^$/ { next }
+	$1 == cc { print $2; found=1; exit }
+	END { if (!found) print 10 }' "$weights_file"
+}
+
+# pressure_effective_weight rule_weight host install_path — apply country multiplier
+# When PRESSURE_COUNTRY=1: rule_weight * country_mult / 10 (integer math).
+# When off or no DB: returns rule_weight unchanged.
+pressure_effective_weight() {
+	local rule_weight="$1" host="$2" install_path="$3"
+	local db_file="$install_path/ipcountry.dat"
+	local weights_file="$install_path/weights.country"
+	if [ ! -f "$db_file" ] || [ ! -f "$weights_file" ]; then
+		echo "$rule_weight"
+		return 0
+	fi
+	local cc
+	cc=$(ip_to_country "$host" "$db_file")
+	if [ -z "$cc" ]; then
+		echo "$rule_weight"
+		return 0
+	fi
+	local mult
+	mult=$(country_weight "$cc" "$weights_file")
+	# integer math: weight * mult / 10, minimum 1
+	local eff=$(( (rule_weight * mult + 5) / 10 ))
+	if [ "$eff" -lt 1 ]; then
+		eff=1
+	fi
+	echo "$eff"
+}
+
 # count_subnet_attackers install_path window now mask mask_v6 min_unique
 # Single-pass awk over events.dat: groups events by subnet+service,
 # outputs "subnet_cidr mod unique_count" for subnets meeting threshold.

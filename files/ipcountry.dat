@@ -1,0 +1,15 @@
+# BFD IP-to-country database
+# Format: START_INT END_INT CC
+# IPv4 addresses converted to integers for binary search.
+# Rebuild with: update-ipcountry.sh
+#
+# This is a sample database for testing. For production use,
+# run update-ipcountry.sh to download the full DB-IP Lite dataset.
+#
+# RFC 5737 test ranges (used by BFD test suite):
+# 192.0.2.0/24   = 3221225984-3221226239  (TEST-NET-1)
+# 198.51.100.0/24 = 3325256704-3325256959 (TEST-NET-2)
+# 203.0.113.0/24  = 3405803776-3405804031 (TEST-NET-3)
+3221225984 3221226239 XX
+3325256704 3325256959 XX
+3405803776 3405804031 XX
