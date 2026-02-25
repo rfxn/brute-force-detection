@@ -243,6 +243,7 @@ check() {
 		# count events (raw IP occurrences including duplicates)
 		local host_lines
 		host_lines=$(echo "$HOSTS_PARSED" | grep -c . 2>/dev/null || echo 0)
+		vout "  $str: ${host_lines:-0} events, threshold ${TRIG:-$GLOB_TRIG}"
 		events_count=$((events_count + host_lines))
 		while IFS= read -r ahost; do
 			[ -z "$ahost" ] && continue
@@ -250,6 +251,7 @@ check() {
 			local filter_rc=0
 			filter_host "$ATTACK_HOST" "$IGNORE_HOST_FILES" "$LO_HOSTS" || filter_rc=$?
 			if [ "$filter_rc" -eq 1 ]; then
+				vout "  $ATTACK_HOST filtered (ignored)"
 				continue
 			fi
 			ATTACK_COUNT=$(count_failures "$ATTACK_HOST" "$HOSTS_PARSED" "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME" "$MOD")
@@ -278,6 +280,7 @@ check() {
 				else
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
 					if execute_ban "$ATTACK_HOST" "$MOD" "$DRY_RUN" "${PORTS:-all}"; then
+						vout "  ban: $ATTACK_HOST via ${_FW_BACKEND} ($MOD, port ${PORTS:-all})"
 						bans_count=$((bans_count + 1))
 						local ban_result
 						ban_result=$(record_ban "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD" "${PORTS:-all}" "ban")
@@ -517,17 +520,20 @@ usage() {
 	echo "   --flush-all ............. unban all bans"
 	echo "   --json .................. output in JSON format (with -l)"
 	echo "   --csv ................... output in CSV format (with -l)"
+	echo "-V|--verbose ............... show detailed output"
 	echo "-v|--version ............... display version"
 	echo "-h|--help .................. display this help"
 }
 
-# Pre-process global modifier flags (--json, --csv)
+# Pre-process global modifier flags (--json, --csv, --verbose)
+VERBOSE=0
 OUTPUT_FORMAT="table"
 declare -a _bfd_args=()
 for _arg in "$@"; do
 	case "$_arg" in
 		--json) OUTPUT_FORMAT="json" ;;
 		--csv)  OUTPUT_FORMAT="csv" ;;
+		--verbose|-V) VERBOSE=1 ;;
 		*)      _bfd_args+=("$_arg") ;;
 	esac
 done

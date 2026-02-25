@@ -1,4 +1,13 @@
 2.0.1:
+[New] --verbose/-V global modifier flag for detailed output; stripped by
+      pre-process loop alongside --json/--csv
+[New] vout() verbose-only output function in bfd.lib.sh; prints to stdout
+      when VERBOSE=1, returns 0 always; silenced by -q (exec redirect)
+[New] verbose instrumentation in check() (per-rule events/threshold, filtered
+      hosts, ban execution), process_unbans() (per-unban detail),
+      show_status() (detection method), _hc_binaries() (binary paths)
+[New] tests/29-verbose.bats: 13 tests for vout(), flag parsing, verbose
+      output in show_status/health_check/process_unbans
 [Change] rules/*: migrate all 34 rule files from $TLOG_PATH subprocess to
          in-process _rule_tlog() call; eliminates 34 fork+exec pairs per
          detection cycle

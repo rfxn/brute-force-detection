@@ -281,6 +281,12 @@ eout() {
 	fi
 }
 
+# vout — verbose-only output. Prints to stdout when VERBOSE=1.
+vout() {
+	[ "${VERBOSE:-0}" = "1" ] && echo "$@"
+	return 0
+}
+
 # safe_source requires: eout() to be functional
 safe_source() {
 	local file="$1"
@@ -1179,6 +1185,7 @@ process_unbans() {
 		else
 			execute_unban "$host" "$mod" "$ports"
 		fi
+		vout "  unban: $host expired ($mod)"
 		state_bans_active_remove "$install_path" "$host"
 		state_bans_history_append "$install_path" "$now" "$expiry" "$host" "$mod" "unban"
 	done < <(state_bans_active_expired "$install_path" "$now")
@@ -1722,6 +1729,10 @@ _hc_binaries() {
 		echo "[SKIP] journalctl: not available (file-only mode)"
 		_hc_pass=$((_hc_pass + 1))
 	fi
+	local _hc_bin
+	for _hc_bin in awk grep sed date hostname; do
+		vout "  command: $_hc_bin = $(command -v "$_hc_bin" 2>/dev/null || echo 'not found')"
+	done
 	_hc_has_journalctl="$has_journalctl"
 
 	local log_source="${LOG_SOURCE:-auto}"
@@ -2108,6 +2119,7 @@ show_status() {
 	if [ -z "$watch_pid" ]; then
 		watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true
 	fi
+	local detect_method="none"
 	if [ -n "$watch_pid" ] && [ "$watch_pid" != "$$" ]; then
 		local uptime_secs
 		uptime_secs=$(ps -o etimes= -p "$watch_pid" 2>/dev/null | tr -d ' ') || uptime_secs=""
@@ -2116,10 +2128,13 @@ show_status() {
 		else
 			mode="watch (pid $watch_pid)"
 		fi
+		detect_method="pgrep"
 	elif crontab -l 2>/dev/null | grep -q 'bfd' || [ -f /etc/cron.d/bfd ]; then
 		mode="cron"
+		detect_method="cron.d/crontab"
 	fi
 	echo "  Mode:           $mode"
+	vout "  (detected via: $detect_method)"
 
 	# Firewall backend
 	if [ -n "${_FW_BACKEND:-}" ]; then
