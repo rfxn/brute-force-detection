@@ -1,4 +1,8 @@
 2.0.1:
+[New] tests/regex_samples.txt: 72-sample data-driven test corpus covering all
+      34 rules with positive and negative test cases; RFC 5737 IP compliant;
+      data-driven BATS tests in 13-regex-samples.bats validate all samples
+      automatically (824 tests total)
 [Change] conf.bfd restructured into workflow-oriented sections (Detection
       Thresholds, Email Alerts, Banning, Custom Firewall Commands, Log Paths,
       Advanced); comments rewritten to explain behavior; repeat-offender
