@@ -1999,17 +1999,19 @@ _hc_rules() {
 			_save_rule_vars
 			_clear_rule_vars
 			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+				_apply_pressure "$rule_name"
 				_apply_thresholds "$rule_name"
 				if _rule_is_active; then
-					local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
+					local rule_weight="${PRESSURE_WEIGHT:-1}"
+					local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-15}}}}"
 					if [ -n "${LP:-}" ] && [ ! -f "$LP" ] && [ "$_hc_has_journalctl" -eq 1 ] && \
 					   [ "$log_source" != "file" ] && \
 					   tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
 						rules_active=$((rules_active + 1))
-						echo "  [PASS] $rule_name: active via journal (TRIG=$rule_trig, PORTS=${PORTS:-all})"
+						echo "  [PASS] $rule_name: active via journal (weight=$rule_weight, trip=$rule_trip, PORTS=${PORTS:-all})"
 					else
 						rules_active=$((rules_active + 1))
-						echo "  [PASS] $rule_name: active (TRIG=$rule_trig, PORTS=${PORTS:-all}, LOG=${LP:-n/a})"
+						echo "  [PASS] $rule_name: active (weight=$rule_weight, trip=$rule_trip, PORTS=${PORTS:-all}, LOG=${LP:-n/a})"
 					fi
 				else
 					rules_inactive=$((rules_inactive + 1))
@@ -2023,6 +2025,7 @@ _hc_rules() {
 		done
 		echo "[PASS] Rules: $rules_active active, $rules_inactive inactive ($rules_total total)"
 		_hc_pass=$((_hc_pass + 1))
+		echo "  Pressure model: half-life ${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}s, trip ${PRESSURE_TRIP:-${TRIG:-20}}, global trip ${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
 	else
 		echo "[FAIL] Rules directory not found: ${RULES_PATH:-$install_path/rules}"
 		_hc_fail=$((_hc_fail + 1))
@@ -2514,6 +2517,39 @@ show_status() {
 			echo "  Top services:   $top_svcs"
 		fi
 	fi
+
+	# Top-5 IPs by current pressure
+	local half_life="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
+	local prune_cutoff=$((now - half_life * 10))
+	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+		local top_pressure
+		top_pressure=$(awk -v now="$now" -v hl="$half_life" -v cutoff="$prune_cutoff" \
+			'BEGIN { ln2 = 0.693147180559945 }
+			$1+0 >= cutoff {
+				w = ($4+0 > 0) ? $4+0 : 1
+				age = now - ($1+0)
+				ip = $2
+				p[ip] += w * exp(-ln2 * age / hl)
+			}
+			END {
+				for (ip in p) {
+					scaled = int(p[ip] * 1000 + 0.5)
+					if (scaled > 0)
+						printf "%d %s\n", scaled, ip
+				}
+			}' "$events_file" | sort -rn | head -5)
+		if [ -n "$top_pressure" ]; then
+			echo ""
+			echo "  Top pressure:"
+			local p_scaled p_ip
+			while read -r p_scaled p_ip; do
+				[ -z "$p_scaled" ] && continue
+				local p_disp
+				p_disp=$(pressure_format "$p_scaled")
+				echo "    $p_ip: $p_disp"
+			done <<< "$top_pressure"
+		fi
+	fi
 }
 
 # show_service_status install_path service — per-service status display
@@ -2536,9 +2572,12 @@ show_service_status() {
 	_save_rule_vars
 	_clear_rule_vars
 	safe_source "$rule_file" "rule:$service" 2>/dev/null
+	_apply_pressure "$service"
 	_apply_thresholds "$service"
 
-	local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
+	local rule_weight="${PRESSURE_WEIGHT:-1}"
+	local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-15}}}}"
+	local half_life="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
 	local rule_ports="${PORTS:-all}"
 
 	# Log source
@@ -2551,7 +2590,8 @@ show_service_status() {
 		echo "  Log:            not available"
 	fi
 
-	echo "  Threshold:      $rule_trig failures in ${TRIG_WINDOW:-300}s"
+	echo "  Weight:         $rule_weight"
+	echo "  Trip:           $rule_trip (half-life ${half_life}s)"
 	echo "  Ports:          $rule_ports"
 
 	# Events (24h) for this service
@@ -2772,7 +2812,7 @@ list_rules() {
 
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.rules.XXXXXX")
-	echo "RULE|STATUS|TRIG|PORTS|LOG SOURCE" > "$atmp"
+	echo "RULE|STATUS|WEIGHT|TRIP|PORTS|LOG SOURCE" > "$atmp"
 
 	local active=0 inactive=0 total=0
 	local rule_file rule_name
@@ -2785,8 +2825,10 @@ list_rules() {
 		_clear_rule_vars
 
 		if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+			_apply_pressure "$rule_name"
 			_apply_thresholds "$rule_name"
-			local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
+			local rule_weight="${PRESSURE_WEIGHT:-1}"
+			local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-15}}}}"
 			local rule_ports="${PORTS:-all}"
 			if _rule_is_active; then
 				active=$((active + 1))
@@ -2800,14 +2842,14 @@ list_rules() {
 				else
 					log_info="${LP:-n/a}"
 				fi
-				echo "$rule_name|active|$rule_trig|$rule_ports|$log_info" >> "$atmp"
+				echo "$rule_name|active|$rule_weight|$rule_trip|$rule_ports|$log_info" >> "$atmp"
 			else
 				inactive=$((inactive + 1))
-				echo "$rule_name|inactive|-|-|(no prereq)" >> "$atmp"
+				echo "$rule_name|inactive|-|-|-|(no prereq)" >> "$atmp"
 			fi
 		else
 			inactive=$((inactive + 1))
-			echo "$rule_name|error|-|-|(source failed)" >> "$atmp"
+			echo "$rule_name|error|-|-|-|(source failed)" >> "$atmp"
 		fi
 
 		_restore_rule_vars
@@ -2840,6 +2882,7 @@ show_rule() {
 		_restore_rule_vars
 		return 1
 	fi
+	_apply_pressure "$rule_name"
 	_apply_thresholds "$rule_name"
 
 	if _rule_is_active; then
@@ -2848,7 +2891,11 @@ show_rule() {
 		echo "  Status:     inactive (${REQ:-unset} not found)"
 	fi
 
-	echo "  Threshold:  ${TRIG:-${GLOB_TRIG:-15}} failures in ${TRIG_WINDOW:-300}s"
+	local rule_weight="${PRESSURE_WEIGHT:-1}"
+	local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-15}}}}"
+	local half_life="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
+	echo "  Weight:     $rule_weight"
+	echo "  Trip:       $rule_trip (half-life ${half_life}s)"
 	echo "  Ports:      ${PORTS:-all}"
 
 	if [ -n "${LP:-}" ] && [ -f "$LP" ]; then
@@ -2899,12 +2946,14 @@ test_rule() {
 		_restore_rule_vars
 		return 1
 	fi
+	_apply_pressure "$rule_name"
 	_apply_thresholds "$rule_name"
 
 	# report
 	echo "Rule:         $rule_name"
 	echo "Log file:     ${log_file:-${LP:-n/a}}"
-	echo "Threshold:    ${TRIG:-${GLOB_TRIG:-15}}"
+	echo "Weight:       ${PRESSURE_WEIGHT:-1}"
+	echo "Trip:         ${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-15}}}}"
 	[ -n "${PORTS:-}" ] && echo "Ports:        $PORTS"
 	echo ""
 

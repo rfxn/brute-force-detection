@@ -363,7 +363,7 @@ _apool_report() {
 	local atmp
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.alist.XXXXXX")
 	echo "[+] $title" && echo
-	echo "#TRIGS|IP|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
+	echo "#EVENTS|IP|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
 	local cnt aip first_ts last_ts mods first_fmt last_fmt ban_status
 	while IFS='|' read -r cnt aip first_ts last_ts mods; do
 		[ -z "$cnt" ] && continue
