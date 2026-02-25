@@ -246,15 +246,15 @@ OLDEOF
 	cat > "$inst/conf.bfd" <<'NEWEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
 TRIG="15"
-LOCK_FILE_TIMEOUT="300"
 NEWEOF
 
-	# new internals.conf
+	# new internals.conf (LOCK_FILE_TIMEOUT moved here in 2.0.1)
 	cat > "$inst/internals.conf" <<'INTEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
 RULES_PATH="$INSTALL_PATH/rules"
 TLOG_PATH="$INSTALL_PATH/tlog"
 LOCK_FILE="$INSTALL_PATH/lock.utime"
+LOCK_FILE_TIMEOUT="${LOCK_FILE_TIMEOUT:-300}"
 INTEOF
 
 	local script
@@ -267,8 +267,8 @@ INTEOF
 	# TRIG should migrate to conf.bfd
 	run grep '^TRIG=' "$inst/conf.bfd"
 	assert_output 'TRIG="10"'
-	# LOCK_FILE_TIMEOUT should migrate to conf.bfd
-	run grep '^LOCK_FILE_TIMEOUT=' "$inst/conf.bfd"
+	# LOCK_FILE_TIMEOUT should migrate to internals.conf
+	run grep '^LOCK_FILE_TIMEOUT=' "$inst/internals.conf"
 	assert_output 'LOCK_FILE_TIMEOUT="600"'
 	# RULES_PATH should migrate to internals.conf
 	run grep '^RULES_PATH=' "$inst/internals.conf"

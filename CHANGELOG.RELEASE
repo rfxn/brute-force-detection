@@ -1,4 +1,12 @@
 2.0.1:
+[Change] conf.bfd restructured into workflow-oriented sections (Detection
+      Thresholds, Email Alerts, Banning, Custom Firewall Commands, Log Paths,
+      Advanced); comments rewritten to explain behavior; repeat-offender
+      pipeline (BAN_ESCALATION/CAP + BAN_PERMANENT_AFTER/WINDOW) grouped with
+      scenario examples; BAN_ESCALATION value "exponential" renamed to "double"
+      (old value still accepted); 4 internal-only variables (LOCK_FILE_TIMEOUT,
+      OUTPUT_SYSLOG_FILE, BAN_RETRY_COUNT, LOG_SOURCE) moved to internals.conf
+      with backward-compatible defaults
 [New] bfd.lib.sh: 112-function library extracted from bfd for testability
 [New] extract_hosts() declarative rule engine with fail2ban-compatible <HOST>
       patterns, dual IPv4/IPv6 boundary-aware regex, and IGNOREREGEX per-rule
@@ -24,7 +32,7 @@
       separate commands; validate_ip6() with zone ID stripping
 [New] temporary bans with auto-expiry (BAN_DURATION, default 300s); recidivism
       escalation (BAN_PERMANENT_AFTER/WINDOW); ban escalation modes
-      (BAN_ESCALATION: none/linear/exponential, BAN_ESCALATION_CAP);
+      (BAN_ESCALATION: none/linear/double, BAN_ESCALATION_CAP);
       execute_ban/execute_unban with retry and exponential backoff
 [New] bans.active and bans.history state files with atomic flock -x appends;
       $PORTS substitution for port-specific blocking

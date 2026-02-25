@@ -192,83 +192,87 @@ Configuration is in
 .BR conf.bfd ,
 organized into six sections.
 The file is sourced as bash; all values are shell variables.
+Additional tuning variables with sensible defaults
+.RB ( LOG_SOURCE ", " LOCK_FILE_TIMEOUT ", " BAN_RETRY_COUNT ", " OUTPUT_SYSLOG_FILE )
+are in
+.BR internals.conf ;
+add them to
+.B conf.bfd
+to override.
 .SS Detection Thresholds
 .TP
 .B TRIG
-Failure count before banning (default: 15).
+Failed logins before banning; must be > 0 (default: 15).
 Per-rule overrides in rule files or
 .BR thresholds.conf .
 .TP
 .B TRIG_WINDOW
 Sliding window in seconds for counting failures (default: 300).
-.TP
-.B TRIG_GLOBAL
-Cross-service aggregate threshold (default: 0, disabled).
-.SS Distributed Attack Detection
-.TP
-.B SUBNET_TRIG
-Unique IPs from same subnet to trigger subnet ban (default: 0, disabled).
-.TP
-.B SUBNET_MASK
-IPv4 subnet mask for aggregation, 8\-32 (default: 24).
-.TP
-.B SUBNET_MASK_V6
-IPv6 subnet mask, multiple of 16 (default: 48).
-.SS Ban Actions
-.TP
-.B FIREWALL
-Firewall backend: auto, apf, csf, firewalld, ufw, nftables,
-iptables, route, or custom (default: auto).
-.TP
-.B BAN_COMMAND
-Custom ban command template (FIREWALL=custom only).
-Supports
-.BR $ATTACK_HOST ", " $MOD ", " $PORTS
-substitution.
-.TP
-.B UNBAN_COMMAND
-Custom unban command template.
-.TP
-.B BAN_COMMAND_V6 ", " UNBAN_COMMAND_V6
-IPv6-specific command templates (empty = use standard commands).
-.TP
-.B BAN_DURATION
-Ban duration in seconds; 0 = permanent (default: 300).
-.TP
-.B BAN_PERMANENT_AFTER
-Temporary bans before permanent escalation; 0 = disabled (default: 5).
-.TP
-.B BAN_PERMANENT_WINDOW
-Window for counting repeat offenses in seconds (default: 86400).
-.TP
-.B BAN_RETRY_COUNT
-Retry count on ban command failure (default: 2).
-.TP
-.B BAN_ESCALATION
-Duration escalation: none, linear, or exponential (default: none).
-.TP
-.B BAN_ESCALATION_CAP
-Maximum escalated duration in seconds; 0 = no cap (default: 86400).
 .SS Email Alerts
 .TP
 .B EMAIL_ALERTS
 Enable email alerts: 0 or 1 (default: 0).
 .TP
 .B EMAIL_ADDRESS
-Alert recipient address (default: root).
+Alert recipient; comma-separated for multiple (default: root).
 .TP
 .B EMAIL_SUBJECT
-Alert email subject line.
+Alert subject line; $HOSTNAME expands at runtime.
 .TP
 .B EMAIL_LOGLINES
-Log lines included in alerts (default: 50).
+Log lines from the offending service included in each alert (default: 50).
+.SS Banning
+.TP
+.B FIREWALL
+Firewall backend: auto, apf, csf, firewalld, ufw, nftables,
+iptables, route, or custom (default: auto).
+.TP
+.B BAN_DURATION
+Ban duration in seconds; 0 = permanent (default: 300).
+Temporary bans auto-expire and the firewall rule is removed.
+.PP
+The next four settings form a repeat-offender pipeline:
+.BR BAN_ESCALATION
+controls how ban duration grows,
+.BR BAN_ESCALATION_CAP
+limits that growth,
+.BR BAN_PERMANENT_AFTER
+flips to permanent once the count is reached, and
+.BR BAN_PERMANENT_WINDOW
+is the lookback window for all of the above.
+.TP
+.B BAN_ESCALATION
+How ban duration grows for repeat offenders: none, linear, or double
+(default: none).
+.TP
+.B BAN_ESCALATION_CAP
+Maximum escalated duration in seconds; 0 = no cap (default: 86400).
+.TP
+.B BAN_PERMANENT_AFTER
+Temporary bans before flipping to permanent; 0 = never (default: 5).
+.TP
+.B BAN_PERMANENT_WINDOW
+Lookback window for counting repeat offenses in seconds (default: 86400).
+.SS Custom Firewall Commands
+Only used when
+.BR FIREWALL = custom ;
+skip if using auto or a named backend.
+Supports
+.BR $ATTACK_HOST ", " $MOD ", " $PORTS
+variable substitution.
+.TP
+.B BAN_COMMAND
+Command to deny an attacking host.
+.TP
+.B UNBAN_COMMAND
+Command to remove a ban; required for temporary ban auto-expiry.
+.TP
+.B BAN_COMMAND_V6 ", " UNBAN_COMMAND_V6
+IPv6-specific command templates (empty = use standard commands).
 .SS Log Paths
 .TP
-.B LOG_SOURCE
-Log source mode: auto, file, or journal (default: auto).
-.TP
 .B AUTH_LOG_PATH
-Auth log path (default: /var/log/secure).
+Auth log path (default: /var/log/secure; auto-detected on Debian/Ubuntu).
 .TP
 .B KERNEL_LOG_PATH
 Kernel/messages log path (default: /var/log/messages).
@@ -278,16 +282,25 @@ Mail log path (default: /var/log/maillog).
 .TP
 .B BFD_LOG_PATH
 BFD application log path (default: /var/log/bfd_log).
-.SS Logging & Advanced
+.SS Advanced
 .TP
-.B OUTPUT_SYSLOG
-Log to syslog: 0 or 1 (default: 1).
+.B TRIG_GLOBAL
+Cross-service aggregate trigger threshold (default: 0, disabled).
 .TP
-.B LOCK_FILE_TIMEOUT
-Lock file staleness timeout in seconds (default: 300).
+.B SUBNET_TRIG
+Unique IPs from same subnet to trigger subnet ban (default: 0, disabled).
+.TP
+.B SUBNET_MASK
+IPv4 subnet mask for distributed detection, 8\-32 (default: 24).
+.TP
+.B SUBNET_MASK_V6
+IPv6 subnet mask, multiple of 16 (default: 48).
 .TP
 .B WATCH_INTERVAL
 Watch mode polling interval in seconds (default: 10).
+.TP
+.B OUTPUT_SYSLOG
+Echo BFD log messages to syslog: 0 or 1 (default: 1).
 .SH THRESHOLD MANAGEMENT
 BFD uses a three-tier threshold precedence system:
 .IP 1. 3

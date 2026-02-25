@@ -333,7 +333,7 @@ expand_command_template() {
 
 # validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, SUBNET_TRIG,
 #   SUBNET_MASK, SUBNET_MASK_V6, BAN_DURATION, BAN_PERMANENT_AFTER,
-#   BAN_PERMANENT_WINDOW, BAN_ESCALATION, BAN_ESCALATION_CAP,
+#   BAN_PERMANENT_WINDOW, BAN_ESCALATION (none/linear/double), BAN_ESCALATION_CAP,
 #   BAN_RETRY_COUNT, FIREWALL, BAN_COMMAND_TEMPLATE, EMAIL_ALERTS,
 #   EMAIL_ADDRESS (when EMAIL_ALERTS=1), EMAIL_LOGLINES, OUTPUT_SYSLOG,
 #   BFD_LOG_PATH, LOG_SOURCE, LOCK_FILE_TIMEOUT, WATCH_INTERVAL,
@@ -438,8 +438,8 @@ validate_config() {
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _esc="${BAN_ESCALATION:-none}"
-	if [ "$_esc" != "none" ] && [ "$_esc" != "linear" ] && [ "$_esc" != "exponential" ]; then
-		echo "error: BAN_ESCALATION must be none, linear, or exponential (got '$_esc')."
+	if [ "$_esc" != "none" ] && [ "$_esc" != "linear" ] && [ "$_esc" != "double" ] && [ "$_esc" != "exponential" ]; then
+		echo "error: BAN_ESCALATION must be none, linear, or double (got '$_esc')."
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_ESCALATION_CAP:-0}" =~ $int_pattern ]]; then
@@ -1240,7 +1240,7 @@ record_ban() {
 # compute_ban_duration base_duration ban_count mode cap
 # Computes escalated ban duration based on repeat offense count.
 # ban_count = previous bans (0 for first offense)
-# mode: none (fixed), linear (base * n), exponential (base * 2^(n-1))
+# mode: none (fixed), linear (base * n), double (base * 2^(n-1))
 # cap: maximum duration (0 = no cap)
 compute_ban_duration() {
 	local base_duration="$1" ban_count="$2" mode="$3" cap="$4"
@@ -1250,7 +1250,7 @@ compute_ban_duration() {
 		linear)
 			d=$((base_duration * effective_count))
 			;;
-		exponential)
+		double|exponential)
 			local shift=$((effective_count - 1))
 			[ "$shift" -gt 30 ] && shift=30
 			d=$((base_duration * (1 << shift)))
