@@ -1301,25 +1301,29 @@ check_recidivism() {
 # record_ban install_path utime host mod ports ban_action
 # Computes ban expiry, records in bans.active + bans.history.
 # Echoes "ban_expiry|ban_action|recent_bans" to stdout.
-# Reads globals: BAN_DURATION, BAN_PERMANENT_WINDOW, BAN_PERMANENT_AFTER,
-#   BAN_ESCALATION, BAN_ESCALATION_CAP
+# Reads globals: BAN_TTL (fallback BAN_DURATION), BAN_ESCALATE_WINDOW
+#   (fallback BAN_PERMANENT_WINDOW), BAN_ESCALATE_AFTER (fallback
+#   BAN_PERMANENT_AFTER), BAN_ESCALATION, BAN_ESCALATION_CAP
 record_ban() {
 	local install_path="$1" utime="$2" host="$3" mod="$4"
 	local ports="$5" ban_action="$6"
+	local ban_ttl="${BAN_TTL:-${BAN_DURATION:-0}}"
+	local esc_window="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
+	local esc_after="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}"
 	local recent_bans
 	recent_bans=$(state_bans_count_recent "$install_path" "$host" \
-		"${BAN_PERMANENT_WINDOW:-86400}" "$utime")
+		"$esc_window" "$utime")
 	local ban_expiry
-	if [ "${BAN_DURATION:-0}" -eq 0 ]; then
+	if [ "$ban_ttl" -eq 0 ]; then
 		ban_expiry=0
 	elif check_recidivism "$install_path" "$host" \
-		"${BAN_PERMANENT_WINDOW:-86400}" "$utime" "${BAN_PERMANENT_AFTER:-0}"; then
+		"$esc_window" "$utime" "$esc_after"; then
 		ban_expiry=0
 		ban_action="escalate"
 		eout "{$mod} $host escalated to permanent ban (repeat offender)." le
 	else
 		local computed_duration
-		computed_duration=$(compute_ban_duration "$BAN_DURATION" "$recent_bans" \
+		computed_duration=$(compute_ban_duration "$ban_ttl" "$recent_bans" \
 			"${BAN_ESCALATION:-none}" "${BAN_ESCALATION_CAP:-0}")
 		ban_expiry=$((utime + computed_duration))
 	fi
@@ -1858,7 +1862,7 @@ _hc_binaries() {
 			_hc_warn=$((_hc_warn + 1))
 		fi
 
-		if [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
+		if [ "${BAN_TTL:-${BAN_DURATION:-0}}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
 			echo "[WARN] UNBAN_COMMAND is empty; temp bans won't auto-unban firewall rules"
 			_hc_warn=$((_hc_warn + 1))
 		fi
@@ -2067,14 +2071,14 @@ format_duration() {
 	echo "$result"
 }
 
-# format_alert_entry n total host mod ports count expiry action recent trig trig_window
+# format_alert_entry n total host mod ports pressure_scaled expiry action recent trip half_life weight
 # Format a single ban's detail block for email alerts.
 # Sets ATTACK_HOST, MOD, PORTS globals so $BAN_COMMAND_TEMPLATE expands correctly.
 format_alert_entry() {
 	local n="$1" total="$2" host="$3" mod="$4" ports="$5"
-	local count="$6" expiry="$7" action="$8" recent="$9"
+	local pressure_scaled="$6" expiry="$7" action="$8" recent="$9"
 	shift 9
-	local trig="$1" trig_window="$2"
+	local trip="$1" half_life="$2" weight="${3:-1}"
 
 	if [ "$total" -gt 1 ]; then
 		echo "--- Ban $n of $total ---"
@@ -2096,7 +2100,7 @@ format_alert_entry() {
 		if [ "$duration" -lt 0 ]; then
 			duration=0
 		fi
-		local base_duration="${BAN_DURATION:-0}"
+		local base_duration="${BAN_TTL:-${BAN_DURATION:-0}}"
 		if [ "${BAN_ESCALATION:-none}" != "none" ] && [ "$recent" -gt 0 ] && [ "$duration" -gt "$base_duration" ]; then
 			ban_type="Temporary ($(format_duration "$duration"), escalated from $(format_duration "$base_duration"))"
 		else
@@ -2112,16 +2116,22 @@ format_alert_entry() {
 		port_display="port $port_display"
 	fi
 
+	local pressure_display trip_display
+	pressure_display=$(pressure_format "$pressure_scaled")
+	trip_display=$(pressure_format $((trip * 1000)))
+
 	echo "  Host:       $host"
 	echo "  Service:    $mod ($port_display)"
-	echo "  Failures:   $count in ${trig_window}s window (threshold: $trig)"
+	echo "  Pressure:   ${pressure_display}/${trip_display} (weight $weight, half-life ${half_life}s)"
 	if [ -n "$ban_detail" ]; then
 		echo "  Ban:        $ban_type, expires $ban_detail"
 	else
 		echo "  Ban:        $ban_type"
 	fi
-	if [ "${BAN_PERMANENT_AFTER:-0}" -gt 0 ]; then
-		echo "  History:    $recent previous ban(s) in ${BAN_PERMANENT_WINDOW:-86400}s (permanent at ${BAN_PERMANENT_AFTER})"
+	local esc_after="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}"
+	local esc_window="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
+	if [ "$esc_after" -gt 0 ]; then
+		echo "  History:    $recent previous ban(s) in ${esc_window}s (permanent at ${esc_after})"
 	fi
 	# reconstruct ban command display
 	local display_cmd
