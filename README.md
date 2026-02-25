@@ -20,12 +20,12 @@ rule engine, sliding time-window counting, automatic ban lifecycle, and IPv4/IPv
   - [2.1 Scheduling](#21-scheduling)
 - [3. Configuration](#3-configuration)
   - [3.1 Detection Thresholds](#31-detection-thresholds)
-  - [3.2 Ban Command & Duration](#32-ban-command--duration)
-  - [3.3 Repeat Offender Escalation](#33-repeat-offender-escalation)
-  - [3.4 IPv6](#34-ipv6)
-  - [3.5 Email Alerts](#35-email-alerts)
+  - [3.2 Email Alerts](#32-email-alerts)
+  - [3.3 Ban Command & Duration](#33-ban-command--duration)
+  - [3.4 Repeat Offender Handling](#34-repeat-offender-handling)
+  - [3.5 IPv6](#35-ipv6)
   - [3.6 Log Paths](#36-log-paths)
-  - [3.7 Logging & Advanced](#37-logging--advanced)
+  - [3.7 Advanced](#37-advanced)
 - [4. Firewall Integration](#4-firewall-integration)
 - [5. General Usage](#5-general-usage)
   - [5.1 Dry Run](#51-dry-run)
@@ -192,52 +192,8 @@ Use `bfd -c` to validate your configuration without banning anything.
 |----------|---------|-------------|
 | `TRIG` | `15` | Failed logins before an address is blocked. Override per-rule in `/usr/local/bfd/rules/` |
 | `TRIG_WINDOW` | `300` | Sliding window in seconds (default 5 min). Only failures within this window count toward the threshold |
-| `TRIG_GLOBAL` | `0` | Cross-service aggregate threshold (0 = disabled). When set, failures from ALL services count toward this single threshold |
 
-#### 3.1.1 Distributed Attack Detection
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SUBNET_TRIG` | `0` | Unique IPs from same subnet to trigger subnet ban (0 = disabled) |
-| `SUBNET_MASK` | `24` | IPv4 subnet mask for distributed detection |
-| `SUBNET_MASK_V6` | `48` | IPv6 subnet mask (must be multiple of 16) |
-
-When `SUBNET_TRIG` unique IPs from the same subnet attack the same service within `TRIG_WINDOW`, the entire subnet is banned instead of individual IPs.
-
-### 3.2 Ban Command & Duration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BAN_COMMAND` | APF deny | Command to execute when banning a host. See [section 4](#4-firewall-integration) for examples |
-| `BAN_DURATION` | `300` | Ban duration in seconds (0 = permanent). Temporary bans require `UNBAN_COMMAND` |
-| `UNBAN_COMMAND` | *(empty)* | Command to remove a ban. Required for temporary bans to auto-remove firewall rules on expiry |
-
-| `BAN_RETRY_COUNT` | `2` | Retries with exponential backoff on transient firewall errors |
-
-The variables `$ATTACK_HOST`, `$MOD` (service name), and `$PORTS` (from rule file) are available in ban/unban commands.
-
-### 3.3 Repeat Offender Escalation
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BAN_PERMANENT_AFTER` | `5` | Number of temporary bans before escalating to permanent (0 = disabled) |
-| `BAN_PERMANENT_WINDOW` | `86400` | Window in seconds for counting repeat offenses (default 24 hours) |
-
-| `BAN_ESCALATION` | `none` | Escalation mode: `none`, `linear`, `exponential` |
-| `BAN_ESCALATION_CAP` | `86400` | Maximum ban duration in seconds (0 = no cap) |
-
-When an IP accumulates `BAN_PERMANENT_AFTER` temporary bans within `BAN_PERMANENT_WINDOW` seconds, subsequent bans are automatically escalated to permanent. With `BAN_ESCALATION` set to `linear` or `exponential`, ban durations increase progressively before reaching permanent.
-
-### 3.4 IPv6
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BAN_COMMAND_V6` | *(empty)* | IPv6-specific ban command. When empty, `BAN_COMMAND` is used for both address families |
-| `UNBAN_COMMAND_V6` | *(empty)* | IPv6-specific unban command. When empty, `UNBAN_COMMAND` is used for both |
-
-Leave empty when using tools that handle both protocols natively (nft with `inet` family, APF, ip route). Set explicitly for tools that require separate IPv4/IPv6 commands (iptables/ip6tables). See [section 9](#9-ipv6-support).
-
-### 3.5 Email Alerts
+### 3.2 Email Alerts
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -250,6 +206,41 @@ Alerts are **batched**: multiple bans in one check cycle produce a single email 
 
 The email template (`alert.bfd`) is fully customizable. Individual rules can suppress alerts by setting `SKIP_ALERT="1"` in the rule file. Set `RULE_EMAIL="addr"` in a rule file to route that rule's alerts to a different recipient.
 
+### 3.3 Ban Command & Duration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BAN_COMMAND` | APF deny | Command to execute when banning a host. See [section 4](#4-firewall-integration) for examples |
+| `BAN_DURATION` | `300` | Ban duration in seconds (0 = permanent). Temporary bans require `UNBAN_COMMAND` |
+| `UNBAN_COMMAND` | APF unban | Command to remove a ban. Required for temporary bans to auto-remove firewall rules on expiry |
+
+The variables `$ATTACK_HOST`, `$MOD` (service name), and `$PORTS` (from rule file) are available in ban/unban commands.
+
+### 3.4 Repeat Offender Handling
+
+These four settings form a pipeline: `BAN_ESCALATION` controls how ban duration grows, `BAN_ESCALATION_CAP` limits that growth, `BAN_PERMANENT_AFTER` flips to permanent once the count is reached, and `BAN_PERMANENT_WINDOW` is the lookback window for all of the above.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BAN_ESCALATION` | `none` | How duration grows: `none` (fixed), `linear` (5m, 10m, 15m...), `double` (5m, 10m, 20m, 40m...) |
+| `BAN_ESCALATION_CAP` | `86400` | Maximum escalated duration in seconds (0 = no cap) |
+| `BAN_PERMANENT_AFTER` | `5` | Temporary bans before flipping to permanent (0 = never) |
+| `BAN_PERMANENT_WINDOW` | `86400` | Lookback window in seconds for counting repeat offenses |
+
+**Examples** (with `BAN_DURATION="300"`):
+- **Fixed 5m bans, permanent after 5th:** `ESCALATION=none`, `PERMANENT_AFTER=5` → 5m, 5m, 5m, 5m, 5m → permanent
+- **Doubling bans, permanent after 5th:** `ESCALATION=double`, `PERMANENT_AFTER=5` → 5m, 10m, 20m, 40m, 80m → permanent
+- **Linear growth, capped, never permanent:** `ESCALATION=linear`, `CAP=3600`, `PERMANENT_AFTER=0` → 5m, 10m, 15m... 1h, 1h, 1h (always temporary)
+
+### 3.5 IPv6
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BAN_COMMAND_V6` | *(empty)* | IPv6-specific ban command. When empty, `BAN_COMMAND` is used for both address families |
+| `UNBAN_COMMAND_V6` | *(empty)* | IPv6-specific unban command. When empty, `UNBAN_COMMAND` is used for both |
+
+Leave empty when using tools that handle both protocols natively (nft with `inet` family, APF, ip route). Set explicitly for tools that require separate IPv4/IPv6 commands (iptables/ip6tables). See [section 9](#9-ipv6-support).
+
 ### 3.6 Log Paths
 
 | Variable | Default | Description |
@@ -261,16 +252,18 @@ The email template (`alert.bfd`) is fully customizable. Individual rules can sup
 
 Log paths are auto-detected based on the distribution. Override in `conf.bfd` if your system uses non-standard paths.
 
-### 3.7 Logging & Advanced
+### 3.7 Advanced
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `FIREWALL` | `auto` | Firewall backend (see [section 4](#4-firewall-integration)) |
-| `LOG_SOURCE` | `auto` | Log source: `auto`, `file`, `journal` |
-| `OUTPUT_SYSLOG` | `1` | Log to syslog (0 = off, 1 = on) |
-| `OUTPUT_SYSLOG_FILE` | `$KERNEL_LOG_PATH` | Syslog target file |
-| `LOCK_FILE_TIMEOUT` | `300` | Lock staleness threshold in seconds |
+| `TRIG_GLOBAL` | `0` | Cross-service aggregate threshold (0 = disabled) |
+| `SUBNET_TRIG` | `0` | Unique IPs from same subnet to trigger subnet ban (0 = disabled) |
+| `SUBNET_MASK` | `24` | IPv4 subnet mask for distributed detection |
+| `SUBNET_MASK_V6` | `48` | IPv6 subnet mask (must be multiple of 16) |
 | `WATCH_INTERVAL` | `10` | Watch mode polling interval in seconds |
+| `OUTPUT_SYSLOG` | `1` | Log to syslog (0 = off, 1 = on) |
+
+Additional variables (`LOG_SOURCE`, `LOCK_FILE_TIMEOUT`, `BAN_RETRY_COUNT`, `OUTPUT_SYSLOG_FILE`) have sensible defaults in `internals.conf` and can be overridden by adding them to `conf.bfd`.
 
 ---
 

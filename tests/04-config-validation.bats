@@ -315,7 +315,12 @@ run_validate_output() {
 	assert_success
 }
 
-@test "validate_config: BAN_ESCALATION=exponential passes" {
+@test "validate_config: BAN_ESCALATION=double passes" {
+	run run_validate 'BAN_ESCALATION="double"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION=exponential accepted (backward compat)" {
 	run run_validate 'BAN_ESCALATION="exponential"'
 	assert_success
 }

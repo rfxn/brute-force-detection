@@ -94,6 +94,11 @@ EMAIL_TEMPLATE="${EMAIL_TEMPLATE:-$INSTALL_PATH/alert.bfd}"
 IGNORE_HOST_FILES="${IGNORE_HOST_FILES:-$INSTALL_PATH/exclude.files}"
 LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
 TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
+LOCK_FILE_TIMEOUT="${LOCK_FILE_TIMEOUT:-300}"
+OUTPUT_SYSLOG_FILE="${OUTPUT_SYSLOG_FILE:-$KERNEL_LOG_PATH}"
+BAN_RETRY_COUNT="${BAN_RETRY_COUNT:-2}"
+LOG_SOURCE="${LOG_SOURCE:-auto}"
+export LOG_SOURCE
 GLOB_TRIG="$TRIG"
 # load per-rule threshold overrides
 declare -A _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
@@ -127,7 +132,6 @@ if [ "$_FW_BACKEND" = "custom" ]; then
 fi
 
 pre() {
-export LOG_SOURCE
 if [ ! -f "$TLOG_PATH" ]; then
 	eout "could not locate \$TLOG_PATH, aborting."
 	exit "$EXIT_PREREQ_ERROR"

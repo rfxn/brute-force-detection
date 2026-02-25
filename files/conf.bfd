@@ -10,174 +10,138 @@
 # Detection Thresholds
 # =============================================
 
-# failure events before an address is blocked; must be > 0 (per-rule override in rules/)
+# number of failed login attempts before an address is banned
+# counted per service within the sliding TRIG_WINDOW; must be > 0
+# per-rule overrides: edit rules/ files or thresholds.conf
 TRIG="15"
 
-# sliding window in seconds for counting failures (default 5 min)
+# time window in seconds for counting failures (default 5 minutes)
+# only failures within this window count toward TRIG threshold
 TRIG_WINDOW="300"
-
-# cross-service aggregate threshold (0 = disabled)
-# failures from ALL services count toward this threshold
-TRIG_GLOBAL="0"
-
-# =============================================
-# Distributed Attack Detection
-# =============================================
-
-# unique IPs from same subnet triggering a subnet ban (0 = disabled)
-# when N unique IPs from the same subnet attack the same service
-# within TRIG_WINDOW, the entire subnet is banned (see SUBNET_MASK)
-SUBNET_TRIG="0"
-
-# IPv4 subnet mask for distributed attack aggregation (8-32)
-SUBNET_MASK="24"
-
-# IPv6 subnet mask for distributed attack aggregation (16-128)
-# must be a multiple of 16 (group-aligned: 16, 32, 48, 64, ...)
-SUBNET_MASK_V6="48"
-
-# =============================================
-# Ban Actions
-# =============================================
-
-# firewall backend for ban/unban operations
-# auto       - auto-detect (APF > CSF > firewalld > UFW > nftables > iptables > route)
-# apf        - Advanced Policy Firewall
-# csf        - ConfigServer Security & Firewall
-# firewalld  - firewalld (runtime rich rules, no --permanent)
-# ufw        - Uncomplicated Firewall
-# nftables   - nftables (dedicated inet bfd table with IP sets)
-# iptables   - iptables/ip6tables (dedicated bfd chain)
-# route      - ip route null-route (blackhole)
-# custom     - use BAN_COMMAND/UNBAN_COMMAND templates below
-FIREWALL="auto"
-
-# --- Custom mode commands (only used when FIREWALL="custom") ---
-# command to block attacking hosts
-# APF (default):
-BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
-# iptables (CentOS 6/7, Ubuntu 14-20):
-#BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP"
-# firewalld (Rocky 8+, CentOS 7):
-#BAN_COMMAND="/usr/bin/firewall-cmd --add-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
-# nftables (Rocky 9+, Debian 12, Ubuntu 22+):
-#BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST drop"
-# ip route null-route (all distros):
-#BAN_COMMAND="/sbin/ip route add blackhole $ATTACK_HOST/32"
-# iptables with port-specific blocking ($PORTS from rule file):
-#BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -p tcp -m multiport --dports $PORTS -j DROP"
-# nftables with port-specific blocking:
-#BAN_COMMAND="/usr/sbin/nft add rule inet filter input ip saddr $ATTACK_HOST tcp dport { $PORTS } drop"
-
-# command to remove a ban (leave empty to disable auto-unban)
-# uses same $ATTACK_HOST, $MOD, and $PORTS variables as BAN_COMMAND
-UNBAN_COMMAND=""
-# APF:
-#UNBAN_COMMAND="/etc/apf/apf -u $ATTACK_HOST"
-# iptables:
-#UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -j DROP"
-# firewalld:
-#UNBAN_COMMAND="/usr/bin/firewall-cmd --remove-rich-rule='rule family=ipv4 source address=$ATTACK_HOST drop'"
-# nftables (requires handle lookup):
-#UNBAN_COMMAND="/usr/sbin/nft delete rule inet filter input handle $(/usr/sbin/nft -a list chain inet filter input | grep $ATTACK_HOST | awk '{print $NF}')"
-# ip route:
-#UNBAN_COMMAND="/sbin/ip route del blackhole $ATTACK_HOST/32"
-# iptables with port-specific unblocking:
-#UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -p tcp -m multiport --dports $PORTS -j DROP"
-
-# IPv6 ban command (leave empty to use BAN_COMMAND for both)
-BAN_COMMAND_V6=""
-# ip6tables:
-#BAN_COMMAND_V6="/sbin/ip6tables -I INPUT -s $ATTACK_HOST -j DROP"
-# nftables (inet family handles both, but use ip6 for v6-only):
-#BAN_COMMAND_V6="/usr/sbin/nft add rule inet filter input ip6 saddr $ATTACK_HOST drop"
-# ip route null-route:
-#BAN_COMMAND_V6="/sbin/ip route add blackhole $ATTACK_HOST/128"
-
-# IPv6 unban command (leave empty to use UNBAN_COMMAND for both)
-UNBAN_COMMAND_V6=""
-# ip6tables:
-#UNBAN_COMMAND_V6="/sbin/ip6tables -D INPUT -s $ATTACK_HOST -j DROP"
-# ip route:
-#UNBAN_COMMAND_V6="/sbin/ip route del blackhole $ATTACK_HOST/128"
-
-# ban duration in seconds (0 = permanent, 300 = 5 minutes)
-# auto-unban requires UNBAN_COMMAND when using FIREWALL="custom"
-BAN_DURATION="300"
-
-# number of temporary bans before permanent; 0 = disabled
-BAN_PERMANENT_AFTER="5"
-
-# window in seconds for counting repeat offenses; must be > 0 (default 24 hours)
-BAN_PERMANENT_WINDOW="86400"
-
-# ban command retry count on failure (e.g., iptables lock contention)
-# 0 = no retries (fail immediately), 2 = up to 2 retries with backoff
-BAN_RETRY_COUNT="2"
-
-# ban duration escalation for repeat offenders
-# none         - fixed BAN_DURATION for all temporary bans (default)
-# linear       - BAN_DURATION * ban_count (300s, 600s, 900s, ...)
-# exponential  - BAN_DURATION * 2^(ban_count-1) (300s, 600s, 1200s, ...)
-BAN_ESCALATION="none"
-
-# maximum escalated ban duration in seconds (0 = no cap)
-# only applies when BAN_ESCALATION is not none
-BAN_ESCALATION_CAP="86400"
 
 # =============================================
 # Email Alerts
 # =============================================
 
-# send email alerts for all events [0 = off; 1 = on]
+# send email alerts when hosts are banned [0 = off, 1 = on]
 EMAIL_ALERTS="0"
 
-# address alerts are sent to (separate multiple with comma)
+# alert recipient; comma-separated for multiple addresses
 EMAIL_ADDRESS="root"
 
-# subject of email alerts
+# alert subject line ($HOSTNAME expands at runtime)
 EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
 
-# per-rule alert routing: set RULE_EMAIL="addr" in individual rule files
-# to override EMAIL_ADDRESS for that rule's alerts
-
-# number of log lines to include in email alerts; must be > 0
+# log lines from the offending service included in each alert; must be > 0
 EMAIL_LOGLINES="50"
+
+# =============================================
+# Banning
+# =============================================
+
+# firewall backend for ban/unban operations
+# auto       - auto-detect: APF > CSF > firewalld > UFW > nftables > iptables > route
+# <backend>  - use a specific backend (apf, csf, firewalld, ufw, nftables, iptables, route)
+# custom     - use BAN_COMMAND/UNBAN_COMMAND templates (see next section)
+FIREWALL="auto"
+
+# how long bans last in seconds; 0 = permanent (default 5 minutes)
+# temporary bans auto-expire and the firewall rule is removed
+BAN_DURATION="300"
+
+# --- Repeat offender handling ---
+#
+# These four settings work as a pipeline for repeat offenders:
+#   1. BAN_ESCALATION controls how ban duration grows each time
+#   2. BAN_ESCALATION_CAP puts a ceiling on that growth
+#   3. BAN_PERMANENT_AFTER flips to permanent once the count is reached
+#   4. BAN_PERMANENT_WINDOW is the lookback window for all of the above
+#
+# Examples (with BAN_DURATION="300"):
+#   Fixed 5m bans, permanent after 5th:
+#     BAN_ESCALATION="none"   BAN_PERMANENT_AFTER="5"
+#     → 5m, 5m, 5m, 5m, 5m → permanent
+#
+#   Doubling bans, permanent after 5th:
+#     BAN_ESCALATION="double" BAN_PERMANENT_AFTER="5"
+#     → 5m, 10m, 20m, 40m, 80m → permanent
+#
+#   Linear growth, capped at 1h, never permanent:
+#     BAN_ESCALATION="linear" BAN_ESCALATION_CAP="3600" BAN_PERMANENT_AFTER="0"
+#     → 5m, 10m, 15m, ... 1h, 1h, 1h (always temporary)
+
+# how ban duration grows for repeat offenders
+# none    - same duration every time (default)
+# linear  - duration * ban_count (5m, 10m, 15m, ...)
+# double  - duration doubles each time (5m, 10m, 20m, 40m, ...)
+BAN_ESCALATION="none"
+
+# maximum escalated ban duration in seconds; 0 = no cap (default 24 hours)
+BAN_ESCALATION_CAP="86400"
+
+# temporary bans before flipping to permanent; 0 = never go permanent
+BAN_PERMANENT_AFTER="5"
+
+# lookback window in seconds for counting repeat offenses (default 24 hours)
+BAN_PERMANENT_WINDOW="86400"
+
+# =============================================
+# Custom Firewall Commands
+# =============================================
+
+# --- Only used when FIREWALL="custom" — skip if using auto or a named backend ---
+# $ATTACK_HOST = offending IP, $MOD = service name, $PORTS = rule ports
+
+# command to deny an attacking host
+BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
+#BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP"
+#BAN_COMMAND="/sbin/ip route add blackhole $ATTACK_HOST/32"
+#BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -p tcp -m multiport --dports $PORTS -j DROP"
+
+# command to remove a ban; required for temporary ban auto-expiry
+UNBAN_COMMAND="/etc/apf/apf -u $ATTACK_HOST"
+#UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -j DROP"
+#UNBAN_COMMAND="/sbin/ip route del blackhole $ATTACK_HOST/32"
+
+# IPv6-specific commands; leave empty to use BAN_COMMAND for both protocols
+BAN_COMMAND_V6=""
+UNBAN_COMMAND_V6=""
 
 # =============================================
 # Log Paths
 # =============================================
 
-# log source mode: auto, file, or journal
-# auto: use flat log files, fall back to journalctl when files are missing
-# file: flat log files only (required for CentOS 6)
-# journal: same as auto (journal used only when file is missing)
-LOG_SOURCE="auto"
-
-# syslog auth log path
+# authentication log (auto-detected: /var/log/auth.log on Debian/Ubuntu)
 AUTH_LOG_PATH="/var/log/secure"
 
-# syslog kernel/messages log path
+# system/kernel log (auto-detected: /var/log/syslog on Debian/Ubuntu)
 KERNEL_LOG_PATH="/var/log/messages"
 
-# syslog mail log path
+# mail log (auto-detected: /var/log/mail.log on Debian/Ubuntu)
 MAIL_LOG_PATH="/var/log/maillog"
 
-# bfd application log path
+# BFD's own application log
 BFD_LOG_PATH="/var/log/bfd_log"
 
 # =============================================
-# Logging & Advanced
+# Advanced
 # =============================================
 
-# log all events to syslog [0 = off; 1 = on]
-OUTPUT_SYSLOG="1"
+# cross-service aggregate trigger threshold (0 = disabled)
+# when set, failures from ALL services count toward a single threshold
+TRIG_GLOBAL="0"
 
-# log file path for syslog logging
-OUTPUT_SYSLOG_FILE="$KERNEL_LOG_PATH"
+# distributed attack detection — ban entire subnets when N unique IPs
+# from the same subnet attack the same service within TRIG_WINDOW
+# 0 = disabled; typical value: 3-5
+SUBNET_TRIG="0"
 
-# lock file timeout in seconds; must be > 0
-LOCK_FILE_TIMEOUT="300"
+# subnet masks for distributed detection
+SUBNET_MASK="24"          # IPv4: 8-32 (24 = /24 = 256 addresses)
+SUBNET_MASK_V6="48"       # IPv6: 16-128, must be multiple of 16
 
-# polling interval in seconds for watch mode (bfd --watch); must be > 0
+# watch mode polling interval in seconds (bfd --watch); must be > 0
 WATCH_INTERVAL="10"
+
+# echo BFD log messages to syslog [0 = off, 1 = on]
+OUTPUT_SYSLOG="1"
