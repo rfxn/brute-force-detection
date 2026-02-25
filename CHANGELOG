@@ -1,4 +1,16 @@
 2.0.1:
+[Change] sshd rule expanded from 3 to 8 patterns: keyboard-interactive, ident
+      string, refused connect, max auth attempts, PAM failure (LFD/fail2ban)
+[Change] dovecot rule expanded from 2 to 5 patterns: Disconnected pop3/imap,
+      submission-login auth failed
+[Change] proftpd rule expanded from 1 to 4 patterns: incorrect password,
+      SECURITY VIOLATION, maximum login attempts
+[Change] exim_authfail rule expanded from 1 to 3 patterns: dovecot_*
+      authenticator, SMTP protocol synchronization error
+[Change] asterisk_badauth rule expanded from 1 to 2 patterns: SecurityEvent
+      FailedACL (Asterisk 12+ security framework)
+[Change] postfix PORTS updated from 25,26 to 25,26,587,465 (submission/SMTPS)
+[Change] sendmail rule expanded from 1 to 2 patterns: AUTH failure
 [New] tests/regex_samples.txt: 72-sample data-driven test corpus covering all
       34 rules with positive and negative test cases; RFC 5737 IP compliant;
       data-driven BATS tests in 13-regex-samples.bats validate all samples

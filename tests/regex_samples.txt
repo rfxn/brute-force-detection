@@ -38,6 +38,31 @@ Feb 22 10:15:07 myhost sshd[12345]: User root from 198.51.100.1 not allowed beca
 # NOTE: IPv6 address
 Feb 22 10:15:03 myhost sshd[12345]: Failed password for root from 2001:db8::1 port 22 ssh2
 
+# RULE: sshd
+# PATTERN: sshd.*Failed keyboard-interactive.* from <HOST>
+# EXPECT: 203.0.113.20
+Feb 22 10:16:01 myhost sshd[12350]: Failed keyboard-interactive/pam for root from 203.0.113.20 port 44100 ssh2
+
+# RULE: sshd
+# PATTERN: sshd.*Did not receive identification string from <HOST>
+# EXPECT: 198.51.100.10
+Feb 22 10:16:02 myhost sshd[12351]: Did not receive identification string from 198.51.100.10 port 50000
+
+# RULE: sshd
+# PATTERN: sshd.*refused connect from <HOST>
+# EXPECT: 203.0.113.30
+Feb 22 10:16:03 myhost sshd[12352]: refused connect from 203.0.113.30 (203.0.113.30)
+
+# RULE: sshd
+# PATTERN: sshd.*maximum authentication attempts exceeded.* from <HOST>
+# EXPECT: 192.0.2.10
+Feb 22 10:16:04 myhost sshd[12353]: error: maximum authentication attempts exceeded for root from 192.0.2.10 port 38010 ssh2
+
+# RULE: sshd
+# PATTERN: sshd.*pam_unix.*authentication failure.*rhost=<HOST>
+# EXPECT: 198.51.100.20
+Feb 22 10:16:05 myhost sshd[12354]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=198.51.100.20 user=root
+
 # --- dovecot ---
 
 # RULE: dovecot
@@ -55,6 +80,21 @@ Feb 22 10:15:05 myhost dovecot: imap-login: Disconnected (auth failed, 3 attempt
 # EXPECT: 2001:db8::ff
 # NOTE: IPv6 address
 Feb 22 10:15:03 myhost dovecot: pop3-login: Aborted login (auth failed, 1 attempts): user=<admin>, method=PLAIN, rip=2001:db8::ff, lip=::1
+
+# RULE: dovecot
+# PATTERN: pop3-login.*Disconnected.*rip=<HOST>
+# EXPECT: 203.0.113.20
+Feb 22 10:16:01 myhost dovecot: pop3-login: Disconnected (auth failed, 2 attempts): user=<test>, method=PLAIN, rip=203.0.113.20, lip=192.0.2.1
+
+# RULE: dovecot
+# PATTERN: imap-login.*Disconnected.*rip=<HOST>
+# EXPECT: 198.51.100.10
+Feb 22 10:16:02 myhost dovecot: imap-login: Disconnected (auth failed, 1 attempts): user=<admin>, method=LOGIN, rip=198.51.100.10, lip=192.0.2.1
+
+# RULE: dovecot
+# PATTERN: submission-login.*auth failed.*rip=<HOST>
+# EXPECT: 192.0.2.10
+Feb 22 10:16:03 myhost dovecot: submission-login: Aborted login (auth failed, 1 attempts): user=<spammer>, method=PLAIN, rip=192.0.2.10, lip=192.0.2.1
 
 # --- postfix ---
 
@@ -85,6 +125,16 @@ Feb 22 10:15:03 myhost postfix/smtpd[9876]: warning: unknown[2001:db8::abcd]: SA
 # PATTERN: login authenticator failed.*\[<HOST>\]
 # EXPECT: 192.0.2.5
 2024-02-22 10:15:05 login authenticator failed for (admin) [192.0.2.5]:54321: 535 Incorrect authentication data
+
+# RULE: exim_authfail
+# PATTERN: dovecot_.*authenticator failed.*\[<HOST>\]
+# EXPECT: 203.0.113.20
+2024-02-22 10:16:01 dovecot_plain authenticator failed for (test) [203.0.113.20]:12345: 535 Incorrect authentication data
+
+# RULE: exim_authfail
+# PATTERN: SMTP protocol synchronization error.*\[<HOST>\]
+# EXPECT: 198.51.100.10
+2024-02-22 10:16:02 SMTP protocol synchronization error (input sent without waiting for greeting): rejected connection from H=spammer.example.com [198.51.100.10]
 
 # --- exim_nxuser ---
 
@@ -119,6 +169,21 @@ Feb 22 10:15:03 myhost proftpd[12345]: myhost (198.51.100.1[198.51.100.1]) - USE
 # EXPECT: 203.0.113.10
 Feb 22 10:15:05 myhost proftpd[12346]: myhost (203.0.113.10[203.0.113.10]) - USER nobody: no such user found from 203.0.113.10 [203.0.113.10] to 192.0.2.1:21
 
+# RULE: proftpd
+# PATTERN: proftpd.*Login failed.*Incorrect password.*\[<HOST>\]
+# EXPECT: 198.51.100.20
+Feb 22 10:16:01 myhost proftpd[12347]: myhost (198.51.100.20[198.51.100.20]) - Login failed: Incorrect password. [198.51.100.20]
+
+# RULE: proftpd
+# PATTERN: proftpd.*SECURITY VIOLATION.*\[<HOST>\]
+# EXPECT: 203.0.113.30
+Feb 22 10:16:02 myhost proftpd[12348]: myhost (203.0.113.30[203.0.113.30]) - SECURITY VIOLATION: root login attempted. [203.0.113.30]
+
+# RULE: proftpd
+# PATTERN: proftpd.*Maximum login attempts.*\[<HOST>\]
+# EXPECT: 192.0.2.10
+Feb 22 10:16:03 myhost proftpd[12349]: myhost (192.0.2.10[192.0.2.10]) - Maximum login attempts (3) exceeded. [192.0.2.10]
+
 # --- pure-ftpd ---
 
 # RULE: pure-ftpd
@@ -132,6 +197,11 @@ Feb 22 10:15:03 myhost pure-ftpd: (?@203.0.113.100) [WARNING] Authentication fai
 # PATTERN: sendmail.*relay=\[<HOST>\]
 # EXPECT: 203.0.113.50
 Feb 22 10:15:03 myhost sendmail[12345]: ruleset=check_rcpt, arg1=<user@example.com>, relay=[203.0.113.50], reject=550 relaying denied
+
+# RULE: sendmail
+# PATTERN: sendmail.*AUTH failure.*relay=\[<HOST>\]
+# EXPECT: 198.51.100.10
+Feb 22 10:16:01 myhost sendmail[12346]: AUTH failure (LOGIN): relay=[198.51.100.10], reject=535
 
 # --- courier ---
 
@@ -203,6 +273,11 @@ Feb 22 10:15:03 myhost ipop3d[12345]: Login failed user=admin auth=admin host=[1
 # PATTERN: Wrong password.*'<HOST>'
 # EXPECT: 203.0.113.50
 [2024-02-22 10:15:03] NOTICE[12345] chan_sip.c: Wrong password for user 'admin' from '203.0.113.50':5060
+
+# RULE: asterisk_badauth
+# PATTERN: SecurityEvent.*FailedACL.*RemoteAddress.*/<HOST>/
+# EXPECT: 192.0.2.10
+[2024-02-22 10:16:01] SECURITY[12346] res_security_log.c: SecurityEvent="FailedACL",EventTV="2024-02-22T10:16:01",Severity="Error",Service="SIP",RemoteAddress="IPV4/UDP/192.0.2.10/5060"
 
 # --- asterisk_iax ---
 

@@ -19,5 +19,8 @@ if [ -f "$REQ" ]; then
 	IGNOREREGEX="no auth attempts"
 	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"pop3-login.*auth failed.*rip=<HOST>" \
-		"imap-login.*auth failed.*rip=<HOST>")
+		"imap-login.*auth failed.*rip=<HOST>" \
+		"pop3-login.*Disconnected.*rip=<HOST>" \
+		"imap-login.*Disconnected.*rip=<HOST>" \
+		"submission-login.*auth failed.*rip=<HOST>")
 fi

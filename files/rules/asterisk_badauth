@@ -17,5 +17,6 @@ if [ -f "$REQ" ]; then
 
 	## ASTERISK BADAUTH
 	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
-		"Wrong password.*'<HOST>'")
+		"Wrong password.*'<HOST>'" \
+		"SecurityEvent.*FailedACL.*RemoteAddress.*/<HOST>/")
 fi

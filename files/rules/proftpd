@@ -17,5 +17,8 @@ if [ -f "$REQ" ]; then
 
 	## PROFTPD
 	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
-		"proftpd.*no such user found from <HOST>")
+		"proftpd.*no such user found from <HOST>" \
+		"proftpd.*Login failed.*Incorrect password.*\[<HOST>\]" \
+		"proftpd.*SECURITY VIOLATION.*\[<HOST>\]" \
+		"proftpd.*Maximum login attempts.*\[<HOST>\]")
 fi

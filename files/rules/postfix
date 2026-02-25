@@ -11,7 +11,7 @@
 REQ="/usr/sbin/postfix"
 
 if [ -f "$REQ" ]; then
-	PORTS="25,26"
+	PORTS="25,26,587,465"
 	LP="$MAIL_LOG_PATH"
 	TLOG_TF="postfix"
 
