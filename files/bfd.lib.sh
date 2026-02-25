@@ -175,16 +175,21 @@ _save_rule_vars() {
 	_SV_TLOG_TF="${TLOG_TF:-}"; _SV_PORTS="${PORTS:-}"
 	_SV_ARG_VAL="${ARG_VAL:-}"; _SV_IGNOREREGEX="${IGNOREREGEX:-}"
 	_SV_SKIP_ALERT="${SKIP_ALERT:-}"; _SV_RULE_EMAIL="${RULE_EMAIL:-}"
+	_SV_PRESSURE_WEIGHT="${PRESSURE_WEIGHT:-}"
+	_SV_PRESSURE_TRIP="${PRESSURE_TRIP:-}"
 }
 _restore_rule_vars() {
 	REQ="$_SV_REQ"; LP="$_SV_LP"; TRIG="$_SV_TRIG"
 	TLOG_TF="$_SV_TLOG_TF"; PORTS="$_SV_PORTS"
 	ARG_VAL="$_SV_ARG_VAL"; IGNOREREGEX="$_SV_IGNOREREGEX"
 	SKIP_ALERT="$_SV_SKIP_ALERT"; RULE_EMAIL="$_SV_RULE_EMAIL"
+	PRESSURE_WEIGHT="$_SV_PRESSURE_WEIGHT"
+	PRESSURE_TRIP="$_SV_PRESSURE_TRIP"
 }
 _clear_rule_vars() {
 	REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
 	ARG_VAL="" IGNOREREGEX="" SKIP_ALERT="" RULE_EMAIL=""
+	PRESSURE_WEIGHT="" PRESSURE_TRIP=""
 }
 
 # _load_thresholds conf_file — parse thresholds.conf into associative arrays
@@ -254,6 +259,87 @@ _apply_thresholds() {
 	fi
 	if [ -z "$RULE_EMAIL" ] && [ "${_THRESH_RULE_EMAIL[$rule_name]+x}" = "x" ]; then
 		RULE_EMAIL="${_THRESH_RULE_EMAIL[$rule_name]}"
+	fi
+}
+
+# _load_pressure_conf conf_file — parse pressure.conf into associative arrays
+# Populates _PRESS_WEIGHT[], _PRESS_TRIP[], _PRESS_SKIP_ALERT[], _PRESS_RULE_EMAIL[].
+# Recognizes both new keys (PRESSURE_WEIGHT, PRESSURE_TRIP) and legacy TRIG key.
+# Skips comments, blank lines, and unknown keys. Validates file safety.
+# Returns 0 even if file is missing (graceful degradation).
+_load_pressure_conf() {
+	local conf_file="${1:-}"
+	# clear arrays (caller must have declared them)
+	_PRESS_WEIGHT=()
+	_PRESS_TRIP=()
+	_PRESS_SKIP_ALERT=()
+	_PRESS_RULE_EMAIL=()
+
+	[ -z "$conf_file" ] && return 0
+	[ ! -f "$conf_file" ] && return 0
+
+	# validate ownership and permissions (same checks as safe_source)
+	local _pc_owner _pc_perms _pc_world
+	_pc_owner=$(stat -c '%u' "$conf_file")
+	_pc_perms=$(stat -c '%a' "$conf_file")
+	_pc_world="${_pc_perms: -1}"
+	if [ "$_pc_owner" != "0" ] || [ "$((_pc_world & 2))" -ne 0 ]; then
+		eout "pressure.conf has unsafe ownership (uid=$_pc_owner) or permissions ($_pc_perms), skipping" le
+		return 0
+	fi
+
+	local line rule_name fields key val pair
+	while IFS= read -r line; do
+		# skip comments and blank lines
+		case "$line" in
+			''|\#*) continue ;;
+		esac
+		# extract rule name (before first colon)
+		rule_name="${line%%:*}"
+		[ -z "$rule_name" ] && continue
+		# extract fields (after first colon)
+		fields="${line#*:}"
+		[ -z "$fields" ] && continue
+		# parse colon-delimited KEY=value pairs
+		while [ -n "$fields" ]; do
+			# extract next field
+			case "$fields" in
+				*:*) pair="${fields%%:*}"; fields="${fields#*:}" ;;
+				*)   pair="$fields"; fields="" ;;
+			esac
+			key="${pair%%=*}"
+			val="${pair#*=}"
+			case "$key" in
+				PRESSURE_WEIGHT)  _PRESS_WEIGHT["$rule_name"]="$val" ;;
+				PRESSURE_TRIP|TRIG) _PRESS_TRIP["$rule_name"]="$val" ;;
+				SKIP_ALERT)       _PRESS_SKIP_ALERT["$rule_name"]="$val" ;;
+				RULE_EMAIL)       _PRESS_RULE_EMAIL["$rule_name"]="$val" ;;
+			esac
+		done
+	done < "$conf_file"
+}
+
+# _apply_pressure rule_name — fill empty pressure vars from _PRESS_* arrays
+# Called after safe_source of a rule file. Only sets variables the rule left
+# empty, preserving rule-file precedence (rule > pressure.conf > conf.bfd).
+# Also fills TRIG from PRESSURE_TRIP for backward compat with display code.
+_apply_pressure() {
+	local rule_name="$1"
+	if [ -z "$PRESSURE_WEIGHT" ] && [ "${_PRESS_WEIGHT[$rule_name]+x}" = "x" ]; then
+		PRESSURE_WEIGHT="${_PRESS_WEIGHT[$rule_name]}"
+	fi
+	if [ -z "$PRESSURE_TRIP" ] && [ "${_PRESS_TRIP[$rule_name]+x}" = "x" ]; then
+		PRESSURE_TRIP="${_PRESS_TRIP[$rule_name]}"
+	fi
+	if [ -z "$SKIP_ALERT" ] && [ "${_PRESS_SKIP_ALERT[$rule_name]+x}" = "x" ]; then
+		SKIP_ALERT="${_PRESS_SKIP_ALERT[$rule_name]}"
+	fi
+	if [ -z "$RULE_EMAIL" ] && [ "${_PRESS_RULE_EMAIL[$rule_name]+x}" = "x" ]; then
+		RULE_EMAIL="${_PRESS_RULE_EMAIL[$rule_name]}"
+	fi
+	# backward compat: also fill TRIG from PRESSURE_TRIP for old display code
+	if [ -z "$TRIG" ] && [ -n "$PRESSURE_TRIP" ]; then
+		TRIG="$PRESSURE_TRIP"
 	fi
 }
 
@@ -1449,19 +1535,21 @@ state_bans_count_recent() {
 
 # --- Event state I/O functions ---
 # State file format:
-#   events.dat: "TIMESTAMP IP MOD" — timestamped failure events
+#   events.dat: "TIMESTAMP IP MOD [WEIGHT]" — timestamped failure events
+#   Field 4 (WEIGHT) is optional; older events without it default to weight 1.
 
-# state_events_append install_path timestamp host mod [count] — append events
-# Appends count timestamped event lines (default 1) to events.dat
+# state_events_append install_path timestamp host mod [count] [weight] — append events
+# Appends count timestamped event lines (default 1) to events.dat.
+# weight (default "1") is stored as field 4 for pressure scoring.
 state_events_append() {
 	local install_path="$1" timestamp="$2" host="$3" mod="$4"
-	local count="${5:-1}"
+	local count="${5:-1}" weight="${6:-1}"
 	local events_file="$install_path/tmp/events.dat"
 	(
 		flock -x 200
 		local i
 		for ((i = 0; i < count; i++)); do
-			echo "$timestamp $host $mod"
+			echo "$timestamp $host $mod $weight"
 		done >> "$events_file"
 	) 200>>"$events_file"
 }
@@ -1522,6 +1610,74 @@ count_failures() {
 		state_events_append "$install_path" "$now" "$host" "$mod" "$count"
 	fi
 	state_events_count "$install_path" "$host" "$window" "$now" "$mod"
+}
+
+# --- Pressure scoring functions ---
+
+# pressure_compute install_path host half_life now [mod] — compute decayed pressure
+# Single-pass awk over events.dat: sums weight * 2^(-(now-ts)/half_life) for each
+# event matching host (and optionally mod). Returns pressure * 1000 as integer.
+# Handles both 3-field (old, weight=1) and 4-field (new) event lines.
+pressure_compute() {
+	local install_path="$1" host="$2" half_life="$3" now="$4"
+	local mod="${5:-}"
+	local events_file="$install_path/tmp/events.dat"
+	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
+		echo "0"
+		return 0
+	fi
+	local cutoff=$((now - half_life * 10))
+	if [ -n "$mod" ]; then
+		awk -v cutoff="$cutoff" -v host="$host" -v hl="$half_life" \
+			-v now="$now" -v mod="$mod" '
+		BEGIN { p = 0 }
+		$1+0 >= cutoff && $2 == host && $3 == mod {
+			w = ($4+0 > 0) ? $4+0 : 1
+			age = now - ($1+0)
+			p += w * exp(-0.693147180559945 * age / hl)
+		}
+		END { printf "%d\n", p * 1000 }' "$events_file"
+	else
+		awk -v cutoff="$cutoff" -v host="$host" -v hl="$half_life" \
+			-v now="$now" '
+		BEGIN { p = 0 }
+		$1+0 >= cutoff && $2 == host {
+			w = ($4+0 > 0) ? $4+0 : 1
+			age = now - ($1+0)
+			p += w * exp(-0.693147180559945 * age / hl)
+		}
+		END { printf "%d\n", p * 1000 }' "$events_file"
+	fi
+}
+
+# pressure_format scaled_pressure — format scaled integer as decimal string
+# Example: 18400 -> "18.4", 0 -> "0.0", 500 -> "0.5"
+pressure_format() {
+	local scaled="$1"
+	local whole=$((scaled / 1000))
+	local frac=$(( (scaled % 1000 + 50) / 100 ))
+	if [ "$frac" -ge 10 ]; then
+		whole=$((whole + 1))
+		frac=0
+	fi
+	echo "${whole}.${frac}"
+}
+
+# record_and_score host hosts_parsed install_path half_life now mod weight
+# Replacement for count_failures() using pressure scoring:
+#   1. Count host occurrences in hosts_parsed (grep -cxF)
+#   2. Append that many weighted events to events.dat
+#   3. Compute per-service pressure (decayed sum)
+#   4. Return pressure * 1000 as integer
+record_and_score() {
+	local host="$1" hosts_parsed="$2" install_path="$3"
+	local half_life="$4" now="$5" mod="$6" weight="${7:-1}"
+	local count
+	count=$(echo "$hosts_parsed" | grep -cxF "$host")
+	if [ "$count" -gt 0 ]; then
+		state_events_append "$install_path" "$now" "$host" "$mod" "$count" "$weight"
+	fi
+	pressure_compute "$install_path" "$host" "$half_life" "$now" "$mod"
 }
 
 # count_subnet_attackers install_path window now mask mask_v6 min_unique
