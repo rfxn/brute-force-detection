@@ -53,16 +53,14 @@ system firewall.
 .PP
 BFD supports two operating modes.
 In
-.B batch mode
-(the default), a cron job runs BFD every 2 minutes to scan logs and
-process bans.
-In
 .B watch mode
-.RB ( \-w ),
-BFD runs continuously in the foreground, polling at a configurable
-interval (default 10 seconds) for near-real-time detection.
-Watch mode is the recommended primary mode; cron remains active as
-a fallback and is silently skipped when watch mode holds the lock.
+(enabled automatically on install), BFD runs continuously, polling at a
+configurable interval (default 10 seconds) for near-real-time detection.
+In
+.B batch mode\fR,
+a cron job runs BFD every 2 minutes as an automatic fallback; it is
+silently skipped when watch mode holds the lock and resumes detection
+if the watch daemon exits.
 .PP
 Each detection cycle reads new log lines (via the
 .B tlog

@@ -41,18 +41,15 @@ Contents:
 
 Quick Start:
 
-  # Install (as root)
+  # Install (as root) — watch mode auto-enabled
   ./install.sh
 
   # Configure — set your firewall ban command
   vi /usr/local/bfd/conf.bfd
 
-  # Enable watch mode (recommended — ~10s detection latency)
-  systemctl enable --now bfd-watch.service    # systemd
-  service bfd-watch start                     # SysVinit
-
-  # Health check — validate config, log paths, and rules
-  bfd -c
+  # Verify — watch mode should be running
+  systemctl status bfd-watch       # systemd
+  bfd -c                           # health check
 
   # Dry run — detect without banning
   bfd -d
@@ -150,11 +147,10 @@ The included install.sh script handles all installation tasks:
 This will:
   - Install BFD to /usr/local/bfd
   - Place the bfd command at /usr/local/sbin/bfd
-  - Install a 2-minute cronjob in /etc/cron.d/bfd
-  - On systemd systems, install bfd.service and bfd.timer (not enabled by
-    default)
-  - If upgrading, run importconf to import settings from the previous
-    installation
+  - Auto-enable watch mode for ~10s detection latency (systemd or SysVinit)
+  - Install a 2-minute cronjob as fallback (skipped while watch runs)
+  - If upgrading, import settings from the previous installation and
+    restart watch mode
 
 Previous installations are backed up before overwriting.
 
@@ -163,18 +159,20 @@ Bin Path: /usr/local/sbin/bfd
 
 2.1) Installation: Scheduling
 
-Watch mode (recommended):
+Watch mode (auto-enabled):
 
-BFD's watch mode runs as a persistent daemon, polling for new log data
-every WATCH_INTERVAL seconds (default 10). Detection latency is ~10
-seconds, comparable to fail2ban and other daemon-based tools.
+The installer automatically enables and starts watch mode on fresh installs.
+Watch mode runs as a persistent daemon, polling for new log data every
+WATCH_INTERVAL seconds (default 10). Detection latency is ~10 seconds,
+comparable to fail2ban and other daemon-based tools.
 
-  systemd (Rocky 8+, Debian 12, Ubuntu 20+):
-    systemctl enable --now bfd-watch.service
+On upgrades, the installer respects the existing scheduling choice:
+  - If watch mode was running, it is restarted with the updated binary
+  - If bfd.timer was enabled, it is left active (switch recommended)
 
-  SysVinit (CentOS 6/7, Ubuntu 14.04):
-    service bfd-watch start
-    chkconfig bfd-watch on    # enable at boot (RHEL)
+To switch from timer to watch mode:
+  systemctl disable bfd.timer
+  systemctl enable --now bfd-watch.service
 
 Cron (automatic fallback):
 

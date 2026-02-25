@@ -1,4 +1,9 @@
 2.0.1:
+[New] install.sh: auto-enable watch mode on fresh install (systemd + SysVinit);
+      upgrades respect existing timer/watch choice
+[Change] install.sh: cleaner post-install output reflecting active scheduling mode
+[Change] README: sections 2, 2.1, Quick Start updated for auto-enabled watch mode
+[Change] bfd.1: DESCRIPTION updated to reflect watch mode as default on install
 [New] proxmox rule: pvedaemon/pveproxy authentication failure via PAM
 [New] lighttpd rule: mod_auth password mismatch with dynamic log detection
 [New] mongodb rule: authentication failed from client
