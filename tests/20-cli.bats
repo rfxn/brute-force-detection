@@ -437,3 +437,57 @@ teardown() {
 	run _fw_custom_ban "192.0.2.1" "sshd" "22"
 	assert_success
 }
+
+# --- detect_run_mode ---
+
+@test "detect_run_mode: returns cron when /etc/cron.d/bfd exists" {
+	# /etc/cron.d/bfd is typically present in the test container
+	if [ ! -f /etc/cron.d/bfd ]; then
+		mkdir -p /etc/cron.d
+		echo "# test" > /etc/cron.d/bfd
+	fi
+	run detect_run_mode
+	assert_success
+	assert_output "cron"
+}
+
+@test "detect_run_mode: returns unknown when no scheduler found" {
+	# temporarily hide the cron file
+	local had_cron=0
+	if [ -f /etc/cron.d/bfd ]; then
+		had_cron=1
+		mv /etc/cron.d/bfd /etc/cron.d/bfd.test_backup
+	fi
+	run detect_run_mode
+	if [ "$had_cron" -eq 1 ]; then
+		mv /etc/cron.d/bfd.test_backup /etc/cron.d/bfd
+	fi
+	assert_success
+	assert_output "unknown"
+}
+
+@test "detect_run_mode: output is single line" {
+	run detect_run_mode
+	assert_success
+	local line_count
+	line_count=$(echo "$output" | wc -l)
+	[ "$line_count" -eq 1 ]
+}
+
+@test "show_status: displays mode line" {
+	run show_status "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "Mode:"
+}
+
+@test "show_status: displays active bans line" {
+	run show_status "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "Active bans:"
+}
+
+@test "show_status: displays events line" {
+	run show_status "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "Events (24h):"
+}

@@ -1,4 +1,12 @@
 2.0.1:
+[New] detect_run_mode() function for structured run-mode identification;
+      returns watch/systemd, watch/init, watch/manual, timer/systemd,
+      cron, or unknown
+[Change] show_status() refactored to use detect_run_mode(); mode display
+         now includes sub-type (systemd/init/manual) for watch mode and
+         shows "no scheduler detected" for unknown mode
+[New] tests/20-cli.bats: 6 tests for detect_run_mode() (cron, unknown,
+      single-line output) and show_status display lines
 [New] --verbose/-V global modifier flag for detailed output; stripped by
       pre-process loop alongside --json/--csv
 [New] vout() verbose-only output function in bfd.lib.sh; prints to stdout

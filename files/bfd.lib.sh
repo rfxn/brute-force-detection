@@ -2103,6 +2103,39 @@ send_alerts() {
 
 # --- Phase 18: CLI Evolution functions ---
 
+# detect_run_mode — determine how BFD is being run.
+# Outputs one of: watch/systemd, watch/init, watch/manual,
+# timer/systemd, cron, unknown
+detect_run_mode() {
+	local watch_pid=""
+	watch_pid=$(pgrep -f "bfd.*--watch" 2>/dev/null | head -1) || true
+	if [ -z "$watch_pid" ]; then
+		watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true
+	fi
+	if [ -n "$watch_pid" ] && [ "$watch_pid" != "$$" ]; then
+		if command -v systemctl >/dev/null 2>&1 && \
+		   systemctl is-active bfd-watch.service >/dev/null 2>&1; then
+			echo "watch/systemd"
+		elif [ -f /var/run/bfd-watch.pid ]; then
+			echo "watch/init"
+		else
+			echo "watch/manual"
+		fi
+		return 0
+	fi
+	if command -v systemctl >/dev/null 2>&1; then
+		if systemctl is-active bfd.timer >/dev/null 2>&1; then
+			echo "timer/systemd"
+			return 0
+		fi
+	fi
+	if [ -f /etc/cron.d/bfd ] || crontab -l 2>/dev/null | grep -q 'bfd'; then
+		echo "cron"
+		return 0
+	fi
+	echo "unknown"
+}
+
 # show_status install_path — display global system status
 show_status() {
 	local install_path="$1"
@@ -2112,29 +2145,39 @@ show_status() {
 	echo "BFD Status ($(date +"%Y-%m-%d %H:%M:%S"))"
 	echo ""
 
-	# Mode detection
-	local mode="unknown"
-	local watch_pid=""
-	watch_pid=$(pgrep -f "bfd.*--watch" 2>/dev/null | head -1) || true
-	if [ -z "$watch_pid" ]; then
-		watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true
-	fi
-	local detect_method="none"
-	if [ -n "$watch_pid" ] && [ "$watch_pid" != "$$" ]; then
-		local uptime_secs
-		uptime_secs=$(ps -o etimes= -p "$watch_pid" 2>/dev/null | tr -d ' ') || uptime_secs=""
-		if [ -n "$uptime_secs" ]; then
-			mode="watch (pid $watch_pid, uptime $(format_duration "$uptime_secs"))"
-		else
-			mode="watch (pid $watch_pid)"
-		fi
-		detect_method="pgrep"
-	elif crontab -l 2>/dev/null | grep -q 'bfd' || [ -f /etc/cron.d/bfd ]; then
-		mode="cron"
-		detect_method="cron.d/crontab"
-	fi
+	# Mode detection via detect_run_mode()
+	local run_mode mode="unknown"
+	run_mode=$(detect_run_mode)
+	case "$run_mode" in
+		watch/*)
+			local watch_pid=""
+			watch_pid=$(pgrep -f "bfd.*--watch" 2>/dev/null | head -1) || true
+			if [ -z "$watch_pid" ]; then
+				watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true
+			fi
+			local uptime_secs=""
+			if [ -n "$watch_pid" ]; then
+				uptime_secs=$(ps -o etimes= -p "$watch_pid" 2>/dev/null | tr -d ' ') || uptime_secs=""
+			fi
+			local watch_type="${run_mode#watch/}"
+			if [ -n "$uptime_secs" ]; then
+				mode="watch ($watch_type, pid $watch_pid, uptime $(format_duration "$uptime_secs"))"
+			else
+				mode="watch ($watch_type${watch_pid:+, pid $watch_pid})"
+			fi
+			;;
+		timer/systemd)
+			mode="timer (systemd)"
+			;;
+		cron)
+			mode="cron (/etc/cron.d/bfd)"
+			;;
+		*)
+			mode="unknown (no scheduler detected)"
+			;;
+	esac
 	echo "  Mode:           $mode"
-	vout "  (detected via: $detect_method)"
+	vout "  (detected via: $run_mode)"
 
 	# Firewall backend
 	if [ -n "${_FW_BACKEND:-}" ]; then
