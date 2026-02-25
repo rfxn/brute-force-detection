@@ -1,4 +1,6 @@
 2.0.1:
+[Change] README/README.md: add --verbose/-V to CLI usage table; add verbose
+         mode, man page, and bash tab completion to feature list
 [New] bfd.bash-completion: bash tab completion with context-sensitive
       completions for flags, IPs from bans.active (-u), rule names
       (-S/-R/-T/-b), config variables (-C), and file paths (--test)
@@ -363,7 +365,7 @@
 [New] validate_config() validates all config variables at startup with clear
       error messages; meaningful exit codes replace bare exit 1
 [New] detect_log_paths() auto-detects AUTH/KERNEL/MAIL log paths across distros
-[New] bfd.lib.sh function library (106 functions) extracted for testability
+[New] bfd.lib.sh function library (112 functions) extracted for testability
 [Change] backtick substitution → $(), $[expr] → $(( )), egrep → grep -E,
          for-cat/for-ls → while-read, systematic variable quoting, hardcoded
          paths → command -v discovery across all files
@@ -376,7 +378,7 @@
          rule catalog, ban management lifecycle, IPv6, troubleshooting
 [New] .shellcheckrc and full shellcheck compliance across all scripts
 [New] .github/workflows/ci.yml with 8-OS Docker matrix, Buildx caching
-[New] BATS 1.11.0 test suite: 731 tests across 25 .bats files
+[New] BATS 1.11.0 test suite: 819 tests across 29 .bats files
 [New] 9 Dockerfiles (Debian 12, CentOS 6/7, Rocky 8/9/10, Ubuntu 12-24)
 [New] bfd.service, bfd.timer, bfd-watch.service systemd units
 [Fix] tlog log rotation: duplicate output and misplaced redirection

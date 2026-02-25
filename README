@@ -101,10 +101,12 @@ IPv4/IPv6:
 Operational:
 - health check mode for non-destructive diagnostics (bfd -c)
 - dry-run mode for testing rules without banning (bfd -d)
+- verbose mode for detailed per-rule and per-ban output (bfd --verbose)
 - attack pool reporting with per-service breakdown and ban status (bfd -a)
 - per-run statistics logging (rules checked, events parsed, bans executed)
 - batched email alerts with enriched context (ban type, duration, history)
 - per-rule alert routing via RULE_EMAIL
+- man page (man bfd) and bash tab completion installed automatically
 
 1.1) Introduction: Supported Systems
 BFD runs on any Linux distribution with bash 4.1+ and standard GNU utilities
@@ -324,6 +326,7 @@ usage: bfd [OPTION]
    --flush-all ............. unban all bans
    --json .................. output in JSON format (with -l)
    --csv ................... output in CSV format (with -l)
+-V|--verbose ............... show detailed output
 -v|--version ............... display version
 -h|--help .................. display this help
 

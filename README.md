@@ -105,9 +105,11 @@ BFD uses a log tracking system so logs are only parsed from the point at which t
 **Operational**
 - Health check mode for non-destructive diagnostics (`bfd -c`)
 - Dry-run mode for testing rules without banning (`bfd -d`)
+- Verbose mode for detailed per-rule and per-ban output (`bfd --verbose`)
 - Attack pool reporting with per-service breakdown and ban status (`bfd -a`)
 - Per-run statistics logging (rules checked, events parsed, bans executed)
 - Batched email alerts with enriched context (ban type, duration, history) and per-rule routing
+- Man page (`man bfd`) and bash tab completion installed automatically
 
 ### 1.1 Supported Systems
 
@@ -360,6 +362,7 @@ usage: bfd [OPTION]
    --flush-all ............. unban all bans
    --json .................. output in JSON format (with -l)
    --csv ................... output in CSV format (with -l)
+-V|--verbose ............... show detailed output
 -v|--version ............... display version
 -h|--help .................. display this help
 ```
