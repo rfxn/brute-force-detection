@@ -3,8 +3,9 @@
 [![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](CHANGELOG)
 [![License: GPL v2](https://img.shields.io/badge/license-GPL_v2-green.svg)](COPYING.GPL)
 
-**Log-based brute force attack detection and IP banning for Linux servers** — modular
-rule engine, exponential-decay pressure scoring, automatic ban lifecycle, and IPv4/IPv6 support.
+**Log-based brute force attack detection and IP banning for Linux servers** — pressure-based
+scoring that lets humans make mistakes while stopping bots cold, automatic ban lifecycle,
+and IPv4/IPv6 support across 42 service rules.
 
 > (C) 1999-2026, R-fx Networks &lt;proj@rfxn.com&gt;<br>
 > (C) 2026, Ryan MacDonald &lt;ryan@rfxn.com&gt;<br>
@@ -84,20 +85,22 @@ bfd -u 192.0.2.1      # unban an IP
 
 Brute Force Detection (BFD) is a modular shell script for parsing application logs and detecting authentication failures. It ships with 42 service rules covering SSH, mail, FTP, web, database, control panel, DNS, VPN, and VoIP services. Each rule declares fail2ban-compatible `<HOST>` regex patterns; the engine handles log reading, IP extraction, IPv6 normalization, and validation.
 
+Unlike traditional count-based tools that ban at a fixed failure count — forcing operators to choose between catching attackers fast or tolerating legitimate mistakes — BFD uses **exponential-decay pressure scoring**. Each failure adds pressure weighted by service severity, and pressure decays over time via a configurable half-life. A user who mistypes a password a few times over several minutes generates pressure that naturally fades, staying well below the trip point. A bot hammering the same service generates pressure faster than it can decay and trips the threshold almost immediately. The result is fewer false positives on real users with faster response to actual attacks.
+
 BFD uses a log tracking system so logs are only parsed from the point at which they were last read. This greatly assists in performance as we are not constantly reading the same log data. The log tracking system is compatible with syslog/logrotate style log rotations — it detects when rotations have occurred and grabs log tails from both the new log file and the rotated log file.
 
 **Detection**
 - 42 service rules with fail2ban-compatible `<HOST>` regex patterns
-- Exponential-decay pressure scoring with per-service weights
-- A human mistyping a password stays below the trip point; a bot hammering a service trips immediately
+- Exponential-decay pressure scoring — human typos fade away, bot attacks trip instantly
+- Per-service severity weights (SSH=3, control panels=5, noisy services=1)
 - Per-rule and global cross-service pressure trip points
 - Optional country-based pressure multipliers
 - Incremental log parsing with rotation-aware tracking
 
 **Banning**
 - Temporary bans with automatic expiry and firewall rule cleanup
-- Repeat offender escalation to permanent bans
-- Pluggable ban commands — APF, iptables, firewalld, nftables, ip route, or any custom command
+- Repeat offender escalation (linear, doubling, or capped growth)
+- 8 firewall backends with auto-detection (APF, CSF, firewalld, UFW, nftables, iptables, route, custom)
 - Manual ban/unban CLI with full state tracking
 
 **IPv4/IPv6**
@@ -191,7 +194,7 @@ Use `bfd -c` to validate your configuration without banning anything.
 
 ### 3.1 Pressure Model (Detection)
 
-BFD uses exponential-decay pressure scoring: each failed login adds pressure weighted by service severity, and pressure decays over time via a half-life. A ban fires when accumulated pressure crosses a trip point. This naturally differentiates a human typing a wrong password from a bot hammering a service.
+BFD uses exponential-decay pressure scoring: each failed login adds pressure weighted by service severity, and pressure decays over time via a half-life. A ban fires when accumulated pressure crosses a trip point. This naturally separates human mistakes from automated attacks — a few typos over several minutes decay away harmlessly, while rapid-fire failures from a bot accumulate faster than they can decay.
 
 ```
 pressure = SUM { weight * 2^(-(now - event_time) / half_life) }
