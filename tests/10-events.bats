@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# Test suite for timestamped event tracking and count_failures()
+# Test suite for timestamped event tracking and record_and_score()
 #
 
 load '/usr/local/lib/bats/bats-support/load'
@@ -21,7 +21,7 @@ teardown() {
 @test "state_events_append: single event appended" {
 	state_events_append "$INSTALL_PATH" "1708560000" "192.0.2.1" "sshd"
 	run cat "$INSTALL_PATH/tmp/events.dat"
-	assert_output "1708560000 192.0.2.1 sshd"
+	assert_output "1708560000 192.0.2.1 sshd 1"
 }
 
 @test "state_events_append: bulk append with count" {
@@ -31,10 +31,16 @@ teardown() {
 	[ "$line_count" -eq 3 ]
 }
 
-@test "state_events_append: format is TIMESTAMP IP MOD" {
+@test "state_events_append: format is TIMESTAMP IP MOD WEIGHT" {
 	state_events_append "$INSTALL_PATH" "1708560000" "203.0.113.100" "dovecot"
 	run cat "$INSTALL_PATH/tmp/events.dat"
-	assert_output "1708560000 203.0.113.100 dovecot"
+	assert_output "1708560000 203.0.113.100 dovecot 1"
+}
+
+@test "state_events_append: explicit weight produces 4-field output" {
+	state_events_append "$INSTALL_PATH" "1708560000" "192.0.2.1" "sshd" "1" "3"
+	run cat "$INSTALL_PATH/tmp/events.dat"
+	assert_output "1708560000 192.0.2.1 sshd 3"
 }
 
 @test "state_events_append: multiple appends accumulate" {

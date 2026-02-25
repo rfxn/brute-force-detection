@@ -99,8 +99,31 @@ OUTPUT_SYSLOG_FILE="${OUTPUT_SYSLOG_FILE:-$KERNEL_LOG_PATH}"
 BAN_RETRY_COUNT="${BAN_RETRY_COUNT:-2}"
 LOG_SOURCE="${LOG_SOURCE:-auto}"
 export LOG_SOURCE
+# backward compat: map old variable names to new pressure model names
+PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
+PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
+PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
+PRESSURE_COUNTRY="${PRESSURE_COUNTRY:-0}"
+BAN_TTL="${BAN_TTL:-${BAN_DURATION:-600}}"
+BAN_ESCALATE_AFTER="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-5}}"
+BAN_ESCALATE_WINDOW="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
+GLOB_PRESSURE_TRIP="$PRESSURE_TRIP"
+# legacy aliases for code that still references old names
+TRIG="${TRIG:-$PRESSURE_TRIP}"
+TRIG_WINDOW="${TRIG_WINDOW:-$PRESSURE_HALF_LIFE}"
+TRIG_GLOBAL="${TRIG_GLOBAL:-$PRESSURE_TRIP_GLOBAL}"
+BAN_DURATION="${BAN_DURATION:-$BAN_TTL}"
+BAN_PERMANENT_AFTER="${BAN_PERMANENT_AFTER:-$BAN_ESCALATE_AFTER}"
+BAN_PERMANENT_WINDOW="${BAN_PERMANENT_WINDOW:-$BAN_ESCALATE_WINDOW}"
 GLOB_TRIG="$TRIG"
-# load per-rule threshold overrides
+# load per-rule pressure overrides (falls back to thresholds.conf if no pressure.conf)
+declare -A _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
+if [ -f "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}" ]; then
+	_load_pressure_conf "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}"
+elif [ -f "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}" ]; then
+	_load_pressure_conf "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
+fi
+# also load legacy arrays for backward compat callers
 declare -A _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
 _load_thresholds "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
 # extract BAN_COMMAND templates (only needed for custom backend)
@@ -227,15 +250,20 @@ check() {
 	local alerts_file
 	alerts_file=$(mktemp "$INSTALL_PATH/tmp/.alerts.XXXXXX")
 
-	# prune expired events once per run, before iterating rules
-	state_events_prune "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME"
+	# prune expired events once per run (10 half-lives = negligible contribution)
+	local prune_window=$((PRESSURE_HALF_LIFE * 10))
+	state_events_prune "$INSTALL_PATH" "$prune_window" "$UTIME"
 
 	for str in "$RULES_PATH"/*; do
 		str=$(basename "$str")
 		eout "processing rule file $str"
 		_clear_rule_vars
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
+		_apply_pressure "$str"
 		_apply_thresholds "$str"
+		# resolve effective weight and trip for this rule
+		local eff_weight="${PRESSURE_WEIGHT:-1}"
+		local eff_trip="${PRESSURE_TRIP:-$GLOB_PRESSURE_TRIP}"
 		if [ -z "$TRIG" ]; then
 			TRIG="$GLOB_TRIG"
 		fi
@@ -247,7 +275,7 @@ check() {
 		# count events (raw IP occurrences including duplicates)
 		local host_lines
 		host_lines=$(echo "$HOSTS_PARSED" | grep -c . 2>/dev/null || echo 0)
-		vout "  $str: ${host_lines:-0} events, threshold ${TRIG:-$GLOB_TRIG}"
+		vout "  $str: ${host_lines:-0} events, weight=$eff_weight, trip=$eff_trip"
 		events_count=$((events_count + host_lines))
 		while IFS= read -r ahost; do
 			[ -z "$ahost" ] && continue
@@ -258,17 +286,25 @@ check() {
 				vout "  $ATTACK_HOST filtered (ignored)"
 				continue
 			fi
-			ATTACK_COUNT=$(count_failures "$ATTACK_HOST" "$HOSTS_PARSED" "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME" "$MOD")
-			if [ -z "$ATTACK_COUNT" ]; then
-				ATTACK_COUNT=0
+			# compute pressure score for this host+service
+			local scoring_weight="$eff_weight"
+			if [ "${PRESSURE_COUNTRY:-0}" = "1" ]; then
+				scoring_weight=$(pressure_effective_weight "$eff_weight" "$ATTACK_HOST" "$INSTALL_PATH")
 			fi
+			local pressure_scaled
+			pressure_scaled=$(record_and_score "$ATTACK_HOST" "$HOSTS_PARSED" \
+				"$INSTALL_PATH" "$PRESSURE_HALF_LIFE" "$UTIME" "$MOD" "$scoring_weight")
+			if [ -z "$pressure_scaled" ]; then
+				pressure_scaled=0
+			fi
+			local trip_scaled=$((eff_trip * 1000))
 			local should_ban=0
-			if [ "$ATTACK_COUNT" -ge "$TRIG" ]; then
+			if [ "$pressure_scaled" -ge "$trip_scaled" ]; then
 				should_ban=1
-			elif [ "$TRIG_GLOBAL" -gt 0 ]; then
-				local global_count
-				global_count=$(state_events_count "$INSTALL_PATH" "$ATTACK_HOST" "$TRIG_WINDOW" "$UTIME")
-				if [ "$global_count" -ge "$TRIG_GLOBAL" ]; then
+			elif [ "${PRESSURE_TRIP_GLOBAL:-0}" -gt 0 ]; then
+				local gp
+				gp=$(pressure_compute "$INSTALL_PATH" "$ATTACK_HOST" "$PRESSURE_HALF_LIFE" "$UTIME")
+				if [ "$gp" -ge $((PRESSURE_TRIP_GLOBAL * 1000)) ]; then
 					should_ban=1
 				fi
 			fi
@@ -293,7 +329,7 @@ check() {
 						# collect alert data for batched delivery
 						if [ "$EMAIL_ALERTS" = "1" ] && [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							local eff_recipient="${RULE_EMAIL:-$EMAIL_ADDRESS}"
-							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${ATTACK_COUNT}|${ban_expiry}|${ban_action}|${recent_bans}|${LP}|${eff_recipient}|${TRIG}|${TRIG_WINDOW}" >> "$alerts_file"
+							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${pressure_scaled}|${ban_expiry}|${ban_action}|${recent_bans}|${LP}|${eff_recipient}|${eff_trip}|${PRESSURE_HALF_LIFE}|${scoring_weight}" >> "$alerts_file"
 						fi
 					fi
 				fi
@@ -304,7 +340,7 @@ check() {
 	# distributed attack detection
 	if [ "${SUBNET_TRIG:-0}" -gt 0 ]; then
 		local subnet_bans
-		subnet_bans=$(check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME" "$alerts_file")
+		subnet_bans=$(check_distributed "$INSTALL_PATH" "$((PRESSURE_HALF_LIFE * 10))" "$UTIME" "$alerts_file")
 		bans_count=$((bans_count + subnet_bans))
 	fi
 
@@ -327,7 +363,7 @@ _apool_report() {
 	local atmp
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.alist.XXXXXX")
 	echo "[+] $title" && echo
-	echo "#TRIGS|IP|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
+	echo "#EVENTS|IP|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
 	local cnt aip first_ts last_ts mods first_fmt last_fmt ban_status
 	while IFS='|' read -r cnt aip first_ts last_ts mods; do
 		[ -z "$cnt" ] && continue
@@ -468,7 +504,32 @@ reload_watch() {
 		fi
 	fi
 	TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
+	# clear derived pressure vars so re-sourced config takes effect
+	unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL PRESSURE_COUNTRY
+	unset BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW
+	unset TRIG TRIG_WINDOW TRIG_GLOBAL
+	unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
+	# re-derive pressure model variables after config reload
+	PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
+	PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
+	PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
+	PRESSURE_COUNTRY="${PRESSURE_COUNTRY:-0}"
+	BAN_TTL="${BAN_TTL:-${BAN_DURATION:-600}}"
+	BAN_ESCALATE_AFTER="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-5}}"
+	BAN_ESCALATE_WINDOW="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
+	GLOB_PRESSURE_TRIP="$PRESSURE_TRIP"
+	TRIG="${TRIG:-$PRESSURE_TRIP}"
+	TRIG_WINDOW="${TRIG_WINDOW:-$PRESSURE_HALF_LIFE}"
+	TRIG_GLOBAL="${TRIG_GLOBAL:-$PRESSURE_TRIP_GLOBAL}"
+	BAN_DURATION="${BAN_DURATION:-$BAN_TTL}"
+	BAN_PERMANENT_AFTER="${BAN_PERMANENT_AFTER:-$BAN_ESCALATE_AFTER}"
+	BAN_PERMANENT_WINDOW="${BAN_PERMANENT_WINDOW:-$BAN_ESCALATE_WINDOW}"
 	GLOB_TRIG="$TRIG"
+	if [ -f "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}" ]; then
+		_load_pressure_conf "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}"
+	elif [ -f "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}" ]; then
+		_load_pressure_conf "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
+	fi
 	_load_thresholds "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
 	# shellcheck disable=SC2034  # templates used by _fw_custom_ban/unban
 	BAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND")
@@ -517,7 +578,7 @@ usage() {
 	echo "-b|--ban IP [SERVICE] ...... manually ban an IP (permanent)"
 	echo "-S|--status [SERVICE] ...... system or per-service status"
 	echo "-C|--config [VAR] .......... show config values"
-	echo "-R|--rules [RULE] .......... list rules or show rule details"
+	echo "-R|--rules [RULE] .......... list rules (weight/trip) or show rule details"
 	echo "-T|--test RULE [FILE|-] .... test rule patterns against log or stdin"
 	echo "   --test-pattern PAT [FILE|-] test a raw <HOST> pattern against log or stdin"
 	echo "   --flush-temp ............ unban all temporary bans"

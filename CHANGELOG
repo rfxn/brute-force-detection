@@ -24,15 +24,15 @@
 [New] tests/regex_samples.txt: data-driven test corpus covering all 42 rules
       with positive and negative test cases; RFC 5737 IP compliant; data-driven
       BATS tests in 13-regex-samples.bats validate all samples automatically
-[Change] conf.bfd restructured into workflow-oriented sections (Detection
-      Thresholds, Email Alerts, Banning, Custom Firewall Commands, Log Paths,
-      Advanced); comments rewritten to explain behavior; repeat-offender
-      pipeline (BAN_ESCALATION/CAP + BAN_PERMANENT_AFTER/WINDOW) grouped with
-      scenario examples; BAN_ESCALATION value "exponential" renamed to "double"
-      (old value still accepted); 4 internal-only variables (LOCK_FILE_TIMEOUT,
-      OUTPUT_SYSLOG_FILE, BAN_RETRY_COUNT, LOG_SOURCE) moved to internals.conf
-      with backward-compatible defaults
-[New] bfd.lib.sh: 112-function library extracted from bfd for testability
+[Change] conf.bfd restructured into workflow-oriented sections (Pressure Model,
+      Email Alerts, Banning, Custom Firewall Commands, Log Paths, Advanced);
+      comments rewritten with worked examples (bot vs human scenarios);
+      repeat-offender pipeline (BAN_ESCALATION/CAP + BAN_ESCALATE_AFTER/WINDOW)
+      grouped with scenario examples; BAN_ESCALATION value "exponential" renamed
+      to "double" (old value still accepted); 4 internal-only variables
+      (LOCK_FILE_TIMEOUT, OUTPUT_SYSLOG_FILE, BAN_RETRY_COUNT, LOG_SOURCE)
+      moved to internals.conf with backward-compatible defaults
+[New] bfd.lib.sh: 120-function library extracted from bfd for testability
 [New] extract_hosts() declarative rule engine with fail2ban-compatible <HOST>
       patterns, dual IPv4/IPv6 boundary-aware regex, and IGNOREREGEX per-rule
       exclusion; all 34 rules converted from ad-hoc grep/sed/awk pipelines
@@ -40,13 +40,22 @@
       mysqld-auth, wordpress, webmin, directadmin, cyrus-imap, roundcube,
       plesk, dropbear, http_401, pam_generic, named, postgresql,
       openvpn, phpmyadmin, gitlab, grafana, proxmox, lighttpd, mongodb, xrdp
-[New] thresholds.conf: centralized per-rule threshold management (TRIG,
-      SKIP_ALERT, RULE_EMAIL); three-tier precedence: rule file >
-      thresholds.conf > conf.bfd
+[New] pressure.conf: centralized per-rule pressure configuration
+      (PRESSURE_WEIGHT, PRESSURE_TRIP, SKIP_ALERT, RULE_EMAIL); three-tier
+      precedence: rule file > pressure.conf > conf.bfd; replaces thresholds.conf
 [New] _rule_tlog() in-process tlog wrapper replaces $TLOG_PATH subprocess in
       all 34 rules; eliminates 34 fork+exec pairs per detection cycle
-[New] time-windowed failure counting via events.dat with TRIG_WINDOW (default
-      300s) sliding window; TRIG_GLOBAL cross-service aggregate threshold
+[New] pressure-to-response model: exponential-decay scoring replaces fixed
+      count thresholds; events add weighted pressure (PRESSURE_WEIGHT per rule),
+      pressure decays via half-life (PRESSURE_HALF_LIFE, default 300s), bans
+      fire when accumulated pressure exceeds trip point (PRESSURE_TRIP, default
+      20); PRESSURE_TRIP_GLOBAL cross-service aggregate trip (0=off);
+      all math in native awk floats with scaled-integer bash comparison;
+      backward compat: old TRIG/TRIG_WINDOW configs auto-migrate
+[New] country pressure multipliers: PRESSURE_COUNTRY=1 enables IP-to-country
+      lookup via ipcountry.dat (binary-search on sorted integer ranges);
+      weights.country maps country codes to multipliers (20=2.0x, 10=1.0x);
+      pressure_effective_weight() scales per-rule weight by country factor
 [New] distributed attack detection: SUBNET_TRIG unique IPs from same subnet
       triggers subnet ban; ip_to_subnet() with configurable IPv4/IPv6 masks
 [New] FIREWALL="auto" with 8 backends (APF, CSF, firewalld, UFW, nftables,
@@ -56,10 +65,11 @@
 [New] full IPv6 support: dual-stack detection, banning, and local address
       exclusion; BAN_COMMAND_V6/UNBAN_COMMAND_V6 for firewalls requiring
       separate commands; validate_ip6() with zone ID stripping
-[New] temporary bans with auto-expiry (BAN_DURATION, default 300s); recidivism
-      escalation (BAN_PERMANENT_AFTER/WINDOW); ban escalation modes
+[New] temporary bans with auto-expiry (BAN_TTL, default 600s); recidivism
+      escalation (BAN_ESCALATE_AFTER/BAN_ESCALATE_WINDOW); ban escalation modes
       (BAN_ESCALATION: none/linear/double, BAN_ESCALATION_CAP);
-      execute_ban/execute_unban with retry and exponential backoff
+      execute_ban/execute_unban with retry and exponential backoff; old names
+      (BAN_DURATION, BAN_PERMANENT_AFTER/WINDOW) accepted via silent fallback
 [New] bans.active and bans.history state files with atomic flock -x appends;
       $PORTS substitution for port-specific blocking
 [New] batched email alerts: single email per recipient per check cycle with
@@ -83,13 +93,14 @@
 [New] conf.bfd reorganized into 6 sections; internals.conf split out;
       validate_config() checks 24 variables at startup with clear error
       messages and meaningful exit codes
-[New] bfd.1 nroff man page (OPTIONS, CONFIGURATION, THRESHOLDS, FIREWALL,
+[New] bfd.1 nroff man page (OPTIONS, CONFIGURATION, PRESSURE MODEL, FIREWALL,
       RULES, FILES, SIGNALS, EXIT CODES); installed via install.sh
 [New] bfd.bash-completion: context-sensitive tab completion for all CLI flags,
       IPs, rule names, config variables, and file paths
 [New] importconf rewritten: awk-based config merge preserving user values;
-      thresholds.conf migration; pre-2.0.1 backward compat (FIREWALL=
-      "custom"); temp file cleanup trap
+      TRIG→PRESSURE_TRIP migration in conf.bfd; thresholds.conf→pressure.conf
+      per-rule translation; pre-2.0.1 backward compat (FIREWALL="custom");
+      temp file cleanup trap
 [New] install.sh: custom paths (INSTALL_PATH/BIN_PATH env vars); man page,
       bash completion, and SysVinit init script installation; post-install
       watch mode recommendation; stats/ mkdir
@@ -106,12 +117,14 @@
       SyslogIdentifier
 [New] .shellcheckrc and full shellcheck compliance across all scripts
 [New] .github/workflows/ci.yml with 8-OS Docker matrix and Buildx caching
-[New] BATS test suite: 819 tests across 29 .bats files; shared helpers
+[New] BATS test suite: 929 tests across 31 .bats files; shared helpers
       (assert-bfd.bash, bfd-mock.bash, bfd-common.bash); parallel runner;
-      9 Dockerfiles; RFC 5737 test IPs throughout
-[Change] check() refactored: delegates to filter_host/count_failures/
-         execute_ban; skips already-banned hosts; per-run statistics;
-         duplicate-ban prevention via state_bans_active_check()
+      9 Dockerfiles; RFC 5737 test IPs throughout; dedicated pressure model
+      and country multiplier test suites
+[Change] check() rewritten: pressure-based scoring via record_and_score()
+         replaces count_failures(); per-rule weight/trip/half-life; optional
+         country multipliers; global cross-service pressure trip; per-run
+         statistics; duplicate-ban prevention via state_bans_active_check()
 [Change] tlog modernized: cat subprocesses → read builtin; getsize() pre-
          create block eliminated (prevents double-read race); growth condition
          simplified; convergence with tlog_read() documented
@@ -164,6 +177,20 @@
       attack pool regex → grep -F; local address grep -Ew fix; WATCH_INTERVAL
       ${-} → ${:-}; sed -r → sed -E; $! quoting; UNBAN_COMMAND warning gated
       on FIREWALL="custom"; firewalld examples removed --permanent flag
+[Fix] pressure alerts: format_alert_body read 11 fields from 12-field alert
+      file; weight field absorbed into half-life, corrupting email display;
+      check_distributed normalized to 12-field format for consistency
+[Fix] tab completion: bfd.bash-completion config_vars used old variable names
+      (TRIG, BAN_DURATION, THRESHOLDS_CONF); updated to match show_config()
+      whitelist (PRESSURE_TRIP, BAN_TTL, PRESSURE_CONF)
+[Fix] display fallback: 5 display functions used hardcoded trip default of 15
+      instead of documented default 20 (unreachable in practice)
+[Fix] show_status rounding: awk int(p*1000+0.5) rounding inconsistent with
+      pressure_compute printf truncation; normalized to truncation
+[Fix] reload_watch: SIGHUP config reload did not clear derived pressure vars
+      before re-sourcing, causing stale values when users edit legacy names
+[Fix] ATTACK_COUNT backward compat: send_alerts set to raw pressure_scaled
+      (e.g., 18400); now uses pressure/1000 for sensible old-template display
 
 1.5-2:
 [Change] simplified dovecot rule regex matching

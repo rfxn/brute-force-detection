@@ -1,6 +1,7 @@
-# per-rule threshold override (uncomment to override thresholds.conf / conf.bfd)
-# high threshold to avoid overlap with specific service rules
-# TRIG="20"
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# high trip point to avoid overlap with specific service rules
+# PRESSURE_WEIGHT="1"
+# PRESSURE_TRIP="40"
 
 # uncomment to disable alerting for this rule
 # SKIP_ALERT="1"

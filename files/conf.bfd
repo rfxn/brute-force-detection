@@ -7,17 +7,35 @@
 #
 
 # =============================================
-# Detection Thresholds
+# Pressure Model (Detection)
 # =============================================
+#
+# BFD uses exponential-decay pressure scoring: each failed login adds
+# pressure weighted by service severity, and pressure decays over time
+# via a half-life. A ban fires when accumulated pressure crosses a trip
+# point. This naturally differentiates a human typing a wrong password
+# from a bot hammering a service.
+#
+# Pressure formula:
+#   pressure = SUM { weight * 2^(-(now - event_time) / half_life) }
+#
+# Example (SSH, weight=3, trip=15, half-life=300s):
+#   Bot: 7 failures in 1s  -> pressure = 3*7 = 21.0 -> BAN
+#   Human: 5 typos over 4m -> pressure decays to ~11.1 -> NO BAN
 
-# number of failed login attempts before an address is banned
-# counted per service within the sliding TRIG_WINDOW; must be > 0
-# per-rule overrides: edit rules/ files or thresholds.conf
-TRIG="15"
+# pressure trip point — accumulated pressure needed to trigger a ban
+# per-rule overrides: edit rules/ files or pressure.conf; must be > 0
+PRESSURE_TRIP="20"
 
-# time window in seconds for counting failures (default 5 minutes)
-# only failures within this window count toward TRIG threshold
-TRIG_WINDOW="300"
+# pressure half-life in seconds (how fast pressure decays)
+# at 1 half-life, pressure is halved; at 2, quartered; etc.
+# shorter = more forgiving; longer = longer memory (default 5 minutes)
+PRESSURE_HALF_LIFE="300"
+
+# enable country-based pressure multipliers [0 = off, 1 = on]
+# when enabled, pressure weight is multiplied by the country factor
+# from weights.country (e.g., CN=20 means 2.0x weight)
+PRESSURE_COUNTRY="0"
 
 # =============================================
 # Email Alerts
@@ -45,45 +63,45 @@ EMAIL_LOGLINES="50"
 # custom     - use BAN_COMMAND/UNBAN_COMMAND templates (see next section)
 FIREWALL="auto"
 
-# how long bans last in seconds; 0 = permanent (default 5 minutes)
+# how long bans last in seconds; 0 = permanent (default 10 minutes)
 # temporary bans auto-expire and the firewall rule is removed
-BAN_DURATION="300"
+BAN_TTL="600"
 
 # --- Repeat offender handling ---
 #
 # These four settings work as a pipeline for repeat offenders:
 #   1. BAN_ESCALATION controls how ban duration grows each time
 #   2. BAN_ESCALATION_CAP puts a ceiling on that growth
-#   3. BAN_PERMANENT_AFTER flips to permanent once the count is reached
-#   4. BAN_PERMANENT_WINDOW is the lookback window for all of the above
+#   3. BAN_ESCALATE_AFTER flips to permanent once the count is reached
+#   4. BAN_ESCALATE_WINDOW is the lookback window for all of the above
 #
-# Examples (with BAN_DURATION="300"):
-#   Fixed 5m bans, permanent after 5th:
-#     BAN_ESCALATION="none"   BAN_PERMANENT_AFTER="5"
-#     → 5m, 5m, 5m, 5m, 5m → permanent
+# Examples (with BAN_TTL="600"):
+#   Fixed 10m bans, permanent after 5th:
+#     BAN_ESCALATION="none"   BAN_ESCALATE_AFTER="5"
+#     -> 10m, 10m, 10m, 10m, 10m -> permanent
 #
 #   Doubling bans, permanent after 5th:
-#     BAN_ESCALATION="double" BAN_PERMANENT_AFTER="5"
-#     → 5m, 10m, 20m, 40m, 80m → permanent
+#     BAN_ESCALATION="double" BAN_ESCALATE_AFTER="5"
+#     -> 10m, 20m, 40m, 80m, 160m -> permanent
 #
 #   Linear growth, capped at 1h, never permanent:
-#     BAN_ESCALATION="linear" BAN_ESCALATION_CAP="3600" BAN_PERMANENT_AFTER="0"
-#     → 5m, 10m, 15m, ... 1h, 1h, 1h (always temporary)
+#     BAN_ESCALATION="linear" BAN_ESCALATION_CAP="3600" BAN_ESCALATE_AFTER="0"
+#     -> 10m, 20m, 30m, ... 1h, 1h, 1h (always temporary)
 
 # how ban duration grows for repeat offenders
 # none    - same duration every time (default)
-# linear  - duration * ban_count (5m, 10m, 15m, ...)
-# double  - duration doubles each time (5m, 10m, 20m, 40m, ...)
+# linear  - duration * ban_count (10m, 20m, 30m, ...)
+# double  - duration doubles each time (10m, 20m, 40m, 80m, ...)
 BAN_ESCALATION="none"
 
 # maximum escalated ban duration in seconds; 0 = no cap (default 24 hours)
 BAN_ESCALATION_CAP="86400"
 
 # temporary bans before flipping to permanent; 0 = never go permanent
-BAN_PERMANENT_AFTER="5"
+BAN_ESCALATE_AFTER="5"
 
 # lookback window in seconds for counting repeat offenses (default 24 hours)
-BAN_PERMANENT_WINDOW="86400"
+BAN_ESCALATE_WINDOW="86400"
 
 # =============================================
 # Custom Firewall Commands
@@ -127,12 +145,12 @@ BFD_LOG_PATH="/var/log/bfd_log"
 # Advanced
 # =============================================
 
-# cross-service aggregate trigger threshold (0 = disabled)
-# when set, failures from ALL services count toward a single threshold
-TRIG_GLOBAL="0"
+# cross-service aggregate pressure trip point (0 = disabled)
+# when set, pressure from ALL services counts toward a single threshold
+PRESSURE_TRIP_GLOBAL="0"
 
 # distributed attack detection — ban entire subnets when N unique IPs
-# from the same subnet attack the same service within TRIG_WINDOW
+# from the same subnet attack the same service within the pressure window
 # 0 = disabled; typical value: 3-5
 SUBNET_TRIG="0"
 

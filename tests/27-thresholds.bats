@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# Tests for thresholds.conf parsing and application
+# Tests for thresholds.conf / pressure.conf parsing and application
 #
 
 load '/usr/local/lib/bats/bats-support/load'
@@ -10,6 +10,8 @@ load 'helpers/bfd-common'
 setup() {
 	bfd_common_setup
 	declare -gA _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
+	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
+	GLOB_PRESSURE_TRIP="15"
 	GLOB_TRIG="15"
 }
 
@@ -172,4 +174,218 @@ EOF
 	# caller would then do: TRIG="${TRIG:-$GLOB_TRIG}"
 	TRIG="${TRIG:-$GLOB_TRIG}"
 	[ "$TRIG" = "15" ]
+}
+
+# --- _load_pressure_conf ---
+
+@test "_load_pressure_conf: parses PRESSURE_TRIP values" {
+	local conf="$TEST_TMPDIR/pressure.conf"
+	cat > "$conf" <<'EOF'
+sshd:PRESSURE_TRIP=5
+dovecot:PRESSURE_TRIP=10
+named:PRESSURE_TRIP=100
+EOF
+	chown root "$conf"
+	chmod 640 "$conf"
+	_load_pressure_conf "$conf"
+	[ "${_PRESS_TRIP[sshd]}" = "5" ]
+	[ "${_PRESS_TRIP[dovecot]}" = "10" ]
+	[ "${_PRESS_TRIP[named]}" = "100" ]
+}
+
+@test "_load_pressure_conf: parses PRESSURE_WEIGHT values" {
+	local conf="$TEST_TMPDIR/pressure.conf"
+	cat > "$conf" <<'EOF'
+sshd:PRESSURE_WEIGHT=2:PRESSURE_TRIP=10
+dovecot:PRESSURE_WEIGHT=3:PRESSURE_TRIP=15
+EOF
+	chown root "$conf"
+	chmod 640 "$conf"
+	_load_pressure_conf "$conf"
+	[ "${_PRESS_WEIGHT[sshd]}" = "2" ]
+	[ "${_PRESS_WEIGHT[dovecot]}" = "3" ]
+	[ "${_PRESS_TRIP[sshd]}" = "10" ]
+	[ "${_PRESS_TRIP[dovecot]}" = "15" ]
+}
+
+@test "_load_pressure_conf: parses multi-field entries" {
+	local conf="$TEST_TMPDIR/pressure.conf"
+	cat > "$conf" <<'EOF'
+postfix:PRESSURE_WEIGHT=2:PRESSURE_TRIP=20:SKIP_ALERT=1:RULE_EMAIL=sec@example.com
+EOF
+	chown root "$conf"
+	chmod 640 "$conf"
+	_load_pressure_conf "$conf"
+	[ "${_PRESS_WEIGHT[postfix]}" = "2" ]
+	[ "${_PRESS_TRIP[postfix]}" = "20" ]
+	[ "${_PRESS_SKIP_ALERT[postfix]}" = "1" ]
+	[ "${_PRESS_RULE_EMAIL[postfix]}" = "sec@example.com" ]
+}
+
+@test "_load_pressure_conf: recognizes legacy TRIG key as PRESSURE_TRIP" {
+	local conf="$TEST_TMPDIR/pressure.conf"
+	cat > "$conf" <<'EOF'
+sshd:TRIG=5
+dovecot:PRESSURE_TRIP=10
+EOF
+	chown root "$conf"
+	chmod 640 "$conf"
+	_load_pressure_conf "$conf"
+	# TRIG key maps to _PRESS_TRIP
+	[ "${_PRESS_TRIP[sshd]}" = "5" ]
+	[ "${_PRESS_TRIP[dovecot]}" = "10" ]
+}
+
+@test "_load_pressure_conf: skips comments and blank lines" {
+	local conf="$TEST_TMPDIR/pressure.conf"
+	cat > "$conf" <<'EOF'
+# this is a comment
+sshd:PRESSURE_TRIP=5
+
+# another comment
+dovecot:PRESSURE_TRIP=10
+EOF
+	chown root "$conf"
+	chmod 640 "$conf"
+	_load_pressure_conf "$conf"
+	[ "${#_PRESS_TRIP[@]}" -eq 2 ]
+	[ "${_PRESS_TRIP[sshd]}" = "5" ]
+	[ "${_PRESS_TRIP[dovecot]}" = "10" ]
+}
+
+@test "_load_pressure_conf: ignores unknown keys" {
+	local conf="$TEST_TMPDIR/pressure.conf"
+	cat > "$conf" <<'EOF'
+sshd:PRESSURE_TRIP=5:BADKEY=nope:SKIP_ALERT=1
+EOF
+	chown root "$conf"
+	chmod 640 "$conf"
+	_load_pressure_conf "$conf"
+	[ "${_PRESS_TRIP[sshd]}" = "5" ]
+	[ "${_PRESS_SKIP_ALERT[sshd]}" = "1" ]
+	[ -z "${_PRESS_TRIP[BADKEY]:-}" ]
+}
+
+@test "_load_pressure_conf: missing file returns 0 with empty arrays" {
+	run _load_pressure_conf "/nonexistent/pressure.conf"
+	assert_success
+	[ "${#_PRESS_TRIP[@]}" -eq 0 ]
+}
+
+@test "_load_pressure_conf: empty argument returns 0" {
+	run _load_pressure_conf ""
+	assert_success
+}
+
+@test "_load_pressure_conf: non-root-owned file is skipped" {
+	local conf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_TRIP=5" > "$conf"
+	chown 65534 "$conf"
+	chmod 640 "$conf"
+	_load_pressure_conf "$conf"
+	[ "${#_PRESS_TRIP[@]}" -eq 0 ]
+}
+
+@test "_load_pressure_conf: world-writable file is skipped" {
+	local conf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_TRIP=5" > "$conf"
+	chown root "$conf"
+	chmod 646 "$conf"
+	_load_pressure_conf "$conf"
+	[ "${#_PRESS_TRIP[@]}" -eq 0 ]
+}
+
+# --- _apply_pressure ---
+
+@test "_apply_pressure: rule PRESSURE_TRIP wins over pressure.conf" {
+	_PRESS_TRIP=([sshd]="99")
+	PRESSURE_TRIP="5"
+	PRESSURE_WEIGHT=""
+	_apply_pressure "sshd"
+	[ "$PRESSURE_TRIP" = "5" ]
+}
+
+@test "_apply_pressure: fills empty PRESSURE_TRIP from pressure.conf" {
+	_PRESS_TRIP=([sshd]="7")
+	PRESSURE_TRIP=""
+	PRESSURE_WEIGHT=""
+	_apply_pressure "sshd"
+	[ "$PRESSURE_TRIP" = "7" ]
+}
+
+@test "_apply_pressure: fills empty PRESSURE_WEIGHT from pressure.conf" {
+	_PRESS_WEIGHT=([sshd]="3")
+	PRESSURE_WEIGHT=""
+	PRESSURE_TRIP=""
+	_apply_pressure "sshd"
+	[ "$PRESSURE_WEIGHT" = "3" ]
+}
+
+@test "_apply_pressure: fills SKIP_ALERT from pressure.conf" {
+	_PRESS_SKIP_ALERT=([postfix]="1")
+	SKIP_ALERT=""
+	PRESSURE_WEIGHT=""
+	PRESSURE_TRIP=""
+	_apply_pressure "postfix"
+	[ "$SKIP_ALERT" = "1" ]
+}
+
+@test "_apply_pressure: fills RULE_EMAIL from pressure.conf" {
+	_PRESS_RULE_EMAIL=([dovecot]="alerts@example.com")
+	RULE_EMAIL=""
+	PRESSURE_WEIGHT=""
+	PRESSURE_TRIP=""
+	_apply_pressure "dovecot"
+	[ "$RULE_EMAIL" = "alerts@example.com" ]
+}
+
+@test "_apply_pressure: no-op for unlisted rule" {
+	_PRESS_TRIP=([sshd]="5")
+	PRESSURE_TRIP=""
+	PRESSURE_WEIGHT=""
+	SKIP_ALERT=""
+	RULE_EMAIL=""
+	_apply_pressure "nginx-http-auth"
+	[ -z "$PRESSURE_TRIP" ]
+	[ -z "$PRESSURE_WEIGHT" ]
+	[ -z "$SKIP_ALERT" ]
+	[ -z "$RULE_EMAIL" ]
+}
+
+@test "_apply_pressure: does not overwrite non-empty SKIP_ALERT" {
+	_PRESS_SKIP_ALERT=([sshd]="1")
+	SKIP_ALERT="0"
+	PRESSURE_WEIGHT=""
+	PRESSURE_TRIP=""
+	_apply_pressure "sshd"
+	[ "$SKIP_ALERT" = "0" ]
+}
+
+@test "_apply_pressure: fills TRIG from PRESSURE_TRIP for backward compat" {
+	_PRESS_TRIP=([sshd]="12")
+	TRIG=""
+	PRESSURE_TRIP=""
+	PRESSURE_WEIGHT=""
+	_apply_pressure "sshd"
+	[ "$PRESSURE_TRIP" = "12" ]
+	# backward compat: TRIG also filled from PRESSURE_TRIP
+	[ "$TRIG" = "12" ]
+}
+
+# --- pressure precedence integration ---
+
+@test "precedence: pressure.conf fills PRESSURE_TRIP, then GLOB_PRESSURE_TRIP fallback" {
+	# rule left PRESSURE_TRIP empty, pressure.conf has value
+	_PRESS_TRIP=([sshd]="8")
+	_clear_rule_vars
+	_apply_pressure "sshd"
+	[ "$PRESSURE_TRIP" = "8" ]
+
+	# rule left PRESSURE_TRIP empty, pressure.conf has no entry → still empty
+	_clear_rule_vars
+	_apply_pressure "unlisted_rule"
+	[ -z "$PRESSURE_TRIP" ]
+	# caller would then do: PRESSURE_TRIP="${PRESSURE_TRIP:-$GLOB_PRESSURE_TRIP}"
+	PRESSURE_TRIP="${PRESSURE_TRIP:-$GLOB_PRESSURE_TRIP}"
+	[ "$PRESSURE_TRIP" = "15" ]
 }

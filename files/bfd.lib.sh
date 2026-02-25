@@ -175,18 +175,24 @@ _save_rule_vars() {
 	_SV_TLOG_TF="${TLOG_TF:-}"; _SV_PORTS="${PORTS:-}"
 	_SV_ARG_VAL="${ARG_VAL:-}"; _SV_IGNOREREGEX="${IGNOREREGEX:-}"
 	_SV_SKIP_ALERT="${SKIP_ALERT:-}"; _SV_RULE_EMAIL="${RULE_EMAIL:-}"
+	_SV_PRESSURE_WEIGHT="${PRESSURE_WEIGHT:-}"
+	_SV_PRESSURE_TRIP="${PRESSURE_TRIP:-}"
 }
 _restore_rule_vars() {
 	REQ="$_SV_REQ"; LP="$_SV_LP"; TRIG="$_SV_TRIG"
 	TLOG_TF="$_SV_TLOG_TF"; PORTS="$_SV_PORTS"
 	ARG_VAL="$_SV_ARG_VAL"; IGNOREREGEX="$_SV_IGNOREREGEX"
 	SKIP_ALERT="$_SV_SKIP_ALERT"; RULE_EMAIL="$_SV_RULE_EMAIL"
+	PRESSURE_WEIGHT="$_SV_PRESSURE_WEIGHT"
+	PRESSURE_TRIP="$_SV_PRESSURE_TRIP"
 }
 _clear_rule_vars() {
 	REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
 	ARG_VAL="" IGNOREREGEX="" SKIP_ALERT="" RULE_EMAIL=""
+	PRESSURE_WEIGHT="" PRESSURE_TRIP=""
 }
 
+# DEPRECATED: use _load_pressure_conf() — retained for backward compat callers.
 # _load_thresholds conf_file — parse thresholds.conf into associative arrays
 # Populates _THRESH_TRIG[], _THRESH_SKIP_ALERT[], _THRESH_RULE_EMAIL[].
 # Skips comments, blank lines, and unknown keys. Validates file safety.
@@ -241,6 +247,7 @@ _load_thresholds() {
 	done < "$conf_file"
 }
 
+# DEPRECATED: use _apply_pressure() — retained for backward compat callers.
 # _apply_thresholds rule_name — fill empty threshold vars from _THRESH arrays
 # Called after safe_source of a rule file. Only sets variables the rule left
 # empty, preserving rule-file precedence (rule > thresholds.conf > conf.bfd).
@@ -254,6 +261,91 @@ _apply_thresholds() {
 	fi
 	if [ -z "$RULE_EMAIL" ] && [ "${_THRESH_RULE_EMAIL[$rule_name]+x}" = "x" ]; then
 		RULE_EMAIL="${_THRESH_RULE_EMAIL[$rule_name]}"
+	fi
+}
+
+# _load_pressure_conf conf_file — parse pressure.conf into associative arrays
+# Populates _PRESS_WEIGHT[], _PRESS_TRIP[], _PRESS_SKIP_ALERT[], _PRESS_RULE_EMAIL[].
+# Recognizes both new keys (PRESSURE_WEIGHT, PRESSURE_TRIP) and legacy TRIG key.
+# Skips comments, blank lines, and unknown keys. Validates file safety.
+# Returns 0 even if file is missing (graceful degradation).
+_load_pressure_conf() {
+	local conf_file="${1:-}"
+	# clear arrays (caller must have declared them)
+	_PRESS_WEIGHT=()
+	_PRESS_TRIP=()
+	_PRESS_SKIP_ALERT=()
+	_PRESS_RULE_EMAIL=()
+
+	[ -z "$conf_file" ] && return 0
+	[ ! -f "$conf_file" ] && return 0
+
+	# validate ownership and permissions (same checks as safe_source)
+	local _pc_owner _pc_perms _pc_world
+	_pc_owner=$(stat -c '%u' "$conf_file")
+	_pc_perms=$(stat -c '%a' "$conf_file")
+	_pc_world="${_pc_perms: -1}"
+	if [ "$_pc_owner" != "0" ] || [ "$((_pc_world & 2))" -ne 0 ]; then
+		eout "pressure.conf has unsafe ownership (uid=$_pc_owner) or permissions ($_pc_perms), skipping" le
+		return 0
+	fi
+
+	local line rule_name fields key val pair
+	while IFS= read -r line; do
+		# skip comments and blank lines
+		case "$line" in
+			''|\#*) continue ;;
+		esac
+		# extract rule name (before first colon)
+		rule_name="${line%%:*}"
+		[ -z "$rule_name" ] && continue
+		# extract fields (after first colon)
+		fields="${line#*:}"
+		[ -z "$fields" ] && continue
+		# parse colon-delimited KEY=value pairs
+		while [ -n "$fields" ]; do
+			# extract next field
+			case "$fields" in
+				*:*) pair="${fields%%:*}"; fields="${fields#*:}" ;;
+				*)   pair="$fields"; fields="" ;;
+			esac
+			key="${pair%%=*}"
+			val="${pair#*=}"
+			case "$key" in
+				PRESSURE_WEIGHT)  _PRESS_WEIGHT["$rule_name"]="$val" ;;
+				PRESSURE_TRIP|TRIG) _PRESS_TRIP["$rule_name"]="$val" ;;
+				SKIP_ALERT)       _PRESS_SKIP_ALERT["$rule_name"]="$val" ;;
+				RULE_EMAIL)       _PRESS_RULE_EMAIL["$rule_name"]="$val" ;;
+			esac
+		done
+	done < "$conf_file"
+}
+
+# _apply_pressure rule_name — fill empty pressure vars from _PRESS_* arrays
+# Called after safe_source of a rule file. Only sets variables the rule left
+# empty, preserving rule-file precedence (rule > pressure.conf > conf.bfd).
+# Also fills TRIG from PRESSURE_TRIP for backward compat with display code.
+_apply_pressure() {
+	local rule_name="$1"
+	# backward compat: old rule files set TRIG, treat as PRESSURE_TRIP
+	if [ -z "$PRESSURE_TRIP" ] && [ -n "$TRIG" ]; then
+		PRESSURE_TRIP="$TRIG"
+	fi
+	if [ -z "$PRESSURE_WEIGHT" ] && [ "${_PRESS_WEIGHT[$rule_name]+x}" = "x" ]; then
+		PRESSURE_WEIGHT="${_PRESS_WEIGHT[$rule_name]}"
+	fi
+	if [ -z "$PRESSURE_TRIP" ] && [ "${_PRESS_TRIP[$rule_name]+x}" = "x" ]; then
+		PRESSURE_TRIP="${_PRESS_TRIP[$rule_name]}"
+	fi
+	if [ -z "$SKIP_ALERT" ] && [ "${_PRESS_SKIP_ALERT[$rule_name]+x}" = "x" ]; then
+		SKIP_ALERT="${_PRESS_SKIP_ALERT[$rule_name]}"
+	fi
+	if [ -z "$RULE_EMAIL" ] && [ "${_PRESS_RULE_EMAIL[$rule_name]+x}" = "x" ]; then
+		RULE_EMAIL="${_PRESS_RULE_EMAIL[$rule_name]}"
+	fi
+	# backward compat: also fill TRIG from PRESSURE_TRIP for old display code
+	if [ -z "$TRIG" ] && [ -n "$PRESSURE_TRIP" ]; then
+		TRIG="$PRESSURE_TRIP"
 	fi
 }
 
@@ -331,25 +423,34 @@ expand_command_template() {
 	echo "$cmd"
 }
 
-# validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, SUBNET_TRIG,
-#   SUBNET_MASK, SUBNET_MASK_V6, BAN_DURATION, BAN_PERMANENT_AFTER,
-#   BAN_PERMANENT_WINDOW, BAN_ESCALATION (none/linear/double), BAN_ESCALATION_CAP,
-#   BAN_RETRY_COUNT, FIREWALL, BAN_COMMAND_TEMPLATE, EMAIL_ALERTS,
-#   EMAIL_ADDRESS (when EMAIL_ALERTS=1), EMAIL_LOGLINES, OUTPUT_SYSLOG,
-#   BFD_LOG_PATH, LOG_SOURCE, LOCK_FILE_TIMEOUT, WATCH_INTERVAL,
-#   INSTALL_PATH, EXIT_CONFIG_ERROR
+# validate_config requires: PRESSURE_TRIP, PRESSURE_HALF_LIFE, PRESSURE_TRIP_GLOBAL,
+#   PRESSURE_COUNTRY, SUBNET_TRIG, SUBNET_MASK, SUBNET_MASK_V6,
+#   BAN_TTL, BAN_ESCALATE_AFTER, BAN_ESCALATE_WINDOW, BAN_ESCALATION
+#   (none/linear/double), BAN_ESCALATION_CAP, BAN_RETRY_COUNT, FIREWALL,
+#   BAN_COMMAND_TEMPLATE, EMAIL_ALERTS, EMAIL_ADDRESS (when EMAIL_ALERTS=1),
+#   EMAIL_LOGLINES, OUTPUT_SYSLOG, BFD_LOG_PATH, LOG_SOURCE, LOCK_FILE_TIMEOUT,
+#   WATCH_INTERVAL, INSTALL_PATH, EXIT_CONFIG_ERROR
 validate_config() {
 	local int_pattern='^[0-9]+$'
-	if ! [[ "$TRIG" =~ $int_pattern ]] || [ "$TRIG" -eq 0 ]; then
-		echo "error: TRIG must be a positive integer (got '$TRIG')."
+	# Use ${VAR-default} (no colon) so explicit empty is validated, not skipped
+	local _pt="${PRESSURE_TRIP-${TRIG:-20}}"
+	if [ -z "$_pt" ] || ! [[ "$_pt" =~ $int_pattern ]] || [ "$_pt" -eq 0 ]; then
+		echo "error: PRESSURE_TRIP must be a positive integer (got '${PRESSURE_TRIP:-${TRIG:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "$TRIG_WINDOW" =~ $int_pattern ]] || [ "$TRIG_WINDOW" -eq 0 ]; then
-		echo "error: TRIG_WINDOW must be a positive integer (got '$TRIG_WINDOW')."
+	local _phl="${PRESSURE_HALF_LIFE-${TRIG_WINDOW:-300}}"
+	if [ -z "$_phl" ] || ! [[ "$_phl" =~ $int_pattern ]] || [ "$_phl" -eq 0 ]; then
+		echo "error: PRESSURE_HALF_LIFE must be a positive integer (got '${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "$TRIG_GLOBAL" =~ $int_pattern ]]; then
-		echo "error: TRIG_GLOBAL must be a non-negative integer (got '$TRIG_GLOBAL')."
+	local _ptg="${PRESSURE_TRIP_GLOBAL-${TRIG_GLOBAL:-0}}"
+	if [ -z "$_ptg" ] || ! [[ "$_ptg" =~ $int_pattern ]]; then
+		echo "error: PRESSURE_TRIP_GLOBAL must be a non-negative integer (got '${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-}}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	local _pc="${PRESSURE_COUNTRY:-0}"
+	if [ "$_pc" != "0" ] && [ "$_pc" != "1" ]; then
+		echo "error: PRESSURE_COUNTRY must be 0 or 1 (got '${PRESSURE_COUNTRY:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _st="${SUBNET_TRIG:-0}"
@@ -367,20 +468,20 @@ validate_config() {
 		echo "error: SUBNET_MASK_V6 must be a multiple of 16 between 16 and 128 (got '${SUBNET_MASK_V6:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "${BAN_DURATION:-0}" =~ $int_pattern ]]; then
-		echo "error: BAN_DURATION must be a non-negative integer (got '${BAN_DURATION:-}')."
+	if ! [[ "${BAN_TTL:-${BAN_DURATION:-0}}" =~ $int_pattern ]]; then
+		echo "error: BAN_TTL must be a non-negative integer (got '${BAN_TTL:-${BAN_DURATION:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "${BAN_PERMANENT_AFTER:-0}" =~ $int_pattern ]]; then
-		echo "error: BAN_PERMANENT_AFTER must be a non-negative integer (got '${BAN_PERMANENT_AFTER:-}')."
+	if ! [[ "${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}" =~ $int_pattern ]]; then
+		echo "error: BAN_ESCALATE_AFTER must be a non-negative integer (got '${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "${BAN_PERMANENT_WINDOW:-1}" =~ $int_pattern ]] || [ "${BAN_PERMANENT_WINDOW:-1}" -eq 0 ]; then
-		echo "error: BAN_PERMANENT_WINDOW must be a positive integer (got '${BAN_PERMANENT_WINDOW:-}')."
+	if ! [[ "${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-1}}" =~ $int_pattern ]] || [ "${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-1}}" -eq 0 ]; then
+		echo "error: BAN_ESCALATE_WINDOW must be a positive integer (got '${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if [ "${FIREWALL:-auto}" = "custom" ] && [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
-		echo "warning: BAN_DURATION>0 but UNBAN_COMMAND is empty; auto-unban will only remove state, not firewall rules."
+	if [ "${FIREWALL:-auto}" = "custom" ] && [ "${BAN_TTL:-${BAN_DURATION:-0}}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
+		echo "warning: BAN_TTL>0 but UNBAN_COMMAND is empty; auto-unban will only remove state, not firewall rules."
 	fi
 	if [ "$EMAIL_ALERTS" != "0" ] && [ "$EMAIL_ALERTS" != "1" ]; then
 		echo "error: EMAIL_ALERTS must be 0 or 1 (got '$EMAIL_ALERTS')."
@@ -1210,25 +1311,29 @@ check_recidivism() {
 # record_ban install_path utime host mod ports ban_action
 # Computes ban expiry, records in bans.active + bans.history.
 # Echoes "ban_expiry|ban_action|recent_bans" to stdout.
-# Reads globals: BAN_DURATION, BAN_PERMANENT_WINDOW, BAN_PERMANENT_AFTER,
-#   BAN_ESCALATION, BAN_ESCALATION_CAP
+# Reads globals: BAN_TTL (fallback BAN_DURATION), BAN_ESCALATE_WINDOW
+#   (fallback BAN_PERMANENT_WINDOW), BAN_ESCALATE_AFTER (fallback
+#   BAN_PERMANENT_AFTER), BAN_ESCALATION, BAN_ESCALATION_CAP
 record_ban() {
 	local install_path="$1" utime="$2" host="$3" mod="$4"
 	local ports="$5" ban_action="$6"
+	local ban_ttl="${BAN_TTL:-${BAN_DURATION:-0}}"
+	local esc_window="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
+	local esc_after="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}"
 	local recent_bans
 	recent_bans=$(state_bans_count_recent "$install_path" "$host" \
-		"${BAN_PERMANENT_WINDOW:-86400}" "$utime")
+		"$esc_window" "$utime")
 	local ban_expiry
-	if [ "${BAN_DURATION:-0}" -eq 0 ]; then
+	if [ "$ban_ttl" -eq 0 ]; then
 		ban_expiry=0
 	elif check_recidivism "$install_path" "$host" \
-		"${BAN_PERMANENT_WINDOW:-86400}" "$utime" "${BAN_PERMANENT_AFTER:-0}"; then
+		"$esc_window" "$utime" "$esc_after"; then
 		ban_expiry=0
 		ban_action="escalate"
 		eout "{$mod} $host escalated to permanent ban (repeat offender)." le
 	else
 		local computed_duration
-		computed_duration=$(compute_ban_duration "$BAN_DURATION" "$recent_bans" \
+		computed_duration=$(compute_ban_duration "$ban_ttl" "$recent_bans" \
 			"${BAN_ESCALATION:-none}" "${BAN_ESCALATION_CAP:-0}")
 		ban_expiry=$((utime + computed_duration))
 	fi
@@ -1449,23 +1554,26 @@ state_bans_count_recent() {
 
 # --- Event state I/O functions ---
 # State file format:
-#   events.dat: "TIMESTAMP IP MOD" — timestamped failure events
+#   events.dat: "TIMESTAMP IP MOD [WEIGHT]" — timestamped failure events
+#   Field 4 (WEIGHT) is optional; older events without it default to weight 1.
 
-# state_events_append install_path timestamp host mod [count] — append events
-# Appends count timestamped event lines (default 1) to events.dat
+# state_events_append install_path timestamp host mod [count] [weight] — append events
+# Appends count timestamped event lines (default 1) to events.dat.
+# weight (default "1") is stored as field 4 for pressure scoring.
 state_events_append() {
 	local install_path="$1" timestamp="$2" host="$3" mod="$4"
-	local count="${5:-1}"
+	local count="${5:-1}" weight="${6:-1}"
 	local events_file="$install_path/tmp/events.dat"
 	(
 		flock -x 200
 		local i
 		for ((i = 0; i < count; i++)); do
-			echo "$timestamp $host $mod"
+			echo "$timestamp $host $mod $weight"
 		done >> "$events_file"
 	) 200>>"$events_file"
 }
 
+# DEPRECATED: use pressure_compute() — retained for backward compat callers.
 # state_events_count install_path host window now [mod] — count events in window
 # Counts events for host within window seconds of now.
 # If mod specified, counts only that service. Outputs count to stdout.
@@ -1509,6 +1617,7 @@ state_events_prune() {
 
 # count_failures host hosts_parsed install_path window now mod — count windowed failures
 # Replacement for count_attacks():
+# DEPRECATED: use record_and_score() — retained for backward compat callers.
 #   1. Count host occurrences in hosts_parsed (grep -cxF)
 #   2. Append that many timestamped events
 #   3. Count per-service events within window
@@ -1522,6 +1631,148 @@ count_failures() {
 		state_events_append "$install_path" "$now" "$host" "$mod" "$count"
 	fi
 	state_events_count "$install_path" "$host" "$window" "$now" "$mod"
+}
+
+# --- Pressure scoring functions ---
+
+# pressure_compute install_path host half_life now [mod] — compute decayed pressure
+# Single-pass awk over events.dat: sums weight * 2^(-(now-ts)/half_life) for each
+# event matching host (and optionally mod). Returns pressure * 1000 as integer.
+# Handles both 3-field (old, weight=1) and 4-field (new) event lines.
+pressure_compute() {
+	local install_path="$1" host="$2" half_life="$3" now="$4"
+	local mod="${5:-}"
+	local events_file="$install_path/tmp/events.dat"
+	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
+		echo "0"
+		return 0
+	fi
+	local cutoff=$((now - half_life * 10))
+	if [ -n "$mod" ]; then
+		awk -v cutoff="$cutoff" -v host="$host" -v hl="$half_life" \
+			-v now="$now" -v mod="$mod" '
+		BEGIN { p = 0 }
+		$1+0 >= cutoff && $2 == host && $3 == mod {
+			w = ($4+0 > 0) ? $4+0 : 1
+			age = now - ($1+0)
+			p += w * exp(-0.693147180559945 * age / hl)
+		}
+		END { printf "%d\n", p * 1000 }' "$events_file"
+	else
+		awk -v cutoff="$cutoff" -v host="$host" -v hl="$half_life" \
+			-v now="$now" '
+		BEGIN { p = 0 }
+		$1+0 >= cutoff && $2 == host {
+			w = ($4+0 > 0) ? $4+0 : 1
+			age = now - ($1+0)
+			p += w * exp(-0.693147180559945 * age / hl)
+		}
+		END { printf "%d\n", p * 1000 }' "$events_file"
+	fi
+}
+
+# pressure_format scaled_pressure — format scaled integer as decimal string
+# Example: 18400 -> "18.4", 0 -> "0.0", 500 -> "0.5"
+pressure_format() {
+	local scaled="$1"
+	local whole=$((scaled / 1000))
+	local frac=$(( (scaled % 1000 + 50) / 100 ))
+	if [ "$frac" -ge 10 ]; then
+		whole=$((whole + 1))
+		frac=0
+	fi
+	echo "${whole}.${frac}"
+}
+
+# record_and_score host hosts_parsed install_path half_life now mod weight
+# Replacement for count_failures() using pressure scoring:
+#   1. Count host occurrences in hosts_parsed (grep -cxF)
+#   2. Append that many weighted events to events.dat
+#   3. Compute per-service pressure (decayed sum)
+#   4. Return pressure * 1000 as integer
+record_and_score() {
+	local host="$1" hosts_parsed="$2" install_path="$3"
+	local half_life="$4" now="$5" mod="$6" weight="${7:-1}"
+	local count
+	count=$(echo "$hosts_parsed" | grep -cxF "$host")
+	if [ "$count" -gt 0 ]; then
+		state_events_append "$install_path" "$now" "$host" "$mod" "$count" "$weight"
+	fi
+	pressure_compute "$install_path" "$host" "$half_life" "$now" "$mod"
+}
+
+# --- Country multiplier functions ---
+
+# ip_to_country ip db_file — look up 2-letter country code for an IPv4 address
+# Uses awk binary search on sorted integer ranges in ipcountry.dat.
+# Returns CC to stdout, or empty string if not found or IPv6.
+ip_to_country() {
+	local ip="$1" db_file="$2"
+	# IPv6 not supported in v1
+	if [[ "$ip" == *:* ]]; then
+		echo ""
+		return 0
+	fi
+	if [ ! -f "$db_file" ] || [ ! -s "$db_file" ]; then
+		echo ""
+		return 0
+	fi
+	awk -v ip="$ip" '
+	BEGIN {
+		n = split(ip, p, ".")
+		if (n != 4) { print ""; exit }
+		target = (p[1]+0) * 16777216 + (p[2]+0) * 65536 + (p[3]+0) * 256 + (p[4]+0)
+	}
+	/^#/ { next }
+	{
+		if ($1+0 <= target && target <= $2+0) {
+			print $3
+			exit
+		}
+	}
+	END {}' "$db_file"
+}
+
+# country_weight cc weights_file — look up pressure multiplier for a country code
+# Returns integer multiplier (10 = 1.0x, 20 = 2.0x). Defaults to 10 if unlisted.
+country_weight() {
+	local cc="$1" weights_file="$2"
+	if [ -z "$cc" ] || [ ! -f "$weights_file" ]; then
+		echo "10"
+		return 0
+	fi
+	awk -F= -v cc="$cc" '
+	/^#/ { next }
+	/^$/ { next }
+	$1 == cc { print $2; found=1; exit }
+	END { if (!found) print 10 }' "$weights_file"
+}
+
+# pressure_effective_weight rule_weight host install_path — apply country multiplier
+# When PRESSURE_COUNTRY=1: rule_weight * country_mult / 10 (integer math).
+# When off or no DB: returns rule_weight unchanged.
+pressure_effective_weight() {
+	local rule_weight="$1" host="$2" install_path="$3"
+	local db_file="$install_path/ipcountry.dat"
+	local weights_file="$install_path/weights.country"
+	if [ ! -f "$db_file" ] || [ ! -f "$weights_file" ]; then
+		echo "$rule_weight"
+		return 0
+	fi
+	local cc
+	cc=$(ip_to_country "$host" "$db_file")
+	if [ -z "$cc" ]; then
+		echo "$rule_weight"
+		return 0
+	fi
+	local mult
+	mult=$(country_weight "$cc" "$weights_file")
+	# integer math: weight * mult / 10, minimum 1
+	local eff=$(( (rule_weight * mult + 5) / 10 ))
+	if [ "$eff" -lt 1 ]; then
+		eff=1
+	fi
+	echo "$eff"
 }
 
 # count_subnet_attackers install_path window now mask mask_v6 min_unique
@@ -1631,7 +1882,7 @@ check_distributed() {
 			IFS='|' read -r ban_expiry ban_action recent_bans <<< "$ban_result"
 			state_pool_append "$install_path" "$now" "$subnet" "$mod"
 			if [ "$EMAIL_ALERTS" = "1" ] && [ "$DRY_RUN" != "1" ]; then
-				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}||${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}" >> "$alerts_file"
+				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}||${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}|1" >> "$alerts_file"
 			fi
 		fi
 	done < <(count_subnet_attackers "$install_path" "$window" "$now" \
@@ -1697,7 +1948,7 @@ _hc_binaries() {
 			_hc_warn=$((_hc_warn + 1))
 		fi
 
-		if [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
+		if [ "${BAN_TTL:-${BAN_DURATION:-0}}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
 			echo "[WARN] UNBAN_COMMAND is empty; temp bans won't auto-unban firewall rules"
 			_hc_warn=$((_hc_warn + 1))
 		fi
@@ -1760,17 +2011,19 @@ _hc_rules() {
 			_save_rule_vars
 			_clear_rule_vars
 			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+				_apply_pressure "$rule_name"
 				_apply_thresholds "$rule_name"
 				if _rule_is_active; then
-					local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
+					local rule_weight="${PRESSURE_WEIGHT:-1}"
+					local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
 					if [ -n "${LP:-}" ] && [ ! -f "$LP" ] && [ "$_hc_has_journalctl" -eq 1 ] && \
 					   [ "$log_source" != "file" ] && \
 					   tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
 						rules_active=$((rules_active + 1))
-						echo "  [PASS] $rule_name: active via journal (TRIG=$rule_trig, PORTS=${PORTS:-all})"
+						echo "  [PASS] $rule_name: active via journal (weight=$rule_weight, trip=$rule_trip, PORTS=${PORTS:-all})"
 					else
 						rules_active=$((rules_active + 1))
-						echo "  [PASS] $rule_name: active (TRIG=$rule_trig, PORTS=${PORTS:-all}, LOG=${LP:-n/a})"
+						echo "  [PASS] $rule_name: active (weight=$rule_weight, trip=$rule_trip, PORTS=${PORTS:-all}, LOG=${LP:-n/a})"
 					fi
 				else
 					rules_inactive=$((rules_inactive + 1))
@@ -1784,6 +2037,7 @@ _hc_rules() {
 		done
 		echo "[PASS] Rules: $rules_active active, $rules_inactive inactive ($rules_total total)"
 		_hc_pass=$((_hc_pass + 1))
+		echo "  Pressure model: half-life ${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}s, trip ${PRESSURE_TRIP:-${TRIG:-20}}, global trip ${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
 	else
 		echo "[FAIL] Rules directory not found: ${RULES_PATH:-$install_path/rules}"
 		_hc_fail=$((_hc_fail + 1))
@@ -1906,14 +2160,14 @@ format_duration() {
 	echo "$result"
 }
 
-# format_alert_entry n total host mod ports count expiry action recent trig trig_window
+# format_alert_entry n total host mod ports pressure_scaled expiry action recent trip half_life weight
 # Format a single ban's detail block for email alerts.
 # Sets ATTACK_HOST, MOD, PORTS globals so $BAN_COMMAND_TEMPLATE expands correctly.
 format_alert_entry() {
 	local n="$1" total="$2" host="$3" mod="$4" ports="$5"
-	local count="$6" expiry="$7" action="$8" recent="$9"
+	local pressure_scaled="$6" expiry="$7" action="$8" recent="$9"
 	shift 9
-	local trig="$1" trig_window="$2"
+	local trip="$1" half_life="$2" weight="${3:-1}"
 
 	if [ "$total" -gt 1 ]; then
 		echo "--- Ban $n of $total ---"
@@ -1935,7 +2189,7 @@ format_alert_entry() {
 		if [ "$duration" -lt 0 ]; then
 			duration=0
 		fi
-		local base_duration="${BAN_DURATION:-0}"
+		local base_duration="${BAN_TTL:-${BAN_DURATION:-0}}"
 		if [ "${BAN_ESCALATION:-none}" != "none" ] && [ "$recent" -gt 0 ] && [ "$duration" -gt "$base_duration" ]; then
 			ban_type="Temporary ($(format_duration "$duration"), escalated from $(format_duration "$base_duration"))"
 		else
@@ -1951,16 +2205,22 @@ format_alert_entry() {
 		port_display="port $port_display"
 	fi
 
+	local pressure_display trip_display
+	pressure_display=$(pressure_format "$pressure_scaled")
+	trip_display=$(pressure_format $((trip * 1000)))
+
 	echo "  Host:       $host"
 	echo "  Service:    $mod ($port_display)"
-	echo "  Failures:   $count in ${trig_window}s window (threshold: $trig)"
+	echo "  Pressure:   ${pressure_display}/${trip_display} (weight $weight, half-life ${half_life}s)"
 	if [ -n "$ban_detail" ]; then
 		echo "  Ban:        $ban_type, expires $ban_detail"
 	else
 		echo "  Ban:        $ban_type"
 	fi
-	if [ "${BAN_PERMANENT_AFTER:-0}" -gt 0 ]; then
-		echo "  History:    $recent previous ban(s) in ${BAN_PERMANENT_WINDOW:-86400}s (permanent at ${BAN_PERMANENT_AFTER})"
+	local esc_after="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}"
+	local esc_window="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
+	if [ "$esc_after" -gt 0 ]; then
+		echo "  History:    $recent previous ban(s) in ${esc_window}s (permanent at ${esc_after})"
 	fi
 	# reconstruct ban command display
 	local display_cmd
@@ -1993,18 +2253,18 @@ format_alert_body() {
 
 	# format each entry
 	local n=0
-	local host mod ports count expiry action recent lp recipient trig trig_window
-	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window; do
+	local host mod ports count expiry action recent lp recipient trig trig_window weight
+	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window weight; do
 		[ -z "$host" ] && continue
 		n=$((n + 1))
 		format_alert_entry "$n" "$entry_count" "$host" "$mod" "$ports" \
-			"$count" "$expiry" "$action" "$recent" "$trig" "$trig_window"
+			"$count" "$expiry" "$action" "$recent" "$trig" "$trig_window" "${weight:-1}"
 	done < "$alerts_file"
 
 	# log section
 	local has_logs=0
 	n=0
-	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window; do
+	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window weight; do
 		[ -z "$host" ] && continue
 		n=$((n + 1))
 		if [ -z "$lp" ] || [ ! -f "$lp" ]; then
@@ -2072,11 +2332,14 @@ send_alerts() {
 
 		# set backward-compat globals for single-ban case
 		if [ "$alert_count" -eq 1 ]; then
-			local _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw
-			IFS='|' read -r _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw < "$recip_file"
+			local _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt
+			IFS='|' read -r _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt < "$recip_file"
 			ATTACK_HOST="$_host"
 			MOD="$_mod"
-			ATTACK_COUNT="$_count"
+			# backward compat: _count is pressure_scaled (e.g., 18400);
+			# old templates expect a count, so use whole pressure units
+			ATTACK_COUNT="$(( _count / 1000 ))"
+			if [ "$ATTACK_COUNT" -lt 1 ]; then ATTACK_COUNT=1; fi
 			LP="$_lp"
 			PORTS="$_ports"
 			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
@@ -2269,6 +2532,39 @@ show_status() {
 			echo "  Top services:   $top_svcs"
 		fi
 	fi
+
+	# Top-5 IPs by current pressure
+	local half_life="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
+	local prune_cutoff=$((now - half_life * 10))
+	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+		local top_pressure
+		top_pressure=$(awk -v now="$now" -v hl="$half_life" -v cutoff="$prune_cutoff" \
+			'BEGIN { ln2 = 0.693147180559945 }
+			$1+0 >= cutoff {
+				w = ($4+0 > 0) ? $4+0 : 1
+				age = now - ($1+0)
+				ip = $2
+				p[ip] += w * exp(-ln2 * age / hl)
+			}
+			END {
+				for (ip in p) {
+					scaled = int(p[ip] * 1000)
+					if (scaled > 0)
+						printf "%d %s\n", scaled, ip
+				}
+			}' "$events_file" | sort -rn | head -5)
+		if [ -n "$top_pressure" ]; then
+			echo ""
+			echo "  Top pressure:"
+			local p_scaled p_ip
+			while read -r p_scaled p_ip; do
+				[ -z "$p_scaled" ] && continue
+				local p_disp
+				p_disp=$(pressure_format "$p_scaled")
+				echo "    $p_ip: $p_disp"
+			done <<< "$top_pressure"
+		fi
+	fi
 }
 
 # show_service_status install_path service — per-service status display
@@ -2291,9 +2587,12 @@ show_service_status() {
 	_save_rule_vars
 	_clear_rule_vars
 	safe_source "$rule_file" "rule:$service" 2>/dev/null
+	_apply_pressure "$service"
 	_apply_thresholds "$service"
 
-	local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
+	local rule_weight="${PRESSURE_WEIGHT:-1}"
+	local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
+	local half_life="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
 	local rule_ports="${PORTS:-all}"
 
 	# Log source
@@ -2306,7 +2605,8 @@ show_service_status() {
 		echo "  Log:            not available"
 	fi
 
-	echo "  Threshold:      $rule_trig failures in ${TRIG_WINDOW:-300}s"
+	echo "  Weight:         $rule_weight"
+	echo "  Trip:           $rule_trip (half-life ${half_life}s)"
 	echo "  Ports:          $rule_ports"
 
 	# Events (24h) for this service
@@ -2356,7 +2656,7 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
-	local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL THRESHOLDS_CONF"
+	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL PRESSURE_COUNTRY SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL PRESSURE_CONF"
 	if [ -n "$var" ]; then
 		# validate against whitelist before eval
 		local _found=0 _v
@@ -2527,7 +2827,7 @@ list_rules() {
 
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.rules.XXXXXX")
-	echo "RULE|STATUS|TRIG|PORTS|LOG SOURCE" > "$atmp"
+	echo "RULE|STATUS|WEIGHT|TRIP|PORTS|LOG SOURCE" > "$atmp"
 
 	local active=0 inactive=0 total=0
 	local rule_file rule_name
@@ -2540,8 +2840,10 @@ list_rules() {
 		_clear_rule_vars
 
 		if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+			_apply_pressure "$rule_name"
 			_apply_thresholds "$rule_name"
-			local rule_trig="${TRIG:-${GLOB_TRIG:-15}}"
+			local rule_weight="${PRESSURE_WEIGHT:-1}"
+			local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
 			local rule_ports="${PORTS:-all}"
 			if _rule_is_active; then
 				active=$((active + 1))
@@ -2555,14 +2857,14 @@ list_rules() {
 				else
 					log_info="${LP:-n/a}"
 				fi
-				echo "$rule_name|active|$rule_trig|$rule_ports|$log_info" >> "$atmp"
+				echo "$rule_name|active|$rule_weight|$rule_trip|$rule_ports|$log_info" >> "$atmp"
 			else
 				inactive=$((inactive + 1))
-				echo "$rule_name|inactive|-|-|(no prereq)" >> "$atmp"
+				echo "$rule_name|inactive|-|-|-|(no prereq)" >> "$atmp"
 			fi
 		else
 			inactive=$((inactive + 1))
-			echo "$rule_name|error|-|-|(source failed)" >> "$atmp"
+			echo "$rule_name|error|-|-|-|(source failed)" >> "$atmp"
 		fi
 
 		_restore_rule_vars
@@ -2595,6 +2897,7 @@ show_rule() {
 		_restore_rule_vars
 		return 1
 	fi
+	_apply_pressure "$rule_name"
 	_apply_thresholds "$rule_name"
 
 	if _rule_is_active; then
@@ -2603,7 +2906,11 @@ show_rule() {
 		echo "  Status:     inactive (${REQ:-unset} not found)"
 	fi
 
-	echo "  Threshold:  ${TRIG:-${GLOB_TRIG:-15}} failures in ${TRIG_WINDOW:-300}s"
+	local rule_weight="${PRESSURE_WEIGHT:-1}"
+	local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
+	local half_life="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
+	echo "  Weight:     $rule_weight"
+	echo "  Trip:       $rule_trip (half-life ${half_life}s)"
 	echo "  Ports:      ${PORTS:-all}"
 
 	if [ -n "${LP:-}" ] && [ -f "$LP" ]; then
@@ -2654,12 +2961,14 @@ test_rule() {
 		_restore_rule_vars
 		return 1
 	fi
+	_apply_pressure "$rule_name"
 	_apply_thresholds "$rule_name"
 
 	# report
 	echo "Rule:         $rule_name"
 	echo "Log file:     ${log_file:-${LP:-n/a}}"
-	echo "Threshold:    ${TRIG:-${GLOB_TRIG:-15}}"
+	echo "Weight:       ${PRESSURE_WEIGHT:-1}"
+	echo "Trip:         ${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
 	[ -n "${PORTS:-}" ] && echo "Ports:        $PORTS"
 	echo ""
 

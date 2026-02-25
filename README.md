@@ -3,8 +3,9 @@
 [![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](CHANGELOG)
 [![License: GPL v2](https://img.shields.io/badge/license-GPL_v2-green.svg)](COPYING.GPL)
 
-**Log-based brute force attack detection and IP banning for Linux servers** — modular
-rule engine, sliding time-window counting, automatic ban lifecycle, and IPv4/IPv6 support.
+**Log-based brute force attack detection and IP banning for Linux servers** — pressure-based
+scoring that lets humans make mistakes while stopping bots cold, automatic ban lifecycle,
+and IPv4/IPv6 support across 42 service rules.
 
 > (C) 1999-2026, R-fx Networks &lt;proj@rfxn.com&gt;<br>
 > (C) 2026, Ryan MacDonald &lt;ryan@rfxn.com&gt;<br>
@@ -19,13 +20,14 @@ rule engine, sliding time-window counting, automatic ban lifecycle, and IPv4/IPv
 - [2. Installation](#2-installation)
   - [2.1 Scheduling](#21-scheduling)
 - [3. Configuration](#3-configuration)
-  - [3.1 Detection Thresholds](#31-detection-thresholds)
+  - [3.1 Pressure Model (Detection)](#31-pressure-model-detection)
   - [3.2 Email Alerts](#32-email-alerts)
-  - [3.3 Ban Command & Duration](#33-ban-command--duration)
+  - [3.3 Banning](#33-banning)
   - [3.4 Repeat Offender Handling](#34-repeat-offender-handling)
   - [3.5 IPv6](#35-ipv6)
   - [3.6 Log Paths](#36-log-paths)
   - [3.7 Advanced](#37-advanced)
+  - [3.8 Country Weighting](#38-country-weighting)
 - [4. Firewall Integration](#4-firewall-integration)
 - [5. General Usage](#5-general-usage)
   - [5.1 Dry Run](#51-dry-run)
@@ -83,18 +85,22 @@ bfd -u 192.0.2.1      # unban an IP
 
 Brute Force Detection (BFD) is a modular shell script for parsing application logs and detecting authentication failures. It ships with 42 service rules covering SSH, mail, FTP, web, database, control panel, DNS, VPN, and VoIP services. Each rule declares fail2ban-compatible `<HOST>` regex patterns; the engine handles log reading, IP extraction, IPv6 normalization, and validation.
 
+Unlike traditional count-based tools that ban at a fixed failure count — forcing operators to choose between catching attackers fast or tolerating legitimate mistakes — BFD uses **exponential-decay pressure scoring**. Each failure adds pressure weighted by service severity, and pressure decays over time via a configurable half-life. A user who mistypes a password a few times over several minutes generates pressure that naturally fades, staying well below the trip point. A bot hammering the same service generates pressure faster than it can decay and trips the threshold almost immediately. The result is fewer false positives on real users with faster response to actual attacks.
+
 BFD uses a log tracking system so logs are only parsed from the point at which they were last read. This greatly assists in performance as we are not constantly reading the same log data. The log tracking system is compatible with syslog/logrotate style log rotations — it detects when rotations have occurred and grabs log tails from both the new log file and the rotated log file.
 
 **Detection**
 - 42 service rules with fail2ban-compatible `<HOST>` regex patterns
-- Sliding time-window failure counting (default 5 minutes)
-- Per-rule and global cross-service trigger thresholds
+- Exponential-decay pressure scoring — human typos fade away, bot attacks trip instantly
+- Per-service severity weights (SSH=3, control panels=5, noisy services=1)
+- Per-rule and global cross-service pressure trip points
+- Optional country-based pressure multipliers
 - Incremental log parsing with rotation-aware tracking
 
 **Banning**
 - Temporary bans with automatic expiry and firewall rule cleanup
-- Repeat offender escalation to permanent bans
-- Pluggable ban commands — APF, iptables, firewalld, nftables, ip route, or any custom command
+- Repeat offender escalation (linear, doubling, or capped growth)
+- 8 firewall backends with auto-detection (APF, CSF, firewalld, UFW, nftables, iptables, route, custom)
 - Manual ban/unban CLI with full state tracking
 
 **IPv4/IPv6**
@@ -186,12 +192,25 @@ The main configuration file is `/usr/local/bfd/conf.bfd`. Each option has a desc
 
 Use `bfd -c` to validate your configuration without banning anything.
 
-### 3.1 Detection Thresholds
+### 3.1 Pressure Model (Detection)
+
+BFD uses exponential-decay pressure scoring: each failed login adds pressure weighted by service severity, and pressure decays over time via a half-life. A ban fires when accumulated pressure crosses a trip point. This naturally separates human mistakes from automated attacks — a few typos over several minutes decay away harmlessly, while rapid-fire failures from a bot accumulate faster than they can decay.
+
+```
+pressure = SUM { weight * 2^(-(now - event_time) / half_life) }
+```
+
+**Example** (SSH rule: weight=3, trip=15, half-life=300s):
+- **Bot attack** — 7 failures in 1 second: pressure = 3×7 = 21.0 → exceeds 15 → **BAN**
+- **Human typos** — 5 failures over 4 minutes: earlier events decay, total ≈ 11.1 → below 15 → **NO BAN**
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TRIG` | `15` | Failed logins before an address is blocked. Override per-rule in `/usr/local/bfd/rules/` |
-| `TRIG_WINDOW` | `300` | Sliding window in seconds (default 5 min). Only failures within this window count toward the threshold |
+| `PRESSURE_TRIP` | `20` | Accumulated pressure needed to trigger a ban; per-rule overrides in rule files or `pressure.conf` |
+| `PRESSURE_HALF_LIFE` | `300` | Half-life in seconds (how fast pressure decays); shorter = more forgiving |
+| `PRESSURE_COUNTRY` | `0` | Enable country-based pressure multipliers (0 = off, 1 = on); see [3.8](#38-country-weighting) |
+
+Per-rule weights are configured in `pressure.conf` (centralized) or in individual rule files via `PRESSURE_WEIGHT`. Higher weight = faster pressure accumulation. Default tiers: 5 (control panels), 3 (SSH/VPN/critical), 2 (mail/FTP/web), 1 (noisy/generic).
 
 ### 3.2 Email Alerts
 
@@ -206,31 +225,32 @@ Alerts are **batched**: multiple bans in one check cycle produce a single email 
 
 The email template (`alert.bfd`) is fully customizable. Individual rules can suppress alerts by setting `SKIP_ALERT="1"` in the rule file. Set `RULE_EMAIL="addr"` in a rule file to route that rule's alerts to a different recipient.
 
-### 3.3 Ban Command & Duration
+### 3.3 Banning
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BAN_COMMAND` | APF deny | Command to execute when banning a host. See [section 4](#4-firewall-integration) for examples |
-| `BAN_DURATION` | `300` | Ban duration in seconds (0 = permanent). Temporary bans require `UNBAN_COMMAND` |
-| `UNBAN_COMMAND` | APF unban | Command to remove a ban. Required for temporary bans to auto-remove firewall rules on expiry |
+| `FIREWALL` | `auto` | Firewall backend; see [section 4](#4-firewall-integration) |
+| `BAN_TTL` | `600` | Ban duration in seconds (0 = permanent). Temporary bans auto-expire |
+| `BAN_COMMAND` | APF deny | Command when `FIREWALL="custom"`. See [section 4](#4-firewall-integration) |
+| `UNBAN_COMMAND` | APF unban | Reverse command. Required for temporary ban auto-expiry |
 
 The variables `$ATTACK_HOST`, `$MOD` (service name), and `$PORTS` (from rule file) are available in ban/unban commands.
 
 ### 3.4 Repeat Offender Handling
 
-These four settings form a pipeline: `BAN_ESCALATION` controls how ban duration grows, `BAN_ESCALATION_CAP` limits that growth, `BAN_PERMANENT_AFTER` flips to permanent once the count is reached, and `BAN_PERMANENT_WINDOW` is the lookback window for all of the above.
+These four settings form a pipeline: `BAN_ESCALATION` controls how ban duration grows, `BAN_ESCALATION_CAP` limits that growth, `BAN_ESCALATE_AFTER` flips to permanent once the count is reached, and `BAN_ESCALATE_WINDOW` is the lookback window for all of the above.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BAN_ESCALATION` | `none` | How duration grows: `none` (fixed), `linear` (5m, 10m, 15m...), `double` (5m, 10m, 20m, 40m...) |
+| `BAN_ESCALATION` | `none` | How duration grows: `none` (fixed), `linear` (10m, 20m, 30m...), `double` (10m, 20m, 40m, 80m...) |
 | `BAN_ESCALATION_CAP` | `86400` | Maximum escalated duration in seconds (0 = no cap) |
-| `BAN_PERMANENT_AFTER` | `5` | Temporary bans before flipping to permanent (0 = never) |
-| `BAN_PERMANENT_WINDOW` | `86400` | Lookback window in seconds for counting repeat offenses |
+| `BAN_ESCALATE_AFTER` | `5` | Temporary bans before flipping to permanent (0 = never) |
+| `BAN_ESCALATE_WINDOW` | `86400` | Lookback window in seconds for counting repeat offenses |
 
-**Examples** (with `BAN_DURATION="300"`):
-- **Fixed 5m bans, permanent after 5th:** `ESCALATION=none`, `PERMANENT_AFTER=5` → 5m, 5m, 5m, 5m, 5m → permanent
-- **Doubling bans, permanent after 5th:** `ESCALATION=double`, `PERMANENT_AFTER=5` → 5m, 10m, 20m, 40m, 80m → permanent
-- **Linear growth, capped, never permanent:** `ESCALATION=linear`, `CAP=3600`, `PERMANENT_AFTER=0` → 5m, 10m, 15m... 1h, 1h, 1h (always temporary)
+**Examples** (with `BAN_TTL="600"`):
+- **Fixed 10m bans, permanent after 5th:** `ESCALATION=none`, `ESCALATE_AFTER=5` → 10m, 10m, 10m, 10m, 10m → permanent
+- **Doubling bans, permanent after 5th:** `ESCALATION=double`, `ESCALATE_AFTER=5` → 10m, 20m, 40m, 80m, 160m → permanent
+- **Linear growth, capped, never permanent:** `ESCALATION=linear`, `CAP=3600`, `ESCALATE_AFTER=0` → 10m, 20m, 30m... 1h, 1h, 1h (always temporary)
 
 ### 3.5 IPv6
 
@@ -256,7 +276,7 @@ Log paths are auto-detected based on the distribution. Override in `conf.bfd` if
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TRIG_GLOBAL` | `0` | Cross-service aggregate threshold (0 = disabled) |
+| `PRESSURE_TRIP_GLOBAL` | `0` | Cross-service aggregate pressure trip (0 = disabled) |
 | `SUBNET_TRIG` | `0` | Unique IPs from same subnet to trigger subnet ban (0 = disabled) |
 | `SUBNET_MASK` | `24` | IPv4 subnet mask for distributed detection |
 | `SUBNET_MASK_V6` | `48` | IPv6 subnet mask (must be multiple of 16) |
@@ -264,6 +284,14 @@ Log paths are auto-detected based on the distribution. Override in `conf.bfd` if
 | `OUTPUT_SYSLOG` | `1` | Log to syslog (0 = off, 1 = on) |
 
 Additional variables (`LOG_SOURCE`, `LOCK_FILE_TIMEOUT`, `BAN_RETRY_COUNT`, `OUTPUT_SYSLOG_FILE`) have sensible defaults in `internals.conf` and can be overridden by adding them to `conf.bfd`.
+
+### 3.8 Country Weighting
+
+When `PRESSURE_COUNTRY="1"`, pressure weight is multiplied by a per-country factor from `/usr/local/bfd/weights.country`. This lets operators increase sensitivity for high-risk geographies without affecting traffic from trusted countries.
+
+The country database (`ipcountry.dat`) maps IPv4 addresses to 2-letter country codes. Update it periodically with `update-ipcountry.sh` (or the pre-built file ships with BFD).
+
+The multiplier file (`weights.country`) uses `CC=N` format where N is weight×10 (e.g., `CN=20` means 2.0× weight, `US=10` means 1.0× = no change). Unlisted countries default to 1.0×.
 
 ---
 
@@ -348,7 +376,7 @@ usage: bfd [OPTION]
 -b|--ban IP [SERVICE] ...... manually ban an IP (permanent)
 -S|--status [SERVICE] ...... system or per-service status
 -C|--config [VAR] .......... show config values
--R|--rules [RULE] .......... list rules or show rule details
+-R|--rules [RULE] .......... list rules (weight/trip) or show rule details
 -T|--test RULE [FILE|-] .... test rule patterns against log or stdin
    --test-pattern PAT [FILE|-] test a raw <HOST> pattern against log or stdin
    --flush-temp ............ unban all temporary bans
@@ -360,7 +388,7 @@ usage: bfd [OPTION]
 -h|--help .................. display this help
 ```
 
-The **`-s|--standard`** and **`-q|--quiet`** options run the full detection and banning cycle. Standard mode prints output; quiet mode suppresses it (used by cron). Both parse logs, count failures against thresholds, and execute bans.
+The **`-s|--standard`** and **`-q|--quiet`** options run the full detection and banning cycle. Standard mode prints output; quiet mode suppresses it (used by cron). Both parse logs, compute pressure against trip points, and execute bans.
 
 ### 5.1 Dry Run
 
@@ -377,9 +405,10 @@ The **`-c|--check`** option performs a non-destructive diagnostic check of your 
 - Validates configuration (required variables, sane values)
 - Checks log file paths exist and are readable
 - Verifies ban command binary exists and is executable
-- Warns if `UNBAN_COMMAND` is empty when `BAN_DURATION > 0`
+- Warns if `UNBAN_COMMAND` is empty when `BAN_TTL > 0`
 - Checks `BAN_COMMAND_V6` binary if configured
-- Scans all rules: reports active vs inactive, trigger thresholds, ports, log paths
+- Scans all rules: reports active vs inactive, pressure weight/trip, ports, log paths
+- Displays pressure model summary (half-life, trip, global trip)
 - Verifies tlog (log tracking script) is executable
 - Checks state directories exist with correct permissions
 - Reports lock file status
@@ -401,7 +430,7 @@ bfd -a 192.0.2   # search for a specific string
 ```
 
 The report includes:
-- **Top 25 attackers today** — trigger count, IP, first/last seen, services, and ban status (active bans show `BANNED(perm)` or `BANNED(Xm)`, previous bans show `prev:N`)
+- **Top 25 attackers today** — event count, IP, first/last seen, services, and ban status (active bans show `BANNED(perm)` or `BANNED(Xm)`, previous bans show `prev:N`)
 - **Per-service breakdown** — event count and unique IP count per service
 - **Top 25 attackers this week** — same format, aggregated from the weekly pool
 
@@ -420,7 +449,7 @@ Watch mode holds a lock for its entire lifetime, so cron-based runs (`bfd -q`) w
 | Signal | Action |
 |--------|--------|
 | `SIGTERM` / `SIGINT` | Clean shutdown (removes lock file) |
-| `SIGHUP` | Reload `conf.bfd` and `internals.conf` without restart (allows changing `WATCH_INTERVAL`, `TRIG`, ban commands, etc.) |
+| `SIGHUP` | Reload `conf.bfd`, `internals.conf`, and `pressure.conf` without restart (allows changing `WATCH_INTERVAL`, `PRESSURE_TRIP`, ban commands, etc.) |
 
 **Service management:**
 
@@ -514,18 +543,22 @@ Each rule file supports the following variables:
 | `REQ` | Path to required binary. Rule is active only if this binary exists |
 | `LP` | Log file path to monitor (uses config variables like `$AUTH_LOG_PATH`) |
 | `ARG_VAL` | Extracted IP list — tlog + extract_hosts pipeline using `<HOST>` patterns |
-| `TRIG` | Per-service trigger threshold (overrides global `TRIG` from `conf.bfd`) |
+| `PRESSURE_WEIGHT` | Per-service pressure weight (overrides `pressure.conf`; higher = faster accumulation) |
+| `PRESSURE_TRIP` | Per-service trip point (overrides `pressure.conf` and global `PRESSURE_TRIP`) |
 | `PORTS` | Service ports for port-specific blocking (e.g., `"22"` for sshd) |
 | `SKIP_ALERT` | Set to `"1"` to suppress email alerts for this service |
 | `RULE_EMAIL` | Override `EMAIL_ADDRESS` for this rule's alerts (per-rule routing) |
 | `TLOG_TF` | Tracking identifier used by tlog for state file naming (e.g., `"sshd"`, `"dovecot"`) |
 | `IGNOREREGEX` | Lines matching this ERE pattern are excluded before IP extraction (fail2ban-compatible) |
 
-To customize a rule's trigger threshold:
+To customize a rule's pressure weight and trip point:
 ```bash
-# In /usr/local/bfd/rules/sshd
-TRIG="5"
+# In /usr/local/bfd/rules/sshd — make SSH failures count triple
+PRESSURE_WEIGHT="3"
+PRESSURE_TRIP="15"
 ```
+
+Centralized per-rule overrides (without editing rule files) go in `/usr/local/bfd/pressure.conf`.
 
 ---
 
@@ -542,9 +575,9 @@ BFD automatically detects local IPv4 and IPv6 addresses (including `::1`) and ex
 
 ## 8. Ban Management
 
-Bans can be temporary (auto-expire after `BAN_DURATION` seconds) or permanent (`BAN_DURATION=0`). Temporary bans require `UNBAN_COMMAND` to be set for the firewall rule to be removed automatically on expiry.
+Bans can be temporary (auto-expire after `BAN_TTL` seconds) or permanent (`BAN_TTL=0`). Temporary bans require `UNBAN_COMMAND` to be set for the firewall rule to be removed automatically on expiry.
 
-Repeat offenders are escalated to permanent bans after `BAN_PERMANENT_AFTER` temporary bans within `BAN_PERMANENT_WINDOW` seconds.
+Repeat offenders are escalated to permanent bans after `BAN_ESCALATE_AFTER` temporary bans within `BAN_ESCALATE_WINDOW` seconds.
 
 **CLI commands:**
 ```bash
@@ -560,7 +593,7 @@ bfd -b 192.0.2.1 sshd     # manually ban with a service label
 |------|-------------|
 | `bans.active` | Currently active bans (timestamp, expiry, IP, service, ports) |
 | `bans.history` | Append-only log of all ban/unban events |
-| `events.dat` | Per-IP failure events within the sliding window (timestamp, IP, service) |
+| `events.dat` | Per-IP failure events with pressure weights (timestamp, IP, service, weight) |
 | `attack.pool` | Persistent attack pool — all detected events for reporting |
 
 The `bfd -a` attack pool report integrates with ban state — each IP shows whether it is currently banned, its ban type (permanent or time remaining), and historical ban count.

@@ -1,0 +1,25 @@
+# Country pressure multiplier table for BFD
+#
+# Format: CC=multiplier (integer scale: 10 = 1.0x, 20 = 2.0x, 5 = 0.5x)
+# Unlisted countries default to 10 (1.0x, no adjustment).
+#
+# Only active when PRESSURE_COUNTRY="1" in conf.bfd.
+# Edit this file to adjust pressure weights by country of origin.
+#
+# Examples:
+#   CN=20    # 2.0x — double pressure for traffic from China
+#   US=10    # 1.0x — no adjustment for US traffic
+#   DE=8     # 0.8x — slightly reduced pressure for Germany
+#
+# Common high-risk origins (uncomment and adjust as needed):
+#CN=20
+#RU=20
+#KP=30
+#IR=15
+#
+# Trusted origins (uncomment to reduce sensitivity):
+#US=8
+#GB=8
+#DE=8
+#CA=8
+#AU=8

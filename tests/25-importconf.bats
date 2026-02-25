@@ -361,9 +361,9 @@ NEWEOF
 	assert_output "192.0.2.1"
 }
 
-# --- thresholds.conf migration ---
+# --- pressure.conf / thresholds.conf migration ---
 
-@test "importconf: pre-thresholds upgrade migrates old rule TRIG to thresholds.conf" {
+@test "importconf: pre-thresholds upgrade migrates old rule TRIG to pressure.conf" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/tmp" "$inst/stats"
 
@@ -375,7 +375,7 @@ OLDEOF
 
 	cat > "$inst/conf.bfd" <<'NEWEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
-TRIG="15"
+PRESSURE_TRIP="15"
 INSTALL_PATH="/usr/local/bfd"
 NEWEOF
 
@@ -389,10 +389,10 @@ TRIG="20"
 REQ="/usr/sbin/dovecot"
 EOF
 
-	# new thresholds.conf with defaults
-	cat > "$inst/thresholds.conf" <<'EOF'
-sshd:TRIG=5
-dovecot:TRIG=10
+	# new pressure.conf with defaults
+	cat > "$inst/pressure.conf" <<'EOF'
+sshd:PRESSURE_TRIP=5
+dovecot:PRESSURE_TRIP=10
 EOF
 
 	local script
@@ -403,14 +403,57 @@ EOF
 	assert_success
 	assert_output --partial "Migrated 2 per-rule thresholds"
 
-	# verify thresholds.conf was updated with old values
-	run grep '^sshd:' "$inst/thresholds.conf"
-	assert_output "sshd:TRIG=3"
-	run grep '^dovecot:' "$inst/thresholds.conf"
-	assert_output "dovecot:TRIG=20"
+	# verify pressure.conf was updated with old TRIG values as PRESSURE_TRIP
+	run grep '^sshd:' "$inst/pressure.conf"
+	assert_output --partial "PRESSURE_TRIP=3"
+	run grep '^dovecot:' "$inst/pressure.conf"
+	assert_output --partial "PRESSURE_TRIP=20"
 }
 
-@test "importconf: post-thresholds upgrade preserves existing thresholds.conf" {
+@test "importconf: post-pressure upgrade preserves existing pressure.conf" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+PRESSURE_TRIP="15"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+PRESSURE_TRIP="15"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# old install had pressure.conf with user customizations
+	cat > "$inst.bk.last/pressure.conf" <<'EOF'
+sshd:PRESSURE_TRIP=3
+dovecot:PRESSURE_TRIP=25:SKIP_ALERT=1
+EOF
+
+	# new pressure.conf with defaults
+	cat > "$inst/pressure.conf" <<'EOF'
+sshd:PRESSURE_TRIP=5
+dovecot:PRESSURE_TRIP=10
+EOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Preserved pressure.conf"
+
+	# verify old pressure.conf was copied over new one
+	run grep '^sshd:' "$inst/pressure.conf"
+	assert_output "sshd:PRESSURE_TRIP=3"
+	run grep '^dovecot:' "$inst/pressure.conf"
+	assert_output "dovecot:PRESSURE_TRIP=25:SKIP_ALERT=1"
+}
+
+@test "importconf: thresholds.conf migrated to pressure.conf on upgrade" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
 
@@ -422,20 +465,20 @@ OLDEOF
 
 	cat > "$inst/conf.bfd" <<'NEWEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
-TRIG="15"
+PRESSURE_TRIP="15"
 INSTALL_PATH="/usr/local/bfd"
 NEWEOF
 
-	# old install had thresholds.conf with user customizations
+	# old install had thresholds.conf (no pressure.conf)
 	cat > "$inst.bk.last/thresholds.conf" <<'EOF'
 sshd:TRIG=3
 dovecot:TRIG=25:SKIP_ALERT=1
 EOF
 
-	# new thresholds.conf with defaults
-	cat > "$inst/thresholds.conf" <<'EOF'
-sshd:TRIG=5
-dovecot:TRIG=10
+	# new pressure.conf with defaults
+	cat > "$inst/pressure.conf" <<'EOF'
+sshd:PRESSURE_TRIP=5
+dovecot:PRESSURE_TRIP=10
 EOF
 
 	local script
@@ -444,11 +487,128 @@ EOF
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
-	assert_output --partial "Preserved thresholds.conf"
+	assert_output --partial "Migrated 2 per-rule thresholds from thresholds.conf to pressure.conf"
 
-	# verify old thresholds.conf was copied over new one
-	run grep '^sshd:' "$inst/thresholds.conf"
-	assert_output "sshd:TRIG=3"
-	run grep '^dovecot:' "$inst/thresholds.conf"
-	assert_output "dovecot:TRIG=25:SKIP_ALERT=1"
+	# verify thresholds.conf TRIG values were translated to PRESSURE_TRIP in pressure.conf
+	run grep '^sshd:' "$inst/pressure.conf"
+	assert_output --partial "PRESSURE_TRIP=3"
+	run grep '^dovecot:' "$inst/pressure.conf"
+	assert_output --partial "PRESSURE_TRIP=25"
+	assert_output --partial "SKIP_ALERT=1"
+}
+
+@test "importconf: TRIG migrated to PRESSURE_TRIP in conf.bfd" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	# old config with legacy TRIG variable
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+TRIG="10"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	# new config with PRESSURE_TRIP
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+PRESSURE_TRIP="15"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Migrated legacy config"
+
+	# verify PRESSURE_TRIP got the old TRIG value
+	run grep '^PRESSURE_TRIP=' "$inst/conf.bfd"
+	assert_output 'PRESSURE_TRIP="10"'
+}
+
+@test "importconf: BAN_DURATION migrated to BAN_TTL in conf.bfd" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+BAN_DURATION="300"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+BAN_TTL="600"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Migrated legacy config"
+
+	# old BAN_DURATION=300 should replace new BAN_TTL=600
+	run grep '^BAN_TTL=' "$inst/conf.bfd"
+	assert_output 'BAN_TTL="300"'
+}
+
+@test "importconf: TRIG_WINDOW migrated to PRESSURE_HALF_LIFE in conf.bfd" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+TRIG_WINDOW="600"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+PRESSURE_HALF_LIFE="300"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Migrated legacy config"
+
+	run grep '^PRESSURE_HALF_LIFE=' "$inst/conf.bfd"
+	assert_output 'PRESSURE_HALF_LIFE="600"'
+}
+
+@test "importconf: BAN_PERMANENT_AFTER migrated to BAN_ESCALATE_AFTER" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+BAN_PERMANENT_AFTER="3"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+BAN_ESCALATE_AFTER="5"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Migrated legacy config"
+
+	run grep '^BAN_ESCALATE_AFTER=' "$inst/conf.bfd"
+	assert_output 'BAN_ESCALATE_AFTER="3"'
 }

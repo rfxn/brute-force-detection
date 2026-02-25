@@ -9,8 +9,8 @@ load 'helpers/bfd-common'
 
 setup() {
 	bfd_standard_setup
-	GLOB_TRIG="15"
-	TRIG=""
+	GLOB_PRESSURE_TRIP="15"
+	PRESSURE_TRIP=""
 	RULES_PATH="$INSTALL_PATH/rules"
 	mkdir -p "$RULES_PATH"
 	LOG_SOURCE="file"
@@ -90,10 +90,11 @@ teardown() {
 	assert_output --partial "0 matches"
 }
 
-@test "test_rule: shows threshold and ports" {
+@test "test_rule: shows trip, weight and ports" {
 	run test_rule "$INSTALL_PATH" "test-sshd" "$SAMPLE_LOG"
 	assert_success
-	assert_output --partial "Threshold:    5"
+	assert_output --partial "Trip:"
+	assert_output --partial "Weight:"
 	assert_output --partial "Ports:        22"
 }
 

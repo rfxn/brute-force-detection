@@ -18,12 +18,13 @@ teardown() {
 # helper: set all config to valid defaults, then override one field
 run_validate() {
 	(
-		TRIG="15"
-		TRIG_WINDOW="300"
-		TRIG_GLOBAL="0"
-		BAN_DURATION="300"
-		BAN_PERMANENT_AFTER="5"
-		BAN_PERMANENT_WINDOW="86400"
+		PRESSURE_TRIP="15"
+		PRESSURE_HALF_LIFE="300"
+		PRESSURE_TRIP_GLOBAL="0"
+		PRESSURE_COUNTRY="0"
+		BAN_TTL="300"
+		BAN_ESCALATE_AFTER="5"
+		BAN_ESCALATE_WINDOW="86400"
 		UNBAN_COMMAND_TEMPLATE=""
 		EMAIL_ALERTS="0"
 		EMAIL_ADDRESS="root@localhost"
@@ -39,12 +40,13 @@ run_validate() {
 # helper: capture stdout+stderr for warning checks
 run_validate_output() {
 	(
-		TRIG="15"
-		TRIG_WINDOW="300"
-		TRIG_GLOBAL="0"
-		BAN_DURATION="300"
-		BAN_PERMANENT_AFTER="5"
-		BAN_PERMANENT_WINDOW="86400"
+		PRESSURE_TRIP="15"
+		PRESSURE_HALF_LIFE="300"
+		PRESSURE_TRIP_GLOBAL="0"
+		PRESSURE_COUNTRY="0"
+		BAN_TTL="300"
+		BAN_ESCALATE_AFTER="5"
+		BAN_ESCALATE_WINDOW="86400"
 		UNBAN_COMMAND_TEMPLATE=""
 		EMAIL_ALERTS="0"
 		EMAIL_ADDRESS="root@localhost"
@@ -62,28 +64,28 @@ run_validate_output() {
 	assert_success
 }
 
-@test "validate_config: TRIG=abc rejects" {
-	run run_validate 'TRIG="abc"'
+@test "validate_config: PRESSURE_TRIP=abc rejects" {
+	run run_validate 'PRESSURE_TRIP="abc"'
 	assert_failure
 }
 
-@test "validate_config: TRIG=0 rejects" {
-	run run_validate 'TRIG="0"'
+@test "validate_config: PRESSURE_TRIP=0 rejects" {
+	run run_validate 'PRESSURE_TRIP="0"'
 	assert_failure
 }
 
-@test "validate_config: TRIG= rejects" {
-	run run_validate 'TRIG=""'
+@test "validate_config: PRESSURE_TRIP= rejects" {
+	run run_validate 'PRESSURE_TRIP=""'
 	assert_failure
 }
 
-@test "validate_config: TRIG=15 passes" {
-	run run_validate 'TRIG="15"'
+@test "validate_config: PRESSURE_TRIP=15 passes" {
+	run run_validate 'PRESSURE_TRIP="15"'
 	assert_success
 }
 
-@test "validate_config: TRIG=1 passes" {
-	run run_validate 'TRIG="1"'
+@test "validate_config: PRESSURE_TRIP=1 passes" {
+	run run_validate 'PRESSURE_TRIP="1"'
 	assert_success
 }
 
@@ -167,105 +169,154 @@ run_validate_output() {
 	assert_failure
 }
 
-# --- TRIG_WINDOW ---
+# --- PRESSURE_HALF_LIFE ---
 
-@test "validate_config: TRIG_WINDOW=300 passes" {
-	run run_validate 'TRIG_WINDOW="300"'
+@test "validate_config: PRESSURE_HALF_LIFE=300 passes" {
+	run run_validate 'PRESSURE_HALF_LIFE="300"'
 	assert_success
 }
 
-@test "validate_config: TRIG_WINDOW=0 rejects" {
-	run run_validate 'TRIG_WINDOW="0"'
+@test "validate_config: PRESSURE_HALF_LIFE=0 rejects" {
+	run run_validate 'PRESSURE_HALF_LIFE="0"'
 	assert_failure
 }
 
-@test "validate_config: TRIG_WINDOW=abc rejects" {
-	run run_validate 'TRIG_WINDOW="abc"'
+@test "validate_config: PRESSURE_HALF_LIFE=abc rejects" {
+	run run_validate 'PRESSURE_HALF_LIFE="abc"'
 	assert_failure
 }
 
-@test "validate_config: TRIG_WINDOW= rejects" {
-	run run_validate 'TRIG_WINDOW=""'
+@test "validate_config: PRESSURE_HALF_LIFE= rejects" {
+	run run_validate 'PRESSURE_HALF_LIFE=""'
 	assert_failure
 }
 
-# --- TRIG_GLOBAL ---
+# --- PRESSURE_TRIP_GLOBAL ---
 
-@test "validate_config: TRIG_GLOBAL=0 passes (disabled)" {
-	run run_validate 'TRIG_GLOBAL="0"'
+@test "validate_config: PRESSURE_TRIP_GLOBAL=0 passes (disabled)" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL="0"'
 	assert_success
 }
 
-@test "validate_config: TRIG_GLOBAL=10 passes" {
-	run run_validate 'TRIG_GLOBAL="10"'
+@test "validate_config: PRESSURE_TRIP_GLOBAL=10 passes" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL="10"'
 	assert_success
 }
 
-@test "validate_config: TRIG_GLOBAL=abc rejects" {
-	run run_validate 'TRIG_GLOBAL="abc"'
+@test "validate_config: PRESSURE_TRIP_GLOBAL=abc rejects" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL="abc"'
 	assert_failure
 }
 
-@test "validate_config: TRIG_GLOBAL= rejects" {
-	run run_validate 'TRIG_GLOBAL=""'
+@test "validate_config: PRESSURE_TRIP_GLOBAL= rejects" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL=""'
 	assert_failure
 }
 
-# --- BAN_DURATION ---
-
-@test "validate_config: BAN_DURATION=300 passes" {
-	run run_validate 'BAN_DURATION="300"; UNBAN_COMMAND_TEMPLATE="echo test"'
-	assert_success
-}
-
-@test "validate_config: BAN_DURATION=0 passes (permanent)" {
-	run run_validate 'BAN_DURATION="0"'
-	assert_success
-}
-
-@test "validate_config: BAN_DURATION=abc rejects" {
-	run run_validate 'BAN_DURATION="abc"'
+@test "validate_config: PRESSURE_TRIP_GLOBAL=-1 rejects" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL="-1"'
 	assert_failure
 }
 
-# --- BAN_PERMANENT_AFTER ---
+# --- PRESSURE_COUNTRY ---
 
-@test "validate_config: BAN_PERMANENT_AFTER=5 passes" {
-	run run_validate 'BAN_PERMANENT_AFTER="5"; UNBAN_COMMAND_TEMPLATE="echo test"'
+@test "validate_config: PRESSURE_COUNTRY=0 passes (disabled)" {
+	run run_validate 'PRESSURE_COUNTRY="0"'
 	assert_success
 }
 
-@test "validate_config: BAN_PERMANENT_AFTER=0 passes (disabled)" {
-	run run_validate 'BAN_PERMANENT_AFTER="0"; UNBAN_COMMAND_TEMPLATE="echo test"'
+@test "validate_config: PRESSURE_COUNTRY=1 passes (enabled)" {
+	run run_validate 'PRESSURE_COUNTRY="1"'
 	assert_success
 }
 
-@test "validate_config: BAN_PERMANENT_AFTER=abc rejects" {
-	run run_validate 'BAN_PERMANENT_AFTER="abc"'
+@test "validate_config: PRESSURE_COUNTRY=2 rejects" {
+	run run_validate 'PRESSURE_COUNTRY="2"'
 	assert_failure
 }
 
-# --- BAN_PERMANENT_WINDOW ---
-
-@test "validate_config: BAN_PERMANENT_WINDOW=86400 passes" {
-	run run_validate 'BAN_PERMANENT_WINDOW="86400"; UNBAN_COMMAND_TEMPLATE="echo test"'
-	assert_success
-}
-
-@test "validate_config: BAN_PERMANENT_WINDOW=0 rejects" {
-	run run_validate 'BAN_PERMANENT_WINDOW="0"'
+@test "validate_config: PRESSURE_COUNTRY=abc rejects" {
+	run run_validate 'PRESSURE_COUNTRY="abc"'
 	assert_failure
 }
 
-@test "validate_config: BAN_PERMANENT_WINDOW=abc rejects" {
-	run run_validate 'BAN_PERMANENT_WINDOW="abc"'
+@test "validate_config: PRESSURE_COUNTRY= defaults to 0 (passes)" {
+	run run_validate 'PRESSURE_COUNTRY=""'
+	assert_success
+}
+
+# --- backward compat: old variable names still accepted ---
+
+@test "validate_config: old TRIG= accepted via fallback to PRESSURE_TRIP" {
+	run run_validate 'unset PRESSURE_TRIP; TRIG="10"'
+	assert_success
+}
+
+@test "validate_config: old TRIG_WINDOW= accepted via fallback to PRESSURE_HALF_LIFE" {
+	run run_validate 'unset PRESSURE_HALF_LIFE; TRIG_WINDOW="300"'
+	assert_success
+}
+
+@test "validate_config: old BAN_DURATION= accepted via fallback to BAN_TTL" {
+	run run_validate 'unset BAN_TTL; BAN_DURATION="300"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+# --- BAN_TTL ---
+
+@test "validate_config: BAN_TTL=300 passes" {
+	run run_validate 'BAN_TTL="300"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_TTL=0 passes (permanent)" {
+	run run_validate 'BAN_TTL="0"'
+	assert_success
+}
+
+@test "validate_config: BAN_TTL=abc rejects" {
+	run run_validate 'BAN_TTL="abc"'
+	assert_failure
+}
+
+# --- BAN_ESCALATE_AFTER ---
+
+@test "validate_config: BAN_ESCALATE_AFTER=5 passes" {
+	run run_validate 'BAN_ESCALATE_AFTER="5"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATE_AFTER=0 passes (disabled)" {
+	run run_validate 'BAN_ESCALATE_AFTER="0"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATE_AFTER=abc rejects" {
+	run run_validate 'BAN_ESCALATE_AFTER="abc"'
+	assert_failure
+}
+
+# --- BAN_ESCALATE_WINDOW ---
+
+@test "validate_config: BAN_ESCALATE_WINDOW=86400 passes" {
+	run run_validate 'BAN_ESCALATE_WINDOW="86400"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATE_WINDOW=0 rejects" {
+	run run_validate 'BAN_ESCALATE_WINDOW="0"'
+	assert_failure
+}
+
+@test "validate_config: BAN_ESCALATE_WINDOW=abc rejects" {
+	run run_validate 'BAN_ESCALATE_WINDOW="abc"'
 	assert_failure
 }
 
 # --- UNBAN_COMMAND warning ---
 
-@test "validate_config: warns when BAN_DURATION>0 and UNBAN_COMMAND empty" {
-	run run_validate_output 'BAN_DURATION="300"; UNBAN_COMMAND_TEMPLATE=""'
+@test "validate_config: warns when BAN_TTL>0 and UNBAN_COMMAND empty" {
+	run run_validate_output 'BAN_TTL="300"; UNBAN_COMMAND_TEMPLATE=""'
 	assert_success
 	assert_output --partial "warning"
 	assert_output --partial "UNBAN_COMMAND"
@@ -451,7 +502,7 @@ run_validate_output() {
 # --- show_config injection tests (Phase 26) ---
 
 @test "show_config: rejects \$(cmd) injection attempt" {
-	TRIG="15"
+	PRESSURE_TRIP="15"
 	run show_config '$(touch /tmp/pwned)'
 	assert_failure
 	assert_output --partial "unknown config variable"
@@ -459,7 +510,7 @@ run_validate_output() {
 }
 
 @test "show_config: rejects backtick injection attempt" {
-	TRIG="15"
+	PRESSURE_TRIP="15"
 	run show_config '`touch /tmp/pwned2`'
 	assert_failure
 	assert_output --partial "unknown config variable"
@@ -467,15 +518,15 @@ run_validate_output() {
 }
 
 @test "show_config: rejects unknown variable name" {
-	TRIG="15"
+	PRESSURE_TRIP="15"
 	run show_config "NONEXISTENT_VAR"
 	assert_failure
 	assert_output --partial "unknown config variable"
 }
 
-@test "show_config: accepts valid config var TRIG" {
-	TRIG="42"
-	run show_config "TRIG"
+@test "show_config: accepts valid config var PRESSURE_TRIP" {
+	PRESSURE_TRIP="42"
+	run show_config "PRESSURE_TRIP"
 	assert_success
 	assert_output "42"
 }
@@ -526,8 +577,10 @@ run_validate_output() {
 @test "_save/_restore_rule_vars: round-trip preserves values" {
 	REQ="/usr/sbin/sshd" LP="/var/log/auth.log" TRIG="10"
 	TLOG_TF="sshd" PORTS="22" ARG_VAL="192.0.2.4" IGNOREREGEX="^ignore"
+	PRESSURE_WEIGHT="3" PRESSURE_TRIP="10"
 	_save_rule_vars
 	REQ="" LP="" TRIG="" TLOG_TF="" PORTS="" ARG_VAL="" IGNOREREGEX=""
+	PRESSURE_WEIGHT="" PRESSURE_TRIP=""
 	_restore_rule_vars
 	[ "$REQ" = "/usr/sbin/sshd" ]
 	[ "$LP" = "/var/log/auth.log" ]
@@ -536,12 +589,15 @@ run_validate_output() {
 	[ "$PORTS" = "22" ]
 	[ "$ARG_VAL" = "192.0.2.4" ]
 	[ "$IGNOREREGEX" = "^ignore" ]
+	[ "$PRESSURE_WEIGHT" = "3" ]
+	[ "$PRESSURE_TRIP" = "10" ]
 }
 
 @test "_clear_rule_vars: clears all rule variables" {
 	REQ="/usr/sbin/sshd" LP="/var/log/auth.log" TRIG="10"
 	TLOG_TF="sshd" PORTS="22" ARG_VAL="192.0.2.4" IGNOREREGEX="^ignore"
 	SKIP_ALERT="1" RULE_EMAIL="test@example.com"
+	PRESSURE_WEIGHT="3" PRESSURE_TRIP="10"
 	_clear_rule_vars
 	[ -z "$REQ" ]
 	[ -z "$LP" ]
@@ -552,6 +608,8 @@ run_validate_output() {
 	[ -z "$IGNOREREGEX" ]
 	[ -z "$SKIP_ALERT" ]
 	[ -z "$RULE_EMAIL" ]
+	[ -z "$PRESSURE_WEIGHT" ]
+	[ -z "$PRESSURE_TRIP" ]
 }
 
 # --- _rule_is_active ---
