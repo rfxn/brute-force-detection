@@ -1,4 +1,13 @@
 2.0.1:
+[New] bfd.bash-completion: bash tab completion with context-sensitive
+      completions for flags, IPs from bans.active (-u), rule names
+      (-S/-R/-T/-b), config variables (-C), and file paths (--test)
+[New] install.sh: bash completion installation to /etc/bash_completion.d/bfd
+      with INSPATH sed replacement for custom install paths
+[New] uninstall.sh: bash completion removal
+[New] tests/28-install-paths.bats: 4 completion tests (source tree presence,
+      default paths, bash syntax validity, install.sh section)
+[Change] Dockerfiles: add COPY bfd.bash-completion to all 9 test images
 [New] bfd.1 nroff man page with full OPTIONS, CONFIGURATION, THRESHOLD
       MANAGEMENT, FIREWALL INTEGRATION, RULES, FILES, SIGNALS, and
       EXIT CODES sections; installable via man(1)

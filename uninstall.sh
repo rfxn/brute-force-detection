@@ -60,6 +60,7 @@ if [ -d "$INSPATH" ]; then
 		systemctl daemon-reload 2>/dev/null || true
 	fi
 	rm -f /usr/share/man/man1/bfd.1
+	rm -f /etc/bash_completion.d/bfd
 	rm -rf "$INSPATH".bk.* "$INSPATH" "$BINPATH" /etc/cron.d/bfd /etc/cron.daily/bfd /etc/logrotate.d/bfd /var/log/bfd_log
 	echo "$APPN has been uninstalled."
 else
