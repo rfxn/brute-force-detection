@@ -1,0 +1,21 @@
+# per-rule threshold override (uncomment to override thresholds.conf / conf.bfd)
+# TRIG="5"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+REQ="/usr/bin/gitlab-ctl"
+
+if [ -f "$REQ" ]; then
+	PORTS="80,443"
+	LP="/var/log/gitlab/gitlab-rails/application.log"
+	TLOG_TF="gitlab"
+
+	## GITLAB (application.log plain text format)
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+		"Failed Login.*ip=<HOST>")
+fi

@@ -1,4 +1,10 @@
 2.0.1:
+[New] openvpn rule: TLS Auth Error, VERIFY ERROR, TLS handshake failed
+      (community edition; separate from openvpnas Access Server rule)
+[New] phpmyadmin rule: mysql-denied and user denied via syslog
+      (requires AuthLog='syslog' in phpMyAdmin config)
+[New] gitlab rule: Failed Login from application.log
+[New] grafana rule: invalid username or password with remote_addr
 [Change] sshd rule expanded from 3 to 8 patterns: keyboard-interactive, ident
       string, refused connect, max auth attempts, PAM failure (LFD/fail2ban)
 [Change] dovecot rule expanded from 2 to 5 patterns: Disconnected pop3/imap,

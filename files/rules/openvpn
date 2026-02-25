@@ -1,0 +1,24 @@
+# per-rule threshold override (uncomment to override thresholds.conf / conf.bfd)
+# TRIG="5"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+# note: openvpnas rule checks /usr/local/openvpn_as/sbin/openvpn (Access Server)
+REQ="/usr/sbin/openvpn"
+
+if [ -f "$REQ" ]; then
+	PORTS="1194"
+	LP="$AUTH_LOG_PATH"
+	TLOG_TF="openvpn"
+
+	## OPENVPN (community edition)
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+		"openvpn.*TLS Auth Error.* <HOST>" \
+		"openvpn.*VERIFY ERROR.* <HOST>" \
+		"openvpn.*TLS handshake failed.* <HOST>")
+fi

@@ -491,6 +491,59 @@ Feb 22 10:15:03 ns1 named[12345]: client @0x7f 2001:db8::abcd#54321 (example.com
 # NOTE: IPv6 address
 2026-02-22 10:15:03.123 UTC [12345] FATAL:  no pg_hba.conf entry for host "2001:db8::db", user "admin", database "testdb"
 
+# --- openvpn ---
+
+# RULE: openvpn
+# PATTERN: openvpn.*TLS Auth Error.* <HOST>
+# EXPECT: 203.0.113.50
+Feb 22 10:15:03 myhost openvpn[12345]: TLS Auth Error: Auth Username/Password verification failed for peer from 203.0.113.50
+
+# RULE: openvpn
+# PATTERN: openvpn.*VERIFY ERROR.* <HOST>
+# EXPECT: 192.0.2.5
+Feb 22 10:15:05 myhost openvpn[12345]: VERIFY ERROR: depth=0, error=certificate has expired: CN=client1, serial=1 from 192.0.2.5
+
+# RULE: openvpn
+# PATTERN: openvpn.*TLS handshake failed.* <HOST>
+# EXPECT: 198.51.100.1
+Feb 22 10:15:07 myhost openvpn[12345]: TLS handshake failed from 198.51.100.1
+
+# --- phpmyadmin ---
+
+# RULE: phpmyadmin
+# PATTERN: pma auth.*mysql-denied.*from <HOST>
+# EXPECT: 203.0.113.100
+Feb 22 10:15:03 myhost pma auth: mysql-denied: user=root from 203.0.113.100
+
+# RULE: phpmyadmin
+# PATTERN: phpmyadmin.*user denied.*from <HOST>
+# EXPECT: 192.0.2.5
+Feb 22 10:15:05 myhost phpmyadmin: user denied: admin from 192.0.2.5
+
+# --- gitlab ---
+
+# RULE: gitlab
+# PATTERN: Failed Login.*ip=<HOST>
+# EXPECT: 203.0.113.50
+Failed Login: username=admin ip=203.0.113.50 2024-02-22T10:15:03.000Z
+
+# RULE: gitlab
+# PATTERN: Failed Login.*ip=<HOST>
+# EXPECT: 198.51.100.1
+Failed Login: username=root ip=198.51.100.1 2024-02-22T10:15:05.000Z
+
+# --- grafana ---
+
+# RULE: grafana
+# PATTERN: Invalid username or password.*remote_addr=<HOST>
+# EXPECT: 203.0.113.50
+t=2024-02-22T10:15:03+0000 lvl=warn msg="Invalid username or password" logger=context userId=0 orgId=0 uname= remote_addr=203.0.113.50
+
+# RULE: grafana
+# PATTERN: invalid username or password.*remote_addr=<HOST>
+# EXPECT: 192.0.2.5
+t=2024-02-22T10:15:05+0000 lvl=eror msg="invalid username or password" remote_addr=192.0.2.5 error="invalid username or password"
+
 # ====================================================================
 # NEGATIVE TESTS — patterns that should NOT match
 # ====================================================================
