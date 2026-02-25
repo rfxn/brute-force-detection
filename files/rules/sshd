@@ -19,5 +19,10 @@ if [ -f "$REQ" ]; then
 	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
 		"sshd.*Invalid user .* from <HOST>" \
 		"sshd.*Failed password for .* from <HOST>" \
-		"sshd.*User .* from <HOST> not allowed")
+		"sshd.*User .* from <HOST> not allowed" \
+		"sshd.*Failed keyboard-interactive.* from <HOST>" \
+		"sshd.*Did not receive identification string from <HOST>" \
+		"sshd.*refused connect from <HOST>" \
+		"sshd.*maximum authentication attempts exceeded.* from <HOST>" \
+		"sshd.*pam_unix.*authentication failure.*rhost=<HOST>")
 fi

@@ -17,5 +17,7 @@ if [ -f "$REQ" ]; then
 
 	## EXIM SMTP Auth failures
 	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
-		"login authenticator failed.*\[<HOST>\]")
+		"login authenticator failed.*\[<HOST>\]" \
+		"dovecot_.*authenticator failed.*\[<HOST>\]" \
+		"SMTP protocol synchronization error.*\[<HOST>\]")
 fi

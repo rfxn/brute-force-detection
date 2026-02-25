@@ -554,3 +554,109 @@ teardown() {
 		extract_hosts "named.* <HOST>[#][0-9]+.*query.*denied")
 	[ "$result" = "2001:db8::abcd" ]
 }
+
+# ============================================================
+# DATA-DRIVEN TESTS — reads tests/regex_samples.txt
+# ============================================================
+
+@test "regex_samples.txt: all positive matches" {
+	local samples_file="$BATS_TEST_DIRNAME/regex_samples.txt"
+	[ -f "$samples_file" ] || skip "regex_samples.txt not found"
+
+	local failures=0 total=0
+	local rule="" pattern="" expect="" note="" igr="" logline=""
+	local fail_details=""
+	while IFS= read -r line; do
+		case "$line" in
+			"# RULE: "*)        rule="${line#\# RULE: }" ;;
+			"# PATTERN: "*)     pattern="${line#\# PATTERN: }" ;;
+			"# EXPECT: "*)      expect="${line#\# EXPECT: }" ;;
+			"# IGNOREREGEX: "*) igr="${line#\# IGNOREREGEX: }" ;;
+			"# NOTE: "*)        note="${line#\# NOTE: }" ;;
+			"#"*|"")            continue ;;
+			*)
+				logline="$line"
+				[ -z "$expect" ] && continue
+				# skip negative tests — handled in separate test
+				if [ "$expect" = "NONE" ]; then
+					rule="" pattern="" expect="" note="" igr=""
+					continue
+				fi
+				total=$((total + 1))
+				IGNOREREGEX="$igr"
+				local result
+				result=$(echo "$logline" | extract_hosts "$pattern")
+				if [ "$result" != "$expect" ]; then
+					failures=$((failures + 1))
+					fail_details="${fail_details}  FAIL: rule=$rule pattern='$pattern' expect='$expect' got='$result'"$'\n'
+				fi
+				IGNOREREGEX=""
+				rule="" pattern="" expect="" note="" igr=""
+				;;
+		esac
+	done < "$samples_file"
+	if [ "$failures" -gt 0 ]; then
+		echo "Tested $total samples, $failures failures:"
+		echo "$fail_details"
+	fi
+	[ "$failures" -eq 0 ]
+}
+
+@test "regex_samples.txt: all negative matches" {
+	local samples_file="$BATS_TEST_DIRNAME/regex_samples.txt"
+	[ -f "$samples_file" ] || skip "regex_samples.txt not found"
+
+	local failures=0 total=0
+	local rule="" pattern="" expect="" note="" igr="" logline=""
+	local fail_details=""
+	while IFS= read -r line; do
+		case "$line" in
+			"# RULE: "*)        rule="${line#\# RULE: }" ;;
+			"# PATTERN: "*)     pattern="${line#\# PATTERN: }" ;;
+			"# EXPECT: "*)      expect="${line#\# EXPECT: }" ;;
+			"# IGNOREREGEX: "*) igr="${line#\# IGNOREREGEX: }" ;;
+			"# NOTE: "*)        note="${line#\# NOTE: }" ;;
+			"#"*|"")            continue ;;
+			*)
+				logline="$line"
+				[ -z "$expect" ] && continue
+				# skip positive tests — handled in separate test
+				if [ "$expect" != "NONE" ]; then
+					rule="" pattern="" expect="" note="" igr=""
+					continue
+				fi
+				total=$((total + 1))
+				IGNOREREGEX="$igr"
+				local result
+				result=$(echo "$logline" | extract_hosts "$pattern")
+				if [ -n "$result" ]; then
+					failures=$((failures + 1))
+					fail_details="${fail_details}  FAIL: rule=$rule pattern='$pattern' expected NONE got='$result'"$'\n'
+				fi
+				IGNOREREGEX=""
+				rule="" pattern="" expect="" note="" igr=""
+				;;
+		esac
+	done < "$samples_file"
+	if [ "$failures" -gt 0 ]; then
+		echo "Tested $total negative samples, $failures failures:"
+		echo "$fail_details"
+	fi
+	[ "$failures" -eq 0 ]
+}
+
+@test "regex_samples.txt: all IPs are RFC 5737 compliant" {
+	local samples_file="$BATS_TEST_DIRNAME/regex_samples.txt"
+	[ -f "$samples_file" ] || skip "regex_samples.txt not found"
+
+	# Extract all IPv4 addresses from log lines (non-comment lines)
+	local bad_ips
+	bad_ips=$(grep -v '^#' "$samples_file" | grep -v '^$' | \
+		grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sort -u | \
+		grep -Ev '^(192\.0\.2\.|198\.51\.100\.|203\.0\.113\.)' || true)
+	if [ -n "$bad_ips" ]; then
+		echo "Non-RFC-5737 IPv4 addresses found in log lines:"
+		echo "$bad_ips"
+	fi
+	[ -z "$bad_ips" ]
+}

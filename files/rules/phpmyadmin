@@ -1,5 +1,5 @@
 # per-rule threshold override (uncomment to override thresholds.conf / conf.bfd)
-# TRIG="10"
+# TRIG="5"
 
 # uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
@@ -7,18 +7,16 @@
 # uncomment to route alerts for this rule to a different address
 # RULE_EMAIL=""
 
-# file must exist for rule to be active
-REQ="/usr/sbin/proftpd"
+# phpMyAdmin logs to AUTH_LOG_PATH when AuthLog = 'syslog' (common setup)
+REQ="$AUTH_LOG_PATH"
 
 if [ -f "$REQ" ]; then
-	PORTS="20,21"
+	PORTS="80,443"
 	LP="$AUTH_LOG_PATH"
-	TLOG_TF="proftpd"
+	TLOG_TF="phpmyadmin"
 
-	## PROFTPD
+	## PHPMYADMIN (syslog auth)
 	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
-		"proftpd.*no such user found from <HOST>" \
-		"proftpd.*Login failed.*Incorrect password.*\[<HOST>\]" \
-		"proftpd.*SECURITY VIOLATION.*\[<HOST>\]" \
-		"proftpd.*Maximum login attempts.*\[<HOST>\]")
+		"pma auth.*mysql-denied.*from <HOST>" \
+		"phpmyadmin.*user denied.*from <HOST>")
 fi

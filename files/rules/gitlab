@@ -1,5 +1,5 @@
 # per-rule threshold override (uncomment to override thresholds.conf / conf.bfd)
-# TRIG="10"
+# TRIG="5"
 
 # uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
@@ -8,17 +8,14 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/sbin/proftpd"
+REQ="/usr/bin/gitlab-ctl"
 
 if [ -f "$REQ" ]; then
-	PORTS="20,21"
-	LP="$AUTH_LOG_PATH"
-	TLOG_TF="proftpd"
+	PORTS="80,443"
+	LP="/var/log/gitlab/gitlab-rails/application.log"
+	TLOG_TF="gitlab"
 
-	## PROFTPD
+	## GITLAB (application.log plain text format)
 	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
-		"proftpd.*no such user found from <HOST>" \
-		"proftpd.*Login failed.*Incorrect password.*\[<HOST>\]" \
-		"proftpd.*SECURITY VIOLATION.*\[<HOST>\]" \
-		"proftpd.*Maximum login attempts.*\[<HOST>\]")
+		"Failed Login.*ip=<HOST>")
 fi

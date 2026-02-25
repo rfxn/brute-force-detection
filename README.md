@@ -81,12 +81,12 @@ bfd -u 192.0.2.1      # unban an IP
 
 ## 1. Introduction
 
-Brute Force Detection (BFD) is a modular shell script for parsing application logs and detecting authentication failures. It ships with 34 service rules covering SSH, mail, FTP, web, database, control panel, DNS, VPN, and VoIP services. Each rule declares fail2ban-compatible `<HOST>` regex patterns; the engine handles log reading, IP extraction, IPv6 normalization, and validation.
+Brute Force Detection (BFD) is a modular shell script for parsing application logs and detecting authentication failures. It ships with 42 service rules covering SSH, mail, FTP, web, database, control panel, DNS, VPN, and VoIP services. Each rule declares fail2ban-compatible `<HOST>` regex patterns; the engine handles log reading, IP extraction, IPv6 normalization, and validation.
 
 BFD uses a log tracking system so logs are only parsed from the point at which they were last read. This greatly assists in performance as we are not constantly reading the same log data. The log tracking system is compatible with syslog/logrotate style log rotations — it detects when rotations have occurred and grabs log tails from both the new log file and the rotated log file.
 
 **Detection**
-- 34 service rules with fail2ban-compatible `<HOST>` regex patterns
+- 42 service rules with fail2ban-compatible `<HOST>` regex patterns
 - Sliding time-window failure counting (default 5 minutes)
 - Per-rule and global cross-service trigger thresholds
 - Incremental log parsing with rotation-aware tracking
@@ -489,19 +489,19 @@ Use `bfd -c` to see which rules are active on your system.
 
 ### 6.1 Rule Catalog
 
-BFD ships with 34 rules:
+BFD ships with 42 rules:
 
 | Category | Rules |
 |----------|-------|
 | **SSH** | sshd, dropbear |
 | **Mail** | dovecot, courier, postfix, sendmail, exim_authfail, exim_nxuser, vpopmail, cyrus-imap |
 | **FTP** | vsftpd, vsftpd2, proftpd, pure-ftpd |
-| **Web** | apache-auth, nginx-http-auth, modsec, wordpress, roundcube, http_401 |
-| **Panel** | cpanel, plesk, webmin, directadmin |
-| **Auth** | pam_generic |
-| **Database** | mysqld-auth, postgresql |
+| **Web** | apache-auth, nginx-http-auth, modsec, wordpress, roundcube, http_401, lighttpd, phpmyadmin |
+| **Panel** | cpanel, plesk, webmin, directadmin, gitlab, grafana, proxmox |
+| **Auth** | pam_generic, xrdp |
+| **Database** | mysqld-auth, postgresql, mongodb |
 | **DNS** | named |
-| **VPN** | openvpnas |
+| **VPN** | openvpnas, openvpn |
 | **VoIP** | asterisk_badauth, asterisk_iax, asterisk_nopeer |
 | **Legacy** | rh_imapd, rh_ipop3d |
 

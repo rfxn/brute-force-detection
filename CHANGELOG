@@ -1,4 +1,29 @@
 2.0.1:
+[New] proxmox rule: pvedaemon/pveproxy authentication failure via PAM
+[New] lighttpd rule: mod_auth password mismatch with dynamic log detection
+[New] mongodb rule: authentication failed from client
+[New] xrdp rule: AUTHFAIL and pam_authenticate failed
+[New] openvpn rule: TLS Auth Error, VERIFY ERROR, TLS handshake failed
+      (community edition; separate from openvpnas Access Server rule)
+[New] phpmyadmin rule: mysql-denied and user denied via syslog
+      (requires AuthLog='syslog' in phpMyAdmin config)
+[New] gitlab rule: Failed Login from application.log
+[New] grafana rule: invalid username or password with remote_addr
+[Change] sshd rule expanded from 3 to 8 patterns: keyboard-interactive, ident
+      string, refused connect, max auth attempts, PAM failure (LFD/fail2ban)
+[Change] dovecot rule expanded from 2 to 5 patterns: Disconnected pop3/imap,
+      submission-login auth failed
+[Change] proftpd rule expanded from 1 to 4 patterns: incorrect password,
+      SECURITY VIOLATION, maximum login attempts
+[Change] exim_authfail rule expanded from 1 to 3 patterns: dovecot_*
+      authenticator, SMTP protocol synchronization error
+[Change] asterisk_badauth rule expanded from 1 to 2 patterns: SecurityEvent
+      FailedACL (Asterisk 12+ security framework)
+[Change] postfix PORTS updated from 25,26 to 25,26,587,465 (submission/SMTPS)
+[Change] sendmail rule expanded from 1 to 2 patterns: AUTH failure
+[New] tests/regex_samples.txt: data-driven test corpus covering all 42 rules
+      with positive and negative test cases; RFC 5737 IP compliant; data-driven
+      BATS tests in 13-regex-samples.bats validate all samples automatically
 [Change] conf.bfd restructured into workflow-oriented sections (Detection
       Thresholds, Email Alerts, Banning, Custom Firewall Commands, Log Paths,
       Advanced); comments rewritten to explain behavior; repeat-offender
@@ -11,9 +36,10 @@
 [New] extract_hosts() declarative rule engine with fail2ban-compatible <HOST>
       patterns, dual IPv4/IPv6 boundary-aware regex, and IGNOREREGEX per-rule
       exclusion; all 34 rules converted from ad-hoc grep/sed/awk pipelines
-[New] 14 new service rules (34 total): apache-auth, nginx-http-auth,
+[New] 22 new service rules (42 total): apache-auth, nginx-http-auth,
       mysqld-auth, wordpress, webmin, directadmin, cyrus-imap, roundcube,
-      plesk, dropbear, http_401, pam_generic, named, postgresql
+      plesk, dropbear, http_401, pam_generic, named, postgresql,
+      openvpn, phpmyadmin, gitlab, grafana, proxmox, lighttpd, mongodb, xrdp
 [New] thresholds.conf: centralized per-rule threshold management (TRIG,
       SKIP_ALERT, RULE_EMAIL); three-tier precedence: rule file >
       thresholds.conf > conf.bfd
