@@ -9,7 +9,7 @@ load 'helpers/bfd-common'
 
 setup() {
 	bfd_common_setup
-	# create a real log file for LP
+	# create a real log file for LOG_FILE
 	echo "log line" > "$TEST_TMPDIR/test.log"
 }
 
@@ -17,82 +17,100 @@ teardown() {
 	bfd_teardown
 }
 
-@test "validate_rule: all required variables set returns 0" {
-	LP="$TEST_TMPDIR/test.log"
-	TLOG_TF="sshd"
-	ARG_VAL="192.0.2.1:user"
+@test "validate_rule: active rule with all variables set returns 0" {
+	PREREQ="$TEST_TMPDIR/test.log"
+	LOG_FILE="$TEST_TMPDIR/test.log"
+	LOG_TAG="sshd"
 	run validate_rule "sshd"
 	assert_success
 }
 
-@test "validate_rule: LP unset returns 1" {
-	unset LP
-	TLOG_TF="sshd"
-	ARG_VAL="192.0.2.1:user"
+@test "validate_rule: PREREQ missing binary — silent skip" {
+	PREREQ="/nonexistent/binary"
+	LOG_FILE="$TEST_TMPDIR/test.log"
+	LOG_TAG="sshd"
 	run validate_rule "sshd"
 	assert_failure
-	assert_output --partial "LP not set"
+	assert_output ""
 }
 
-@test "validate_rule: LP empty returns 1" {
-	LP=""
-	TLOG_TF="sshd"
-	ARG_VAL="192.0.2.1:user"
+@test "validate_rule: PREREQ empty + LOG_FILE empty — silent skip (file-detection no match)" {
+	PREREQ=""
+	LOG_FILE=""
+	LOG_TAG=""
+	run validate_rule "http_401"
+	assert_failure
+	assert_output ""
+}
+
+@test "validate_rule: PREREQ exists but LOG_FILE empty — misconfiguration message" {
+	PREREQ="/bin/sh"
+	LOG_FILE=""
+	LOG_TAG="sshd"
 	run validate_rule "sshd"
 	assert_failure
-	assert_output --partial "LP not set"
+	assert_output --partial "LOG_FILE not set"
 }
 
-@test "validate_rule: LP file does not exist returns 1" {
-	LP="$TEST_TMPDIR/nonexistent.log"
-	TLOG_TF="sshd"
-	ARG_VAL="192.0.2.1:user"
+@test "validate_rule: LOG_FILE file does not exist returns 1" {
+	PREREQ="/bin/sh"
+	LOG_FILE="$TEST_TMPDIR/nonexistent.log"
+	LOG_TAG="sshd"
 	LOG_SOURCE="file"
 	run validate_rule "sshd"
 	assert_failure
 	assert_output --partial "does not exist"
 }
 
-@test "validate_rule: TLOG_TF unset returns 1" {
-	LP="$TEST_TMPDIR/test.log"
-	unset TLOG_TF
-	ARG_VAL="192.0.2.1:user"
+@test "validate_rule: LOG_TAG unset returns 1" {
+	PREREQ="/bin/sh"
+	LOG_FILE="$TEST_TMPDIR/test.log"
+	unset LOG_TAG
 	run validate_rule "sshd"
 	assert_failure
-	assert_output --partial "TLOG_TF not set"
+	assert_output --partial "LOG_TAG not set"
 }
 
-@test "validate_rule: TLOG_TF empty returns 1" {
-	LP="$TEST_TMPDIR/test.log"
-	TLOG_TF=""
-	ARG_VAL="192.0.2.1:user"
+@test "validate_rule: LOG_TAG empty returns 1" {
+	PREREQ="/bin/sh"
+	LOG_FILE="$TEST_TMPDIR/test.log"
+	LOG_TAG=""
 	run validate_rule "sshd"
 	assert_failure
-	assert_output --partial "TLOG_TF not set"
+	assert_output --partial "LOG_TAG not set"
 }
 
-@test "validate_rule: ARG_VAL empty returns 1 silently" {
-	LP="$TEST_TMPDIR/test.log"
-	TLOG_TF="sshd"
-	ARG_VAL=""
+@test "validate_rule: MATCHED_HOSTS empty still returns 0 (caller checks)" {
+	PREREQ="/bin/sh"
+	LOG_FILE="$TEST_TMPDIR/test.log"
+	LOG_TAG="sshd"
+	MATCHED_HOSTS=""
 	run validate_rule "sshd"
-	assert_failure
-	assert_output ""
+	assert_success
 }
 
-@test "validate_rule: ARG_VAL unset returns 1 silently" {
-	LP="$TEST_TMPDIR/test.log"
-	TLOG_TF="sshd"
-	unset ARG_VAL
+@test "validate_rule: MATCHED_HOSTS unset still returns 0 (caller checks)" {
+	PREREQ="/bin/sh"
+	LOG_FILE="$TEST_TMPDIR/test.log"
+	LOG_TAG="sshd"
+	unset MATCHED_HOSTS
 	run validate_rule "sshd"
-	assert_failure
-	assert_output ""
+	assert_success
 }
 
 @test "validate_rule: rule name appears in log messages" {
-	LP=""
-	TLOG_TF="sshd"
-	ARG_VAL="192.0.2.1:user"
+	PREREQ="/bin/sh"
+	LOG_FILE=""
+	LOG_TAG="sshd"
 	run validate_rule "dovecot"
 	assert_output --partial "dovecot"
+}
+
+@test "validate_rule: file-detection rule with PREREQ from LOG_FILE" {
+	# Simulates file-detection pattern: PREREQ="${LOG_FILE:-}"
+	LOG_FILE="$TEST_TMPDIR/test.log"
+	PREREQ="$LOG_FILE"
+	LOG_TAG="http.401"
+	run validate_rule "http_401"
+	assert_success
 }

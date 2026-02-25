@@ -9,15 +9,15 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/sbin/dropbear"
+PREREQ="/usr/sbin/dropbear"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="22"
-	LP="$AUTH_LOG_PATH"
-	TLOG_TF="dropbear"
+	LOG_FILE="$AUTH_LOG_PATH"
+	LOG_TAG="dropbear"
 
 	## Dropbear SSH authentication failures
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"dropbear.*Bad password attempt .* from <HOST>" \
 		"dropbear.*Login attempt for nonexistent user from <HOST>")
 fi

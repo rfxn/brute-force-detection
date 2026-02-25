@@ -103,7 +103,6 @@ export LOG_SOURCE
 PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
 PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
 PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
-PRESSURE_COUNTRY="${PRESSURE_COUNTRY:-0}"
 BAN_TTL="${BAN_TTL:-${BAN_DURATION:-600}}"
 BAN_ESCALATE_AFTER="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-5}}"
 BAN_ESCALATE_WINDOW="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
@@ -243,7 +242,7 @@ echo "$UTIME" > "$LOCK_FILE"
 }
 
 check() {
-	local run_start rules_count=0 events_count=0 bans_count=0
+	local run_start active_count=0 rules_count=0 events_count=0 bans_count=0
 	run_start=$(date +"%s")
 
 	# create alerts temp file for batched email delivery
@@ -256,9 +255,10 @@ check() {
 
 	for str in "$RULES_PATH"/*; do
 		str=$(basename "$str")
-		eout "processing rule file $str"
+		vout "processing rule file $str"
 		_clear_rule_vars
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
+		_compat_rule_vars
 		_apply_pressure "$str"
 		_apply_thresholds "$str"
 		# resolve effective weight and trip for this rule
@@ -269,9 +269,13 @@ check() {
 		fi
 		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
 		validate_rule "$str" || continue
+		active_count=$((active_count + 1))
+		if [ -z "${MATCHED_HOSTS:-}" ]; then
+			continue  # active but no new events this cycle
+		fi
 		rules_count=$((rules_count + 1))
-		# process ARG_VAL pipeline once; reuse for iteration and counting
-		HOSTS_PARSED=$(echo "$ARG_VAL" | tr ' ' '\n' | sort)
+		# process MATCHED_HOSTS pipeline once; reuse for iteration and counting
+		HOSTS_PARSED=$(echo "$MATCHED_HOSTS" | tr ' ' '\n' | sort)
 		# count events (raw IP occurrences including duplicates)
 		local host_lines
 		host_lines=$(echo "$HOSTS_PARSED" | grep -c . 2>/dev/null || echo 0)
@@ -286,11 +290,9 @@ check() {
 				vout "  $ATTACK_HOST filtered (ignored)"
 				continue
 			fi
-			# compute pressure score for this host+service
-			local scoring_weight="$eff_weight"
-			if [ "${PRESSURE_COUNTRY:-0}" = "1" ]; then
-				scoring_weight=$(pressure_effective_weight "$eff_weight" "$ATTACK_HOST" "$INSTALL_PATH")
-			fi
+			# compute pressure score for this host+service (country multiplier auto-applied)
+			local scoring_weight
+			scoring_weight=$(pressure_effective_weight "$eff_weight" "$ATTACK_HOST" "$INSTALL_PATH")
 			local pressure_scaled
 			pressure_scaled=$(record_and_score "$ATTACK_HOST" "$HOSTS_PARSED" \
 				"$INSTALL_PATH" "$PRESSURE_HALF_LIFE" "$UTIME" "$MOD" "$scoring_weight")
@@ -329,7 +331,7 @@ check() {
 						# collect alert data for batched delivery
 						if [ "$EMAIL_ALERTS" = "1" ] && [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							local eff_recipient="${RULE_EMAIL:-$EMAIL_ADDRESS}"
-							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${pressure_scaled}|${ban_expiry}|${ban_action}|${recent_bans}|${LP}|${eff_recipient}|${eff_trip}|${PRESSURE_HALF_LIFE}|${scoring_weight}" >> "$alerts_file"
+							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${pressure_scaled}|${ban_expiry}|${ban_action}|${recent_bans}|${LOG_FILE}|${eff_recipient}|${eff_trip}|${PRESSURE_HALF_LIFE}|${scoring_weight}" >> "$alerts_file"
 						fi
 					fi
 				fi
@@ -353,7 +355,7 @@ check() {
 	local run_end run_elapsed
 	run_end=$(date +"%s")
 	run_elapsed=$((run_end - run_start))
-	eout "run complete: $rules_count rules checked, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" le
+	eout "run complete: $active_count active rules, $rules_count with events, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" le
 }
 
 _apool_report() {
@@ -505,7 +507,7 @@ reload_watch() {
 	fi
 	TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
 	# clear derived pressure vars so re-sourced config takes effect
-	unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL PRESSURE_COUNTRY
+	unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL
 	unset BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW
 	unset TRIG TRIG_WINDOW TRIG_GLOBAL
 	unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
@@ -513,7 +515,6 @@ reload_watch() {
 	PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
 	PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
 	PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
-	PRESSURE_COUNTRY="${PRESSURE_COUNTRY:-0}"
 	BAN_TTL="${BAN_TTL:-${BAN_DURATION:-600}}"
 	BAN_ESCALATE_AFTER="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-5}}"
 	BAN_ESCALATE_WINDOW="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"

@@ -9,16 +9,19 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/sbin/dovecot"
+PREREQ="/usr/sbin/dovecot"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="110,143,993,995"
-	LP="$MAIL_LOG_PATH"
-	TLOG_TF="dovecot"
+	LOG_FILE="$MAIL_LOG_PATH"
+	if [ ! -f "$LOG_FILE" ]; then
+		LOG_FILE="$AUTH_LOG_PATH"
+	fi
+	LOG_TAG="dovecot"
 
 	## DOVECOT IMAP/POP3
 	IGNOREREGEX="no auth attempts"
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"pop3-login.*auth failed.*rip=<HOST>" \
 		"imap-login.*auth failed.*rip=<HOST>" \
 		"pop3-login.*Disconnected.*rip=<HOST>" \

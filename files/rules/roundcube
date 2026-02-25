@@ -10,21 +10,21 @@
 
 # detect roundcube log path
 if [ -f "/var/log/roundcube/errors.log" ]; then
-	LP="/var/log/roundcube/errors.log"
+	LOG_FILE="/var/log/roundcube/errors.log"
 elif [ -f "/var/log/roundcubemail/errors.log" ]; then
-	LP="/var/log/roundcubemail/errors.log"
+	LOG_FILE="/var/log/roundcubemail/errors.log"
 elif [ -f "/var/log/roundcube/errors" ]; then
-	LP="/var/log/roundcube/errors"
+	LOG_FILE="/var/log/roundcube/errors"
 fi
 
 # file must exist for rule to be active
-REQ="${LP:-}"
-if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+PREREQ="${LOG_FILE:-}"
+if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
 	PORTS="80,443"
-	TLOG_TF="roundcube"
+	LOG_TAG="roundcube"
 
 	## Roundcube webmail authentication failures
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"Login failed for .+ from <HOST>" \
 		"Failed login for .+ from <HOST>")
 fi

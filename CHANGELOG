@@ -1,4 +1,35 @@
 2.0.1:
+[Change] weights.country renamed to pressure-country.conf; PRESSURE_COUNTRY
+      toggle removed — country weighting is now auto-enabled when
+      pressure-country.conf has uncommented entries; removes config variable
+      from conf.bfd, validate_config(), show_config(), and bash completion
+[Change] dovecot rule: AUTH_LOG_PATH fallback when MAIL_LOG_PATH missing
+      (Debian/Ubuntu systems where dovecot logs to auth.log)
+[Change] exim_authfail/exim_nxuser rules: Debian support — /usr/sbin/exim4
+      binary fallback, /var/log/exim4/mainlog log path fallback
+[Change] asterisk_badauth/asterisk_iax/asterisk_nopeer rules: /var/log/
+      asterisk/messages fallback when /var/log/asterisk/full missing
+[Change] http_401 rule: conservative defaults enabled (PRESSURE_WEIGHT=1,
+      PRESSURE_TRIP=60) to prevent false positives from legitimate 401s
+[Change] pam_generic rule: conservative defaults enabled (PRESSURE_WEIGHT=1,
+      PRESSURE_TRIP=40) with overlap documentation comment
+[Change] validate_rule() rewritten to distinguish inactive rules (silent skip)
+      from genuine misconfigurations (logged); PREREQ-missing and file-detection
+      with no match are now silent; MATCHED_HOSTS check moved to caller
+[Change] check() output: "processing rule file" messages now verbose-only;
+      new summary format "N active rules, M with events, P events parsed,
+      K bans executed"; active_count tracks rules passing validate_rule
+[New] tlog_journal_filter() expanded from 16 to 23 entries: openvpn,
+      exim_authfail, exim_nxuser, xrdp, asterisk, asterisk.iax, asterisk_nopeer
+[Change] rule variables renamed for clarity: REQ→PREREQ, LP→LOG_FILE,
+      TLOG_TF→LOG_TAG, ARG_VAL→MATCHED_HOSTS; all 42 rule files, library
+      functions, and diagnostics updated; _compat_rule_vars() shim provides
+      full backward compatibility for custom rules using old names
+[New] install.sh: auto-enable watch mode on fresh install (systemd + SysVinit);
+      upgrades respect existing timer/watch choice
+[Change] install.sh: cleaner post-install output reflecting active scheduling mode
+[Change] README: sections 2, 2.1, Quick Start updated for auto-enabled watch mode
+[Change] bfd.1: DESCRIPTION updated to reflect watch mode as default on install
 [New] proxmox rule: pvedaemon/pveproxy authentication failure via PAM
 [New] lighttpd rule: mod_auth password mismatch with dynamic log detection
 [New] mongodb rule: authentication failed from client
@@ -52,10 +83,11 @@
       20); PRESSURE_TRIP_GLOBAL cross-service aggregate trip (0=off);
       all math in native awk floats with scaled-integer bash comparison;
       backward compat: old TRIG/TRIG_WINDOW configs auto-migrate
-[New] country pressure multipliers: PRESSURE_COUNTRY=1 enables IP-to-country
-      lookup via ipcountry.dat (binary-search on sorted integer ranges);
-      weights.country maps country codes to multipliers (20=2.0x, 10=1.0x);
-      pressure_effective_weight() scales per-rule weight by country factor
+[New] country pressure multipliers: auto-enabled when pressure-country.conf
+      has entries; IP-to-country lookup via ipcountry.dat (binary-search on
+      sorted integer ranges); pressure-country.conf maps country codes to
+      multipliers (20=2.0x, 10=1.0x); pressure_effective_weight() scales
+      per-rule weight by country factor
 [New] distributed attack detection: SUBNET_TRIG unique IPs from same subnet
       triggers subnet ban; ip_to_subnet() with configurable IPv4/IPv6 masks
 [New] FIREWALL="auto" with 8 backends (APF, CSF, firewalld, UFW, nftables,

@@ -10,15 +10,15 @@
 
 # file must exist for rule to be active
 # requires wp-fail2ban plugin (logs to AUTH_LOG_PATH via syslog)
-REQ="$AUTH_LOG_PATH"
+PREREQ="$AUTH_LOG_PATH"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="80,443"
-	LP="$AUTH_LOG_PATH"
-	TLOG_TF="wordpress"
+	LOG_FILE="$AUTH_LOG_PATH"
+	LOG_TAG="wordpress"
 
 	## WordPress authentication failures (via wp-fail2ban plugin)
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"wordpress.*Authentication failure .* from <HOST>" \
 		"wordpress.*Blocked authentication attempt .* from <HOST>" \
 		"wordpress.*XML-RPC authentication .* from <HOST>")

@@ -208,8 +208,6 @@ pressure = SUM { weight * 2^(-(now - event_time) / half_life) }
 |----------|---------|-------------|
 | `PRESSURE_TRIP` | `20` | Accumulated pressure needed to trigger a ban; per-rule overrides in rule files or `pressure.conf` |
 | `PRESSURE_HALF_LIFE` | `300` | Half-life in seconds (how fast pressure decays); shorter = more forgiving |
-| `PRESSURE_COUNTRY` | `0` | Enable country-based pressure multipliers (0 = off, 1 = on); see [3.8](#38-country-weighting) |
-
 Per-rule weights are configured in `pressure.conf` (centralized) or in individual rule files via `PRESSURE_WEIGHT`. Higher weight = faster pressure accumulation. Default tiers: 5 (control panels), 3 (SSH/VPN/critical), 2 (mail/FTP/web), 1 (noisy/generic).
 
 ### 3.2 Email Alerts
@@ -287,11 +285,11 @@ Additional variables (`LOG_SOURCE`, `LOCK_FILE_TIMEOUT`, `BAN_RETRY_COUNT`, `OUT
 
 ### 3.8 Country Weighting
 
-When `PRESSURE_COUNTRY="1"`, pressure weight is multiplied by a per-country factor from `/usr/local/bfd/weights.country`. This lets operators increase sensitivity for high-risk geographies without affecting traffic from trusted countries.
+Country weighting is active automatically when `pressure-country.conf` contains uncommented entries. No toggle is required — if the file has entries, they are applied; if all entries are commented out (the default), country weighting is off.
 
 The country database (`ipcountry.dat`) maps IPv4 addresses to 2-letter country codes. Update it periodically with `update-ipcountry.sh` (or the pre-built file ships with BFD).
 
-The multiplier file (`weights.country`) uses `CC=N` format where N is weight×10 (e.g., `CN=20` means 2.0× weight, `US=10` means 1.0× = no change). Unlisted countries default to 1.0×.
+The multiplier file (`pressure-country.conf`) uses `CC=N` format where N is weight×10 (e.g., `CN=20` means 2.0× weight, `US=10` means 1.0× = no change). Unlisted countries default to 1.0×.
 
 ---
 
@@ -512,7 +510,7 @@ ip,service,ports,banned,expires
 
 Rules are located under `/usr/local/bfd/rules/`. Each rule is a shell fragment that declares the service name, required binary, log path, and a regex pattern for matching authentication failures.
 
-Each rule auto-enables based on the existence of a specific application binary (`REQ`). For example, if `/usr/sbin/sshd` exists, the sshd rule is active. No manual activation is needed — install the application and BFD will detect it.
+Each rule auto-enables based on the existence of a specific application binary (`PREREQ`). For example, if `/usr/sbin/sshd` exists, the sshd rule is active. No manual activation is needed — install the application and BFD will detect it.
 
 Use `bfd -c` to see which rules are active on your system.
 
@@ -540,15 +538,15 @@ Each rule file supports the following variables:
 
 | Variable | Description |
 |----------|-------------|
-| `REQ` | Path to required binary. Rule is active only if this binary exists |
-| `LP` | Log file path to monitor (uses config variables like `$AUTH_LOG_PATH`) |
-| `ARG_VAL` | Extracted IP list — tlog + extract_hosts pipeline using `<HOST>` patterns |
+| `PREREQ` | Path to required binary or file. Rule is active only if this file exists |
+| `LOG_FILE` | Log file path to monitor (uses config variables like `$AUTH_LOG_PATH`) |
+| `MATCHED_HOSTS` | Extracted IP list — tlog + extract_hosts pipeline using `<HOST>` patterns |
 | `PRESSURE_WEIGHT` | Per-service pressure weight (overrides `pressure.conf`; higher = faster accumulation) |
 | `PRESSURE_TRIP` | Per-service trip point (overrides `pressure.conf` and global `PRESSURE_TRIP`) |
 | `PORTS` | Service ports for port-specific blocking (e.g., `"22"` for sshd) |
 | `SKIP_ALERT` | Set to `"1"` to suppress email alerts for this service |
 | `RULE_EMAIL` | Override `EMAIL_ADDRESS` for this rule's alerts (per-rule routing) |
-| `TLOG_TF` | Tracking identifier used by tlog for state file naming (e.g., `"sshd"`, `"dovecot"`) |
+| `LOG_TAG` | Tracking tag for tlog state file naming and journal filter dispatch (e.g., `"sshd"`, `"dovecot"`) |
 | `IGNOREREGEX` | Lines matching this ERE pattern are excluded before IP extraction (fail2ban-compatible) |
 
 To customize a rule's pressure weight and trip point:

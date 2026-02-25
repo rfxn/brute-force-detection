@@ -16,22 +16,22 @@
 # embeds the IP in the message text and works with any prefix.
 if [ -d "/var/log/postgresql" ]; then
 	# Debian/Ubuntu — find newest log file
-	LP=$(ls -t /var/log/postgresql/postgresql-*.log 2>/dev/null | head -1)
+	LOG_FILE=$(ls -t /var/log/postgresql/postgresql-*.log 2>/dev/null | head -1)
 elif [ -d "/var/lib/pgsql" ]; then
 	# RHEL/Rocky — find newest log in any version's data/log dir
-	LP=$(ls -t /var/lib/pgsql/*/data/log/postgresql-*.log 2>/dev/null | head -1)
+	LOG_FILE=$(ls -t /var/lib/pgsql/*/data/log/postgresql-*.log 2>/dev/null | head -1)
 fi
 
 # file must exist for rule to be active
-REQ="${LP:-}"
-if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+PREREQ="${LOG_FILE:-}"
+if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
 	PORTS="5432"
-	TLOG_TF="postgresql"
+	LOG_TAG="postgresql"
 
 	## PostgreSQL authentication failures
 	# Pattern 1: no pg_hba.conf entry — IP embedded in message
 	# Pattern 2: password authentication failed — requires %h or %r in log_line_prefix
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		'no pg_hba.conf entry for host "<HOST>"' \
 		"<HOST>.*FATAL.*password authentication failed")
 fi

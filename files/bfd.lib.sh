@@ -171,25 +171,36 @@ sanitize_ports() {
 # Save, restore, and clear the per-rule variables that rule files set.
 # Used by functions that source rules but must not clobber the caller's state.
 _save_rule_vars() {
-	_SV_REQ="${REQ:-}"; _SV_LP="${LP:-}"; _SV_TRIG="${TRIG:-}"
-	_SV_TLOG_TF="${TLOG_TF:-}"; _SV_PORTS="${PORTS:-}"
-	_SV_ARG_VAL="${ARG_VAL:-}"; _SV_IGNOREREGEX="${IGNOREREGEX:-}"
+	_SV_PREREQ="${PREREQ:-}"; _SV_LOG_FILE="${LOG_FILE:-}"; _SV_TRIG="${TRIG:-}"
+	_SV_LOG_TAG="${LOG_TAG:-}"; _SV_PORTS="${PORTS:-}"
+	_SV_MATCHED_HOSTS="${MATCHED_HOSTS:-}"; _SV_IGNOREREGEX="${IGNOREREGEX:-}"
 	_SV_SKIP_ALERT="${SKIP_ALERT:-}"; _SV_RULE_EMAIL="${RULE_EMAIL:-}"
 	_SV_PRESSURE_WEIGHT="${PRESSURE_WEIGHT:-}"
 	_SV_PRESSURE_TRIP="${PRESSURE_TRIP:-}"
 }
 _restore_rule_vars() {
-	REQ="$_SV_REQ"; LP="$_SV_LP"; TRIG="$_SV_TRIG"
-	TLOG_TF="$_SV_TLOG_TF"; PORTS="$_SV_PORTS"
-	ARG_VAL="$_SV_ARG_VAL"; IGNOREREGEX="$_SV_IGNOREREGEX"
+	PREREQ="$_SV_PREREQ"; LOG_FILE="$_SV_LOG_FILE"; TRIG="$_SV_TRIG"
+	LOG_TAG="$_SV_LOG_TAG"; PORTS="$_SV_PORTS"
+	MATCHED_HOSTS="$_SV_MATCHED_HOSTS"; IGNOREREGEX="$_SV_IGNOREREGEX"
 	SKIP_ALERT="$_SV_SKIP_ALERT"; RULE_EMAIL="$_SV_RULE_EMAIL"
 	PRESSURE_WEIGHT="$_SV_PRESSURE_WEIGHT"
 	PRESSURE_TRIP="$_SV_PRESSURE_TRIP"
 }
 _clear_rule_vars() {
-	REQ="" LP="" TRIG="" TLOG_TF="" PORTS=""
-	ARG_VAL="" IGNOREREGEX="" SKIP_ALERT="" RULE_EMAIL=""
+	PREREQ="" LOG_FILE="" TRIG="" LOG_TAG="" PORTS=""
+	MATCHED_HOSTS="" IGNOREREGEX="" SKIP_ALERT="" RULE_EMAIL=""
 	PRESSURE_WEIGHT="" PRESSURE_TRIP=""
+	# legacy names cleared for backward compat (custom rules may use them)
+	REQ="" LP="" TLOG_TF="" ARG_VAL=""
+}
+
+# _compat_rule_vars — map legacy rule variable names to canonical names.
+# Called after sourcing a rule file so custom rules using old names still work.
+_compat_rule_vars() {
+	: "${PREREQ:=${REQ:-}}"
+	: "${LOG_FILE:=${LP:-}}"
+	: "${LOG_TAG:=${TLOG_TF:-}}"
+	: "${MATCHED_HOSTS:=${ARG_VAL:-}}"
 }
 
 # DEPRECATED: use _load_pressure_conf() — retained for backward compat callers.
@@ -351,7 +362,7 @@ _apply_pressure() {
 
 # _rule_is_active — true when the rule's prerequisite binary/file exists
 _rule_is_active() {
-	[ -n "${REQ:-}" ] && [ -f "$REQ" ]
+	[ -n "${PREREQ:-}" ] && [ -f "$PREREQ" ]
 }
 
 # eout requires: BFD_LOG_PATH, OUTPUT_SYSLOG, OUTPUT_SYSLOG_FILE
@@ -424,7 +435,7 @@ expand_command_template() {
 }
 
 # validate_config requires: PRESSURE_TRIP, PRESSURE_HALF_LIFE, PRESSURE_TRIP_GLOBAL,
-#   PRESSURE_COUNTRY, SUBNET_TRIG, SUBNET_MASK, SUBNET_MASK_V6,
+#   SUBNET_TRIG, SUBNET_MASK, SUBNET_MASK_V6,
 #   BAN_TTL, BAN_ESCALATE_AFTER, BAN_ESCALATE_WINDOW, BAN_ESCALATION
 #   (none/linear/double), BAN_ESCALATION_CAP, BAN_RETRY_COUNT, FIREWALL,
 #   BAN_COMMAND_TEMPLATE, EMAIL_ALERTS, EMAIL_ADDRESS (when EMAIL_ALERTS=1),
@@ -446,11 +457,6 @@ validate_config() {
 	local _ptg="${PRESSURE_TRIP_GLOBAL-${TRIG_GLOBAL:-0}}"
 	if [ -z "$_ptg" ] || ! [[ "$_ptg" =~ $int_pattern ]]; then
 		echo "error: PRESSURE_TRIP_GLOBAL must be a non-negative integer (got '${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-}}')."
-		exit $EXIT_CONFIG_ERROR
-	fi
-	local _pc="${PRESSURE_COUNTRY:-0}"
-	if [ "$_pc" != "0" ] && [ "$_pc" != "1" ]; then
-		echo "error: PRESSURE_COUNTRY must be 0 or 1 (got '${PRESSURE_COUNTRY:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _st="${SUBNET_TRIG:-0}"
@@ -657,8 +663,8 @@ tlog_read() {
 	return 0
 }
 
-# _rule_tlog lp tlog_tf — in-process tlog for rule execution.
-# Replaces the subprocess call: $("$TLOG_PATH" "$LP" "$TLOG_TF")
+# _rule_tlog log_file log_tag — in-process tlog for rule execution.
+# Replaces the subprocess call: $("$TLOG_PATH" "$LOG_FILE" "$LOG_TAG")
 # When _TLOG_PASSTHROUGH is set, outputs the entire file instead of a delta
 # (used by test_rule() to feed full test data through the rule pipeline).
 # Requires: TLOG_BASERUN (set in internals.conf / files/bfd fallback).
@@ -676,7 +682,7 @@ _rule_tlog() {
 	tlog_read "$lp" "$tlog_tf" "${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
 }
 
-# tlog_journal_filter tlog_name — map TLOG_TF to journalctl filter argument
+# tlog_journal_filter log_tag — map LOG_TAG to journalctl filter argument
 # Returns 0 with filter on stdout, or 1 if no mapping exists (not journal-capable).
 tlog_journal_filter() {
 	local tlog_name="$1"
@@ -697,6 +703,13 @@ tlog_journal_filter() {
 		rh_imapd)   echo "SYSLOG_IDENTIFIER=imapd" ;;
 		rh_ipop3)   echo "SYSLOG_IDENTIFIER=ipop3d" ;;
 		named)      echo "SYSLOG_IDENTIFIER=named" ;;
+		openvpn)    echo "SYSLOG_IDENTIFIER=openvpn" ;;
+		exim_authfail) echo "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim" ;;
+		exim_nxuser)   echo "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim" ;;
+		xrdp)       echo "SYSLOG_IDENTIFIER=xrdp-sesman" ;;
+		asterisk)   echo "SYSLOG_IDENTIFIER=asterisk" ;;
+		asterisk.iax)     echo "SYSLOG_IDENTIFIER=asterisk" ;;
+		asterisk_nopeer)  echo "SYSLOG_IDENTIFIER=asterisk" ;;
 		*) return 1 ;;
 	esac
 	return 0
@@ -820,33 +833,45 @@ extract_hosts() {
 	done
 }
 
-# validate_rule rule_name — check that a sourced rule set required variables
-# requires: LP, TLOG_TF, ARG_VAL to be set by the rule file
-# returns 0 on success, 1 on skip
+# validate_rule rule_name — check that a sourced rule set required variables.
+# Distinguishes three cases:
+#   1. Service not installed (PREREQ set but missing) — silent skip
+#   2. File-detection rule with no match (PREREQ+LOG_FILE both empty) — silent skip
+#   3. Genuine misconfiguration (LOG_FILE/LOG_TAG missing despite PREREQ existing) — logged
+# MATCHED_HOSTS check is NOT here — caller handles it after counting active rules.
+# returns 0 on success (rule is active), 1 on skip
 validate_rule() {
 	local rule_name="$1"
-	if [ -z "${LP:-}" ]; then
-		eout "rule $rule_name: LP not set (prerequisite not installed?), skipping" le
+	# 1. Service not installed (binary set but missing) — silent skip
+	if [ -n "${PREREQ:-}" ] && [ ! -f "$PREREQ" ]; then
 		return 1
 	fi
-	if [ ! -f "$LP" ]; then
-		# allow rule if journal fallback is possible
+	# 2. File-detection rules with no match — silent skip
+	if [ -z "${PREREQ:-}" ] && [ -z "${LOG_FILE:-}" ]; then
+		return 1
+	fi
+	# 3. LOG_FILE not set despite PREREQ existing — genuine misconfiguration
+	if [ -z "${LOG_FILE:-}" ]; then
+		eout "rule $rule_name: LOG_FILE not set (service found but log path missing), skipping" le
+		return 1
+	fi
+	# 4. LOG_FILE missing — check journal fallback
+	if [ ! -f "$LOG_FILE" ]; then
 		if [ "${LOG_SOURCE:-auto}" != "file" ] && \
 		   command -v journalctl >/dev/null 2>&1 && \
-		   tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
-			: # journal-capable, continue validation
+		   tlog_journal_filter "${LOG_TAG:-}" >/dev/null 2>&1; then
+			: # journal-capable, continue
 		else
-			eout "rule $rule_name: log file '$LP' does not exist, skipping" le
+			eout "rule $rule_name: log file '$LOG_FILE' does not exist, skipping" le
 			return 1
 		fi
 	fi
-	if [ -z "${TLOG_TF:-}" ]; then
-		eout "rule $rule_name: TLOG_TF not set, skipping" le
+	# 5. LOG_TAG not set
+	if [ -z "${LOG_TAG:-}" ]; then
+		eout "rule $rule_name: LOG_TAG not set, skipping" le
 		return 1
 	fi
-	if [ -z "${ARG_VAL:-}" ]; then
-		return 1
-	fi
+	# Rule is ACTIVE — MATCHED_HOSTS check moves to caller
 	return 0
 }
 
@@ -1749,12 +1774,12 @@ country_weight() {
 }
 
 # pressure_effective_weight rule_weight host install_path — apply country multiplier
-# When PRESSURE_COUNTRY=1: rule_weight * country_mult / 10 (integer math).
-# When off or no DB: returns rule_weight unchanged.
+# Auto-enabled when pressure-country.conf exists with entries; otherwise passthrough.
+# Returns: rule_weight * country_mult / 10 (integer math, minimum 1).
 pressure_effective_weight() {
 	local rule_weight="$1" host="$2" install_path="$3"
 	local db_file="$install_path/ipcountry.dat"
-	local weights_file="$install_path/weights.country"
+	local weights_file="$install_path/pressure-country.conf"
 	if [ ! -f "$db_file" ] || [ ! -f "$weights_file" ]; then
 		echo "$rule_weight"
 		return 0
@@ -2011,23 +2036,24 @@ _hc_rules() {
 			_save_rule_vars
 			_clear_rule_vars
 			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+				_compat_rule_vars
 				_apply_pressure "$rule_name"
 				_apply_thresholds "$rule_name"
 				if _rule_is_active; then
 					local rule_weight="${PRESSURE_WEIGHT:-1}"
 					local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
-					if [ -n "${LP:-}" ] && [ ! -f "$LP" ] && [ "$_hc_has_journalctl" -eq 1 ] && \
+					if [ -n "${LOG_FILE:-}" ] && [ ! -f "$LOG_FILE" ] && [ "$_hc_has_journalctl" -eq 1 ] && \
 					   [ "$log_source" != "file" ] && \
-					   tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
+					   tlog_journal_filter "${LOG_TAG:-}" >/dev/null 2>&1; then
 						rules_active=$((rules_active + 1))
 						echo "  [PASS] $rule_name: active via journal (weight=$rule_weight, trip=$rule_trip, PORTS=${PORTS:-all})"
 					else
 						rules_active=$((rules_active + 1))
-						echo "  [PASS] $rule_name: active (weight=$rule_weight, trip=$rule_trip, PORTS=${PORTS:-all}, LOG=${LP:-n/a})"
+						echo "  [PASS] $rule_name: active (weight=$rule_weight, trip=$rule_trip, PORTS=${PORTS:-all}, LOG=${LOG_FILE:-n/a})"
 					fi
 				else
 					rules_inactive=$((rules_inactive + 1))
-					echo "  [SKIP] $rule_name: inactive (REQ ${REQ:-unset} not found)"
+					echo "  [SKIP] $rule_name: inactive (PREREQ ${PREREQ:-unset} not found)"
 				fi
 			else
 				rules_inactive=$((rules_inactive + 1))
@@ -2340,7 +2366,8 @@ send_alerts() {
 			# old templates expect a count, so use whole pressure units
 			ATTACK_COUNT="$(( _count / 1000 ))"
 			if [ "$ATTACK_COUNT" -lt 1 ]; then ATTACK_COUNT=1; fi
-			LP="$_lp"
+			LOG_FILE="$_lp"
+			LP="$_lp"  # backward compat for custom alert templates
 			PORTS="$_ports"
 			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
 				BAN_COMMAND=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
@@ -2587,6 +2614,7 @@ show_service_status() {
 	_save_rule_vars
 	_clear_rule_vars
 	safe_source "$rule_file" "rule:$service" 2>/dev/null
+	_compat_rule_vars
 	_apply_pressure "$service"
 	_apply_thresholds "$service"
 
@@ -2596,11 +2624,11 @@ show_service_status() {
 	local rule_ports="${PORTS:-all}"
 
 	# Log source
-	if [ -n "${LP:-}" ] && [ -f "$LP" ]; then
-		echo "  Log:            $LP (file)"
+	if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
+		echo "  Log:            $LOG_FILE (file)"
 	elif command -v journalctl >/dev/null 2>&1 && \
-	     tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
-		echo "  Log:            journal (${TLOG_TF:-})"
+	     tlog_journal_filter "${LOG_TAG:-}" >/dev/null 2>&1; then
+		echo "  Log:            journal (${LOG_TAG:-})"
 	else
 		echo "  Log:            not available"
 	fi
@@ -2656,7 +2684,7 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
-	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL PRESSURE_COUNTRY SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL PRESSURE_CONF"
+	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL PRESSURE_CONF"
 	if [ -n "$var" ]; then
 		# validate against whitelist before eval
 		local _found=0 _v
@@ -2840,6 +2868,7 @@ list_rules() {
 		_clear_rule_vars
 
 		if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+			_compat_rule_vars
 			_apply_pressure "$rule_name"
 			_apply_thresholds "$rule_name"
 			local rule_weight="${PRESSURE_WEIGHT:-1}"
@@ -2848,14 +2877,14 @@ list_rules() {
 			if _rule_is_active; then
 				active=$((active + 1))
 				local log_info
-				if [ -n "${LP:-}" ] && [ -f "$LP" ]; then
-					log_info="$LP (file)"
+				if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
+					log_info="$LOG_FILE (file)"
 				elif [ "$log_source" != "file" ] && \
 				     command -v journalctl >/dev/null 2>&1 && \
-				     tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
+				     tlog_journal_filter "${LOG_TAG:-}" >/dev/null 2>&1; then
 					log_info="journal"
 				else
-					log_info="${LP:-n/a}"
+					log_info="${LOG_FILE:-n/a}"
 				fi
 				echo "$rule_name|active|$rule_weight|$rule_trip|$rule_ports|$log_info" >> "$atmp"
 			else
@@ -2900,10 +2929,12 @@ show_rule() {
 	_apply_pressure "$rule_name"
 	_apply_thresholds "$rule_name"
 
+	_compat_rule_vars
+
 	if _rule_is_active; then
 		echo "  Status:     active"
 	else
-		echo "  Status:     inactive (${REQ:-unset} not found)"
+		echo "  Status:     inactive (${PREREQ:-unset} not found)"
 	fi
 
 	local rule_weight="${PRESSURE_WEIGHT:-1}"
@@ -2913,14 +2944,14 @@ show_rule() {
 	echo "  Trip:       $rule_trip (half-life ${half_life}s)"
 	echo "  Ports:      ${PORTS:-all}"
 
-	if [ -n "${LP:-}" ] && [ -f "$LP" ]; then
-		echo "  Log:        $LP (file mode)"
+	if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
+		echo "  Log:        $LOG_FILE (file mode)"
 	elif [ "$log_source" != "file" ] && \
 	     command -v journalctl >/dev/null 2>&1 && \
-	     tlog_journal_filter "${TLOG_TF:-}" >/dev/null 2>&1; then
-		echo "  Log:        journal (${TLOG_TF:-})"
+	     tlog_journal_filter "${LOG_TAG:-}" >/dev/null 2>&1; then
+		echo "  Log:        journal (${LOG_TAG:-})"
 	else
-		echo "  Log:        ${LP:-not configured}"
+		echo "  Log:        ${LOG_FILE:-not configured}"
 	fi
 
 	_restore_rule_vars
@@ -2964,24 +2995,26 @@ test_rule() {
 	_apply_pressure "$rule_name"
 	_apply_thresholds "$rule_name"
 
+	_compat_rule_vars
+
 	# report
 	echo "Rule:         $rule_name"
-	echo "Log file:     ${log_file:-${LP:-n/a}}"
+	echo "Log file:     ${log_file:-${LOG_FILE:-n/a}}"
 	echo "Weight:       ${PRESSURE_WEIGHT:-1}"
 	echo "Trip:         ${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
 	[ -n "${PORTS:-}" ] && echo "Ports:        $PORTS"
 	echo ""
 
 	local total=0 unique=0
-	if [ -n "$ARG_VAL" ]; then
-		total=$(echo "$ARG_VAL" | tr ' ' '\n' | grep -c . 2>/dev/null || echo 0)
-		unique=$(echo "$ARG_VAL" | tr ' ' '\n' | sort -u | grep -c . 2>/dev/null || echo 0)
+	if [ -n "$MATCHED_HOSTS" ]; then
+		total=$(echo "$MATCHED_HOSTS" | tr ' ' '\n' | grep -c . 2>/dev/null || echo 0)
+		unique=$(echo "$MATCHED_HOSTS" | tr ' ' '\n' | sort -u | grep -c . 2>/dev/null || echo 0)
 	fi
 	echo "Results:      $total matches, $unique unique IPs"
 	if [ "$total" -gt 0 ]; then
 		echo ""
 		echo "Top IPs:"
-		echo "$ARG_VAL" | tr ' ' '\n' | sort | uniq -c | sort -rn | head -10 | \
+		echo "$MATCHED_HOSTS" | tr ' ' '\n' | sort | uniq -c | sort -rn | head -10 | \
 			while IFS= read -r line; do
 				echo "  $(echo "$line" | awk '{print $2}') ($(echo "$line" | awk '{print $1}'))"
 			done

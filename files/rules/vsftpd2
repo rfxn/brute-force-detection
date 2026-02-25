@@ -9,13 +9,13 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/sbin/vsftpd"
-if [ -f "$REQ" ]; then
+PREREQ="/usr/sbin/vsftpd"
+if [ -f "$PREREQ" ]; then
 	PORTS="20,21"
-	LP="/var/log/vsftpd.log"
-	TLOG_TF="vsftpd2"
+	LOG_FILE="/var/log/vsftpd.log"
+	LOG_TAG="vsftpd2"
 
 	## VSFTPD
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		'FAIL LOGIN: Client "<HOST>"')
 fi

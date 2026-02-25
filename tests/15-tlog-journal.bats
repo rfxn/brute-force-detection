@@ -279,25 +279,25 @@ MOCK
 
 # --- validate_rule() journal awareness tests ---
 
-@test "validate_rule: LP missing + journal available + mapping passes" {
-	LP="/nonexistent/auth.log"
-	TLOG_TF="sshd"
-	ARG_VAL="192.0.2.1"
+@test "validate_rule: LOG_FILE missing + journal available + mapping passes" {
+	PREREQ="/bin/sh"
+	LOG_FILE="/nonexistent/auth.log"
+	LOG_TAG="sshd"
 	LOG_SOURCE="auto"
 	run validate_rule "sshd"
 	assert_success
 }
 
-@test "validate_rule: LP missing + no journalctl fails" {
+@test "validate_rule: LOG_FILE missing + no journalctl fails" {
 	run bash -c "
 		source '${PROJECT_ROOT}/files/bfd.lib.sh'
 		export PATH='$EMPTY_BIN'
 		export BFD_LOG_PATH='$BFD_LOG_PATH'
 		export OUTPUT_SYSLOG='0'
 		export OUTPUT_SYSLOG_FILE='/dev/null'
-		LP='/nonexistent/auth.log'
-		TLOG_TF='sshd'
-		ARG_VAL='192.0.2.1'
+		PREREQ='/bin/sh'
+		LOG_FILE='/nonexistent/auth.log'
+		LOG_TAG='sshd'
 		LOG_SOURCE='auto'
 		validate_rule 'sshd'
 	"
@@ -305,20 +305,20 @@ MOCK
 	assert_output --partial "does not exist"
 }
 
-@test "validate_rule: LP missing + LOG_SOURCE=file fails" {
-	LP="/nonexistent/auth.log"
-	TLOG_TF="sshd"
-	ARG_VAL="192.0.2.1"
+@test "validate_rule: LOG_FILE missing + LOG_SOURCE=file fails" {
+	PREREQ="/bin/sh"
+	LOG_FILE="/nonexistent/auth.log"
+	LOG_TAG="sshd"
 	LOG_SOURCE="file"
 	run validate_rule "sshd"
 	assert_failure
 	assert_output --partial "does not exist"
 }
 
-@test "validate_rule: LP missing + no mapping fails" {
-	LP="/nonexistent/error.log"
-	TLOG_TF="apache-auth"
-	ARG_VAL="192.0.2.1"
+@test "validate_rule: LOG_FILE missing + no mapping fails" {
+	PREREQ="/bin/sh"
+	LOG_FILE="/nonexistent/error.log"
+	LOG_TAG="apache-auth"
 	LOG_SOURCE="auto"
 	run validate_rule "apache-auth"
 	assert_failure

@@ -9,15 +9,15 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/var/qmail/bin/qmail-pop3d"
+PREREQ="/var/qmail/bin/qmail-pop3d"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="110,143,993,995"
-	LP="$MAIL_LOG_PATH"
-	TLOG_TF="vpopmail"
+	LOG_FILE="$MAIL_LOG_PATH"
+	LOG_TAG="vpopmail"
 
 	## vpopmail [qmail]
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"vchkpw-pop3.*password fail.*:<HOST>" \
 		"vchkpw-pop3.*user not found.*:<HOST>")
 fi

@@ -41,18 +41,15 @@ Contents:
 
 Quick Start:
 
-  # Install (as root)
+  # Install (as root) — watch mode auto-enabled
   ./install.sh
 
   # Configure — set your firewall ban command
   vi /usr/local/bfd/conf.bfd
 
-  # Enable watch mode (recommended — ~10s detection latency)
-  systemctl enable --now bfd-watch.service    # systemd
-  service bfd-watch start                     # SysVinit
-
-  # Health check — validate config, log paths, and rules
-  bfd -c
+  # Verify — watch mode should be running
+  systemctl status bfd-watch       # systemd
+  bfd -c                           # health check
 
   # Dry run — detect without banning
   bfd -d
@@ -150,11 +147,10 @@ The included install.sh script handles all installation tasks:
 This will:
   - Install BFD to /usr/local/bfd
   - Place the bfd command at /usr/local/sbin/bfd
-  - Install a 2-minute cronjob in /etc/cron.d/bfd
-  - On systemd systems, install bfd.service and bfd.timer (not enabled by
-    default)
-  - If upgrading, run importconf to import settings from the previous
-    installation
+  - Auto-enable watch mode for ~10s detection latency (systemd or SysVinit)
+  - Install a 2-minute cronjob as fallback (skipped while watch runs)
+  - If upgrading, import settings from the previous installation and
+    restart watch mode
 
 Previous installations are backed up before overwriting.
 
@@ -163,18 +159,20 @@ Bin Path: /usr/local/sbin/bfd
 
 2.1) Installation: Scheduling
 
-Watch mode (recommended):
+Watch mode (auto-enabled):
 
-BFD's watch mode runs as a persistent daemon, polling for new log data
-every WATCH_INTERVAL seconds (default 10). Detection latency is ~10
-seconds, comparable to fail2ban and other daemon-based tools.
+The installer automatically enables and starts watch mode on fresh installs.
+Watch mode runs as a persistent daemon, polling for new log data every
+WATCH_INTERVAL seconds (default 10). Detection latency is ~10 seconds,
+comparable to fail2ban and other daemon-based tools.
 
-  systemd (Rocky 8+, Debian 12, Ubuntu 20+):
-    systemctl enable --now bfd-watch.service
+On upgrades, the installer respects the existing scheduling choice:
+  - If watch mode was running, it is restarted with the updated binary
+  - If bfd.timer was enabled, it is left active (switch recommended)
 
-  SysVinit (CentOS 6/7, Ubuntu 14.04):
-    service bfd-watch start
-    chkconfig bfd-watch on    # enable at boot (RHEL)
+To switch from timer to watch mode:
+  systemctl disable bfd.timer
+  systemctl enable --now bfd-watch.service
 
 Cron (automatic fallback):
 
@@ -209,10 +207,6 @@ PRESSURE_TRIP="20" - accumulated pressure needed to trigger a ban. Per-rule
 
 PRESSURE_HALF_LIFE="300" - half-life in seconds (how fast pressure decays).
   Shorter = more forgiving; longer = longer memory. Default 5 minutes.
-
-PRESSURE_COUNTRY="0" - enable country-based pressure multipliers (0 = off,
-  1 = on). When enabled, weight is multiplied by the country factor from
-  weights.country. See section 3.8.
 
 Per-rule weights are configured in pressure.conf (centralized) or in
 individual rule files via PRESSURE_WEIGHT. Higher weight = faster pressure
@@ -352,17 +346,17 @@ overridden by adding them to conf.bfd.
 
 3.8) Configuration: Country Weighting
 
-When PRESSURE_COUNTRY="1", pressure weight is multiplied by a per-country
-factor from /usr/local/bfd/weights.country. This lets operators increase
-sensitivity for high-risk geographies without affecting traffic from trusted
-countries.
+Country weighting is active automatically when pressure-country.conf contains
+uncommented entries. No toggle is required — if the file has entries, they
+are applied; if all entries are commented out (the default), country weighting
+is off.
 
 The country database (ipcountry.dat) maps IPv4 addresses to 2-letter country
 codes.
 
-The multiplier file (weights.country) uses CC=N format where N is weight*10
-(e.g., CN=20 means 2.0x weight, US=10 means 1.0x = no change). Unlisted
-countries default to 1.0x.
+The multiplier file (pressure-country.conf) uses CC=N format where N is
+weight*10 (e.g., CN=20 means 2.0x weight, US=10 means 1.0x = no change).
+Unlisted countries default to 1.0x.
 
 4) Firewall Integration
 BFD supports automatic firewall detection via FIREWALL="auto" (default). When
@@ -539,7 +533,7 @@ that declares the service name, required binary, log path, and a regex pattern
 for matching authentication failures.
 
 Each rule auto-enables based on the existence of a specific application binary
-(REQ). For example, if /usr/sbin/sshd exists, the sshd rule is active. No
+(PREREQ). For example, if /usr/sbin/sshd exists, the sshd rule is active. No
 manual activation is needed — install the application and BFD will detect it.
 
 Use 'bfd -c' to see which rules are active on your system.
@@ -564,11 +558,11 @@ BFD ships with 42 rules:
 6.2) Rule Engine: Rule Customization
 Each rule file supports the following variables:
 
-  REQ             - path to required binary. Rule is active only if this
-                    binary exists.
-  LP              - log file path to monitor (uses config variables like
+  PREREQ          - path to required binary or file. Rule is active only
+                    if this file exists.
+  LOG_FILE        - log file path to monitor (uses config variables like
                     $AUTH_LOG_PATH).
-  ARG_VAL         - extracted IP list — tlog + extract_hosts pipeline using
+  MATCHED_HOSTS   - extracted IP list — tlog + extract_hosts pipeline using
                     <HOST> patterns.
   PRESSURE_WEIGHT - per-service pressure weight (overrides pressure.conf;
                     higher = faster pressure accumulation).
@@ -579,8 +573,8 @@ Each rule file supports the following variables:
   SKIP_ALERT      - set to "1" to suppress email alerts for this service.
   RULE_EMAIL      - override EMAIL_ADDRESS for this rule's alerts (per-rule
                     routing).
-  TLOG_TF         - tracking identifier used by tlog for state file naming
-                    (e.g., "sshd", "dovecot").
+  LOG_TAG         - tracking tag used by tlog for state file naming and
+                    journal filter dispatch (e.g., "sshd", "dovecot").
   IGNOREREGEX     - lines matching this ERE pattern are excluded before IP
                     extraction (fail2ban-compatible).
 

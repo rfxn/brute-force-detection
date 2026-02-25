@@ -9,15 +9,15 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/sbin/sshd"
+PREREQ="/usr/sbin/sshd"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="22"
-	LP="$AUTH_LOG_PATH"
-	TLOG_TF="sshd"
+	LOG_FILE="$AUTH_LOG_PATH"
+	LOG_TAG="sshd"
 
 	## SSHD
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"sshd.*Invalid user .* from <HOST>" \
 		"sshd.*Failed password for .* from <HOST>" \
 		"sshd.*User .* from <HOST> not allowed" \

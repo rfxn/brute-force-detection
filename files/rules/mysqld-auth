@@ -10,20 +10,20 @@
 
 # detect mysql error log path
 if [ -f "/var/log/mysqld.log" ]; then
-	LP="/var/log/mysqld.log"
+	LOG_FILE="/var/log/mysqld.log"
 elif [ -f "/var/log/mysql/error.log" ]; then
-	LP="/var/log/mysql/error.log"
+	LOG_FILE="/var/log/mysql/error.log"
 elif [ -f "/var/log/mariadb/mariadb.log" ]; then
-	LP="/var/log/mariadb/mariadb.log"
+	LOG_FILE="/var/log/mariadb/mariadb.log"
 fi
 
 # file must exist for rule to be active
-REQ="${LP:-}"
-if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+PREREQ="${LOG_FILE:-}"
+if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
 	PORTS="3306"
-	TLOG_TF="mysqld.auth"
+	LOG_TAG="mysqld.auth"
 
 	## MySQL/MariaDB authentication failures
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"Access denied for user '[^']+'@'<HOST>'")
 fi

@@ -635,7 +635,7 @@ _run_check_with_stats() {
 	run _run_check_with_stats "$rules_dir"
 	assert_success
 	assert_output --partial "run complete:"
-	assert_output --partial "rules checked"
+	assert_output --partial "active rules"
 	assert_output --partial "events parsed"
 	assert_output --partial "bans executed"
 }
@@ -643,37 +643,37 @@ _run_check_with_stats() {
 @test "run stats: rules count matches valid rules" {
 	local rules_dir="$TEST_TMPDIR/rules"
 	mkdir -p "$rules_dir"
-	# create 2 valid rule files with REQ that exists, LP pointing to a real file
+	# create 2 valid rule files with PREREQ that exists, LOG_FILE pointing to a real file
 	local logfile="$TEST_TMPDIR/test.log"
 	echo "test line" > "$logfile"
 	cat > "$rules_dir/testrule1" <<EOF
 TRIG="5"
-REQ="/bin/sh"
-LP="$logfile"
-TLOG_TF="testrule1"
-ARG_VAL=""
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="testrule1"
+MATCHED_HOSTS=""
 EOF
 	cat > "$rules_dir/testrule2" <<EOF
 TRIG="5"
-REQ="/bin/sh"
-LP="$logfile"
-TLOG_TF="testrule2"
-ARG_VAL=""
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="testrule2"
+MATCHED_HOSTS=""
 EOF
-	# create 1 rule that will fail validate_rule (no ARG_VAL, LP missing)
+	# create 1 rule that will fail validate_rule (no MATCHED_HOSTS, LOG_FILE missing)
 	cat > "$rules_dir/badrule" <<EOF
 TRIG="5"
-REQ="/bin/sh"
-LP="/nonexistent/log"
-TLOG_TF="badrule"
-ARG_VAL=""
+PREREQ="/bin/sh"
+LOG_FILE="/nonexistent/log"
+LOG_TAG="badrule"
+MATCHED_HOSTS=""
 EOF
 	run _run_check_with_stats "$rules_dir"
 	assert_success
-	# badrule has LP that doesn't exist, so validate_rule skips it
-	# testrule1 and testrule2 pass validate_rule but have empty ARG_VAL so
-	# validate_rule returns 1 for empty ARG_VAL — 0 valid rules
-	assert_output --partial "0 rules checked"
+	# badrule has LOG_FILE that doesn't exist, so validate_rule skips it
+	# testrule1 and testrule2 pass validate_rule (2 active) but have empty
+	# MATCHED_HOSTS so 0 rules have events
+	assert_output --partial "2 active rules, 0 with events"
 }
 
 @test "run stats: counts events from HOSTS_PARSED" {
@@ -681,19 +681,19 @@ EOF
 	mkdir -p "$rules_dir"
 	local logfile="$TEST_TMPDIR/test.log"
 	echo "test line" > "$logfile"
-	# create a rule that produces 3 events via ARG_VAL
+	# create a rule that produces 3 events via MATCHED_HOSTS
 	cat > "$rules_dir/testrule" <<'RULEEOF'
 TRIG="100"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
-LP="$logfile"
-TLOG_TF="testrule"
-ARG_VAL="192.0.2.1 192.0.2.2 192.0.2.1"
+LOG_FILE="$logfile"
+LOG_TAG="testrule"
+MATCHED_HOSTS="192.0.2.1 192.0.2.2 192.0.2.1"
 EOF
 	run _run_check_with_stats "$rules_dir"
 	assert_success
-	assert_output --partial "1 rules checked"
+	assert_output --partial "1 with events"
 	assert_output --partial "3 events parsed"
 }
 
@@ -702,7 +702,7 @@ EOF
 	mkdir -p "$rules_dir"
 	run _run_check_with_stats "$rules_dir"
 	assert_success
-	assert_output --partial "0 rules checked, 0 events parsed, 0 bans executed"
+	assert_output --partial "0 active rules, 0 with events, 0 events parsed, 0 bans executed"
 }
 
 @test "run stats: elapsed time is non-negative integer" {
@@ -803,19 +803,19 @@ EOF
 	# rule1 sets IGNOREREGEX
 	cat > "$rules_dir/rule1" <<EOF
 TRIG="100"
-REQ="/bin/sh"
-LP="$logfile"
-TLOG_TF="rule1"
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="rule1"
 IGNOREREGEX="no auth attempts"
-ARG_VAL=""
+MATCHED_HOSTS=""
 EOF
 	# rule2 should NOT inherit IGNOREREGEX from rule1
 	cat > "$rules_dir/rule2" <<EOF
 TRIG="100"
-REQ="/bin/sh"
-LP="$logfile"
-TLOG_TF="rule2"
-ARG_VAL=""
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="rule2"
+MATCHED_HOSTS=""
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
@@ -854,19 +854,19 @@ EOF
 	# rule1 sets PORTS
 	cat > "$rules_dir/rule1" <<EOF
 TRIG="100"
-REQ="/bin/sh"
-LP="$logfile"
-TLOG_TF="rule1"
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="rule1"
 PORTS="22"
-ARG_VAL=""
+MATCHED_HOSTS=""
 EOF
 	# rule2 should NOT inherit PORTS from rule1
 	cat > "$rules_dir/rule2" <<EOF
 TRIG="100"
-REQ="/bin/sh"
-LP="$logfile"
-TLOG_TF="rule2"
-ARG_VAL=""
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="rule2"
+MATCHED_HOSTS=""
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
@@ -902,11 +902,11 @@ EOF
 	echo "test line" > "$logfile"
 	cat > "$rules_dir/testrule" <<EOF
 TRIG="100"
-REQ="/bin/sh"
-LP="$logfile"
-TLOG_TF="testrule"
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="testrule"
 IGNOREREGEX="filter_this"
-ARG_VAL=""
+MATCHED_HOSTS=""
 EOF
 	chmod 644 "$rules_dir/testrule"
 	chown root "$rules_dir/testrule"
@@ -926,10 +926,10 @@ EOF
 	echo "test line" > "$logfile"
 	cat > "$rules_dir/testrule" <<EOF
 TRIG="100"
-REQ="/bin/sh"
-LP="$logfile"
-TLOG_TF="testrule"
-ARG_VAL=""
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="testrule"
+MATCHED_HOSTS=""
 EOF
 	chmod 644 "$rules_dir/testrule"
 	chown root "$rules_dir/testrule"
@@ -968,10 +968,10 @@ EOF
 	refute_output --partial '[ -f "/var/log/postgresql" ]'
 }
 
-@test "rule: vsftpd and vsftpd2 have different TLOG_TF values" {
+@test "rule: vsftpd and vsftpd2 have different LOG_TAG values" {
 	local tf1 tf2
-	tf1=$(grep -E '^[[:space:]]*TLOG_TF=' "$PROJECT_ROOT/files/rules/vsftpd" | tail -1 | sed 's/.*="\?\([^"]*\)"\?/\1/')
-	tf2=$(grep -E '^[[:space:]]*TLOG_TF=' "$PROJECT_ROOT/files/rules/vsftpd2" | tail -1 | sed 's/.*="\?\([^"]*\)"\?/\1/')
+	tf1=$(grep -E '^[[:space:]]*LOG_TAG=' "$PROJECT_ROOT/files/rules/vsftpd" | tail -1 | sed 's/.*="\?\([^"]*\)"\?/\1/')
+	tf2=$(grep -E '^[[:space:]]*LOG_TAG=' "$PROJECT_ROOT/files/rules/vsftpd2" | tail -1 | sed 's/.*="\?\([^"]*\)"\?/\1/')
 	[ "$tf1" != "$tf2" ]
 	[ "$tf1" = "vsftpd" ]
 	[ "$tf2" = "vsftpd2" ]
@@ -993,22 +993,22 @@ EOF
 	# rule1: IP triggers ban
 	cat > "$rules_dir/rule1" <<'RULEEOF'
 TRIG="2"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 RULEEOF
 	cat >> "$rules_dir/rule1" <<EOF
-LP="$logfile"
-TLOG_TF="rule1"
-ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+LOG_FILE="$logfile"
+LOG_TAG="rule1"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	# rule2: same IP triggers ban
 	cat > "$rules_dir/rule2" <<'RULEEOF'
 TRIG="2"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 RULEEOF
 	cat >> "$rules_dir/rule2" <<EOF
-LP="$logfile"
-TLOG_TF="rule2"
-ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+LOG_FILE="$logfile"
+LOG_TAG="rule2"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
@@ -1049,21 +1049,21 @@ EOF
 	# use 127.0.0.1 as a local address
 	cat > "$rules_dir/rule1" <<'RULEEOF'
 TRIG="2"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 RULEEOF
 	cat >> "$rules_dir/rule1" <<EOF
-LP="$logfile"
-TLOG_TF="rule1"
-ARG_VAL="127.0.0.1 127.0.0.1 127.0.0.1"
+LOG_FILE="$logfile"
+LOG_TAG="rule1"
+MATCHED_HOSTS="127.0.0.1 127.0.0.1 127.0.0.1"
 EOF
 	cat > "$rules_dir/rule2" <<'RULEEOF'
 TRIG="2"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 RULEEOF
 	cat >> "$rules_dir/rule2" <<EOF
-LP="$logfile"
-TLOG_TF="rule2"
-ARG_VAL="127.0.0.1 127.0.0.1 127.0.0.1"
+LOG_FILE="$logfile"
+LOG_TAG="rule2"
+MATCHED_HOSTS="127.0.0.1 127.0.0.1 127.0.0.1"
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
@@ -1205,12 +1205,12 @@ EOF
 	# rule with TRIG commented out (empty after _clear_rule_vars)
 	cat > "$rules_dir/testrule" <<'RULEEOF'
 # TRIG="5"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
-LP="$logfile"
-TLOG_TF="testrule"
-ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+LOG_FILE="$logfile"
+LOG_TAG="testrule"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/testrule"
 	chown root "$rules_dir/testrule"
@@ -1263,12 +1263,12 @@ EOF
 	# rule with explicit TRIG=999 (very high, should NOT trigger ban)
 	cat > "$rules_dir/testrule" <<'RULEEOF'
 TRIG="999"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
-LP="$logfile"
-TLOG_TF="testrule"
-ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+LOG_FILE="$logfile"
+LOG_TAG="testrule"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/testrule"
 	chown root "$rules_dir/testrule"
@@ -1328,10 +1328,10 @@ EOF
 	done
 	cat > "$rules_dir/testrule_decay" <<EOF
 PRESSURE_TRIP="5"
-REQ="/bin/sh"
-LP="$logfile"
-TLOG_TF="testrule_decay"
-ARG_VAL="192.0.2.1 192.0.2.1"
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="testrule_decay"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/testrule_decay"
 	chown root "$rules_dir/testrule_decay"
@@ -1373,10 +1373,10 @@ EOF
 	echo "test line" > "$logfile"
 	cat > "$rules_dir/testrule_fresh" <<EOF
 PRESSURE_TRIP="5"
-REQ="/bin/sh"
-LP="$logfile"
-TLOG_TF="testrule_fresh"
-ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1 192.0.2.1 192.0.2.1 192.0.2.1"
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="testrule_fresh"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1 192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/testrule_fresh"
 	chown root "$rules_dir/testrule_fresh"
@@ -1419,10 +1419,10 @@ EOF
 	echo "test line" > "$logfile"
 	cat > "$rules_dir/testrule_weight" <<EOF
 PRESSURE_TRIP="8"
-REQ="/bin/sh"
-LP="$logfile"
-TLOG_TF="testrule_weight"
-ARG_VAL="192.0.2.1 192.0.2.1"
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="testrule_weight"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/testrule_weight"
 	chown root "$rules_dir/testrule_weight"

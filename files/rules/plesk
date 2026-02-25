@@ -9,14 +9,14 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/local/psa/admin/bin/panel"
+PREREQ="/usr/local/psa/admin/bin/panel"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="8443,8880"
-	LP="/var/log/plesk/panel.log"
-	TLOG_TF="plesk"
+	LOG_FILE="/var/log/plesk/panel.log"
+	LOG_TAG="plesk"
 
 	## Plesk panel authentication failures
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"Failed login attempt .* from IP <HOST>")
 fi

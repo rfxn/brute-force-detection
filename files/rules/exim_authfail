@@ -9,15 +9,21 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/sbin/exim"
+PREREQ="/usr/sbin/exim"
+if [ ! -f "$PREREQ" ]; then
+	PREREQ="/usr/sbin/exim4"
+fi
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="25,26,465"
-	LP="/var/log/exim_mainlog"
-	TLOG_TF="exim_authfail"
+	LOG_FILE="/var/log/exim_mainlog"
+	if [ ! -f "$LOG_FILE" ]; then
+		LOG_FILE="/var/log/exim4/mainlog"
+	fi
+	LOG_TAG="exim_authfail"
 
 	## EXIM SMTP Auth failures
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"login authenticator failed.*\[<HOST>\]" \
 		"dovecot_.*authenticator failed.*\[<HOST>\]" \
 		"SMTP protocol synchronization error.*\[<HOST>\]")

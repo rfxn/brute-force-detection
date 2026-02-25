@@ -10,20 +10,20 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/sbin/named"
+PREREQ="/usr/sbin/named"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	# detect named log path
 	if [ -f "/var/log/named/security.log" ]; then
-		LP="/var/log/named/security.log"
+		LOG_FILE="/var/log/named/security.log"
 	else
-		LP="$KERNEL_LOG_PATH"
+		LOG_FILE="$KERNEL_LOG_PATH"
 	fi
 	PORTS="53"
-	TLOG_TF="named"
+	LOG_TAG="named"
 
 	## BIND/named query denied and zone transfer denied
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"named.* <HOST>[#][0-9]+.*query.*denied" \
 		"named.* <HOST>[#][0-9]+.*zone transfer.*denied")
 fi

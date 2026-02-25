@@ -53,16 +53,14 @@ system firewall.
 .PP
 BFD supports two operating modes.
 In
-.B batch mode
-(the default), a cron job runs BFD every 2 minutes to scan logs and
-process bans.
-In
 .B watch mode
-.RB ( \-w ),
-BFD runs continuously in the foreground, polling at a configurable
-interval (default 10 seconds) for near-real-time detection.
-Watch mode is the recommended primary mode; cron remains active as
-a fallback and is silently skipped when watch mode holds the lock.
+(enabled automatically on install), BFD runs continuously, polling at a
+configurable interval (default 10 seconds) for near-real-time detection.
+In
+.B batch mode\fR,
+a cron job runs BFD every 2 minutes as an automatic fallback; it is
+silently skipped when watch mode holds the lock and resumes detection
+if the watch daemon exits.
 .PP
 Each detection cycle reads new log lines (via the
 .B tlog
@@ -213,11 +211,6 @@ Per-rule overrides in rule files or
 .B PRESSURE_HALF_LIFE
 Half-life in seconds for pressure decay (default: 300).
 Shorter = more forgiving.
-.TP
-.B PRESSURE_COUNTRY
-Enable country-based pressure multipliers: 0 or 1 (default: 0).
-When enabled, weight is multiplied by the country factor
-from weights.country.
 .SS Email Alerts
 .TP
 .B EMAIL_ALERTS
@@ -363,16 +356,16 @@ Rule files in
 define service-specific detection patterns.
 Each rule sets:
 .TP
-.B REQ
-Path to a binary that must exist for the rule to be active.
+.B PREREQ
+Path to a binary or file that must exist for the rule to be active.
 .TP
-.B LP
-Log file path to scan.
+.B LOG_FILE
+Log file path to scan for authentication failures.
 .TP
-.B TLOG_TF
-Tracking file identifier for tlog byte-offset state.
+.B LOG_TAG
+Tracking tag for tlog byte-offset state and journal filter dispatch.
 .TP
-.B ARG_VAL
+.B MATCHED_HOSTS
 Set by the detection engine; contains extracted IPs from log matching.
 .PP
 Optional per-rule variables:
@@ -400,8 +393,8 @@ Internal/derived variables.
 .I /usr/local/bfd/pressure.conf
 Per-rule pressure weight and trip overrides.
 .TP
-.I /usr/local/bfd/weights.country
-Country pressure multiplier table (used when PRESSURE_COUNTRY=1).
+.I /usr/local/bfd/pressure-country.conf
+Country pressure multiplier table (active when entries are uncommented).
 .TP
 .I /usr/local/bfd/ipcountry.dat
 IP-to-country lookup database.

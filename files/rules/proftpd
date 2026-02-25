@@ -9,15 +9,15 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/sbin/proftpd"
+PREREQ="/usr/sbin/proftpd"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="20,21"
-	LP="$AUTH_LOG_PATH"
-	TLOG_TF="proftpd"
+	LOG_FILE="$AUTH_LOG_PATH"
+	LOG_TAG="proftpd"
 
 	## PROFTPD
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"proftpd.*no such user found from <HOST>" \
 		"proftpd.*Login failed.*Incorrect password.*\[<HOST>\]" \
 		"proftpd.*SECURITY VIOLATION.*\[<HOST>\]" \

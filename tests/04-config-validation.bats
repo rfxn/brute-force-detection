@@ -21,7 +21,6 @@ run_validate() {
 		PRESSURE_TRIP="15"
 		PRESSURE_HALF_LIFE="300"
 		PRESSURE_TRIP_GLOBAL="0"
-		PRESSURE_COUNTRY="0"
 		BAN_TTL="300"
 		BAN_ESCALATE_AFTER="5"
 		BAN_ESCALATE_WINDOW="86400"
@@ -43,7 +42,6 @@ run_validate_output() {
 		PRESSURE_TRIP="15"
 		PRESSURE_HALF_LIFE="300"
 		PRESSURE_TRIP_GLOBAL="0"
-		PRESSURE_COUNTRY="0"
 		BAN_TTL="300"
 		BAN_ESCALATE_AFTER="5"
 		BAN_ESCALATE_WINDOW="86400"
@@ -218,32 +216,6 @@ run_validate_output() {
 	assert_failure
 }
 
-# --- PRESSURE_COUNTRY ---
-
-@test "validate_config: PRESSURE_COUNTRY=0 passes (disabled)" {
-	run run_validate 'PRESSURE_COUNTRY="0"'
-	assert_success
-}
-
-@test "validate_config: PRESSURE_COUNTRY=1 passes (enabled)" {
-	run run_validate 'PRESSURE_COUNTRY="1"'
-	assert_success
-}
-
-@test "validate_config: PRESSURE_COUNTRY=2 rejects" {
-	run run_validate 'PRESSURE_COUNTRY="2"'
-	assert_failure
-}
-
-@test "validate_config: PRESSURE_COUNTRY=abc rejects" {
-	run run_validate 'PRESSURE_COUNTRY="abc"'
-	assert_failure
-}
-
-@test "validate_config: PRESSURE_COUNTRY= defaults to 0 (passes)" {
-	run run_validate 'PRESSURE_COUNTRY=""'
-	assert_success
-}
 
 # --- backward compat: old variable names still accepted ---
 
@@ -575,36 +547,36 @@ run_validate_output() {
 # --- _save_rule_vars / _restore_rule_vars / _clear_rule_vars ---
 
 @test "_save/_restore_rule_vars: round-trip preserves values" {
-	REQ="/usr/sbin/sshd" LP="/var/log/auth.log" TRIG="10"
-	TLOG_TF="sshd" PORTS="22" ARG_VAL="192.0.2.4" IGNOREREGEX="^ignore"
+	PREREQ="/usr/sbin/sshd" LOG_FILE="/var/log/auth.log" TRIG="10"
+	LOG_TAG="sshd" PORTS="22" MATCHED_HOSTS="192.0.2.4" IGNOREREGEX="^ignore"
 	PRESSURE_WEIGHT="3" PRESSURE_TRIP="10"
 	_save_rule_vars
-	REQ="" LP="" TRIG="" TLOG_TF="" PORTS="" ARG_VAL="" IGNOREREGEX=""
+	PREREQ="" LOG_FILE="" TRIG="" LOG_TAG="" PORTS="" MATCHED_HOSTS="" IGNOREREGEX=""
 	PRESSURE_WEIGHT="" PRESSURE_TRIP=""
 	_restore_rule_vars
-	[ "$REQ" = "/usr/sbin/sshd" ]
-	[ "$LP" = "/var/log/auth.log" ]
+	[ "$PREREQ" = "/usr/sbin/sshd" ]
+	[ "$LOG_FILE" = "/var/log/auth.log" ]
 	[ "$TRIG" = "10" ]
-	[ "$TLOG_TF" = "sshd" ]
+	[ "$LOG_TAG" = "sshd" ]
 	[ "$PORTS" = "22" ]
-	[ "$ARG_VAL" = "192.0.2.4" ]
+	[ "$MATCHED_HOSTS" = "192.0.2.4" ]
 	[ "$IGNOREREGEX" = "^ignore" ]
 	[ "$PRESSURE_WEIGHT" = "3" ]
 	[ "$PRESSURE_TRIP" = "10" ]
 }
 
 @test "_clear_rule_vars: clears all rule variables" {
-	REQ="/usr/sbin/sshd" LP="/var/log/auth.log" TRIG="10"
-	TLOG_TF="sshd" PORTS="22" ARG_VAL="192.0.2.4" IGNOREREGEX="^ignore"
+	PREREQ="/usr/sbin/sshd" LOG_FILE="/var/log/auth.log" TRIG="10"
+	LOG_TAG="sshd" PORTS="22" MATCHED_HOSTS="192.0.2.4" IGNOREREGEX="^ignore"
 	SKIP_ALERT="1" RULE_EMAIL="test@example.com"
 	PRESSURE_WEIGHT="3" PRESSURE_TRIP="10"
 	_clear_rule_vars
-	[ -z "$REQ" ]
-	[ -z "$LP" ]
+	[ -z "$PREREQ" ]
+	[ -z "$LOG_FILE" ]
 	[ -z "$TRIG" ]
-	[ -z "$TLOG_TF" ]
+	[ -z "$LOG_TAG" ]
 	[ -z "$PORTS" ]
-	[ -z "$ARG_VAL" ]
+	[ -z "$MATCHED_HOSTS" ]
 	[ -z "$IGNOREREGEX" ]
 	[ -z "$SKIP_ALERT" ]
 	[ -z "$RULE_EMAIL" ]
@@ -614,21 +586,21 @@ run_validate_output() {
 
 # --- _rule_is_active ---
 
-@test "_rule_is_active: active when REQ exists" {
-	REQ="$TEST_TMPDIR/fake_binary"
-	touch "$REQ"
+@test "_rule_is_active: active when PREREQ exists" {
+	PREREQ="$TEST_TMPDIR/fake_binary"
+	touch "$PREREQ"
 	run _rule_is_active
 	assert_success
 }
 
-@test "_rule_is_active: inactive when REQ missing" {
-	REQ="$TEST_TMPDIR/nonexistent"
+@test "_rule_is_active: inactive when PREREQ missing" {
+	PREREQ="$TEST_TMPDIR/nonexistent"
 	run _rule_is_active
 	assert_failure
 }
 
-@test "_rule_is_active: inactive when REQ empty" {
-	REQ=""
+@test "_rule_is_active: inactive when PREREQ empty" {
+	PREREQ=""
 	run _rule_is_active
 	assert_failure
 }

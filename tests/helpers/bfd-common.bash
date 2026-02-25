@@ -50,7 +50,6 @@ bfd_standard_setup() {
 	PRESSURE_TRIP="${PRESSURE_TRIP:-20}"
 	PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-300}"
 	PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-0}"
-	PRESSURE_COUNTRY="${PRESSURE_COUNTRY:-0}"
 	GLOB_PRESSURE_TRIP="$PRESSURE_TRIP"
 	# declare associative arrays for pressure.conf lookups (must be -gA to
 	# survive outside setup scope; bash 4.2+ — safe on all test targets)

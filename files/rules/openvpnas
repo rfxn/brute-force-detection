@@ -9,14 +9,14 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/local/openvpn_as/sbin/openvpn"
+PREREQ="/usr/local/openvpn_as/sbin/openvpn"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="843,943,1043,1194"
-	LP="/var/log/openvpnas.log"
-	TLOG_TF="openvpnas"
+	LOG_FILE="/var/log/openvpnas.log"
+	LOG_TAG="openvpnas"
 
 	## OpenVPN Access Server
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"AUTH_FAILED.*ip=<HOST>")
 fi
