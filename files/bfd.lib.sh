@@ -417,25 +417,30 @@ expand_command_template() {
 	echo "$cmd"
 }
 
-# validate_config requires: TRIG, TRIG_WINDOW, TRIG_GLOBAL, SUBNET_TRIG,
-#   SUBNET_MASK, SUBNET_MASK_V6, BAN_DURATION, BAN_PERMANENT_AFTER,
-#   BAN_PERMANENT_WINDOW, BAN_ESCALATION (none/linear/double), BAN_ESCALATION_CAP,
-#   BAN_RETRY_COUNT, FIREWALL, BAN_COMMAND_TEMPLATE, EMAIL_ALERTS,
-#   EMAIL_ADDRESS (when EMAIL_ALERTS=1), EMAIL_LOGLINES, OUTPUT_SYSLOG,
-#   BFD_LOG_PATH, LOG_SOURCE, LOCK_FILE_TIMEOUT, WATCH_INTERVAL,
-#   INSTALL_PATH, EXIT_CONFIG_ERROR
+# validate_config requires: PRESSURE_TRIP, PRESSURE_HALF_LIFE, PRESSURE_TRIP_GLOBAL,
+#   PRESSURE_COUNTRY, SUBNET_TRIG, SUBNET_MASK, SUBNET_MASK_V6,
+#   BAN_TTL, BAN_ESCALATE_AFTER, BAN_ESCALATE_WINDOW, BAN_ESCALATION
+#   (none/linear/double), BAN_ESCALATION_CAP, BAN_RETRY_COUNT, FIREWALL,
+#   BAN_COMMAND_TEMPLATE, EMAIL_ALERTS, EMAIL_ADDRESS (when EMAIL_ALERTS=1),
+#   EMAIL_LOGLINES, OUTPUT_SYSLOG, BFD_LOG_PATH, LOG_SOURCE, LOCK_FILE_TIMEOUT,
+#   WATCH_INTERVAL, INSTALL_PATH, EXIT_CONFIG_ERROR
 validate_config() {
 	local int_pattern='^[0-9]+$'
-	if ! [[ "$TRIG" =~ $int_pattern ]] || [ "$TRIG" -eq 0 ]; then
-		echo "error: TRIG must be a positive integer (got '$TRIG')."
+	if ! [[ "${PRESSURE_TRIP:-${TRIG:-20}}" =~ $int_pattern ]] || [ "${PRESSURE_TRIP:-${TRIG:-20}}" -eq 0 ]; then
+		echo "error: PRESSURE_TRIP must be a positive integer (got '${PRESSURE_TRIP:-${TRIG:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "$TRIG_WINDOW" =~ $int_pattern ]] || [ "$TRIG_WINDOW" -eq 0 ]; then
-		echo "error: TRIG_WINDOW must be a positive integer (got '$TRIG_WINDOW')."
+	if ! [[ "${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}" =~ $int_pattern ]] || [ "${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}" -eq 0 ]; then
+		echo "error: PRESSURE_HALF_LIFE must be a positive integer (got '${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "$TRIG_GLOBAL" =~ $int_pattern ]]; then
-		echo "error: TRIG_GLOBAL must be a non-negative integer (got '$TRIG_GLOBAL')."
+	if ! [[ "${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}" =~ $int_pattern ]]; then
+		echo "error: PRESSURE_TRIP_GLOBAL must be a non-negative integer (got '${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-}}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	local _pc="${PRESSURE_COUNTRY:-0}"
+	if [ "$_pc" != "0" ] && [ "$_pc" != "1" ]; then
+		echo "error: PRESSURE_COUNTRY must be 0 or 1 (got '${PRESSURE_COUNTRY:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _st="${SUBNET_TRIG:-0}"
@@ -453,20 +458,20 @@ validate_config() {
 		echo "error: SUBNET_MASK_V6 must be a multiple of 16 between 16 and 128 (got '${SUBNET_MASK_V6:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "${BAN_DURATION:-0}" =~ $int_pattern ]]; then
-		echo "error: BAN_DURATION must be a non-negative integer (got '${BAN_DURATION:-}')."
+	if ! [[ "${BAN_TTL:-${BAN_DURATION:-0}}" =~ $int_pattern ]]; then
+		echo "error: BAN_TTL must be a non-negative integer (got '${BAN_TTL:-${BAN_DURATION:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "${BAN_PERMANENT_AFTER:-0}" =~ $int_pattern ]]; then
-		echo "error: BAN_PERMANENT_AFTER must be a non-negative integer (got '${BAN_PERMANENT_AFTER:-}')."
+	if ! [[ "${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}" =~ $int_pattern ]]; then
+		echo "error: BAN_ESCALATE_AFTER must be a non-negative integer (got '${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "${BAN_PERMANENT_WINDOW:-1}" =~ $int_pattern ]] || [ "${BAN_PERMANENT_WINDOW:-1}" -eq 0 ]; then
-		echo "error: BAN_PERMANENT_WINDOW must be a positive integer (got '${BAN_PERMANENT_WINDOW:-}')."
+	if ! [[ "${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-1}}" =~ $int_pattern ]] || [ "${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-1}}" -eq 0 ]; then
+		echo "error: BAN_ESCALATE_WINDOW must be a positive integer (got '${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if [ "${FIREWALL:-auto}" = "custom" ] && [ "${BAN_DURATION:-0}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
-		echo "warning: BAN_DURATION>0 but UNBAN_COMMAND is empty; auto-unban will only remove state, not firewall rules."
+	if [ "${FIREWALL:-auto}" = "custom" ] && [ "${BAN_TTL:-${BAN_DURATION:-0}}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
+		echo "warning: BAN_TTL>0 but UNBAN_COMMAND is empty; auto-unban will only remove state, not firewall rules."
 	fi
 	if [ "$EMAIL_ALERTS" != "0" ] && [ "$EMAIL_ALERTS" != "1" ]; then
 		echo "error: EMAIL_ALERTS must be 0 or 1 (got '$EMAIL_ALERTS')."
@@ -2512,7 +2517,7 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
-	local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL THRESHOLDS_CONF"
+	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL PRESSURE_COUNTRY SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL PRESSURE_CONF"
 	if [ -n "$var" ]; then
 		# validate against whitelist before eval
 		local _found=0 _v
