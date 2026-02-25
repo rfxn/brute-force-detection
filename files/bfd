@@ -250,15 +250,20 @@ check() {
 	local alerts_file
 	alerts_file=$(mktemp "$INSTALL_PATH/tmp/.alerts.XXXXXX")
 
-	# prune expired events once per run, before iterating rules
-	state_events_prune "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME"
+	# prune expired events once per run (10 half-lives = negligible contribution)
+	local prune_window=$((PRESSURE_HALF_LIFE * 10))
+	state_events_prune "$INSTALL_PATH" "$prune_window" "$UTIME"
 
 	for str in "$RULES_PATH"/*; do
 		str=$(basename "$str")
 		eout "processing rule file $str"
 		_clear_rule_vars
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
+		_apply_pressure "$str"
 		_apply_thresholds "$str"
+		# resolve effective weight and trip for this rule
+		local eff_weight="${PRESSURE_WEIGHT:-1}"
+		local eff_trip="${PRESSURE_TRIP:-$GLOB_PRESSURE_TRIP}"
 		if [ -z "$TRIG" ]; then
 			TRIG="$GLOB_TRIG"
 		fi
@@ -270,7 +275,7 @@ check() {
 		# count events (raw IP occurrences including duplicates)
 		local host_lines
 		host_lines=$(echo "$HOSTS_PARSED" | grep -c . 2>/dev/null || echo 0)
-		vout "  $str: ${host_lines:-0} events, threshold ${TRIG:-$GLOB_TRIG}"
+		vout "  $str: ${host_lines:-0} events, weight=$eff_weight, trip=$eff_trip"
 		events_count=$((events_count + host_lines))
 		while IFS= read -r ahost; do
 			[ -z "$ahost" ] && continue
@@ -281,17 +286,25 @@ check() {
 				vout "  $ATTACK_HOST filtered (ignored)"
 				continue
 			fi
-			ATTACK_COUNT=$(count_failures "$ATTACK_HOST" "$HOSTS_PARSED" "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME" "$MOD")
-			if [ -z "$ATTACK_COUNT" ]; then
-				ATTACK_COUNT=0
+			# compute pressure score for this host+service
+			local scoring_weight="$eff_weight"
+			if [ "${PRESSURE_COUNTRY:-0}" = "1" ]; then
+				scoring_weight=$(pressure_effective_weight "$eff_weight" "$ATTACK_HOST" "$INSTALL_PATH")
 			fi
+			local pressure_scaled
+			pressure_scaled=$(record_and_score "$ATTACK_HOST" "$HOSTS_PARSED" \
+				"$INSTALL_PATH" "$PRESSURE_HALF_LIFE" "$UTIME" "$MOD" "$scoring_weight")
+			if [ -z "$pressure_scaled" ]; then
+				pressure_scaled=0
+			fi
+			local trip_scaled=$((eff_trip * 1000))
 			local should_ban=0
-			if [ "$ATTACK_COUNT" -ge "$TRIG" ]; then
+			if [ "$pressure_scaled" -ge "$trip_scaled" ]; then
 				should_ban=1
-			elif [ "$TRIG_GLOBAL" -gt 0 ]; then
-				local global_count
-				global_count=$(state_events_count "$INSTALL_PATH" "$ATTACK_HOST" "$TRIG_WINDOW" "$UTIME")
-				if [ "$global_count" -ge "$TRIG_GLOBAL" ]; then
+			elif [ "${PRESSURE_TRIP_GLOBAL:-0}" -gt 0 ]; then
+				local gp
+				gp=$(pressure_compute "$INSTALL_PATH" "$ATTACK_HOST" "$PRESSURE_HALF_LIFE" "$UTIME")
+				if [ "$gp" -ge $((PRESSURE_TRIP_GLOBAL * 1000)) ]; then
 					should_ban=1
 				fi
 			fi
@@ -316,7 +329,7 @@ check() {
 						# collect alert data for batched delivery
 						if [ "$EMAIL_ALERTS" = "1" ] && [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							local eff_recipient="${RULE_EMAIL:-$EMAIL_ADDRESS}"
-							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${ATTACK_COUNT}|${ban_expiry}|${ban_action}|${recent_bans}|${LP}|${eff_recipient}|${TRIG}|${TRIG_WINDOW}" >> "$alerts_file"
+							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${pressure_scaled}|${ban_expiry}|${ban_action}|${recent_bans}|${LP}|${eff_recipient}|${eff_trip}|${PRESSURE_HALF_LIFE}|${scoring_weight}" >> "$alerts_file"
 						fi
 					fi
 				fi
@@ -327,7 +340,7 @@ check() {
 	# distributed attack detection
 	if [ "${SUBNET_TRIG:-0}" -gt 0 ]; then
 		local subnet_bans
-		subnet_bans=$(check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$UTIME" "$alerts_file")
+		subnet_bans=$(check_distributed "$INSTALL_PATH" "$((PRESSURE_HALF_LIFE * 10))" "$UTIME" "$alerts_file")
 		bans_count=$((bans_count + subnet_bans))
 	fi
 
