@@ -1,5 +1,6 @@
-# per-rule threshold override (uncomment to override thresholds.conf / conf.bfd)
-# TRIG="15"
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="30"
 
 # uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
