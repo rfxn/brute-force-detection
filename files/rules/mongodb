@@ -1,0 +1,22 @@
+# per-rule threshold override (uncomment to override thresholds.conf / conf.bfd)
+# TRIG="5"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+REQ="/usr/bin/mongod"
+
+if [ -f "$REQ" ]; then
+	PORTS="27017"
+	LP="/var/log/mongodb/mongod.log"
+	TLOG_TF="mongodb"
+
+	## MONGODB
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+		"authentication failed.*from client <HOST>" \
+		"Failed to authenticate.*from client <HOST>")
+fi

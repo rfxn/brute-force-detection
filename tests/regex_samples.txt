@@ -544,6 +544,54 @@ t=2024-02-22T10:15:03+0000 lvl=warn msg="Invalid username or password" logger=co
 # EXPECT: 192.0.2.5
 t=2024-02-22T10:15:05+0000 lvl=eror msg="invalid username or password" remote_addr=192.0.2.5 error="invalid username or password"
 
+# --- proxmox ---
+
+# RULE: proxmox
+# PATTERN: pvedaemon.*authentication failure.*rhost=<HOST>
+# EXPECT: 203.0.113.50
+Feb 22 10:15:03 myhost pvedaemon[12345]: pam_unix(proxmox:auth): authentication failure; logname= uid=0 euid=0 tty= ruser= rhost=203.0.113.50 user=root
+
+# RULE: proxmox
+# PATTERN: pveproxy.*authentication failure.*rhost=<HOST>
+# EXPECT: 192.0.2.5
+Feb 22 10:15:05 myhost pveproxy[12346]: pam_unix(proxmox:auth): authentication failure; logname= uid=0 euid=0 tty= ruser= rhost=192.0.2.5 user=admin
+
+# --- lighttpd ---
+
+# RULE: lighttpd
+# PATTERN: password doesn.t match.*IP: <HOST>
+# EXPECT: 203.0.113.100
+2024-02-22 10:15:03: (mod_auth.c.867) password doesn't match for /admin - IP: 203.0.113.100
+
+# RULE: lighttpd
+# PATTERN: wrong password.*IP: <HOST>
+# EXPECT: 192.0.2.5
+2024-02-22 10:15:05: (mod_auth.c.867) wrong password for user 'admin' - IP: 192.0.2.5
+
+# --- mongodb ---
+
+# RULE: mongodb
+# PATTERN: authentication failed.*from client <HOST>
+# EXPECT: 203.0.113.50
+2024-02-22T10:15:03.000+0000 I ACCESS   [conn12345] authentication failed for user admin on admin from client 203.0.113.50
+
+# RULE: mongodb
+# PATTERN: Failed to authenticate.*from client <HOST>
+# EXPECT: 192.0.2.5
+2024-02-22T10:15:05.000+0000 I ACCESS   [conn12346] Failed to authenticate admin@admin from client 192.0.2.5
+
+# --- xrdp ---
+
+# RULE: xrdp
+# PATTERN: sesman.*AUTHFAIL.*ip=<HOST>
+# EXPECT: 203.0.113.50
+[20240222-10:15:03] [INFO ] sesman: AUTHFAIL: user=admin ip=203.0.113.50
+
+# RULE: xrdp
+# PATTERN: sesman.*pam_authenticate failed.* <HOST>
+# EXPECT: 192.0.2.5
+[20240222-10:15:05] [ERROR] sesman: pam_authenticate failed: Authentication failure from 192.0.2.5
+
 # ====================================================================
 # NEGATIVE TESTS — patterns that should NOT match
 # ====================================================================

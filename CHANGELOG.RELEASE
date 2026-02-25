@@ -1,4 +1,8 @@
 2.0.1:
+[New] proxmox rule: pvedaemon/pveproxy authentication failure via PAM
+[New] lighttpd rule: mod_auth password mismatch with dynamic log detection
+[New] mongodb rule: authentication failed from client
+[New] xrdp rule: AUTHFAIL and pam_authenticate failed
 [New] openvpn rule: TLS Auth Error, VERIFY ERROR, TLS handshake failed
       (community edition; separate from openvpnas Access Server rule)
 [New] phpmyadmin rule: mysql-denied and user denied via syslog

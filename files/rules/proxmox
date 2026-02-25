@@ -1,0 +1,22 @@
+# per-rule threshold override (uncomment to override thresholds.conf / conf.bfd)
+# TRIG="5"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+REQ="/usr/bin/pvesh"
+
+if [ -f "$REQ" ]; then
+	PORTS="8006"
+	LP="$AUTH_LOG_PATH"
+	TLOG_TF="proxmox"
+
+	## PROXMOX VE
+	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+		"pvedaemon.*authentication failure.*rhost=<HOST>" \
+		"pveproxy.*authentication failure.*rhost=<HOST>")
+fi

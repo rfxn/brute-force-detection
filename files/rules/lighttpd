@@ -1,0 +1,30 @@
+# per-rule threshold override (uncomment to override thresholds.conf / conf.bfd)
+# TRIG="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+REQ="/usr/sbin/lighttpd"
+
+if [ -f "$REQ" ]; then
+	PORTS="80,443"
+
+	# dynamic LP detection
+	if [ -f "/var/log/lighttpd/error.log" ]; then
+		LP="/var/log/lighttpd/error.log"
+	else
+		LP=""
+	fi
+	TLOG_TF="lighttpd"
+
+	## LIGHTTPD
+	if [ -n "$LP" ]; then
+		ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+			"password doesn.t match.*IP: <HOST>" \
+			"wrong password.*IP: <HOST>")
+	fi
+fi
