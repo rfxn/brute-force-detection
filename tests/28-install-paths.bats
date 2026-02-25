@@ -192,3 +192,50 @@ teardown() {
 	assert_success
 	[ "$output" -ge 1 ]
 }
+
+# --- Man page ---
+
+@test "install-paths: bfd.1 man page exists in source tree" {
+	[ -f "$PROJECT_ROOT/bfd.1" ]
+}
+
+@test "install-paths: bfd.1 contains /usr/local/bfd default paths" {
+	run grep -c '/usr/local/bfd' "$PROJECT_ROOT/bfd.1"
+	assert_success
+	[ "$output" -ge 1 ]
+}
+
+@test "install-paths: install.sh has man page install section" {
+	run grep -c 'man1/bfd.1' "$PROJECT_ROOT/install.sh"
+	assert_success
+	[ "$output" -ge 1 ]
+}
+
+@test "install-paths: uninstall.sh removes man page" {
+	run grep -c 'man1/bfd.1' "$PROJECT_ROOT/uninstall.sh"
+	assert_success
+	[ "$output" -ge 1 ]
+}
+
+# --- Bash tab completion ---
+
+@test "install-paths: bfd.bash-completion exists in source tree" {
+	[ -f "$PROJECT_ROOT/bfd.bash-completion" ]
+}
+
+@test "install-paths: bfd.bash-completion contains /usr/local/bfd default paths" {
+	run grep -c '/usr/local/bfd' "$PROJECT_ROOT/bfd.bash-completion"
+	assert_success
+	[ "$output" -ge 1 ]
+}
+
+@test "install-paths: bfd.bash-completion has valid bash syntax" {
+	run bash -n "$PROJECT_ROOT/bfd.bash-completion"
+	assert_success
+}
+
+@test "install-paths: install.sh has bash completion section" {
+	run grep -c 'bash_completion.d' "$PROJECT_ROOT/install.sh"
+	assert_success
+	[ "$output" -ge 1 ]
+}

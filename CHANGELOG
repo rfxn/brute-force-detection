@@ -1,404 +1,135 @@
 2.0.1:
-[Change] rules/*: migrate all 34 rule files from $TLOG_PATH subprocess to
-         in-process _rule_tlog() call; eliminates 34 fork+exec pairs per
-         detection cycle
-[Change] test_rule(): rewrite to use _TLOG_PASSTHROUGH instead of mktemp
-         tlog script; no temp file creation, no chmod, no TLOG_PATH override
-[Change] tests/21-rule-test.bats: update mock rule pattern and setup to match
-         _rule_tlog() migration
-[New] _rule_tlog(): in-process tlog wrapper for rule execution; replaces
-      $TLOG_PATH subprocess with tlog_read() call; _TLOG_PASSTHROUGH variable
-      for test_rule() passthrough mode
-[New] TLOG_BASERUN variable in internals.conf for tracking file directory;
-      fallback in files/bfd, pre() validation, reload_watch() refresh
-[Change] _hc_state(): health check reports TLOG_BASERUN path instead of
-         hardcoded tmp/ reference
-[New] tests/14-tlog.bats: 6 _rule_tlog unit tests (delta, first-run,
-      passthrough modes, missing file/baserun)
-[Change] tlog getsize(): replace cat subprocess with read builtin for tracking
-         file reads; matches tlog_read() pattern in bfd.lib.sh
-[Change] tlog_read(): replace cat subprocess with read builtin for tracking
-         file reads; matches tlog getsize() pattern
-[Change] tlog: simplify growth condition from NOT-less-than AND NOT-equal to
-         single greater-than test; aligns with tlog_read() in bfd.lib.sh
-[Change] tlog: annotate vestigial PATH export with rationale (standalone
-         subprocess invocation, cron.daily, manual use)
-[Change] exclude.files: add header and inline comments grouping entries by source
-         (APF, TCP wrappers, BFD ignore lists, cPanel/WHM/Plesk)
-[Change] bfd-watch.service: add SyslogIdentifier=bfd-watch and TimeoutStopSec=15
-[Change] bfd.service: add SyslogIdentifier=bfd
-[New] tests/28-install-paths.bats: 16 tests for install.sh INSPATH/BINPATH sed
-      replacement logic (source file presence, replacement correctness, no stray
-      defaults, combined replacement, bash -n validity, exclude.files paths,
-      conditional guard)
-[Change] Dockerfiles: add COPY lines for bfd-watch.service, bfd.service, cron,
-         cron.daily, install.sh (all 9) for install-path tests
-[Fix] tlog getsize(): eliminate pre-create block and duplicate branches; single
-      size read on first run prevents spurious delta output from double-read race;
-      semantics now match tlog_read() in bfd.lib.sh
-[Change] tlog/bfd.lib.sh: update convergence comments cross-referencing both
-         implementations and documenting migration path
-[New] thresholds.conf: centralized per-rule threshold management; colon-
-      delimited KEY=VALUE format supporting TRIG, SKIP_ALERT, RULE_EMAIL;
-      three-tier precedence: rule file > thresholds.conf > conf.bfd
-[New] _load_thresholds(): parse thresholds.conf into associative arrays with
-      root-ownership and permission safety validation; graceful degradation
-      on missing file
-[New] _apply_thresholds(): fill empty threshold variables from thresholds.conf
-      after rule sourcing; integrated into check(), 6 display functions, and
-      SIGHUP reload
-[Change] rules/*: TRIG commented out in all 34 rule files; thresholds now
-         managed centrally via thresholds.conf with rule-file uncomment override
-[Change] importconf: migrate per-rule TRIG values from old rule files (pre-
-         thresholds upgrade) or preserve existing thresholds.conf (post-
-         thresholds upgrade)
-[New] tests/27-thresholds.bats: 15 tests for _load_thresholds and
-      _apply_thresholds (parsing, safety, precedence)
-[New] tests/17-check-pipeline.bats: 2 precedence integration tests for
-      thresholds.conf in the check() pipeline
-[New] tests/25-importconf.bats: 2 migration tests for thresholds.conf
-      (pre-thresholds rule TRIG extraction, post-thresholds preservation)
-[Fix] importconf: add cleanup trap for temp files on interrupt (SIGINT/SIGTERM);
-      removes mktemp and merge_conf intermediate files on EXIT/INT/TERM
-[Note] EXIT_USAGE_ERROR constant: FALSE POSITIVE — EXIT_CONFIG_ERROR is
-       semantically correct for unknown CLI options; adding a new constant would
-       change exit codes (backward compat freeze)
-[Fix] get_state(): PID liveness check — when lock is fresh but holder PID is
-      dead (OOM, SIGKILL), clear and re-acquire instead of waiting for timeout;
-      cron recovers from dead watch daemon within one cycle (~2 min)
-[New] bfd-watch.init: SysVinit init script for CentOS 6 / Ubuntu 14.04;
-      cross-distro support (RHEL /etc/init.d/functions, Debian
-      /lib/lsb/init-functions, bare fallback); start/stop/restart/reload/
-      status/condrestart actions; SIGHUP reload, graceful SIGTERM shutdown
-[New] install.sh: SysVinit init script installation on non-systemd systems;
-      auto-detects /etc/rc.d/init.d (RHEL) or /etc/init.d (Debian)
-[New] install.sh: post-install watch mode recommendation with init-system-
-      appropriate command (systemctl or service)
-[Change] install.sh: BINPATH sed also updates init script when installed
-[New] uninstall.sh: SysVinit init script cleanup — stop service, remove
-      chkconfig/update-rc.d entries, clean pidfile and subsys lock
-[Change] README/README.md: reframe watch mode as recommended primary mode;
-         section 2.1 leads with watch mode, cron presented as automatic
-         fallback; section 5.4 adds SysVinit service management examples
-         and dead-PID recovery explanation; Quick Start includes watch mode
-         enable step after configure
-[New] tests/26-init-script.bats: 20 tests — init script structural checks
-      (syntax, LSB/chkconfig headers, case actions, paths) and get_state()
-      PID liveness lock tests (dead PID recovery, live PID blocking, stale
-      timeout, missing PID file, lock dir without timestamp)
-[Change] Dockerfiles: add COPY bfd-watch.init for init script tests (all 9)
-[Fix] tests/25-importconf.bats: version extraction test uses --partial to
-      accommodate FIREWALL migration message on pre-2.0.1 configs
-[Fix] tlog: mixed tab/space indentation in getsize(); normalized to tabs
-[Fix] tlog: [ "$1" = "" ] idiom replaced with [ -z "$1" ] for project consistency
-[Change] conf.bfd: add validation constraint notes to 9 variable comments
-      (TRIG, SUBNET_TRIG, SUBNET_MASK, SUBNET_MASK_V6, BAN_PERMANENT_AFTER,
-      BAN_PERMANENT_WINDOW, EMAIL_LOGLINES, LOCK_FILE_TIMEOUT, WATCH_INTERVAL)
-[Fix] pre(): chmod 750 targeted $INSTALL_PATH instead of $INSTALL_PATH/stats;
-      stats/ directory was left at umask default (755) instead of 750
-[Fix] validate_config() header comment: list all 24 validated variables
-      (12 were missing from the original 11-variable comment)
-[Fix] importconf: add user-visible message when FIREWALL is silently changed
-      from "auto" to "custom" during pre-2.0.1 upgrade
-[Fix] tlog version string: "track log 0.4" → standard project header format
-[Fix] alert.bfd: normalize email spacing "< bfd@rfxn.com >" → "<bfd@rfxn.com>"
-[Fix] CHANGELOG statistics: update function count (~78 → 106) and test count
-      (662 → 731) to reflect current codebase
-[New] cron.daily: add standard GPL copyright header (was the only project
-      script without one)
-[Fix] global lock: replace FD-based flock with mkdir-based file lock;
-      eliminates eval "exec $LOCK_FD" and the fd-0-close risk on early exit
-[Fix] install.sh: create BINPATH parent directory before symlink
-[Fix] install.sh: cd to script directory for portability from any CWD
-[Fix] uninstall.sh: add root privilege check matching install.sh pattern
-[Fix] uninstall.sh: stop bfd.service before unit file removal
-[Fix] show_config() whitelist: add BAN_COMMAND, UNBAN_COMMAND, BAN_COMMAND_V6,
-      UNBAN_COMMAND_V6 mapped to _TEMPLATE variants for raw template display
-[Fix] validate_config(): add OUTPUT_SYSLOG 0/1 validation
-[Fix] validate_config(): require EMAIL_ADDRESS when EMAIL_ALERTS=1
-[Fix] validate_config(): require non-empty BFD_LOG_PATH
-[Fix] _save_rule_vars/_restore_rule_vars: add SKIP_ALERT and RULE_EMAIL
-      to match _clear_rule_vars (prevents variable leakage across rules)
-[Fix] WATCH_INTERVAL fallback: change ${WATCH_INTERVAL-10} to
-      ${WATCH_INTERVAL:-10} to catch empty string
-[Fix] alert eval echo injection: replace eval echo "$BAN_COMMAND_TEMPLATE"
-      with safe expand_command_template() using ${var//pat/rep} substitution
-      in format_alert_entry() and send_alerts()
-[New] expand_command_template() helper expands $ATTACK_HOST, $MOD, $PORTS
-      in command templates without eval
-[New] sanitize_ports() validates PORTS values (numeric CSV or "all") before
-      custom backend eval in _fw_custom_ban() and _fw_custom_unban()
-[Fix] tlog sources bfd.lib.sh without ownership/permission checks; added
-      stat validation matching files/bfd pattern (root-owned, non-world-writable)
-[Fix] route backend bare ip calls replaced with $_FW_ROUTE_IP_BIN discovered
-      via command -v in _fw_route_setup()
-[Fix] CLI exit code propagation: -u, -b, -T, --test-pattern validate required
-      args with explicit messages; all dispatch branches propagate callee exit
-      codes via || exit "$?"
-[Fix] install.sh missing stats/ mkdir; added mkdir -p and chmod 750
-[Fix] install.sh daemon-reload ordering: moved systemctl daemon-reload after
-      sed path replacement so systemd sees final paths
-[Fix] logrotate.d.bfd: add copytruncate, weekly rotation, compress, create
-      directive; preserves log file inode for tail -f consumers
-[Fix] cron.daily state rotation races: wrap state-file operations in flock -x
-      using BFD's lock file; copy-and-truncate preserves inodes; INSTALL_PATH
-      variable replaces hardcoded paths; bans.history and attack.pool rotation
-      with 30-day purge added
-[Fix] Dockerfiles missing COPY importconf; added to all 9 test Dockerfiles
-[Change] test IPs: replace private/example ranges (10.0.0.x, 172.16.x, 192.168.1.x,
-         1.2.3.4, 5.6.7.8) with RFC 5737 documentation ranges (192.0.2.0/24,
-         198.51.100.0/24, 203.0.113.0/24) across all 25 test files
-[Change] route backend tests: replace mock ip() shell functions with mock
-         scripts using $_FW_ROUTE_IP_BIN (matches new binary discovery)
-[Change] test suite: rename 25 test files from test_*.bats to numbered
-         NN-name.bats convention for deterministic ordering and parallel
-         distribution
-[Change] test suite: refactor all test files to use shared setup/teardown
-         helpers (bfd_common_setup, bfd_standard_setup, bfd_teardown),
-         eliminating duplicated boilerplate across 22 files
-[New] tests/helpers/assert-bfd.bash: domain-specific BATS assertions
-      (assert_banned, refute_banned, assert_ban_count, assert_event_count,
-      assert_history_count, assert_pool_count)
-[New] tests/helpers/bfd-mock.bash: mock helpers (create_mock_bin,
-      create_mock_rule) for test isolation
-[Change] tests/helpers/bfd-common.bash: expanded from minimal 3-line loader
-         to full helper infrastructure with setup/teardown functions
-[Change] tests/run-tests.sh: rewritten with --parallel [N] flag for
-         multi-container round-robin distribution matching APF pattern
-[Change] tests/Makefile: rewritten with parallel-by-default targets,
-         grouped OS targets (modern, legacy, deep-legacy), and parallel
-         cross-OS execution via xargs
-[Fix] install.sh: support INSTALL_PATH/BIN_PATH env var override for custom
-      install locations; sed replacement of hardcoded paths at install time
-[Fix] install.sh: chmod 640 for rules/ and alert.bfd (was 750, should be
-      640 — sourced template, not executable); glob replaced with
-      find -maxdepth 1 -type f to avoid stripping subdirectory execute bits
-[Fix] firewall backends: replace hardcoded /etc/apf/apf and /usr/sbin/csf
-      with command -v discovery cached in _FW_APF_BIN/_FW_CSF_BIN
-[Fix] firewall backends: iptables/ip6tables resolved via command -v in setup
-      phase, cached in _FW_IPT_BIN/_FW_IP6T_BIN
-[Fix] detect_firewall: replace hardcoded path checks for apf/csf with
-      command -v (consistent with all other backend detection)
-[Change] uninstall.sh, importconf: honor INSTALL_PATH/BIN_PATH env vars for
-         custom install locations
-[New] record_ban() helper extracts ban lifecycle logic (expiry computation,
-      recidivism escalation, state recording) from check() and
-      check_distributed(), eliminating 20-line duplication
-[New] _save_rule_vars(), _restore_rule_vars(), _clear_rule_vars() helpers
-      consolidate per-rule variable save/restore across 7 callers
-[New] _rule_is_active() replaces inline [ -n "$REQ" ] && [ -f "$REQ" ]
-      checks in _hc_rules(), show_status(), list_rules()
-[Fix] POSIX compliance: == in [ ] tests replaced with = in eout(), tlog
-[Fix] unquoted $EXIT_* and $LOCK_FD variables in files/bfd; all now quoted
-[Fix] _hc_config() eval replaced with case statement for log path lookup
-[Fix] _apool_report() date -d calls lack fallback; added || echo for
-      systems without GNU date -d
-[Change] LAST_HOST/LAST dedup variables removed from check(); duplicate
-         ban prevention now handled entirely by state_bans_active_check()
-[Change] BAN_CMD_BIN/BAN_CMD_V6_BIN renamed with underscore prefix and
-         unset after use to avoid namespace pollution
-[New] shellcheck SC2034 directive for reload_watch() template variables
-[New] security comments on _fw_custom_ban/unban eval documenting the
-      mitigation chain (validate_ip_any, sanitize_mod, safe_source)
-[New] ip_to_subnet() and tlog_read() header comments clarifying library
-      vs production usage
-[Fix] show_config() eval injection: unsanitized CLI input passed to eval
-      allowed arbitrary command execution; now validates against config
-      variable whitelist before eval
-[Fix] files/bfd sources bfd.lib.sh without ownership/permission checks;
-      added stat validation matching conf.bfd pattern (root-owned, non-world-writable)
-[Fix] alert template sourced without safety checks; send_alerts() now
-      validates ownership/permissions before sourcing alert.bfd
-[Fix] state_bans_active_remove and state_events_prune ran awk+mv without
-      flock; wrapped in flock -x subshells for atomicity
-[Fix] IGNOREREGEX and PORTS not reset between rules in check(); dovecot
-      IGNOREREGEX leaked into subsequent rules; PORTS leaked similarly
-[Fix] postgresql rule tested log path with [ -f ] && [ -d ] (impossible);
-      changed to [ -d ] so Debian log path is reachable
-[Fix] vsftpd2 rule TLOG_TF="vsftpd" collided with vsftpd rule cursor;
-      changed to TLOG_TF="vsftpd2"
-[Fix] ignore.hosts missing IPv6 loopback; added ::1
-[Fix] BAN_COMMAND execution in check(): template extracted raw from conf.bfd
-      preventing premature variable expansion and command injection
-[Fix] temp files secured with mktemp replacing predictable PID-based names
-[Fix] atomic locking with flock replacing TOCTOU check-then-act race condition
-[Fix] state files created with 600 permissions before first use
-[Fix] tlog gunzip/gzip race replaced with zcat read-only approach
-[New] safe_source() validates root ownership and non-world-writable before
-      sourcing; cleanup trap on EXIT/INT/TERM releases lock files and flock FD
-[New] validate_ip() strict octet validation; sanitize_mod() restricts rule
-      names to safe characters
-[New] FIREWALL="auto" auto-detects firewall and handles ban/unban natively;
-      users no longer need to edit BAN_COMMAND/UNBAN_COMMAND templates
-[New] 8 firewall backends: apf, csf, firewalld, ufw, nftables, iptables,
-      route, custom; auto-detection priority: APF > CSF > firewalld > UFW >
-      nftables > iptables > route
-[New] nftables backend with dedicated inet bfd table and blocked4/blocked6
-      sets; iptables backend with dedicated bfd chain; firewalld runtime-only
-      rich rules; route backend with ip route blackhole; APF/CSF/UFW direct
-      integration; custom backend preserves pre-2.0.1 BAN_COMMAND behavior
-[New] fw_ban/fw_unban/fw_setup/fw_status dispatch layer routes to backends
-[New] validate_ip6() IPv6 validation (8-group, :: compression, zone ID
-      stripping, injection rejection); validate_ip_any() dual-stack wrapper
-[New] BAN_COMMAND_V6 and UNBAN_COMMAND_V6 config variables for IPv6-specific
-      custom commands; empty = use standard commands for both
-[Change] full pipeline (detection, banning, manual operations, local address
-         filtering) accepts IPv6 addresses natively
-[Fix] IPv6 false-match: grep -Fw treats colons as word boundaries causing
-      prefix false positives; replaced with awk field-exact matching and
-      grep -Fx for single-IP files
+[New] bfd.lib.sh: 112-function library extracted from bfd for testability
 [New] extract_hosts() declarative rule engine with fail2ban-compatible <HOST>
-      placeholder patterns, dual IPv4/IPv6 boundary-aware regex, and
-      IGNOREREGEX per-rule exclusion
-[Change] all rules converted from ad-hoc grep/sed/awk pipelines to
-         extract_hosts() with FAILREGEX patterns
-[New] time-windowed failure counting via events.dat; count_failures() returns
-      per-service windowed count; state_events_prune() cleans expired events
-[New] TRIG_WINDOW (default 300s) sliding window for counting failures
-[New] TRIG_GLOBAL (default 0/disabled) cross-service aggregate threshold
-[New] filter_host() checks ignore lists and local addresses (returns 0/1/2)
-[New] $PORTS substitution in BAN_COMMAND templates for port-specific blocking
-[Change] check() delegates to filter_host, count_failures, execute_ban,
-         validate_rule; skips already-banned hosts; verifies execute_ban
-         return code; per-run statistics logged (rules, events, bans, elapsed)
-[New] distributed attack detection: when SUBNET_TRIG unique IPs from the same
-      subnet attack the same service within TRIG_WINDOW, the entire subnet is
-      banned; disabled by default (SUBNET_TRIG="0")
-[New] SUBNET_MASK (default 24) and SUBNET_MASK_V6 (default 48, group-aligned)
-[New] ip_to_subnet() for IPv4 (bit-shift, masks 8-32) and IPv6; single-pass
-      awk aggregation in count_subnet_attackers(); check_distributed()
-      orchestrates subnet bans through existing execute_ban pipeline
-[Fix] _fw_route_ban/_fw_route_unban: CIDR addresses passed through without
-      appending extra /32 or /128 suffix
-[New] BAN_DURATION (default 300s) for temporary bans with auto-expiry;
-      0 = permanent (legacy behavior)
-[New] BAN_PERMANENT_AFTER (default 5) and BAN_PERMANENT_WINDOW (default 24h)
-      for recidivism escalation to permanent bans
-[New] BAN_ESCALATION (none/linear/exponential) and BAN_ESCALATION_CAP
-      (default 86400s) for incremental ban time escalation
-[New] UNBAN_COMMAND config variable; process_unbans() auto-expires temporary
-      bans each cycle; check_recidivism() escalates repeat offenders
+      patterns, dual IPv4/IPv6 boundary-aware regex, and IGNOREREGEX per-rule
+      exclusion; all 34 rules converted from ad-hoc grep/sed/awk pipelines
+[New] 14 new service rules (34 total): apache-auth, nginx-http-auth,
+      mysqld-auth, wordpress, webmin, directadmin, cyrus-imap, roundcube,
+      plesk, dropbear, http_401, pam_generic, named, postgresql
+[New] thresholds.conf: centralized per-rule threshold management (TRIG,
+      SKIP_ALERT, RULE_EMAIL); three-tier precedence: rule file >
+      thresholds.conf > conf.bfd
+[New] _rule_tlog() in-process tlog wrapper replaces $TLOG_PATH subprocess in
+      all 34 rules; eliminates 34 fork+exec pairs per detection cycle
+[New] time-windowed failure counting via events.dat with TRIG_WINDOW (default
+      300s) sliding window; TRIG_GLOBAL cross-service aggregate threshold
+[New] distributed attack detection: SUBNET_TRIG unique IPs from same subnet
+      triggers subnet ban; ip_to_subnet() with configurable IPv4/IPv6 masks
+[New] FIREWALL="auto" with 8 backends (APF, CSF, firewalld, UFW, nftables,
+      iptables, route, custom); auto-detection in priority order;
+      fw_ban/fw_unban/fw_setup/fw_status dispatch layer; nftables sets,
+      iptables chain, firewalld rich rules, route blackhole
+[New] full IPv6 support: dual-stack detection, banning, and local address
+      exclusion; BAN_COMMAND_V6/UNBAN_COMMAND_V6 for firewalls requiring
+      separate commands; validate_ip6() with zone ID stripping
+[New] temporary bans with auto-expiry (BAN_DURATION, default 300s); recidivism
+      escalation (BAN_PERMANENT_AFTER/WINDOW); ban escalation modes
+      (BAN_ESCALATION: none/linear/exponential, BAN_ESCALATION_CAP);
+      execute_ban/execute_unban with retry and exponential backoff
 [New] bans.active and bans.history state files with atomic flock -x appends;
-      state_bans_active_* and state_bans_history_* functions
-[New] execute_ban/execute_unban retry with exponential backoff
-      (BAN_RETRY_COUNT, default 2) for transient lock contention
-[New] batched email alerts: multiple bans per check cycle produce a single
-      email per recipient instead of per-ban flooding
-[New] format_duration(), format_alert_entry(), format_alert_body(),
-      send_alerts() with enriched content (ban type, duration, recidivism,
-      escalation context, log excerpts)
-[New] RULE_EMAIL per-rule alert routing overrides EMAIL_ADDRESS
-[Fix] alert data now collected after ban state computation (was unavailable
-      to template previously)
-[New] systemd journal reader with transparent fallback: when a rule's log
-      file is missing but journalctl is available, BFD reads from the journal;
-      16 of 34 rules are journal-capable
-[New] LOG_SOURCE config variable: auto (default), file (CentOS 6), or journal
-[New] tlog_journal_filter() maps 16 service identifiers; tlog_journal_read()
-      cursor-based tracking with timestamp fallback
-[Fix] tlog_journal_filter rh_ipop3d key mismatch; journal dispatch bypassed
-      existing log files; .cursor/.jts cleanup added to cron.daily
-[New] -S|--status [SERVICE]: system overview or per-service status
-[New] -C|--config [VAR]: dump all config or single variable value
-[New] -R|--rules [RULE]: list rules or show detailed rule info
-[New] -T|--test RULE [FILE]: test rule patterns against log files
-[New] --test-pattern PAT [FILE]: test a raw <HOST> pattern
-[New] -l|--list, -u|--unban IP, -b|--ban IP [SERVICE] flags
-[New] --flush-temp and --flush-all for bulk unban operations
-[New] --json and --csv global modifiers for structured output (with -l)
-[New] -c|--check: health check (config, binaries, rules, state, alerts)
-[New] -d|--dryrun, -v|--version, -h|--help flags
-[New] -w|--watch: continuous foreground mode (WATCH_INTERVAL, default 10s);
-      SIGHUP reload; bfd-watch.service systemd unit
-[Change] -a|--attackpool extended: valid IPs show enriched search_ip() report
-         with ban status, history, events; per-service breakdown added
-[Change] unknown flags exit non-zero; empty invocation shows usage
-[New] 14 new service rules: apache-auth, nginx-http-auth, mysqld-auth,
-      wordpress, webmin, directadmin, cyrus-imap, roundcube, plesk, dropbear,
-      http_401, pam_generic, named, postgresql; 34 total rules
-[Change] per-service TRIG thresholds in all rules (sshd=5, dovecot/postfix/
-         courier/ftpd=10, exim_nxuser=15, pam_generic=20, http_401=30,
-         named=100)
-[New] conf.bfd reorganized into 6 sections: Detection Thresholds, Distributed
-      Attack Detection, Ban Actions, Email Alerts, Log Paths, Logging & Advanced
-[New] internals.conf split from conf.bfd for internal/derived variables
-[New] importconf rewritten: grep/awk-based config merge preserves user values
-      as raw text; pre-2.0.1 configs get FIREWALL="custom" for backward compat;
-      ban state preserved during upgrades
-[New] validate_config() validates all config variables at startup with clear
-      error messages; meaningful exit codes replace bare exit 1
-[New] detect_log_paths() auto-detects AUTH/KERNEL/MAIL log paths across distros
-[New] bfd.lib.sh function library (106 functions) extracted for testability
-[Change] backtick substitution → $(), $[expr] → $(( )), egrep → grep -E,
-         for-cat/for-ls → while-read, systematic variable quoting, hardcoded
-         paths → command -v discovery across all files
-[Change] tlog_read() as library function; _apool_report() single-pass awk;
-         ARG_VAL pipeline processed once per rule
-[Change] default cron interval reduced from 3 to 2 minutes
-[Change] version renamed from 1.6-1 to 2.0.1; copyright years updated to 2026;
-         project domain normalized to rfxn.com
-[Change] README/README.md wholesale rewrite: quick start, subsectioned config,
-         rule catalog, ban management lifecycle, IPv6, troubleshooting
+      $PORTS substitution for port-specific blocking
+[New] batched email alerts: single email per recipient per check cycle with
+      enriched content (ban type, duration, recidivism, log excerpts);
+      RULE_EMAIL per-rule routing; SKIP_ALERT per-rule suppression
+[New] CLI expanded from 4 to 21 flags: -S/--status, -C/--config, -R/--rules,
+      -T/--test, --test-pattern, -l/--list, -u/--unban, -b/--ban, -c/--check,
+      -d/--dryrun, -w/--watch, -V/--verbose, -v/--version, -h/--help,
+      --flush-temp, --flush-all, --json, --csv
+[New] -w/--watch continuous daemon mode (WATCH_INTERVAL, default 10s); SIGHUP
+      config reload; bfd-watch.service (systemd) and bfd-watch.init (SysVinit
+      for CentOS 6 / Ubuntu 14.04); dead-PID lock recovery for cron fallback
+[New] -V/--verbose flag with vout() instrumentation across check, unbans,
+      status, and health check
+[New] -c/--check health check: validates config, log paths, firewall binaries,
+      rule status, state directories, tlog, and active bans
+[New] detect_run_mode() for structured run-mode identification (watch/systemd,
+      watch/init, watch/manual, timer/systemd, cron, unknown)
+[New] systemd journal reader with transparent fallback (16 of 34 rules);
+      LOG_SOURCE config (auto/file/journal); cursor-based journal tracking
+[New] conf.bfd reorganized into 6 sections; internals.conf split out;
+      validate_config() checks 24 variables at startup with clear error
+      messages and meaningful exit codes
+[New] bfd.1 nroff man page (OPTIONS, CONFIGURATION, THRESHOLDS, FIREWALL,
+      RULES, FILES, SIGNALS, EXIT CODES); installed via install.sh
+[New] bfd.bash-completion: context-sensitive tab completion for all CLI flags,
+      IPs, rule names, config variables, and file paths
+[New] importconf rewritten: awk-based config merge preserving user values;
+      thresholds.conf migration; pre-2.0.1 backward compat (FIREWALL=
+      "custom"); temp file cleanup trap
+[New] install.sh: custom paths (INSTALL_PATH/BIN_PATH env vars); man page,
+      bash completion, and SysVinit init script installation; post-install
+      watch mode recommendation; stats/ mkdir
+[New] uninstall.sh: root check; service stop ordering; man page, completion,
+      init script, and backup directory cleanup
+[New] safe_source() validates root ownership and non-world-writable permissions
+      before sourcing; expand_command_template() and sanitize_ports() for safe
+      template expansion without eval
+[New] validate_ip()/validate_ip6()/validate_ip_any() strict IP validation;
+      sanitize_mod() restricts rule names to safe characters
+[New] record_ban(), _save/_restore/_clear_rule_vars(), _rule_is_active()
+      helpers consolidating duplicated logic across callers
+[New] bfd.service, bfd.timer, bfd-watch.service systemd units with
+      SyslogIdentifier
 [New] .shellcheckrc and full shellcheck compliance across all scripts
-[New] .github/workflows/ci.yml with 8-OS Docker matrix, Buildx caching
-[New] BATS 1.11.0 test suite: 731 tests across 25 .bats files
-[New] 9 Dockerfiles (Debian 12, CentOS 6/7, Rocky 8/9/10, Ubuntu 12-24)
-[New] bfd.service, bfd.timer, bfd-watch.service systemd units
-[Fix] tlog log rotation: duplicate output and misplaced redirection
-[Fix] -q flag spawned redundant subprocess; uses exec redirection
-[Fix] modsec rule FILE→LP rename; vsftpd duplicate pipeline; missing
-      SKIP_ALERT in postfix/proftpd rules
-[Fix] attack pool search used regex matching; changed to literal grep -F
-[Fix] local address detection: grep -Ew failed to match IPv4 inet lines
-[Fix] UNBAN_COMMAND warning gated on FIREWALL="custom"; named backends
-      handle unban natively and no longer trigger the warning
-[Fix] firewalld custom-mode examples removed --permanent flag (contradicts
-      the backend's runtime-only rich rule design)
-[Fix] tlog usage text typo: "tracked sized" → "tracked sizes"
-[New] BAN_RETRY_COUNT and EMAIL_LOGLINES validation in validate_config()
-[Change] show_config() includes OUTPUT_SYSLOG_FILE
-[Change] README/README.md CLI usage blocks updated with all 20 flags
-[Change] cron.daily removed dead track.attack/ban.list cleanup
-[New] tests/Makefile: add test-debian12 target for explicit Debian 12 runs
-[Fix] tests/21-rule-test.bats: IPv6 test_pattern used > instead of >> for
-      second echo, losing first log line; assertion now checks 2 matches
-[Fix] tests/21-rule-test.bats: test_rule match count assertion strengthened
-      to exact "5 matches, 2 unique IPs"
-[New] tests/04-config-validation.bats: BAN_RETRY_COUNT and EMAIL_LOGLINES
-      validation test coverage (9 tests: valid, invalid, empty defaults)
-[New] tests/20-cli.bats: list_bans() table format tests (empty, single,
-      multiple bans)
-[New] tests/20-cli.bats: _json_escape() tests (plain, backslash, quote,
-      empty, mixed)
-[New] tests/20-cli.bats: flush_bans non-standard mode test
-[Change] tests/20-cli.bats: list_bans_json tests strengthened from loose
-         --partial checks to structural JSON assertions
-[New] README: FIREWALL="auto" backend documentation with detection priority
-      and 8-backend table
-[New] README: distributed attack detection variables (SUBNET_TRIG/MASK)
-[New] README: BAN_RETRY_COUNT, BAN_ESCALATION/CAP config variables
-[New] README: section 3.7 Logging & Advanced (FIREWALL, LOG_SOURCE,
-      OUTPUT_SYSLOG, LOCK_FILE_TIMEOUT, WATCH_INTERVAL)
-[New] README: sections 5.5 Flush Bans and 5.6 Structured Output (JSON/CSV)
-[New] README: INSTALL_PATH/BIN_PATH custom install documentation
-[New] README: events.dat and attack.pool in state files table
-[New] README: IGNOREREGEX in rule customization table
-[Fix] README: ARG_VAL description corrected from "regex pattern" to
-      "extracted IP list — tlog + extract_hosts pipeline"
-[Fix] README: example IPs changed from 10.0.0.x to RFC 5737 192.0.2.x
-[Change] CLI help: -b clarified as "(permanent)"; -a describes dual behavior;
-         -T/--test-pattern document stdin via -
-[Fix] install.sh: remove no-op BINPATH sed target on $INSPATH/bfd (file contains
-      no /usr/local/sbin/bfd references)
-[Fix] uninstall.sh: backup directories ($INSPATH.bk.*) left behind after each
-      upgrade; added glob cleanup before main rm -rf
-[Fix] cron.daily: cursor/JTS file deletion caused journal re-read on next run;
-      preserved cursor files as event-tracking state
-[Change] show_rule(): replace inline REQ check with _rule_is_active() helper
-         for consistency with _hc_rules(), show_status(), list_rules()
-[Change] extract_hosts(): sed -r → sed -E for POSIX portability (GNU sed 4.2+
-         supports -E; aligns with BSD/macOS sed)
-[Fix] watch mode: quote $! → "$!" for variable quoting consistency
+[New] .github/workflows/ci.yml with 8-OS Docker matrix and Buildx caching
+[New] BATS test suite: 819 tests across 29 .bats files; shared helpers
+      (assert-bfd.bash, bfd-mock.bash, bfd-common.bash); parallel runner;
+      9 Dockerfiles; RFC 5737 test IPs throughout
+[Change] check() refactored: delegates to filter_host/count_failures/
+         execute_ban; skips already-banned hosts; per-run statistics;
+         duplicate-ban prevention via state_bans_active_check()
+[Change] tlog modernized: cat subprocesses → read builtin; getsize() pre-
+         create block eliminated (prevents double-read race); growth condition
+         simplified; convergence with tlog_read() documented
+[Change] shell modernization across all files: backticks → $(), $[expr] →
+         $(( )), egrep → grep -E, for-cat → while-read, systematic variable
+         quoting, hardcoded paths → command -v discovery
+[Change] -a/--attackpool extended with search_ip() report, per-service
+         breakdown, and ban status integration
+[Change] logrotate.d.bfd rewritten: copytruncate, weekly, compress, create 0640
+[Change] cron.daily: flock-wrapped state rotation; copy-and-truncate preserves
+         inodes; INSTALL_PATH variable; cursor files preserved; GPL header added
+[Change] README wholesale rewrite: quick start, config reference, rule catalog,
+         ban lifecycle, firewall backends, IPv6, CLI flags, troubleshooting
+[Change] default cron interval reduced from 3 to 2 minutes
+[Change] version 1.6-1 → 2.0.1; copyright years updated to 2026
+[Fix] security: alert eval echo injection replaced with expand_command_
+      template(); show_config() eval injection guarded by whitelist;
+      BAN_COMMAND template extracted raw preventing premature expansion;
+      custom backend PORTS validated via sanitize_ports()
+[Fix] security: safe_source() applied to all sourced files (bfd.lib.sh,
+      conf.bfd, alert.bfd, rules, tlog); state file operations wrapped in
+      flock -x; mktemp replaces PID-based temp files; state files created 600;
+      tlog gunzip/gzip race replaced with zcat
+[Fix] global lock: FD-based flock replaced with mkdir-based lock eliminating
+      eval "exec $LOCK_FD" and fd-0-close risk; PID liveness check clears dead
+      holder immediately for cron recovery
+[Fix] install.sh: daemon-reload after sed; BINPATH parent dir creation; CWD
+      portability; chmod 640 for sourced files via find -type f; stats/ mkdir
+      with chmod 750; no-op sed target removed
+[Fix] validate_config(): added OUTPUT_SYSLOG, EMAIL_ADDRESS, BFD_LOG_PATH,
+      BAN_RETRY_COUNT, EMAIL_LOGLINES validation; header comment updated
+[Fix] show_config(): BAN_COMMAND vars added to whitelist with _TEMPLATE mapping
+[Fix] rule variable leakage: IGNOREREGEX/PORTS/SKIP_ALERT/RULE_EMAIL now
+      properly reset between rules via _clear/_save/_restore helpers
+[Fix] CLI exit codes: all dispatch branches validate args and propagate via
+      || exit "$?"; unknown flags exit non-zero
+[Fix] firewall backends: hardcoded paths replaced with command -v discovery
+      for apf, csf, iptables, ip6tables, ip (route backend); CIDR addresses
+      pass through without extra /32 or /128 suffix
+[Fix] tlog: log rotation duplicate output; source safety validation;
+      indentation normalized; idioms and version string updated
+[Fix] rule fixes: postgresql impossible path test; vsftpd2 TLOG_TF collision;
+      modsec FILE→LP rename; missing SKIP_ALERT in postfix/proftpd;
+      ignore.hosts missing ::1 loopback
+[Fix] IPv6: grep -Fw false-match replaced with awk/grep -Fx exact matching
+[Fix] journal: tlog_journal_filter rh_ipop3d key mismatch; dispatch bypassed
+      existing log files
+[Fix] miscellaneous: POSIX == → = in [ ] tests; $EXIT_* quoting; _hc_config()
+      eval → case; _apool_report() date -d fallback; -q subprocess → exec;
+      attack pool regex → grep -F; local address grep -Ew fix; WATCH_INTERVAL
+      ${-} → ${:-}; sed -r → sed -E; $! quoting; UNBAN_COMMAND warning gated
+      on FIREWALL="custom"; firewalld examples removed --permanent flag
 
 1.5-2:
 [Change] simplified dovecot rule regex matching

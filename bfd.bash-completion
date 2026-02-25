@@ -1,0 +1,108 @@
+# bash completion for bfd (Brute Force Detection)
+# Installed to /etc/bash_completion.d/bfd by install.sh
+#
+# Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
+# Licensed under the GNU General Public License v2
+
+_bfd_completions() {
+	local cur prev
+	cur="${COMP_WORDS[COMP_CWORD]}"
+	prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+	# Flag lists
+	local short_flags="-s -q -d -w -a -c -l -u -b -S -C -R -T -v -h -V"
+	local long_flags="--standard --quiet --dryrun --watch --attackpool --check --list --unban --ban --status --config --rules --test --test-pattern --flush-temp --flush-all --json --csv --verbose --version --help"
+
+	# Context-sensitive completions
+	case "$prev" in
+		-u|--unban)
+			# complete with IPs from bans.active
+			local bans_file="/usr/local/bfd/tmp/bans.active"
+			if [ -f "$bans_file" ]; then
+				local ips
+				ips=$(awk '{print $3}' "$bans_file" 2>/dev/null)
+				COMPREPLY=( $(compgen -W "$ips" -- "$cur") )
+			fi
+			return 0
+			;;
+		-S|--status|-R|--rules)
+			# complete with rule names
+			local rules_dir="/usr/local/bfd/rules"
+			if [ -d "$rules_dir" ]; then
+				local rules
+				rules=$(ls "$rules_dir" 2>/dev/null)
+				COMPREPLY=( $(compgen -W "$rules" -- "$cur") )
+			fi
+			return 0
+			;;
+		-T|--test)
+			# first arg: rule name; second arg: file
+			local nargs=0 i
+			for (( i=1; i < COMP_CWORD; i++ )); do
+				case "${COMP_WORDS[$i]}" in
+					-*) ;;
+					*)  nargs=$((nargs + 1)) ;;
+				esac
+			done
+			if [ "$nargs" -eq 0 ]; then
+				local rules_dir="/usr/local/bfd/rules"
+				if [ -d "$rules_dir" ]; then
+					local rules
+					rules=$(ls "$rules_dir" 2>/dev/null)
+					COMPREPLY=( $(compgen -W "$rules" -- "$cur") )
+				fi
+			else
+				COMPREPLY=( $(compgen -f -- "$cur") )
+			fi
+			return 0
+			;;
+		--test-pattern)
+			# second arg: file
+			local nargs=0 i
+			for (( i=1; i < COMP_CWORD; i++ )); do
+				case "${COMP_WORDS[$i]}" in
+					-*) ;;
+					*)  nargs=$((nargs + 1)) ;;
+				esac
+			done
+			if [ "$nargs" -ge 1 ]; then
+				COMPREPLY=( $(compgen -f -- "$cur") )
+			fi
+			return 0
+			;;
+		-b|--ban)
+			# second arg: service (rule name)
+			local nargs=0 i
+			for (( i=1; i < COMP_CWORD; i++ )); do
+				case "${COMP_WORDS[$i]}" in
+					-*) ;;
+					*)  nargs=$((nargs + 1)) ;;
+				esac
+			done
+			if [ "$nargs" -ge 1 ]; then
+				local rules_dir="/usr/local/bfd/rules"
+				if [ -d "$rules_dir" ]; then
+					local rules
+					rules=$(ls "$rules_dir" 2>/dev/null)
+					COMPREPLY=( $(compgen -W "$rules" -- "$cur") )
+				fi
+			fi
+			return 0
+			;;
+		-C|--config)
+			# complete with config variable names
+			local config_vars="FIREWALL TRIG TRIG_WINDOW TRIG_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL THRESHOLDS_CONF"
+			COMPREPLY=( $(compgen -W "$config_vars" -- "$cur") )
+			return 0
+			;;
+	esac
+
+	# Default: complete flags
+	if [[ "$cur" == --* ]]; then
+		COMPREPLY=( $(compgen -W "$long_flags" -- "$cur") )
+	elif [[ "$cur" == -* ]]; then
+		COMPREPLY=( $(compgen -W "$short_flags $long_flags" -- "$cur") )
+	fi
+}
+
+complete -F _bfd_completions bfd

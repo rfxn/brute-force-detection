@@ -281,6 +281,12 @@ eout() {
 	fi
 }
 
+# vout — verbose-only output. Prints to stdout when VERBOSE=1.
+vout() {
+	[ "${VERBOSE:-0}" = "1" ] && echo "$@"
+	return 0
+}
+
 # safe_source requires: eout() to be functional
 safe_source() {
 	local file="$1"
@@ -1179,6 +1185,7 @@ process_unbans() {
 		else
 			execute_unban "$host" "$mod" "$ports"
 		fi
+		vout "  unban: $host expired ($mod)"
 		state_bans_active_remove "$install_path" "$host"
 		state_bans_history_append "$install_path" "$now" "$expiry" "$host" "$mod" "unban"
 	done < <(state_bans_active_expired "$install_path" "$now")
@@ -1722,6 +1729,10 @@ _hc_binaries() {
 		echo "[SKIP] journalctl: not available (file-only mode)"
 		_hc_pass=$((_hc_pass + 1))
 	fi
+	local _hc_bin
+	for _hc_bin in awk grep sed date hostname; do
+		vout "  command: $_hc_bin = $(command -v "$_hc_bin" 2>/dev/null || echo 'not found')"
+	done
 	_hc_has_journalctl="$has_journalctl"
 
 	local log_source="${LOG_SOURCE:-auto}"
@@ -2092,6 +2103,39 @@ send_alerts() {
 
 # --- Phase 18: CLI Evolution functions ---
 
+# detect_run_mode — determine how BFD is being run.
+# Outputs one of: watch/systemd, watch/init, watch/manual,
+# timer/systemd, cron, unknown
+detect_run_mode() {
+	local watch_pid=""
+	watch_pid=$(pgrep -f "bfd.*--watch" 2>/dev/null | head -1) || true
+	if [ -z "$watch_pid" ]; then
+		watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true
+	fi
+	if [ -n "$watch_pid" ] && [ "$watch_pid" != "$$" ]; then
+		if command -v systemctl >/dev/null 2>&1 && \
+		   systemctl is-active bfd-watch.service >/dev/null 2>&1; then
+			echo "watch/systemd"
+		elif [ -f /var/run/bfd-watch.pid ]; then
+			echo "watch/init"
+		else
+			echo "watch/manual"
+		fi
+		return 0
+	fi
+	if command -v systemctl >/dev/null 2>&1; then
+		if systemctl is-active bfd.timer >/dev/null 2>&1; then
+			echo "timer/systemd"
+			return 0
+		fi
+	fi
+	if [ -f /etc/cron.d/bfd ] || crontab -l 2>/dev/null | grep -q 'bfd'; then
+		echo "cron"
+		return 0
+	fi
+	echo "unknown"
+}
+
 # show_status install_path — display global system status
 show_status() {
 	local install_path="$1"
@@ -2101,25 +2145,39 @@ show_status() {
 	echo "BFD Status ($(date +"%Y-%m-%d %H:%M:%S"))"
 	echo ""
 
-	# Mode detection
-	local mode="unknown"
-	local watch_pid=""
-	watch_pid=$(pgrep -f "bfd.*--watch" 2>/dev/null | head -1) || true
-	if [ -z "$watch_pid" ]; then
-		watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true
-	fi
-	if [ -n "$watch_pid" ] && [ "$watch_pid" != "$$" ]; then
-		local uptime_secs
-		uptime_secs=$(ps -o etimes= -p "$watch_pid" 2>/dev/null | tr -d ' ') || uptime_secs=""
-		if [ -n "$uptime_secs" ]; then
-			mode="watch (pid $watch_pid, uptime $(format_duration "$uptime_secs"))"
-		else
-			mode="watch (pid $watch_pid)"
-		fi
-	elif crontab -l 2>/dev/null | grep -q 'bfd' || [ -f /etc/cron.d/bfd ]; then
-		mode="cron"
-	fi
+	# Mode detection via detect_run_mode()
+	local run_mode mode="unknown"
+	run_mode=$(detect_run_mode)
+	case "$run_mode" in
+		watch/*)
+			local watch_pid=""
+			watch_pid=$(pgrep -f "bfd.*--watch" 2>/dev/null | head -1) || true
+			if [ -z "$watch_pid" ]; then
+				watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true
+			fi
+			local uptime_secs=""
+			if [ -n "$watch_pid" ]; then
+				uptime_secs=$(ps -o etimes= -p "$watch_pid" 2>/dev/null | tr -d ' ') || uptime_secs=""
+			fi
+			local watch_type="${run_mode#watch/}"
+			if [ -n "$uptime_secs" ]; then
+				mode="watch ($watch_type, pid $watch_pid, uptime $(format_duration "$uptime_secs"))"
+			else
+				mode="watch ($watch_type${watch_pid:+, pid $watch_pid})"
+			fi
+			;;
+		timer/systemd)
+			mode="timer (systemd)"
+			;;
+		cron)
+			mode="cron (/etc/cron.d/bfd)"
+			;;
+		*)
+			mode="unknown (no scheduler detected)"
+			;;
+	esac
 	echo "  Mode:           $mode"
+	vout "  (detected via: $run_mode)"
 
 	# Firewall backend
 	if [ -n "${_FW_BACKEND:-}" ]; then
