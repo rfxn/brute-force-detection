@@ -162,8 +162,10 @@ elif [ -f "$INSTALL_PATH.bk.last/thresholds.conf" ]; then
 		_old_trig=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^TRIG=/){sub(/^TRIG=/,"",$i); print $i; exit}}}')
 		if [ -n "$_old_trig" ] && [ -f "$new_press" ]; then
 			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
-				# update existing entry — add PRESSURE_TRIP if not present
-				if ! grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then
+				# update existing entry — replace or add PRESSURE_TRIP
+				if grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then
+					sed -i "s|^\(${_rule_name}:.*PRESSURE_TRIP=\)[^:]*|\1${_old_trig}|" "$new_press"
+				else
 					sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:PRESSURE_TRIP=${_old_trig}|" "$new_press"
 				fi
 			else
@@ -202,7 +204,10 @@ elif [ -f "$new_press" ] && [ -d "$INSTALL_PATH.bk.last/rules" ]; then
 			_old_trig="${_old_trig#TRIG=\"}"
 			_old_trig="${_old_trig%\"}"
 			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
-				if ! grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then
+				# replace or add PRESSURE_TRIP from old rule TRIG
+				if grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then
+					sed -i "s|^\(${_rule_name}:.*PRESSURE_TRIP=\)[^:]*|\1${_old_trig}|" "$new_press"
+				else
 					sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:PRESSURE_TRIP=${_old_trig}|" "$new_press"
 				fi
 			else

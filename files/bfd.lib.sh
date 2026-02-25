@@ -325,6 +325,10 @@ _load_pressure_conf() {
 # Also fills TRIG from PRESSURE_TRIP for backward compat with display code.
 _apply_pressure() {
 	local rule_name="$1"
+	# backward compat: old rule files set TRIG, treat as PRESSURE_TRIP
+	if [ -z "$PRESSURE_TRIP" ] && [ -n "$TRIG" ]; then
+		PRESSURE_TRIP="$TRIG"
+	fi
 	if [ -z "$PRESSURE_WEIGHT" ] && [ "${_PRESS_WEIGHT[$rule_name]+x}" = "x" ]; then
 		PRESSURE_WEIGHT="${_PRESS_WEIGHT[$rule_name]}"
 	fi
@@ -426,15 +430,19 @@ expand_command_template() {
 #   WATCH_INTERVAL, INSTALL_PATH, EXIT_CONFIG_ERROR
 validate_config() {
 	local int_pattern='^[0-9]+$'
-	if ! [[ "${PRESSURE_TRIP:-${TRIG:-20}}" =~ $int_pattern ]] || [ "${PRESSURE_TRIP:-${TRIG:-20}}" -eq 0 ]; then
+	# Use ${VAR-default} (no colon) so explicit empty is validated, not skipped
+	local _pt="${PRESSURE_TRIP-${TRIG:-20}}"
+	if [ -z "$_pt" ] || ! [[ "$_pt" =~ $int_pattern ]] || [ "$_pt" -eq 0 ]; then
 		echo "error: PRESSURE_TRIP must be a positive integer (got '${PRESSURE_TRIP:-${TRIG:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}" =~ $int_pattern ]] || [ "${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}" -eq 0 ]; then
+	local _phl="${PRESSURE_HALF_LIFE-${TRIG_WINDOW:-300}}"
+	if [ -z "$_phl" ] || ! [[ "$_phl" =~ $int_pattern ]] || [ "$_phl" -eq 0 ]; then
 		echo "error: PRESSURE_HALF_LIFE must be a positive integer (got '${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}" =~ $int_pattern ]]; then
+	local _ptg="${PRESSURE_TRIP_GLOBAL-${TRIG_GLOBAL:-0}}"
+	if [ -z "$_ptg" ] || ! [[ "$_ptg" =~ $int_pattern ]]; then
 		echo "error: PRESSURE_TRIP_GLOBAL must be a non-negative integer (got '${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-}}')."
 		exit $EXIT_CONFIG_ERROR
 	fi

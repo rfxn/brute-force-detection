@@ -9,12 +9,12 @@ load 'helpers/bfd-common'
 
 setup() {
 	bfd_standard_setup
-	TRIG="15"
-	TRIG_WINDOW="300"
-	TRIG_GLOBAL="0"
-	BAN_DURATION="300"
-	BAN_PERMANENT_AFTER="5"
-	BAN_PERMANENT_WINDOW="86400"
+	PRESSURE_TRIP="15"
+	PRESSURE_HALF_LIFE="300"
+	PRESSURE_TRIP_GLOBAL="0"
+	BAN_TTL="300"
+	BAN_ESCALATE_AFTER="5"
+	BAN_ESCALATE_WINDOW="86400"
 	EMAIL_ALERTS="0"
 	EMAIL_ADDRESS="root"
 	EMAIL_SUBJECT="Test"
@@ -26,7 +26,7 @@ setup() {
 	OUTPUT_SYSLOG="1"
 	LOCK_FILE_TIMEOUT="300"
 	WATCH_INTERVAL="10"
-	GLOB_TRIG="$TRIG"
+	GLOB_PRESSURE_TRIP="$PRESSURE_TRIP"
 
 	# create rules directory with a test rule
 	RULES_PATH="$INSTALL_PATH/rules"
@@ -95,10 +95,10 @@ teardown() {
 	assert_output --partial "BFD Status: sshd"
 }
 
-@test "show_service_status: shows threshold and ports" {
+@test "show_service_status: shows trip and ports" {
 	run show_service_status "$INSTALL_PATH" "sshd"
 	assert_success
-	assert_output --partial "Threshold:      5 failures"
+	assert_output --partial "Trip:"
 	assert_output --partial "Ports:          22"
 }
 
@@ -134,14 +134,14 @@ teardown() {
 @test "show_config: dumps all variables" {
 	run show_config
 	assert_success
-	assert_output --partial "TRIG=15"
-	assert_output --partial "TRIG_WINDOW=300"
-	assert_output --partial "BAN_DURATION=300"
+	assert_output --partial "PRESSURE_TRIP=15"
+	assert_output --partial "PRESSURE_HALF_LIFE=300"
+	assert_output --partial "BAN_TTL=300"
 	assert_output --partial "EMAIL_ALERTS=0"
 }
 
 @test "show_config: shows single variable" {
-	run show_config "TRIG"
+	run show_config "PRESSURE_TRIP"
 	assert_success
 	assert_output "15"
 }
@@ -274,7 +274,8 @@ teardown() {
 	run show_rule "$INSTALL_PATH" "sshd"
 	assert_success
 	assert_output --partial "Rule: sshd"
-	assert_output --partial "Threshold:  5"
+	assert_output --partial "Trip:"
+	assert_output --partial "Weight:"
 	assert_output --partial "Ports:      22"
 }
 
