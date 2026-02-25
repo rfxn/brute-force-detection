@@ -192,6 +192,7 @@ _clear_rule_vars() {
 	PRESSURE_WEIGHT="" PRESSURE_TRIP=""
 }
 
+# DEPRECATED: use _load_pressure_conf() — retained for backward compat callers.
 # _load_thresholds conf_file — parse thresholds.conf into associative arrays
 # Populates _THRESH_TRIG[], _THRESH_SKIP_ALERT[], _THRESH_RULE_EMAIL[].
 # Skips comments, blank lines, and unknown keys. Validates file safety.
@@ -246,6 +247,7 @@ _load_thresholds() {
 	done < "$conf_file"
 }
 
+# DEPRECATED: use _apply_pressure() — retained for backward compat callers.
 # _apply_thresholds rule_name — fill empty threshold vars from _THRESH arrays
 # Called after safe_source of a rule file. Only sets variables the rule left
 # empty, preserving rule-file precedence (rule > thresholds.conf > conf.bfd).
@@ -1571,6 +1573,7 @@ state_events_append() {
 	) 200>>"$events_file"
 }
 
+# DEPRECATED: use pressure_compute() — retained for backward compat callers.
 # state_events_count install_path host window now [mod] — count events in window
 # Counts events for host within window seconds of now.
 # If mod specified, counts only that service. Outputs count to stdout.
@@ -1614,6 +1617,7 @@ state_events_prune() {
 
 # count_failures host hosts_parsed install_path window now mod — count windowed failures
 # Replacement for count_attacks():
+# DEPRECATED: use record_and_score() — retained for backward compat callers.
 #   1. Count host occurrences in hosts_parsed (grep -cxF)
 #   2. Append that many timestamped events
 #   3. Count per-service events within window
