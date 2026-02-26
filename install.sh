@@ -24,6 +24,7 @@ cd "$(dirname "$0")"
 
 INSPATH="${INSTALL_PATH:-/usr/local/bfd}"
 BINPATH="${BIN_PATH:-/usr/local/sbin/bfd}"
+VER="2.0.1"
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "error: install.sh must be run as root."
@@ -33,6 +34,7 @@ fi
 backup(){
 if [ -d "$INSPATH" ]; then
         DVAL=$(date +"%d%m%Y-%s")
+	echo "Backing up to $INSPATH.bk.$DVAL"
 	mv "$INSPATH" "$INSPATH.bk.$DVAL"
 	rm -f "$INSPATH.bk.last"
 	ln -s "$INSPATH.bk.$DVAL" "$INSPATH.bk.last"
@@ -141,6 +143,36 @@ install(){
 	fi
 }
 
+_stop_services(){
+	# stop bfd-watch before installing to avoid delay and output leaks
+	if command -v systemctl >/dev/null 2>&1; then
+		if systemctl is-active bfd-watch.service >/dev/null 2>&1; then
+			echo -n "Stopping bfd-watch... "
+			systemctl stop bfd-watch.service 2>/dev/null || true
+			echo "done"
+		fi
+	else
+		local _initdir=""
+		for _initdir in /etc/rc.d/init.d /etc/init.d; do
+			if [ -f "$_initdir/bfd-watch" ]; then
+				break
+			fi
+			_initdir=""
+		done
+		if [ -n "$_initdir" ]; then
+			local _pid=""
+			if [ -f /var/run/bfd-watch.pid ]; then
+				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true
+			fi
+			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+				echo -n "Stopping bfd-watch... "
+				"$_initdir/bfd-watch" stop 2>/dev/null || true
+				echo "done"
+			fi
+		fi
+	fi
+}
+
 _enable_services(){
 	_WATCH_STATE=""
 	if command -v systemctl >/dev/null 2>&1; then
@@ -148,12 +180,16 @@ _enable_services(){
 		_watch_enabled=$(systemctl is-enabled bfd-watch.service 2>/dev/null) || true
 		_timer_enabled=$(systemctl is-enabled bfd.timer 2>/dev/null) || true
 		if [ "$_watch_enabled" = "enabled" ]; then
-			systemctl restart bfd-watch.service 2>/dev/null || true
+			echo -n "Starting bfd-watch... "
+			systemctl start bfd-watch.service 2>/dev/null || true
+			echo "done"
 			_WATCH_STATE="restarted"
 		elif [ "$_timer_enabled" = "enabled" ]; then
 			_WATCH_STATE="timer-active"
 		else
+			echo -n "Enabling bfd-watch... "
 			systemctl enable --now bfd-watch.service 2>/dev/null || true
+			echo "done"
 			_WATCH_STATE="enabled"
 		fi
 	else
@@ -169,15 +205,19 @@ _enable_services(){
 				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true
 			fi
 			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
-				"$_initdir/bfd-watch" restart 2>/dev/null || true
+				echo -n "Starting bfd-watch... "
+				"$_initdir/bfd-watch" start 2>/dev/null || true
+				echo "done"
 				_WATCH_STATE="restarted"
 			else
+				echo -n "Enabling bfd-watch... "
 				if command -v chkconfig >/dev/null 2>&1; then
 					chkconfig bfd-watch on 2>/dev/null || true
 				elif command -v update-rc.d >/dev/null 2>&1; then
 					update-rc.d bfd-watch defaults 2>/dev/null || true
 				fi
 				"$_initdir/bfd-watch" start 2>/dev/null || true
+				echo "done"
 				_WATCH_STATE="enabled"
 			fi
 		else
@@ -187,45 +227,51 @@ _enable_services(){
 }
 
 postinfo(){
-	echo ".: BFD installed"
-	echo "Install path:    $INSPATH"
-	echo "Config path:     $INSPATH/conf.bfd"
-	echo "Executable:      $BINPATH"
 	echo ""
+	echo "BFD $VER installed"
+	echo "  Install path:  $INSPATH"
+	echo "  Config path:   $INSPATH/conf.bfd"
+	echo "  Executable:    $BINPATH"
 	case "${_WATCH_STATE:-}" in
 		enabled)
-			echo "Watch mode:      enabled and started (~10s detection latency)"
-			echo "Cron fallback:   active (skipped while watch runs)"
+			echo "  Watch mode:    enabled and started (~10s detection latency)"
+			echo "  Cron fallback: active (skipped while watch runs)"
 			;;
 		restarted)
-			echo "Watch mode:      restarted with updated installation"
-			echo "Cron fallback:   active (skipped while watch runs)"
+			echo "  Watch mode:    restarted with updated installation"
+			echo "  Cron fallback: active (skipped while watch runs)"
 			;;
 		timer-active)
-			echo "Timer mode:      active (bfd.timer)"
-			echo "Cron fallback:   active"
+			echo "  Timer mode:    active (bfd.timer)"
+			echo "  Cron fallback: active"
 			echo ""
-			echo "  Recommendation: switch to watch mode for ~10s latency:"
+			echo "  Tip: switch to watch mode for ~10s latency:"
 			echo "    systemctl disable bfd.timer"
 			echo "    systemctl enable --now bfd-watch.service"
 			;;
 		cron-only)
-			echo "Watch mode:      not available (no init system detected)"
-			echo "Cron fallback:   active (~2m detection latency)"
+			echo "  Watch mode:    not available (no init system detected)"
+			echo "  Cron fallback: active (~2m detection latency)"
 			;;
 		*)
-			echo "Cron fallback:   active (~2m detection latency)"
+			echo "  Cron fallback: active (~2m detection latency)"
 			;;
 	esac
 }
 
 if [ -d "$INSPATH" ]; then
+	echo "BFD $VER upgrade"
+	_stop_services
 	backup
+	echo "Installing files"
 	install
+	echo "Importing configuration"
 	./importconf
 	_enable_services
 	postinfo
 else
+	echo "BFD $VER install"
+	echo "Installing files"
 	install
 	_enable_services
 	postinfo
