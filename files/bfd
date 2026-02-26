@@ -255,6 +255,10 @@ check() {
 
 	for str in "$RULES_PATH"/*; do
 		str=$(basename "$str")
+		# scan mode: skip rules not matching the target
+		if [ -n "${_SCAN_RULE:-}" ] && [ "$str" != "$_SCAN_RULE" ]; then
+			continue
+		fi
 		vout "processing rule file $str"
 		_clear_rule_vars
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
@@ -270,6 +274,11 @@ check() {
 		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
 		validate_rule "$str" || continue
 		active_count=$((active_count + 1))
+		# scan mode: collect log file/tag pairs for cursor advancement
+		if [ "${_SCAN_MODE:-}" = "1" ] && [ -n "${LOG_FILE:-}" ] && [ -n "${LOG_TAG:-}" ]; then
+			_SCAN_LOG_PAIRS="${_SCAN_LOG_PAIRS:-}${LOG_FILE}|${LOG_TAG}
+"
+		fi
 		if [ -z "${MATCHED_HOSTS:-}" ]; then
 			continue  # active but no new events this cycle
 		fi
@@ -355,7 +364,9 @@ check() {
 	local run_end run_elapsed
 	run_end=$(date +"%s")
 	run_elapsed=$((run_end - run_start))
-	eout "run complete: $active_count active rules, $rules_count with events, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" le
+	local _run_label="run"
+	[ "${_SCAN_MODE:-}" = "1" ] && _run_label="scan"
+	eout "$_run_label complete: $active_count active rules, $rules_count with events, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" le
 }
 
 _apool_report() {
