@@ -37,6 +37,13 @@ bfd \- brute force detection and IP banning
 .IR PATTERN " [" FILE | \- ]]
 .br
 .B bfd
+.B \-\-scan
+.RI [ RULE ]
+.RB [ \-d ]
+.RB [ \-\-max\-lines= \fIN\fR]
+.RB [ \-\-scan\-timeout= \fIN\fR]
+.br
+.B bfd
 .RB [ \-\-json ]
 .RB [ \-\-csv ]
 .RB [ \-V | \-\-verbose ]
@@ -114,6 +121,23 @@ Remove all temporary (non-permanent) bans.
 .TP
 .B \-\-flush\-all
 Remove all bans (temporary and permanent).
+.SS Scan Mode
+.TP
+.BI \-\-scan " \fR[" RULE \fR] " \fR[" \-d \fR]
+Process the full current log file through the detection pipeline.
+Without
+.IR RULE ,
+scans all active rules.
+Combine with
+.BR \-d
+for dry-run (no bans, no cursor advancement).
+Acquires the global lock; stop watch mode first if running.
+.TP
+.BI \-\-max\-lines= N
+Maximum lines per log file during scan; 0 = unlimited (default: 50000).
+.TP
+.BI \-\-scan\-timeout= N
+Journal read timeout in seconds per rule during scan (default: 120).
 .SS Information
 .TP
 .B \-l ", " \-\-list
@@ -301,6 +325,16 @@ IPv6 subnet mask, multiple of 16 (default: 48).
 .TP
 .B WATCH_INTERVAL
 Watch mode polling interval in seconds (default: 10).
+.TP
+.B SCAN_MAX_LINES
+Maximum lines per log file during scan mode; 0 = unlimited (default: 50000).
+Override with
+.BR \-\-max\-lines= .
+.TP
+.B SCAN_TIMEOUT
+Journal read timeout in seconds per rule during scan mode (default: 120).
+Override with
+.BR \-\-scan\-timeout= .
 .TP
 .B OUTPUT_SYSLOG
 Echo BFD log messages to syslog: 0 or 1 (default: 1).

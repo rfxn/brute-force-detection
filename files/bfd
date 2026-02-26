@@ -255,6 +255,10 @@ check() {
 
 	for str in "$RULES_PATH"/*; do
 		str=$(basename "$str")
+		# scan mode: skip rules not matching the target
+		if [ -n "${_SCAN_RULE:-}" ] && [ "$str" != "$_SCAN_RULE" ]; then
+			continue
+		fi
 		vout "processing rule file $str"
 		_clear_rule_vars
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
@@ -270,6 +274,11 @@ check() {
 		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
 		validate_rule "$str" || continue
 		active_count=$((active_count + 1))
+		# scan mode: collect log file/tag pairs for cursor advancement
+		if [ "${_SCAN_MODE:-}" = "1" ] && [ -n "${LOG_FILE:-}" ] && [ -n "${LOG_TAG:-}" ]; then
+			_SCAN_LOG_PAIRS="${_SCAN_LOG_PAIRS:-}${LOG_FILE}|${LOG_TAG}
+"
+		fi
 		if [ -z "${MATCHED_HOSTS:-}" ]; then
 			continue  # active but no new events this cycle
 		fi
@@ -355,7 +364,9 @@ check() {
 	local run_end run_elapsed
 	run_end=$(date +"%s")
 	run_elapsed=$((run_end - run_start))
-	eout "run complete: $active_count active rules, $rules_count with events, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" le
+	local _run_label="run"
+	[ "${_SCAN_MODE:-}" = "1" ] && _run_label="scan"
+	eout "$_run_label complete: $active_count active rules, $rules_count with events, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" le
 }
 
 _apool_report() {
@@ -582,6 +593,9 @@ usage() {
 	echo "-R|--rules [RULE] .......... list rules (weight/trip) or show rule details"
 	echo "-T|--test RULE [FILE|-] .... test rule patterns against log or stdin"
 	echo "   --test-pattern PAT [FILE|-] test a raw <HOST> pattern against log or stdin"
+	echo "   --scan [RULE] [-d] ...... scan full log (all rules or specific rule)"
+	echo "   --max-lines=N ........... max lines per log during scan (default 50000)"
+	echo "   --scan-timeout=N ........ journal timeout per rule during scan (default 120)"
 	echo "   --flush-temp ............ unban all temporary bans"
 	echo "   --flush-all ............. unban all bans"
 	echo "   --json .................. output in JSON format (with -l)"
@@ -591,15 +605,19 @@ usage() {
 	echo "-h|--help .................. display this help"
 }
 
-# Pre-process global modifier flags (--json, --csv, --verbose)
+# Pre-process global modifier flags (--json, --csv, --verbose, --max-lines=, --scan-timeout=)
 VERBOSE=0
 OUTPUT_FORMAT="table"
+_CLI_SCAN_MAX_LINES=""
+_CLI_SCAN_TIMEOUT=""
 declare -a _bfd_args=()
 for _arg in "$@"; do
 	case "$_arg" in
 		--json) OUTPUT_FORMAT="json" ;;
 		--csv)  OUTPUT_FORMAT="csv" ;;
 		--verbose|-V) VERBOSE=1 ;;
+		--max-lines=*) _CLI_SCAN_MAX_LINES="${_arg#--max-lines=}" ;;
+		--scan-timeout=*) _CLI_SCAN_TIMEOUT="${_arg#--scan-timeout=}" ;;
 		*)      _bfd_args+=("$_arg") ;;
 	esac
 done
@@ -671,6 +689,61 @@ case "${1:-}" in
 		echo "error: --test-pattern requires a pattern."; echo; usage; exit "$EXIT_CONFIG_ERROR"
 	fi
 	test_pattern "$2" "${3:-}" || exit "$?"
+	;;
+--scan)
+	vhead; pre
+	# apply defaults: CLI --max-lines= / --scan-timeout= override config > hardcoded
+	if [ -n "$_CLI_SCAN_MAX_LINES" ]; then
+		SCAN_MAX_LINES="$_CLI_SCAN_MAX_LINES"
+	else
+		SCAN_MAX_LINES="${SCAN_MAX_LINES:-50000}"
+	fi
+	if [ -n "$_CLI_SCAN_TIMEOUT" ]; then
+		SCAN_TIMEOUT="$_CLI_SCAN_TIMEOUT"
+	else
+		SCAN_TIMEOUT="${SCAN_TIMEOUT:-120}"
+	fi
+	# validate limits
+	_int_p='^[0-9]+$'
+	if ! [[ "$SCAN_MAX_LINES" =~ $_int_p ]]; then
+		echo "error: --max-lines must be a non-negative integer (got '$SCAN_MAX_LINES')."
+		exit "$EXIT_CONFIG_ERROR"
+	fi
+	if ! [[ "$SCAN_TIMEOUT" =~ $_int_p ]] || [ "$SCAN_TIMEOUT" -eq 0 ]; then
+		echo "error: --scan-timeout must be a positive integer (got '$SCAN_TIMEOUT')."
+		exit "$EXIT_CONFIG_ERROR"
+	fi
+	# parse sub-args: optional RULE and -d/--dryrun (order-independent)
+	_SCAN_RULE=""
+	_s2="${2:-}"; _s3="${3:-}"
+	case "$_s2" in
+		-d|--dryrun) DRY_RUN=1 ;;
+		"") ;;
+		-*) echo "error: unknown scan option '$_s2'"; echo; usage; exit "$EXIT_CONFIG_ERROR" ;;
+		*)  _SCAN_RULE="$_s2" ;;
+	esac
+	case "$_s3" in
+		-d|--dryrun) DRY_RUN=1 ;;
+		"") ;;
+		-*) echo "error: unknown scan option '$_s3'"; echo; usage; exit "$EXIT_CONFIG_ERROR" ;;
+		*)  [ -z "$_SCAN_RULE" ] && _SCAN_RULE="$_s3" ;;
+	esac
+	if [ -n "$_SCAN_RULE" ] && [ ! -f "$RULES_PATH/$_SCAN_RULE" ]; then
+		echo "error: rule '$_SCAN_RULE' not found."; echo; usage; exit "$EXIT_CONFIG_ERROR"
+	fi
+	get_state
+	_SCAN_MODE=1
+	_SCAN_LOG_PAIRS=""
+	eout "scan: processing ${_SCAN_RULE:-all rules} (max_lines=$SCAN_MAX_LINES, timeout=${SCAN_TIMEOUT}s, dry_run=$DRY_RUN)" le
+	process_unbans "$INSTALL_PATH" "$UTIME"
+	check
+	_SCAN_MODE=""
+	if [ "$DRY_RUN" != "1" ] && [ -n "$_SCAN_LOG_PAIRS" ]; then
+		_tlog_advance_scan_cursors "$INSTALL_PATH"
+		eout "scan: cursors advanced to current position" le
+	elif [ "$DRY_RUN" = "1" ]; then
+		vout "scan: dry-run — cursors not advanced"
+	fi
 	;;
 --flush-temp)   vhead; pre; flush_bans "$INSTALL_PATH" "temp" "$UTIME" || exit "$?" ;;
 --flush-all)    vhead; pre; flush_bans "$INSTALL_PATH" "all" "$UTIME" || exit "$?" ;;

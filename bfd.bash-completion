@@ -11,7 +11,7 @@ _bfd_completions() {
 
 	# Flag lists
 	local short_flags="-s -q -d -w -a -c -l -u -b -S -C -R -T -v -h -V"
-	local long_flags="--standard --quiet --dryrun --watch --attackpool --check --list --unban --ban --status --config --rules --test --test-pattern --flush-temp --flush-all --json --csv --verbose --version --help"
+	local long_flags="--standard --quiet --dryrun --watch --attackpool --check --list --unban --ban --status --config --rules --test --test-pattern --scan --max-lines= --scan-timeout= --flush-temp --flush-all --json --csv --verbose --version --help"
 
 	# Context-sensitive completions
 	case "$prev" in
@@ -25,7 +25,7 @@ _bfd_completions() {
 			fi
 			return 0
 			;;
-		-S|--status|-R|--rules)
+		-S|--status|-R|--rules|--scan)
 			# complete with rule names
 			local rules_dir="/usr/local/bfd/rules"
 			if [ -d "$rules_dir" ]; then
@@ -91,7 +91,7 @@ _bfd_completions() {
 			;;
 		-C|--config)
 			# complete with config variable names
-			local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL PRESSURE_CONF"
+			local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT PRESSURE_CONF"
 			COMPREPLY=( $(compgen -W "$config_vars" -- "$cur") )
 			return 0
 			;;

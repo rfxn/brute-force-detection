@@ -440,7 +440,7 @@ expand_command_template() {
 #   (none/linear/double), BAN_ESCALATION_CAP, BAN_RETRY_COUNT, FIREWALL,
 #   BAN_COMMAND_TEMPLATE, EMAIL_ALERTS, EMAIL_ADDRESS (when EMAIL_ALERTS=1),
 #   EMAIL_LOGLINES, OUTPUT_SYSLOG, BFD_LOG_PATH, LOG_SOURCE, LOCK_FILE_TIMEOUT,
-#   WATCH_INTERVAL, INSTALL_PATH, EXIT_CONFIG_ERROR
+#   WATCH_INTERVAL, SCAN_MAX_LINES, SCAN_TIMEOUT, INSTALL_PATH, EXIT_CONFIG_ERROR
 validate_config() {
 	local int_pattern='^[0-9]+$'
 	# Use ${VAR-default} (no colon) so explicit empty is validated, not skipped
@@ -542,6 +542,14 @@ validate_config() {
 	local _wi="${WATCH_INTERVAL:-10}"
 	if ! [[ "$_wi" =~ $int_pattern ]] || [ "$_wi" -eq 0 ]; then
 		echo "error: WATCH_INTERVAL must be a positive integer (got '${WATCH_INTERVAL:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if [ -n "${SCAN_MAX_LINES:-}" ] && ! [[ "${SCAN_MAX_LINES:-0}" =~ $int_pattern ]]; then
+		echo "error: SCAN_MAX_LINES must be a non-negative integer (got '${SCAN_MAX_LINES:-}')."
+		exit $EXIT_CONFIG_ERROR
+	fi
+	if [ -n "${SCAN_TIMEOUT:-}" ] && ! [[ "${SCAN_TIMEOUT:-120}" =~ $int_pattern ]]; then
+		echo "error: SCAN_TIMEOUT must be a positive integer (got '${SCAN_TIMEOUT:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _esc="${BAN_ESCALATION:-none}"
@@ -679,7 +687,93 @@ _rule_tlog() {
 		fi
 		return 0
 	fi
+	# scan mode: read full file without cursor tracking
+	if [ "${_SCAN_MODE:-}" = "1" ]; then
+		# journal dispatch (mirrors tlog_read journal check)
+		if [ "${LOG_SOURCE:-auto}" != "file" ] && [ ! -f "$lp" ]; then
+			if command -v journalctl >/dev/null 2>&1 && \
+			   tlog_journal_filter "$tlog_tf" >/dev/null 2>&1; then
+				_tlog_journal_read_full "$tlog_tf" "${SCAN_TIMEOUT:-120}" "${SCAN_MAX_LINES:-50000}"
+				return $?
+			fi
+		fi
+		_tlog_read_full "$lp" "${SCAN_MAX_LINES:-50000}"
+		return $?
+	fi
 	tlog_read "$lp" "$tlog_tf" "${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
+}
+
+# _tlog_read_full file max_lines — read full log file without cursor tracking
+# Used by scan mode to process entire log contents. Does NOT read rotated files.
+# max_lines > 0: output last N lines; max_lines = 0: output entire file.
+_tlog_read_full() {
+	local file="$1" max_lines="${2:-0}"
+	if [ ! -f "$file" ]; then
+		echo "$file is not a valid file, aborting" >&2
+		return 1
+	fi
+	if [ "$max_lines" -gt 0 ] 2>/dev/null; then
+		tail -n "$max_lines" "$file"
+	else
+		cat "$file"
+	fi
+}
+
+# _tlog_journal_read_full tlog_name scan_timeout max_lines — read full journal
+# without cursor tracking. Used by scan mode for journal-based log sources.
+# max_lines > 0: limit output; max_lines = 0: no limit (use with caution).
+# scan_timeout: journalctl process timeout in seconds.
+_tlog_journal_read_full() {
+	local tlog_name="$1" scan_timeout="${2:-120}" max_lines="${3:-50000}"
+	local jfilter
+	jfilter=$(tlog_journal_filter "$tlog_name") || return 1
+	if ! command -v journalctl >/dev/null 2>&1; then
+		echo "journalctl not available" >&2
+		return 1
+	fi
+	local jctl_args=""
+	if [ "$max_lines" -gt 0 ] 2>/dev/null; then
+		jctl_args="-n $max_lines"
+	fi
+	# jfilter intentionally unquoted for word splitting (same pattern as tlog_journal_read)
+	# shellcheck disable=SC2086
+	timeout "$scan_timeout" journalctl $jfilter $jctl_args \
+		--output=short --no-pager -q 2>/dev/null
+}
+
+# _tlog_advance_scan_cursors install_path — advance tlog cursors after scan
+# Reads _SCAN_LOG_PAIRS (newline-separated "LOG_FILE|LOG_TAG" pairs collected
+# by check() during scan mode) and updates cursor files to current position.
+# This prevents the next normal run from re-processing scanned data.
+_tlog_advance_scan_cursors() {
+	local install_path="$1"
+	local baserun="${TLOG_BASERUN:-$install_path/tmp}"
+	[ -z "${_SCAN_LOG_PAIRS:-}" ] && return 0
+	local pair lp tlog_tf
+	while IFS='|' read -r lp tlog_tf; do
+		[ -z "$lp" ] || [ -z "$tlog_tf" ] && continue
+		# flat file: record current size
+		if [ -f "$lp" ]; then
+			local fsize
+			fsize=$(stat -c %s "$lp" 2>/dev/null || wc -c < "$lp")
+			echo "$fsize" > "$baserun/$tlog_tf"
+		fi
+		# journal: capture current cursor position
+		if command -v journalctl >/dev/null 2>&1; then
+			local jfilter
+			jfilter=$(tlog_journal_filter "$tlog_tf" 2>/dev/null) || continue
+			local jctl_out
+			# shellcheck disable=SC2086
+			jctl_out=$(timeout 10 journalctl $jfilter -n 0 \
+				--output=short --show-cursor --no-pager -q 2>/dev/null) || continue
+			local new_cursor
+			new_cursor=$(echo "$jctl_out" | grep -m1 '^-- cursor:' | sed 's/^-- cursor: //')
+			if [ -n "$new_cursor" ]; then
+				echo "$new_cursor" > "$baserun/${tlog_tf}.cursor"
+				date +"%s" > "$baserun/${tlog_tf}.jts"
+			fi
+		fi
+	done < <(echo "$_SCAN_LOG_PAIRS" | sort -u)
 }
 
 # tlog_journal_filter log_tag — map LOG_TAG to journalctl filter argument
@@ -2694,7 +2788,7 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
-	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL PRESSURE_CONF"
+	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT PRESSURE_CONF"
 	if [ -n "$var" ]; then
 		# validate against whitelist before eval
 		local _found=0 _v

@@ -29,6 +29,7 @@ Contents:
 5.4 ........... General Usage: Watch Mode
 5.5 ........... General Usage: Flush Bans
 5.6 ........... General Usage: Structured Output
+5.7 ........... General Usage: Scan Mode
 6 ............. Rule Engine
 6.1 ........... Rule Engine: Rule Catalog
 6.2 ........... Rule Engine: Rule Customization
@@ -338,6 +339,12 @@ SUBNET_MASK_V6="48" - IPv6 subnet mask (16-128, must be multiple of 16).
 
 WATCH_INTERVAL="10" - watch mode polling interval in seconds.
 
+SCAN_MAX_LINES="50000" - max log lines per rule during scan (0 = unlimited).
+  Override with --max-lines= on the command line.
+
+SCAN_TIMEOUT="120" - journal read timeout in seconds per rule during scan.
+  Override with --scan-timeout= on the command line. Must be > 0.
+
 OUTPUT_SYSLOG="1" - echo BFD log messages to syslog (0 = off, 1 = on).
 
 Additional variables (LOG_SOURCE, LOCK_FILE_TIMEOUT, BAN_RETRY_COUNT,
@@ -421,6 +428,9 @@ usage: bfd [OPTION]
    --flush-all ............. unban all bans
    --json .................. output in JSON format (with -l)
    --csv ................... output in CSV format (with -l)
+   --scan [RULE] [-d] .... scan full log (all rules or specific rule)
+   --max-lines=N ......... max lines per log during scan (default 50000)
+   --scan-timeout=N ...... journal timeout per rule during scan (default 120)
 -V|--verbose ............... show detailed output
 -v|--version ............... display version
 -h|--help .................. display this help
@@ -526,6 +536,35 @@ Use --json or --csv with -l for machine-readable ban lists:
 
 JSON outputs an array of objects with ip, service, ports, banned, and expires
 fields. CSV outputs with a header row in the same field order.
+
+5.7) General Usage: Scan Mode
+Scan mode processes the full current log file through the detection pipeline,
+bypassing the incremental tlog reader. This is useful for:
+
+  - First install: catch existing attackers immediately instead of waiting for
+    new log events
+  - Rule changes: retroactively apply new rules to existing log data
+  - Recovery: process missed events after a detection gap (daemon down, cron
+    disabled)
+  - Forensic review: combine with -d (dry-run) to see what would be detected
+    without banning
+
+  bfd --scan              # scan all active rules against full logs
+  bfd --scan sshd         # scan a specific rule only
+  bfd --scan -d           # dry-run: detect without banning
+  bfd --scan --max-lines=100000   # override line limit
+  bfd --scan --scan-timeout=60    # override journal timeout
+
+After a non-dry-run scan, tlog cursors are advanced to the current log position
+so the next normal run starts fresh. In dry-run mode, cursors are not modified.
+
+Safety limits: SCAN_MAX_LINES (default 50000) bounds the number of lines
+processed per log file. SCAN_TIMEOUT (default 120s) limits journal reads.
+Set --max-lines=0 for unlimited (use with caution on large logs). Both can be
+configured in conf.bfd or overridden on the command line.
+
+Lock behavior: scan acquires the same global lock as normal runs. If watch mode
+is running, stop it first (systemctl stop bfd-watch), run the scan, then restart.
 
 6) Rule Engine
 Rules are located under /usr/local/bfd/rules/. Each rule is a shell fragment

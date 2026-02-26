@@ -156,5 +156,12 @@ SUBNET_MASK_V6="48"       # IPv6: 16-128, must be multiple of 16
 # watch mode polling interval in seconds (bfd --watch); must be > 0
 WATCH_INTERVAL="10"
 
+# scan mode defaults (bfd --scan); override with --max-lines= / --scan-timeout=
+# max log lines per rule during scan; 0 = unlimited (default 50000)
+SCAN_MAX_LINES="50000"
+
+# journal read timeout in seconds per rule during scan; must be > 0 (default 120)
+SCAN_TIMEOUT="120"
+
 # echo BFD log messages to syslog [0 = off, 1 = on]
 OUTPUT_SYSLOG="1"
