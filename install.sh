@@ -141,6 +141,32 @@ install(){
 	fi
 }
 
+_stop_services(){
+	# stop bfd-watch before installing to avoid delay and output leaks
+	if command -v systemctl >/dev/null 2>&1; then
+		if systemctl is-active bfd-watch.service >/dev/null 2>&1; then
+			systemctl stop bfd-watch.service 2>/dev/null || true
+		fi
+	else
+		local _initdir=""
+		for _initdir in /etc/rc.d/init.d /etc/init.d; do
+			if [ -f "$_initdir/bfd-watch" ]; then
+				break
+			fi
+			_initdir=""
+		done
+		if [ -n "$_initdir" ]; then
+			local _pid=""
+			if [ -f /var/run/bfd-watch.pid ]; then
+				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true
+			fi
+			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+				"$_initdir/bfd-watch" stop 2>/dev/null || true
+			fi
+		fi
+	fi
+}
+
 _enable_services(){
 	_WATCH_STATE=""
 	if command -v systemctl >/dev/null 2>&1; then
@@ -148,7 +174,7 @@ _enable_services(){
 		_watch_enabled=$(systemctl is-enabled bfd-watch.service 2>/dev/null) || true
 		_timer_enabled=$(systemctl is-enabled bfd.timer 2>/dev/null) || true
 		if [ "$_watch_enabled" = "enabled" ]; then
-			systemctl restart bfd-watch.service 2>/dev/null || true
+			systemctl start bfd-watch.service 2>/dev/null || true
 			_WATCH_STATE="restarted"
 		elif [ "$_timer_enabled" = "enabled" ]; then
 			_WATCH_STATE="timer-active"
@@ -169,7 +195,7 @@ _enable_services(){
 				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true
 			fi
 			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
-				"$_initdir/bfd-watch" restart 2>/dev/null || true
+				"$_initdir/bfd-watch" start 2>/dev/null || true
 				_WATCH_STATE="restarted"
 			else
 				if command -v chkconfig >/dev/null 2>&1; then
@@ -220,6 +246,7 @@ postinfo(){
 }
 
 if [ -d "$INSPATH" ]; then
+	_stop_services
 	backup
 	install
 	./importconf
