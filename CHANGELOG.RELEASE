@@ -17,6 +17,10 @@
       categories covering FHS paths, symlink farm, internals.conf transforms,
       lock coordination, cron paths, permissions, rule files, exclude.files,
       systemd units, and bfd execution via both /usr/sbin and /usr/local/sbin
+[Fix] stat -c calls in bfd, bfd.lib.sh, tlog: add -L flag to dereference
+      symlinks before checking ownership/permissions; required for package
+      installs where /usr/local/bfd/ files are symlinks to FHS locations;
+      backward-compatible (no-op on regular files for install.sh installs)
 [New] README (plain text): section 5.7 Scan Mode with use cases, CLI examples,
       safety limits, and lock behavior; --scan/--max-lines=/--scan-timeout= in
       CLI usage block; SCAN_MAX_LINES/SCAN_TIMEOUT in 3.7 Advanced config;

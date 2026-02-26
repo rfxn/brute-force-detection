@@ -28,8 +28,8 @@ APPN="BFD"
 UTIME=$(date +"%s")
 
 # validate library safety before sourcing
-_lib_owner=$(stat -c '%u' "$INSTALL_PATH/bfd.lib.sh")
-_lib_perms=$(stat -c '%a' "$INSTALL_PATH/bfd.lib.sh")
+_lib_owner=$(stat -L -c '%u' "$INSTALL_PATH/bfd.lib.sh")
+_lib_perms=$(stat -L -c '%a' "$INSTALL_PATH/bfd.lib.sh")
 _lib_world="${_lib_perms: -1}"
 if [ "$_lib_owner" != "0" ] || [ "$((_lib_world & 2))" -ne 0 ]; then
 	echo "bfd.lib.sh has unsafe ownership (uid=$_lib_owner) or permissions ($_lib_perms), aborting."
@@ -63,8 +63,8 @@ if [ ! -f "$CNF" ]; then
 	exit "$EXIT_CONFIG_ERROR"
 fi
 # validate config file safety before sourcing
-_cnf_owner=$(stat -c '%u' "$CNF")
-_cnf_perms=$(stat -c '%a' "$CNF")
+_cnf_owner=$(stat -L -c '%u' "$CNF")
+_cnf_perms=$(stat -L -c '%a' "$CNF")
 _cnf_world="${_cnf_perms: -1}"
 if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
 	vhead
@@ -76,8 +76,8 @@ fi
 # source internal/derived variables (split from conf.bfd in 2.0.1)
 INTCNF="$INSTALL_PATH/internals.conf"
 if [ -f "$INTCNF" ]; then
-	_int_owner=$(stat -c '%u' "$INTCNF")
-	_int_perms=$(stat -c '%a' "$INTCNF")
+	_int_owner=$(stat -L -c '%u' "$INTCNF")
+	_int_perms=$(stat -L -c '%a' "$INTCNF")
 	_int_world="${_int_perms: -1}"
 	if [ "$_int_owner" = "0" ] && [ "$((_int_world & 2))" -eq 0 ]; then
 		# shellcheck disable=SC1090
@@ -497,8 +497,8 @@ reload_watch() {
 	eout "watch mode reloading configuration (SIGHUP)" le
 	# re-source config with same safety checks as startup
 	local _cnf_owner _cnf_perms _cnf_world
-	_cnf_owner=$(stat -c '%u' "$CNF")
-	_cnf_perms=$(stat -c '%a' "$CNF")
+	_cnf_owner=$(stat -L -c '%u' "$CNF")
+	_cnf_perms=$(stat -L -c '%a' "$CNF")
 	_cnf_world="${_cnf_perms: -1}"
 	if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
 		eout "reload aborted: conf.bfd has unsafe ownership or permissions" le
@@ -508,8 +508,8 @@ reload_watch() {
 	. "$CNF"
 	if [ -f "$INTCNF" ]; then
 		local _int_owner _int_perms _int_world
-		_int_owner=$(stat -c '%u' "$INTCNF")
-		_int_perms=$(stat -c '%a' "$INTCNF")
+		_int_owner=$(stat -L -c '%u' "$INTCNF")
+		_int_perms=$(stat -L -c '%a' "$INTCNF")
 		_int_world="${_int_perms: -1}"
 		if [ "$_int_owner" = "0" ] && [ "$((_int_world & 2))" -eq 0 ]; then
 			# shellcheck disable=SC1090

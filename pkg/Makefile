@@ -28,11 +28,24 @@ BUILDDIR := $(CURDIR)/build
 
 source: $(BUILDDIR)/$(TARBALL)
 
+# Use git archive when available (native builds), fall back to tar
 $(BUILDDIR)/$(TARBALL):
 	mkdir -p $(BUILDDIR)
-	cd $(PROJDIR) && \
-	git archive --format=tar.gz --prefix=$(NAME)-$(VERSION)/ \
-	    -o $(BUILDDIR)/$(TARBALL) HEAD
+	@if command -v git >/dev/null 2>&1 && [ -d "$(PROJDIR)/.git" ]; then \
+	    cd $(PROJDIR) && \
+	    git archive --format=tar.gz --prefix=$(NAME)-$(VERSION)/ \
+	        -o $(BUILDDIR)/$(TARBALL) HEAD; \
+	else \
+	    cd $(PROJDIR) && \
+	    tar czf $(BUILDDIR)/$(TARBALL) \
+	        --transform 's,^\./,$(NAME)-$(VERSION)/,' \
+	        --exclude='.git' --exclude='audit-output' \
+	        --exclude='PRESSURE.md' --exclude='.claude' \
+	        --exclude='CLAUDE.md' --exclude='PLAN*.md' \
+	        --exclude='AUDIT.md' --exclude='MEMORY.md' \
+	        --exclude='pkg/build' \
+	        . ; \
+	fi
 
 # --- Native RPM build ---
 

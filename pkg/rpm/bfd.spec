@@ -130,7 +130,7 @@ install -D -m 644 bfd.bash-completion %{buildroot}/usr/share/bash-completion/com
 # Docs
 install -D -m 644 README %{buildroot}/usr/share/doc/bfd/README
 install -D -m 644 CHANGELOG %{buildroot}/usr/share/doc/bfd/CHANGELOG
-install -D -m 644 COPYING.GPL %{buildroot}/usr/share/doc/bfd/COPYING.GPL
+# COPYING.GPL handled by %license directive — not installed to doc/
 
 # Symlink farm at /usr/local/bfd for backward compatibility
 install -d -m 755 %{buildroot}%{legacy_path}
@@ -258,7 +258,7 @@ fi
 /usr/local/sbin/bfd
 
 %changelog
-* Wed Feb 26 2026 R-fx Networks <proj@rfxn.com> - 2.0.1-1
+* Thu Feb 26 2026 R-fx Networks <proj@rfxn.com> - 2.0.1-1
 - Initial RPM package with FHS layout and symlink farm
 - Pressure model with exponential-decay scoring
 - 8 firewall backends with auto-detection

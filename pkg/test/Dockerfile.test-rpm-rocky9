@@ -1,8 +1,8 @@
 FROM rockylinux:9
 
 # Install dependencies that BFD requires at runtime
-RUN dnf install -y bash coreutils grep gawk findutils util-linux \
-        iproute sed procps-ng cronie logrotate && \
+RUN dnf install -y --allowerasing bash coreutils grep gawk findutils \
+        util-linux iproute sed procps-ng cronie logrotate && \
     dnf clean all
 
 # Copy RPM and test script from build context
