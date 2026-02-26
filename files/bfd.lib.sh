@@ -435,7 +435,7 @@ expand_command_template() {
 }
 
 # validate_config requires: PRESSURE_TRIP, PRESSURE_HALF_LIFE, PRESSURE_TRIP_GLOBAL,
-#   PRESSURE_COUNTRY, SUBNET_TRIG, SUBNET_MASK, SUBNET_MASK_V6,
+#   SUBNET_TRIG, SUBNET_MASK, SUBNET_MASK_V6,
 #   BAN_TTL, BAN_ESCALATE_AFTER, BAN_ESCALATE_WINDOW, BAN_ESCALATION
 #   (none/linear/double), BAN_ESCALATION_CAP, BAN_RETRY_COUNT, FIREWALL,
 #   BAN_COMMAND_TEMPLATE, EMAIL_ALERTS, EMAIL_ADDRESS (when EMAIL_ALERTS=1),
@@ -457,11 +457,6 @@ validate_config() {
 	local _ptg="${PRESSURE_TRIP_GLOBAL-${TRIG_GLOBAL:-0}}"
 	if [ -z "$_ptg" ] || ! [[ "$_ptg" =~ $int_pattern ]]; then
 		echo "error: PRESSURE_TRIP_GLOBAL must be a non-negative integer (got '${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-}}')."
-		exit $EXIT_CONFIG_ERROR
-	fi
-	local _pc="${PRESSURE_COUNTRY:-0}"
-	if [ "$_pc" != "0" ] && [ "$_pc" != "1" ]; then
-		echo "error: PRESSURE_COUNTRY must be 0 or 1 (got '${PRESSURE_COUNTRY:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _st="${SUBNET_TRIG:-0}"
@@ -1779,12 +1774,12 @@ country_weight() {
 }
 
 # pressure_effective_weight rule_weight host install_path — apply country multiplier
-# When PRESSURE_COUNTRY=1: rule_weight * country_mult / 10 (integer math).
-# When off or no DB: returns rule_weight unchanged.
+# Auto-enabled when pressure-country.conf exists with entries; otherwise passthrough.
+# Returns: rule_weight * country_mult / 10 (integer math, minimum 1).
 pressure_effective_weight() {
 	local rule_weight="$1" host="$2" install_path="$3"
 	local db_file="$install_path/ipcountry.dat"
-	local weights_file="$install_path/weights.country"
+	local weights_file="$install_path/pressure-country.conf"
 	if [ ! -f "$db_file" ] || [ ! -f "$weights_file" ]; then
 		echo "$rule_weight"
 		return 0
@@ -2689,7 +2684,7 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
-	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL PRESSURE_COUNTRY SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL PRESSURE_CONF"
+	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL PRESSURE_CONF"
 	if [ -n "$var" ]; then
 		# validate against whitelist before eval
 		local _found=0 _v

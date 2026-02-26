@@ -1,4 +1,8 @@
 2.0.1:
+[Change] weights.country renamed to pressure-country.conf; PRESSURE_COUNTRY
+      toggle removed — country weighting is now auto-enabled when
+      pressure-country.conf has uncommented entries; removes config variable
+      from conf.bfd, validate_config(), show_config(), and bash completion
 [Change] dovecot rule: AUTH_LOG_PATH fallback when MAIL_LOG_PATH missing
       (Debian/Ubuntu systems where dovecot logs to auth.log)
 [Change] exim_authfail/exim_nxuser rules: Debian support — /usr/sbin/exim4
@@ -79,10 +83,11 @@
       20); PRESSURE_TRIP_GLOBAL cross-service aggregate trip (0=off);
       all math in native awk floats with scaled-integer bash comparison;
       backward compat: old TRIG/TRIG_WINDOW configs auto-migrate
-[New] country pressure multipliers: PRESSURE_COUNTRY=1 enables IP-to-country
-      lookup via ipcountry.dat (binary-search on sorted integer ranges);
-      weights.country maps country codes to multipliers (20=2.0x, 10=1.0x);
-      pressure_effective_weight() scales per-rule weight by country factor
+[New] country pressure multipliers: auto-enabled when pressure-country.conf
+      has entries; IP-to-country lookup via ipcountry.dat (binary-search on
+      sorted integer ranges); pressure-country.conf maps country codes to
+      multipliers (20=2.0x, 10=1.0x); pressure_effective_weight() scales
+      per-rule weight by country factor
 [New] distributed attack detection: SUBNET_TRIG unique IPs from same subnet
       triggers subnet ban; ip_to_subnet() with configurable IPv4/IPv6 masks
 [New] FIREWALL="auto" with 8 backends (APF, CSF, firewalld, UFW, nftables,

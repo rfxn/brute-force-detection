@@ -103,7 +103,6 @@ export LOG_SOURCE
 PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
 PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
 PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
-PRESSURE_COUNTRY="${PRESSURE_COUNTRY:-0}"
 BAN_TTL="${BAN_TTL:-${BAN_DURATION:-600}}"
 BAN_ESCALATE_AFTER="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-5}}"
 BAN_ESCALATE_WINDOW="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
@@ -291,11 +290,9 @@ check() {
 				vout "  $ATTACK_HOST filtered (ignored)"
 				continue
 			fi
-			# compute pressure score for this host+service
-			local scoring_weight="$eff_weight"
-			if [ "${PRESSURE_COUNTRY:-0}" = "1" ]; then
-				scoring_weight=$(pressure_effective_weight "$eff_weight" "$ATTACK_HOST" "$INSTALL_PATH")
-			fi
+			# compute pressure score for this host+service (country multiplier auto-applied)
+			local scoring_weight
+			scoring_weight=$(pressure_effective_weight "$eff_weight" "$ATTACK_HOST" "$INSTALL_PATH")
 			local pressure_scaled
 			pressure_scaled=$(record_and_score "$ATTACK_HOST" "$HOSTS_PARSED" \
 				"$INSTALL_PATH" "$PRESSURE_HALF_LIFE" "$UTIME" "$MOD" "$scoring_weight")
@@ -510,7 +507,7 @@ reload_watch() {
 	fi
 	TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
 	# clear derived pressure vars so re-sourced config takes effect
-	unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL PRESSURE_COUNTRY
+	unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL
 	unset BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW
 	unset TRIG TRIG_WINDOW TRIG_GLOBAL
 	unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
@@ -518,7 +515,6 @@ reload_watch() {
 	PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
 	PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
 	PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
-	PRESSURE_COUNTRY="${PRESSURE_COUNTRY:-0}"
 	BAN_TTL="${BAN_TTL:-${BAN_DURATION:-600}}"
 	BAN_ESCALATE_AFTER="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-5}}"
 	BAN_ESCALATE_WINDOW="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"

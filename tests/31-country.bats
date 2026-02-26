@@ -24,7 +24,7 @@ setup() {
 EOF
 
 	# create a test weights file
-	cat > "$INSTALL_PATH/weights.country" <<'EOF'
+	cat > "$INSTALL_PATH/pressure-country.conf" <<'EOF'
 # Test country weights
 CN=20
 RU=15
@@ -95,37 +95,37 @@ teardown() {
 # ============================================================
 
 @test "country_weight: returns 20 for CN" {
-	run country_weight "CN" "$INSTALL_PATH/weights.country"
+	run country_weight "CN" "$INSTALL_PATH/pressure-country.conf"
 	assert_success
 	assert_output "20"
 }
 
 @test "country_weight: returns 15 for RU" {
-	run country_weight "RU" "$INSTALL_PATH/weights.country"
+	run country_weight "RU" "$INSTALL_PATH/pressure-country.conf"
 	assert_success
 	assert_output "15"
 }
 
 @test "country_weight: returns 10 for US (1.0x)" {
-	run country_weight "US" "$INSTALL_PATH/weights.country"
+	run country_weight "US" "$INSTALL_PATH/pressure-country.conf"
 	assert_success
 	assert_output "10"
 }
 
 @test "country_weight: returns 10 for unlisted country" {
-	run country_weight "DE" "$INSTALL_PATH/weights.country"
+	run country_weight "DE" "$INSTALL_PATH/pressure-country.conf"
 	assert_success
 	assert_output "10"
 }
 
 @test "country_weight: returns 10 for empty country code" {
-	run country_weight "" "$INSTALL_PATH/weights.country"
+	run country_weight "" "$INSTALL_PATH/pressure-country.conf"
 	assert_success
 	assert_output "10"
 }
 
 @test "country_weight: returns 10 for missing weights file" {
-	run country_weight "CN" "/nonexistent/weights.country"
+	run country_weight "CN" "/nonexistent/pressure-country.conf"
 	assert_success
 	assert_output "10"
 }
@@ -170,7 +170,7 @@ teardown() {
 }
 
 @test "pressure_effective_weight: missing weights file returns weight unchanged" {
-	rm -f "$INSTALL_PATH/weights.country"
+	rm -f "$INSTALL_PATH/pressure-country.conf"
 	run pressure_effective_weight "3" "10.0.0.1" "$INSTALL_PATH"
 	assert_success
 	assert_output "3"
@@ -184,7 +184,7 @@ teardown() {
 
 @test "pressure_effective_weight: result minimum is 1" {
 	# set a very low multiplier
-	echo "XX=1" > "$INSTALL_PATH/weights.country"
+	echo "XX=1" > "$INSTALL_PATH/pressure-country.conf"
 	# weight=1, mult=1 → 1*1/10 = 0 → minimum 1
 	run pressure_effective_weight "1" "192.0.2.1" "$INSTALL_PATH"
 	assert_success

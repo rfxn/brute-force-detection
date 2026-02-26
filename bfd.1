@@ -211,11 +211,6 @@ Per-rule overrides in rule files or
 .B PRESSURE_HALF_LIFE
 Half-life in seconds for pressure decay (default: 300).
 Shorter = more forgiving.
-.TP
-.B PRESSURE_COUNTRY
-Enable country-based pressure multipliers: 0 or 1 (default: 0).
-When enabled, weight is multiplied by the country factor
-from weights.country.
 .SS Email Alerts
 .TP
 .B EMAIL_ALERTS
@@ -398,8 +393,8 @@ Internal/derived variables.
 .I /usr/local/bfd/pressure.conf
 Per-rule pressure weight and trip overrides.
 .TP
-.I /usr/local/bfd/weights.country
-Country pressure multiplier table (used when PRESSURE_COUNTRY=1).
+.I /usr/local/bfd/pressure-country.conf
+Country pressure multiplier table (active when entries are uncommented).
 .TP
 .I /usr/local/bfd/ipcountry.dat
 IP-to-country lookup database.

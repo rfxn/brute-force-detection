@@ -208,10 +208,6 @@ PRESSURE_TRIP="20" - accumulated pressure needed to trigger a ban. Per-rule
 PRESSURE_HALF_LIFE="300" - half-life in seconds (how fast pressure decays).
   Shorter = more forgiving; longer = longer memory. Default 5 minutes.
 
-PRESSURE_COUNTRY="0" - enable country-based pressure multipliers (0 = off,
-  1 = on). When enabled, weight is multiplied by the country factor from
-  weights.country. See section 3.8.
-
 Per-rule weights are configured in pressure.conf (centralized) or in
 individual rule files via PRESSURE_WEIGHT. Higher weight = faster pressure
 accumulation. Default tiers: 5 (control panels), 3 (SSH/VPN/critical),
@@ -350,17 +346,17 @@ overridden by adding them to conf.bfd.
 
 3.8) Configuration: Country Weighting
 
-When PRESSURE_COUNTRY="1", pressure weight is multiplied by a per-country
-factor from /usr/local/bfd/weights.country. This lets operators increase
-sensitivity for high-risk geographies without affecting traffic from trusted
-countries.
+Country weighting is active automatically when pressure-country.conf contains
+uncommented entries. No toggle is required — if the file has entries, they
+are applied; if all entries are commented out (the default), country weighting
+is off.
 
 The country database (ipcountry.dat) maps IPv4 addresses to 2-letter country
 codes.
 
-The multiplier file (weights.country) uses CC=N format where N is weight*10
-(e.g., CN=20 means 2.0x weight, US=10 means 1.0x = no change). Unlisted
-countries default to 1.0x.
+The multiplier file (pressure-country.conf) uses CC=N format where N is
+weight*10 (e.g., CN=20 means 2.0x weight, US=10 means 1.0x = no change).
+Unlisted countries default to 1.0x.
 
 4) Firewall Integration
 BFD supports automatic firewall detection via FIREWALL="auto" (default). When

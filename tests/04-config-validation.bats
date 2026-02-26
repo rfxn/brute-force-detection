@@ -21,7 +21,6 @@ run_validate() {
 		PRESSURE_TRIP="15"
 		PRESSURE_HALF_LIFE="300"
 		PRESSURE_TRIP_GLOBAL="0"
-		PRESSURE_COUNTRY="0"
 		BAN_TTL="300"
 		BAN_ESCALATE_AFTER="5"
 		BAN_ESCALATE_WINDOW="86400"
@@ -43,7 +42,6 @@ run_validate_output() {
 		PRESSURE_TRIP="15"
 		PRESSURE_HALF_LIFE="300"
 		PRESSURE_TRIP_GLOBAL="0"
-		PRESSURE_COUNTRY="0"
 		BAN_TTL="300"
 		BAN_ESCALATE_AFTER="5"
 		BAN_ESCALATE_WINDOW="86400"
@@ -218,32 +216,6 @@ run_validate_output() {
 	assert_failure
 }
 
-# --- PRESSURE_COUNTRY ---
-
-@test "validate_config: PRESSURE_COUNTRY=0 passes (disabled)" {
-	run run_validate 'PRESSURE_COUNTRY="0"'
-	assert_success
-}
-
-@test "validate_config: PRESSURE_COUNTRY=1 passes (enabled)" {
-	run run_validate 'PRESSURE_COUNTRY="1"'
-	assert_success
-}
-
-@test "validate_config: PRESSURE_COUNTRY=2 rejects" {
-	run run_validate 'PRESSURE_COUNTRY="2"'
-	assert_failure
-}
-
-@test "validate_config: PRESSURE_COUNTRY=abc rejects" {
-	run run_validate 'PRESSURE_COUNTRY="abc"'
-	assert_failure
-}
-
-@test "validate_config: PRESSURE_COUNTRY= defaults to 0 (passes)" {
-	run run_validate 'PRESSURE_COUNTRY=""'
-	assert_success
-}
 
 # --- backward compat: old variable names still accepted ---
 
