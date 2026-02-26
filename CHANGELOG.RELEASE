@@ -1,4 +1,9 @@
 2.0.1:
+[New] --scan CLI option: scan full logs for all rules or a specific rule;
+      supports -d/--dryrun, --max-lines=N, --scan-timeout=N; acquires lock,
+      runs check() in scan mode, advances cursors after non-dry-run scan
+[New] SCAN_MAX_LINES and SCAN_TIMEOUT config variables in conf.bfd Advanced
+      section with validate_config() and show_config() support
 [New] scan mode core: _tlog_read_full(), _tlog_journal_read_full(), and
       _tlog_advance_scan_cursors() for full-log processing without cursor tracking;
       _rule_tlog() scan branch; check() rule filter and cursor pair collection;
