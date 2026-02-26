@@ -1,4 +1,29 @@
 2.0.1:
+[New] GitHub Actions release workflow (.github/workflows/release.yml): builds
+      RPM (el7, el8, el9, el10) and DEB packages in parallel Docker containers
+      on v* tag push; creates GitHub Release with all packages as assets
+[New] RPM packaging (pkg/rpm/bfd.spec): FHS-compliant layout with files at
+      /usr/sbin, /usr/lib/bfd, /etc/bfd, /usr/share/bfd, /var/lib/bfd;
+      symlink farm at /usr/local/bfd for backward compatibility; sed transforms
+      at build time for internals.conf, cron, systemd units; %config(noreplace)
+      for all user-editable config; install.sh migration in %pre/%post;
+      single spec covers el7/el8/el9/el10
+[New] DEB packaging (pkg/deb/debian/): FHS layout with dh_link-based symlink
+      farm; debhelper-compat 13; conffile protection; preinst/postinst handle
+      install.sh-to-package migration; single .deb covers Debian 12 and
+      Ubuntu 18/20/22/24
+[New] Package build infrastructure (pkg/Makefile): source tarball via git
+      archive; native rpm/deb targets; Docker build containers for el7
+      (CentOS 7), el9 (Rocky 9, covers el8/el9/el10), and Debian 12;
+      test-rpm-rocky9 and test-deb-debian12 targets for install verification
+[New] Package verification test suite (pkg/test/test-pkg-install.sh): 10 test
+      categories covering FHS paths, symlink farm, internals.conf transforms,
+      lock coordination, cron paths, permissions, rule files, exclude.files,
+      systemd units, and bfd execution via both /usr/sbin and /usr/local/sbin
+[Fix] stat -c calls in bfd, bfd.lib.sh, tlog: add -L flag to dereference
+      symlinks before checking ownership/permissions; required for package
+      installs where /usr/local/bfd/ files are symlinks to FHS locations;
+      backward-compatible (no-op on regular files for install.sh installs)
 [New] README (plain text): section 5.7 Scan Mode with use cases, CLI examples,
       safety limits, and lock behavior; --scan/--max-lines=/--scan-timeout= in
       CLI usage block; SCAN_MAX_LINES/SCAN_TIMEOUT in 3.7 Advanced config;

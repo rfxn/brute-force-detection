@@ -1,0 +1,6 @@
+/etc/bfd/conf.bfd
+/etc/bfd/internals.conf
+/etc/bfd/pressure.conf
+/etc/bfd/pressure-country.conf
+/etc/bfd/exclude.files
+/etc/bfd/ignore.hosts

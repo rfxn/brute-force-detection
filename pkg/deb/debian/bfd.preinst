@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+
+LEGACY_PATH="/usr/local/bfd"
+
+case "$1" in
+    install|upgrade)
+        # Detect and back up existing install.sh-based installation
+        if [ -f "$LEGACY_PATH/bfd" ] && [ ! -L "$LEGACY_PATH/bfd.lib.sh" ]; then
+            # This is a real (non-package) install — back up
+            _bkdir="${LEGACY_PATH}.bk.$(date +%Y%m%d-%s)"
+            echo "Backing up existing install.sh installation to $_bkdir"
+            cp -a "$LEGACY_PATH" "$_bkdir"
+            rm -f "${LEGACY_PATH}.bk.last"
+            ln -s "$_bkdir" "${LEGACY_PATH}.bk.last"
+            # Preserve state files
+            if [ -d "$LEGACY_PATH/tmp" ]; then
+                mkdir -p /var/lib/bfd/tmp
+                cp -a "$LEGACY_PATH"/tmp/* /var/lib/bfd/tmp/ 2>/dev/null || true
+            fi
+            if [ -d "$LEGACY_PATH/stats" ]; then
+                mkdir -p /var/lib/bfd/stats
+                cp -a "$LEGACY_PATH"/stats/* /var/lib/bfd/stats/ 2>/dev/null || true
+            fi
+            # Stop services before removing old install
+            if command -v systemctl >/dev/null 2>&1; then
+                systemctl stop bfd-watch.service 2>/dev/null || true
+                systemctl stop bfd.timer 2>/dev/null || true
+            fi
+            # Remove old install — package will lay down new files
+            rm -rf "$LEGACY_PATH"
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

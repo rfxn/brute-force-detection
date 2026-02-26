@@ -220,8 +220,8 @@ _load_thresholds() {
 
 	# validate ownership and permissions (same checks as safe_source)
 	local _tc_owner _tc_perms _tc_world
-	_tc_owner=$(stat -c '%u' "$conf_file")
-	_tc_perms=$(stat -c '%a' "$conf_file")
+	_tc_owner=$(stat -L -c '%u' "$conf_file")
+	_tc_perms=$(stat -L -c '%a' "$conf_file")
 	_tc_world="${_tc_perms: -1}"
 	if [ "$_tc_owner" != "0" ] || [ "$((_tc_world & 2))" -ne 0 ]; then
 		eout "thresholds.conf has unsafe ownership (uid=$_tc_owner) or permissions ($_tc_perms), skipping" le
@@ -293,8 +293,8 @@ _load_pressure_conf() {
 
 	# validate ownership and permissions (same checks as safe_source)
 	local _pc_owner _pc_perms _pc_world
-	_pc_owner=$(stat -c '%u' "$conf_file")
-	_pc_perms=$(stat -c '%a' "$conf_file")
+	_pc_owner=$(stat -L -c '%u' "$conf_file")
+	_pc_perms=$(stat -L -c '%a' "$conf_file")
 	_pc_world="${_pc_perms: -1}"
 	if [ "$_pc_owner" != "0" ] || [ "$((_pc_world & 2))" -ne 0 ]; then
 		eout "pressure.conf has unsafe ownership (uid=$_pc_owner) or permissions ($_pc_perms), skipping" le
@@ -399,13 +399,13 @@ safe_source() {
 		return 1
 	fi
 	local fowner
-	fowner=$(stat -c '%u' "$file")
+	fowner=$(stat -L -c '%u' "$file")
 	if [ "$fowner" != "0" ]; then
 		eout "safe_source: $label is not owned by root (uid=$fowner)." le
 		return 1
 	fi
 	local fperms
-	fperms=$(stat -c '%a' "$file")
+	fperms=$(stat -L -c '%a' "$file")
 	# check world-writable: last digit has write bit (2, 3, 6, 7)
 	local world_digit="${fperms: -1}"
 	if [ "$((world_digit & 2))" -ne 0 ]; then
@@ -2432,8 +2432,8 @@ send_alerts() {
 		return 1
 	fi
 	local _tmpl_owner _tmpl_perms _tmpl_world
-	_tmpl_owner=$(stat -c '%u' "$template")
-	_tmpl_perms=$(stat -c '%a' "$template")
+	_tmpl_owner=$(stat -L -c '%u' "$template")
+	_tmpl_perms=$(stat -L -c '%a' "$template")
 	_tmpl_world="${_tmpl_perms: -1}"
 	if [ "$_tmpl_owner" != "0" ] || [ "$((_tmpl_world & 2))" -ne 0 ]; then
 		eout "alert template has unsafe ownership or permissions, skipping alerts." le
