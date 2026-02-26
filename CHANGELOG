@@ -1,4 +1,7 @@
 2.0.1:
+[New] tests: direct test coverage for sanitize_ports() (12 cases) and
+      expand_command_template() (7 cases) — security-critical input validation
+      and safe template expansion functions
 [Fix] cron.daily: check mkdir-based lock (lock.utime.lk) before rotating state
       files; prevents racing with running bfd process that uses directory-based
       locking; flock retained for self-contention between cron.daily invocations

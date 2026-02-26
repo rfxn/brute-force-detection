@@ -853,7 +853,9 @@ SCRIPT
 		echo \"\$_FW_IPT_BIN\"
 	"
 	assert_success
-	assert_output "$MOCK_DIR/iptables"
+	assert_output --partial "$MOCK_DIR/iptables"
+	# ip6tables not in mock PATH — warning expected
+	assert_output --partial "ip6tables not found"
 }
 
 @test "_fw_iptables_setup: sets _FW_IP6T_BIN when ip6tables exists" {

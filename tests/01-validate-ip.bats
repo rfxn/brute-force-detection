@@ -206,3 +206,79 @@ load 'helpers/bfd-common'
 	assert_failure
 	assert_output ""
 }
+
+# --- sanitize_ports: valid inputs ---
+
+@test "sanitize_ports: valid single port" {
+	run sanitize_ports "22"
+	assert_success
+	assert_output "22"
+}
+
+@test "sanitize_ports: valid multi port" {
+	run sanitize_ports "22,80,443"
+	assert_success
+	assert_output "22,80,443"
+}
+
+@test "sanitize_ports: valid keyword all" {
+	run sanitize_ports "all"
+	assert_success
+	assert_output "all"
+}
+
+@test "sanitize_ports: valid large port 65535" {
+	run sanitize_ports "65535"
+	assert_success
+	assert_output "65535"
+}
+
+# --- sanitize_ports: invalid inputs ---
+
+@test "sanitize_ports: invalid empty string" {
+	run sanitize_ports ""
+	assert_failure
+	assert_output ""
+}
+
+@test "sanitize_ports: invalid semicolon injection" {
+	run sanitize_ports "22;rm -rf /"
+	assert_failure
+	assert_output ""
+}
+
+@test "sanitize_ports: invalid backtick injection" {
+	run sanitize_ports '22`id`'
+	assert_failure
+	assert_output ""
+}
+
+@test "sanitize_ports: invalid space" {
+	run sanitize_ports "22 80"
+	assert_failure
+	assert_output ""
+}
+
+@test "sanitize_ports: invalid dollar injection" {
+	run sanitize_ports '$(whoami)'
+	assert_failure
+	assert_output ""
+}
+
+@test "sanitize_ports: invalid pipe" {
+	run sanitize_ports "22|nc"
+	assert_failure
+	assert_output ""
+}
+
+@test "sanitize_ports: invalid mixed all with port" {
+	run sanitize_ports "all,22"
+	assert_failure
+	assert_output ""
+}
+
+@test "sanitize_ports: invalid space after comma" {
+	run sanitize_ports "22, 80"
+	assert_failure
+	assert_output ""
+}

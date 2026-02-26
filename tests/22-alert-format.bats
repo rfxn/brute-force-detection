@@ -27,6 +27,71 @@ teardown() {
 	bfd_teardown
 }
 
+# --- expand_command_template ---
+
+@test "expand_command_template: single var ATTACK_HOST" {
+	ATTACK_HOST="192.0.2.1"
+	MOD=""
+	PORTS=""
+	run expand_command_template 'ban $ATTACK_HOST'
+	assert_success
+	assert_output "ban 192.0.2.1"
+}
+
+@test "expand_command_template: all three vars" {
+	ATTACK_HOST="192.0.2.1"
+	MOD="sshd"
+	PORTS="22,80"
+	run expand_command_template 'iptables -s $ATTACK_HOST -m $MOD -p $PORTS'
+	assert_success
+	assert_output "iptables -s 192.0.2.1 -m sshd -p 22,80"
+}
+
+@test "expand_command_template: IPv6 address" {
+	ATTACK_HOST="2001:db8::1"
+	MOD=""
+	PORTS=""
+	run expand_command_template 'ip6tables -s $ATTACK_HOST'
+	assert_success
+	assert_output "ip6tables -s 2001:db8::1"
+}
+
+@test "expand_command_template: multi-port PORTS" {
+	ATTACK_HOST=""
+	MOD=""
+	PORTS="22,25,80"
+	run expand_command_template 'block $PORTS'
+	assert_success
+	assert_output "block 22,25,80"
+}
+
+@test "expand_command_template: empty variables" {
+	ATTACK_HOST=""
+	MOD=""
+	PORTS=""
+	run expand_command_template 'ban $ATTACK_HOST'
+	assert_success
+	assert_output "ban "
+}
+
+@test "expand_command_template: no variables in template" {
+	ATTACK_HOST="192.0.2.1"
+	MOD="sshd"
+	PORTS="22"
+	run expand_command_template '/usr/sbin/iptables -F'
+	assert_success
+	assert_output "/usr/sbin/iptables -F"
+}
+
+@test "expand_command_template: variable appears twice" {
+	ATTACK_HOST="192.0.2.1"
+	MOD=""
+	PORTS=""
+	run expand_command_template '$ATTACK_HOST to $ATTACK_HOST'
+	assert_success
+	assert_output "192.0.2.1 to 192.0.2.1"
+}
+
 # --- format_duration ---
 
 @test "format_duration: 0 returns permanent" {
