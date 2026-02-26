@@ -14,6 +14,9 @@ PREREQ="/usr/sbin/dovecot"
 if [ -f "$PREREQ" ]; then
 	PORTS="110,143,993,995"
 	LOG_FILE="$MAIL_LOG_PATH"
+	if [ ! -f "$LOG_FILE" ]; then
+		LOG_FILE="$AUTH_LOG_PATH"
+	fi
 	LOG_TAG="dovecot"
 
 	## DOVECOT IMAP/POP3

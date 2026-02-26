@@ -1,7 +1,9 @@
 # per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
-# high trip point to avoid overlap with specific service rules
-# PRESSURE_WEIGHT="1"
-# PRESSURE_TRIP="40"
+# high trip point — pam_generic intentionally overlaps with service-specific rules
+# (sshd, dovecot, etc.) that also match PAM lines. It acts as a catch-all for
+# services without dedicated rules. The high trip point prevents double-banning.
+PRESSURE_WEIGHT="1"
+PRESSURE_TRIP="40"
 
 # uncomment to disable alerting for this rule
 # SKIP_ALERT="1"

@@ -1,4 +1,14 @@
 2.0.1:
+[Change] dovecot rule: AUTH_LOG_PATH fallback when MAIL_LOG_PATH missing
+      (Debian/Ubuntu systems where dovecot logs to auth.log)
+[Change] exim_authfail/exim_nxuser rules: Debian support — /usr/sbin/exim4
+      binary fallback, /var/log/exim4/mainlog log path fallback
+[Change] asterisk_badauth/asterisk_iax/asterisk_nopeer rules: /var/log/
+      asterisk/messages fallback when /var/log/asterisk/full missing
+[Change] http_401 rule: conservative defaults enabled (PRESSURE_WEIGHT=1,
+      PRESSURE_TRIP=60) to prevent false positives from legitimate 401s
+[Change] pam_generic rule: conservative defaults enabled (PRESSURE_WEIGHT=1,
+      PRESSURE_TRIP=40) with overlap documentation comment
 [Change] validate_rule() rewritten to distinguish inactive rules (silent skip)
       from genuine misconfigurations (logged); PREREQ-missing and file-detection
       with no match are now silent; MATCHED_HOSTS check moved to caller
