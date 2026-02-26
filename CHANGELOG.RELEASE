@@ -1,4 +1,7 @@
 2.0.1:
+[New] GitHub Actions release workflow (.github/workflows/release.yml): builds
+      RPM (el7, el8, el9, el10) and DEB packages in parallel Docker containers
+      on v* tag push; creates GitHub Release with all packages as assets
 [New] RPM packaging (pkg/rpm/bfd.spec): FHS-compliant layout with files at
       /usr/sbin, /usr/lib/bfd, /etc/bfd, /usr/share/bfd, /var/lib/bfd;
       symlink farm at /usr/local/bfd for backward compatibility; sed transforms
