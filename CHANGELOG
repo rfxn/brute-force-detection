@@ -3,6 +3,9 @@
       toggle removed — country weighting is now auto-enabled when
       pressure-country.conf has uncommented entries; removes config variable
       from conf.bfd, validate_config(), show_config(), and bash completion
+[Fix] tlog_journal_read: unquote $jfilter so multi-filter entries (exim OR
+      syntax) are word-split into separate journalctl arguments; single-filter
+      entries unaffected; shellcheck SC2086 suppressed with safety comment
 [Change] dovecot rule: AUTH_LOG_PATH fallback when MAIL_LOG_PATH missing
       (Debian/Ubuntu systems where dovecot logs to auth.log)
 [Change] exim_authfail/exim_nxuser rules: Debian support — /usr/sbin/exim4
