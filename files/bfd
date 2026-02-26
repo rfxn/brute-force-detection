@@ -504,6 +504,12 @@ reload_watch() {
 		eout "reload aborted: conf.bfd has unsafe ownership or permissions" le
 		return 1
 	fi
+	# clear config vars BEFORE re-sourcing so conf.bfd values take effect cleanly
+	# (if unset happens after sourcing, it destroys the freshly-sourced values)
+	unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL
+	unset BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW
+	unset TRIG TRIG_WINDOW TRIG_GLOBAL
+	unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
 	# shellcheck disable=SC1090
 	. "$CNF"
 	if [ -f "$INTCNF" ]; then
@@ -516,13 +522,19 @@ reload_watch() {
 			. "$INTCNF"
 		fi
 	fi
+	# fallbacks for internals.conf variables (same as startup lines 90-100)
+	RULES_PATH="${RULES_PATH:-$INSTALL_PATH/rules}"
+	TLOG_PATH="${TLOG_PATH:-$INSTALL_PATH/tlog}"
 	TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
-	# clear derived pressure vars so re-sourced config takes effect
-	unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL
-	unset BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW
-	unset TRIG TRIG_WINDOW TRIG_GLOBAL
-	unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
-	# re-derive pressure model variables after config reload
+	EMAIL_TEMPLATE="${EMAIL_TEMPLATE:-$INSTALL_PATH/alert.bfd}"
+	IGNORE_HOST_FILES="${IGNORE_HOST_FILES:-$INSTALL_PATH/exclude.files}"
+	LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
+	TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
+	LOCK_FILE_TIMEOUT="${LOCK_FILE_TIMEOUT:-300}"
+	OUTPUT_SYSLOG_FILE="${OUTPUT_SYSLOG_FILE:-$KERNEL_LOG_PATH}"
+	BAN_RETRY_COUNT="${BAN_RETRY_COUNT:-2}"
+	LOG_SOURCE="${LOG_SOURCE:-auto}"
+	# re-derive pressure model variables (same fallback chain as startup)
 	PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
 	PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
 	PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
@@ -537,6 +549,11 @@ reload_watch() {
 	BAN_PERMANENT_AFTER="${BAN_PERMANENT_AFTER:-$BAN_ESCALATE_AFTER}"
 	BAN_PERMANENT_WINDOW="${BAN_PERMANENT_WINDOW:-$BAN_ESCALATE_WINDOW}"
 	GLOB_TRIG="$TRIG"
+	# clear pressure arrays before reload (if file is missing, arrays must be empty)
+	_PRESS_WEIGHT=()
+	_PRESS_TRIP=()
+	_PRESS_SKIP_ALERT=()
+	_PRESS_RULE_EMAIL=()
 	if [ -f "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}" ]; then
 		_load_pressure_conf "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}"
 	elif [ -f "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}" ]; then
@@ -562,7 +579,10 @@ reload_watch() {
 }
 
 watch() {
-	trap cleanup_watch EXIT INT TERM
+	trap cleanup_watch EXIT
+	# shellcheck disable=SC2317 # reached via signal
+	trap 'exit 143' TERM
+	trap 'exit 130' INT
 	trap reload_watch HUP
 	pre
 	get_state
@@ -625,7 +645,7 @@ set -- "${_bfd_args[@]+"${_bfd_args[@]}"}"
 
 case "${1:-}" in
 -s|--standard)  vhead; run ;;
--q|--quiet)     exec >/dev/null 2>&1; run ;;
+-q|--quiet)     exec >/dev/null; run ;;
 -d|--dryrun)    DRY_RUN=1; vhead; run ;;
 -w|--watch)     vhead; watch ;;
 -a|--attackpool)

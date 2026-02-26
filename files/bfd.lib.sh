@@ -548,7 +548,7 @@ validate_config() {
 		echo "error: SCAN_MAX_LINES must be a non-negative integer (got '${SCAN_MAX_LINES:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if [ -n "${SCAN_TIMEOUT:-}" ] && ! [[ "${SCAN_TIMEOUT:-120}" =~ $int_pattern ]]; then
+	if [ -n "${SCAN_TIMEOUT:-}" ] && { ! [[ "${SCAN_TIMEOUT:-120}" =~ $int_pattern ]] || [ "${SCAN_TIMEOUT:-120}" -eq 0 ]; }; then
 		echo "error: SCAN_TIMEOUT must be a positive integer (got '${SCAN_TIMEOUT:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
@@ -1163,12 +1163,18 @@ _fw_iptables_setup() {
 	if [ -n "$_FW_IP6T_BIN" ]; then
 		"$_FW_IP6T_BIN" -N bfd 2>/dev/null || true
 		"$_FW_IP6T_BIN" -C INPUT -j bfd 2>/dev/null || "$_FW_IP6T_BIN" -I INPUT -j bfd
+	else
+		eout "{glob} ip6tables not found — IPv6 bans will be skipped" "le"
 	fi
 }
 
 _fw_iptables_ban() {
 	local host="$1"
 	if [[ "$host" == *:* ]]; then
+		if [ -z "$_FW_IP6T_BIN" ]; then
+			eout "{iptables} IPv6 ban skipped — ip6tables not found" "le"
+			return 1
+		fi
 		"$_FW_IP6T_BIN" -A bfd -s "$host" -j DROP 2>/dev/null
 	else
 		"$_FW_IPT_BIN" -A bfd -s "$host" -j DROP
@@ -1178,6 +1184,10 @@ _fw_iptables_ban() {
 _fw_iptables_unban() {
 	local host="$1"
 	if [[ "$host" == *:* ]]; then
+		if [ -z "$_FW_IP6T_BIN" ]; then
+			eout "{iptables} IPv6 unban skipped — ip6tables not found" "le"
+			return 1
+		fi
 		"$_FW_IP6T_BIN" -D bfd -s "$host" -j DROP 2>/dev/null
 	else
 		"$_FW_IPT_BIN" -D bfd -s "$host" -j DROP 2>/dev/null
@@ -1554,10 +1564,10 @@ manual_ban() {
 state_init() {
 	local install_path="$1"
 	if [ ! -d "$install_path/tmp" ]; then
-		mkdir -p "$install_path/tmp"
+		mkdir -m 750 -p "$install_path/tmp"
 	fi
 	if [ ! -d "$install_path/stats" ]; then
-		mkdir -p "$install_path/stats"
+		mkdir -m 750 -p "$install_path/stats"
 	fi
 	local f
 	for f in "$install_path/tmp/events.dat" "$install_path/tmp/bans.active" \
@@ -2790,7 +2800,7 @@ show_config() {
 	local var="${1:-}"
 	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT PRESSURE_CONF"
 	if [ -n "$var" ]; then
-		# validate against whitelist before eval
+		# validate against whitelist
 		local _found=0 _v
 		for _v in $config_vars; do
 			if [ "$var" = "$_v" ]; then
@@ -2811,7 +2821,7 @@ show_config() {
 			UNBAN_COMMAND_V6) var="UNBAN_COMMAND_V6_TEMPLATE" ;;
 		esac
 		local val
-		eval "val=\${$var:-}"
+		val="${!var}"
 		echo "$val"
 	else
 		# dump all active config variables
@@ -2824,7 +2834,7 @@ show_config() {
 				BAN_COMMAND_V6)   v="BAN_COMMAND_V6_TEMPLATE" ;;
 				UNBAN_COMMAND_V6) v="UNBAN_COMMAND_V6_TEMPLATE" ;;
 			esac
-			eval "val=\${$v:-}"
+			val="${!v}"
 			echo "$_display=$val"
 		done
 	fi

@@ -23,7 +23,15 @@ INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
 LOCK_FILE="$INSTALL_PATH/lock.utime"
 dstamp=$(date +"%m%d%y.%H%M")
 
-# acquire BFD's lock to avoid racing with running bfd process
+# check if bfd is actively running (mkdir-based lock used by bfd/watch)
+if [ -d "$LOCK_FILE.lk" ]; then
+	_lock_pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null)
+	if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null; then
+		exit 0
+	fi
+fi
+
+# acquire flock for self-contention (multiple cron.daily invocations)
 (
 flock -x -w 30 200 || exit 0
 # rotate attack pool

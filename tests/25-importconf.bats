@@ -612,3 +612,139 @@ NEWEOF
 	run grep '^BAN_ESCALATE_AFTER=' "$inst/conf.bfd"
 	assert_output 'BAN_ESCALATE_AFTER="3"'
 }
+
+# --- tlog byte-offset state preservation (F-006) ---
+
+@test "importconf: tlog byte-offset files preserved on upgrade" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last/tmp" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# create tlog byte-offset state files (bare names, no extension)
+	echo "12345" > "$inst.bk.last/tmp/sshd"
+	echo "67890" > "$inst.bk.last/tmp/dovecot"
+	echo "11111" > "$inst.bk.last/tmp/postfix"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# verify byte-offset files were copied
+	[ -f "$inst/tmp/sshd" ]
+	[ -f "$inst/tmp/dovecot" ]
+	[ -f "$inst/tmp/postfix" ]
+	run cat "$inst/tmp/sshd"
+	assert_output "12345"
+	run cat "$inst/tmp/dovecot"
+	assert_output "67890"
+}
+
+@test "importconf: tlog loop skips dotfiles and extension files" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last/tmp" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# create files that should NOT be copied by tlog loop
+	echo "skip" > "$inst.bk.last/tmp/.hidden"
+	echo "skip" > "$inst.bk.last/tmp/foo.cursor"
+	echo "skip" > "$inst.bk.last/tmp/bar.jts"
+	echo "skip" > "$inst.bk.last/tmp/bans.active"
+	echo "skip" > "$inst.bk.last/tmp/events.dat"
+	# also create one that SHOULD be copied
+	echo "keep" > "$inst.bk.last/tmp/sshd"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# bare-name file should be copied
+	[ -f "$inst/tmp/sshd" ]
+	# dotfiles should NOT be copied by tlog loop (may or may not exist from other cp's)
+	[ ! -f "$inst/tmp/.hidden" ]
+}
+
+# --- alert.bfd preservation (F-007) ---
+
+@test "importconf: custom alert template preserved on upgrade" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# create custom alert template in old install
+	echo "CUSTOM ALERT TEMPLATE" > "$inst.bk.last/alert.bfd"
+	# create default alert template in new install (install.sh would have placed this)
+	echo "DEFAULT ALERT TEMPLATE" > "$inst/alert.bfd"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# verify custom template was preserved over default
+	run cat "$inst/alert.bfd"
+	assert_output "CUSTOM ALERT TEMPLATE"
+}
+
+@test "importconf: missing alert.bfd in backup keeps new default" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# no alert.bfd in backup, but new default exists
+	echo "DEFAULT ALERT TEMPLATE" > "$inst/alert.bfd"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# default template should be unchanged
+	run cat "$inst/alert.bfd"
+	assert_output "DEFAULT ALERT TEMPLATE"
+}

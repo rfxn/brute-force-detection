@@ -12,6 +12,7 @@ Contents:
 1.1 ........... Introduction: Supported Systems
 2 ............. Installation
 2.1 ........... Installation: Scheduling
+2.2 ........... Installation: Upgrading
 3 ............. Configuration
 3.1 ........... Configuration: Pressure Model (Detection)
 3.2 ........... Configuration: Email Alerts
@@ -183,6 +184,45 @@ active, cron runs detect the lock and silently skip. If the watch daemon
 exits, cron automatically resumes detection within 2 minutes.
 
 The cron entry does not need to be removed when using watch mode.
+
+2.2) Installation: Upgrading
+
+When upgrading from a previous BFD installation (including v1.5-2),
+install.sh automatically:
+
+  - Backs up the existing installation to /usr/local/bfd.bk.DDMMYYYY-HHMMSS
+    (symlinked as /usr/local/bfd.bk.last for easy access)
+  - Runs importconf to merge your configuration and preserve state
+
+What importconf migrates automatically:
+
+  - User configuration (conf.bfd values merged onto new template)
+  - Legacy variable names translated to current names:
+      TRIG             -> PRESSURE_TRIP
+      TRIG_WINDOW      -> PRESSURE_HALF_LIFE
+      TRIG_GLOBAL      -> PRESSURE_TRIP_GLOBAL
+      BAN_DURATION     -> BAN_TTL
+      BAN_PERMANENT_*  -> BAN_ESCALATE_*
+  - Per-rule overrides (thresholds.conf -> pressure.conf conversion)
+  - Firewall backend: set to "custom" if pre-2.0.1 BAN_COMMAND detected
+  - Ban state: bans.active, bans.history, events.dat
+  - Log tracking state: tlog byte-offsets, journal cursors
+  - Custom alert template (alert.bfd)
+  - Ignore lists (ignore.hosts)
+
+Post-upgrade verification:
+
+  bfd -c                    # dry-run detection cycle
+  bfd --status              # show current ban/event summary
+  bfd --health              # system health check
+
+Rollback:
+
+If the upgrade causes issues, restore from backup:
+
+  bfd --flush-all           # clear any new bans
+  rm -rf /usr/local/bfd
+  cp -a /usr/local/bfd.bk.last /usr/local/bfd
 
 3) Configuration
 The main configuration file is /usr/local/bfd/conf.bfd. Each option has a
@@ -490,7 +530,7 @@ and other daemon-based tools.
 
   bfd --watch
 
-Watch mode holds an flock for its entire lifetime, so cron-based runs
+Watch mode holds a lock (via atomic directory creation) for its entire lifetime, so cron-based runs
 (bfd -q) will silently skip when watch mode is active. If the watch
 daemon exits unexpectedly (OOM, crash), cron automatically detects the
 dead PID and resumes detection within one cycle (~2 minutes). No cron

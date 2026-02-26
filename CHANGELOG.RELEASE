@@ -1,4 +1,53 @@
 2.0.1:
+[New] README, README.md, bfd.1: upgrade documentation section covering
+      importconf migration, config variable renames, state preservation,
+      post-upgrade verification, and rollback procedure
+[Fix] state_init(): enforce 750 permissions on tmp/ and stats/ directories
+      (mkdir -m 750); previously relied on pre() to set permissions, leaving an
+      unprotected window if state_init() was called independently
+[Fix] validate_config(): reject SCAN_TIMEOUT=0; GNU timeout 0 means "no timeout"
+      which could cause journalctl to hang indefinitely during scan mode
+[Fix] watch(): SIGTERM/SIGINT now properly exit the daemon; previous trap
+      pattern ran cleanup_watch but let the while-true loop continue; changed
+      to EXIT-only cleanup with separate TERM/INT traps that call exit
+[Fix] reload_watch(): unset config vars BEFORE re-sourcing conf.bfd, not
+      after; previous ordering destroyed freshly-sourced values so config
+      changes (e.g., PRESSURE_TRIP) never took effect on SIGHUP reload
+[New] tests/33-watch-mode.bats: 15 tests for watch mode daemon lifecycle;
+      10 unit tests (cleanup_watch lock removal/logging, reload_watch config
+      re-sourcing/safety-rejection/pressure-array-clearing/fallback-derivation);
+      5 integration tests (lock creation, PID file, start logging, SIGTERM
+      graceful shutdown, SIGHUP config reload)
+[Fix] reload_watch(): clear pressure arrays (_PRESS_WEIGHT/_TRIP/_SKIP_ALERT/
+      _RULE_EMAIL) before reload; if pressure.conf is deleted while daemon
+      runs, stale arrays no longer persist from previous load
+[Fix] reload_watch(): add full fallback variable block matching startup
+      lines 90-100 (RULES_PATH, TLOG_PATH, EMAIL_TEMPLATE, etc.); defends
+      against config-sourcing failures leaving variables unset
+[Fix] importconf: preserve tlog byte-offset state files on upgrade; loop
+      copies bare-name files (sshd, dovecot, postfix, etc.) from old tmp/,
+      skipping dotfiles and extension files already handled by other cp's
+[Fix] importconf: preserve user's custom alert.bfd template on upgrade;
+      install.sh unconditionally overwrites with new default, importconf
+      now restores from backup if present
+[Fix] show_config(): replace eval-based variable indirection with ${!var}
+      indirect expansion; eliminates eval from display path while preserving
+      whitelist validation and BAN_COMMAND case mapping
+[Fix] quiet mode (-q): remove stderr redirect so genuine errors from tlog
+      functions reach cron's mail handler; stdout suppression sufficient for
+      cron silence since eout() writes to log file regardless
+[New] tests: direct test coverage for sanitize_ports() (12 cases) and
+      expand_command_template() (7 cases) — security-critical input validation
+      and safe template expansion functions
+[Fix] cron.daily: check mkdir-based lock (lock.utime.lk) before rotating state
+      files; prevents racing with running bfd process that uses directory-based
+      locking; flock retained for self-contention between cron.daily invocations
+[Fix] _fw_iptables_ban/_fw_iptables_unban: guard against empty $_FW_IP6T_BIN
+      when ip6tables is not installed; IPv6 bans now log a warning and return 1
+      instead of executing an empty command; _fw_iptables_setup logs one-time
+      warning when ip6tables is missing
+[Fix] README: corrected watch mode lock description from "flock" to "atomic
+      directory creation" to match actual mkdir-based implementation
 [New] GitHub Actions release workflow (.github/workflows/release.yml): builds
       RPM (el7, el8, el9, el10) and DEB packages in parallel Docker containers
       on v* tag push; creates GitHub Release with all packages as assets

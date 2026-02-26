@@ -642,6 +642,14 @@ _setup_validate_config() {
 	assert_output --partial "SCAN_TIMEOUT"
 }
 
+@test "validate_config: rejects SCAN_TIMEOUT=0" {
+	_setup_validate_config
+	SCAN_TIMEOUT="0"
+	run validate_config
+	assert_failure
+	assert_output --partial "SCAN_TIMEOUT"
+}
+
 @test "validate_config: passes when scan vars unset (lenient)" {
 	_setup_validate_config
 	unset SCAN_MAX_LINES

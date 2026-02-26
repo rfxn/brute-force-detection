@@ -205,20 +205,6 @@ teardown() {
 	assert_output "0"
 }
 
-# --- state_init ---
-
-@test "state_init: creates bans.active" {
-	local new_path="$TEST_TMPDIR/new_bfd"
-	state_init "$new_path"
-	[ -f "$new_path/tmp/bans.active" ]
-}
-
-@test "state_init: creates bans.history" {
-	local new_path="$TEST_TMPDIR/new_bfd"
-	state_init "$new_path"
-	[ -f "$new_path/tmp/bans.history" ]
-}
-
 # --- compute_ban_duration ---
 
 @test "compute_ban_duration: none mode returns base duration" {

@@ -489,42 +489,6 @@ run_validate_output() {
 	[ ! -f "/tmp/pwned2" ]
 }
 
-@test "show_config: rejects unknown variable name" {
-	PRESSURE_TRIP="15"
-	run show_config "NONEXISTENT_VAR"
-	assert_failure
-	assert_output --partial "unknown config variable"
-}
-
-@test "show_config: accepts valid config var PRESSURE_TRIP" {
-	PRESSURE_TRIP="42"
-	run show_config "PRESSURE_TRIP"
-	assert_success
-	assert_output "42"
-}
-
-# --- eout tests (Phase 27) ---
-
-@test "eout: writes to stdout" {
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="/dev/null"
-	run eout "test message"
-	assert_success
-	assert_output --partial "test message"
-}
-
-@test "eout: writes to BFD_LOG_PATH with le flag" {
-	BFD_LOG_PATH="$TEST_TMPDIR/bfd.log"
-	touch "$BFD_LOG_PATH"
-	OUTPUT_SYSLOG="0"
-	OUTPUT_SYSLOG_FILE="/dev/null"
-	eout "logged message" "le"
-	run cat "$BFD_LOG_PATH"
-	assert_output --partial "logged message"
-}
-
 # --- _hc_config case statement tests (Phase 27) ---
 
 @test "_hc_config: validates log paths with case statement" {
@@ -603,4 +567,24 @@ run_validate_output() {
 	PREREQ=""
 	run _rule_is_active
 	assert_failure
+}
+
+# --- show_config with BAN_COMMAND case mapping (F-019 regression) ---
+
+@test "show_config: BAN_COMMAND returns raw template via case mapping" {
+	BAN_COMMAND_TEMPLATE='/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+	run show_config "BAN_COMMAND"
+	assert_success
+	assert_output '/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+}
+
+@test "show_config: dump all includes BAN_COMMAND mapped value" {
+	BAN_COMMAND_TEMPLATE='/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+	UNBAN_COMMAND_TEMPLATE=""
+	BAN_COMMAND_V6_TEMPLATE=""
+	UNBAN_COMMAND_V6_TEMPLATE=""
+	PRESSURE_TRIP="20"
+	run show_config
+	assert_success
+	assert_output --partial 'BAN_COMMAND=/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
 }

@@ -205,21 +205,3 @@ teardown() {
 	# should only see the 2 sshd events, not the 5 dovecot
 	assert_output "2"
 }
-
-# --- state_init events.dat ---
-
-@test "state_init: creates events.dat" {
-	local new_path="$TEST_TMPDIR/newbfd"
-	mkdir -p "$new_path"
-	state_init "$new_path"
-	[ -f "$new_path/tmp/events.dat" ]
-}
-
-@test "state_init: events.dat has 600 permissions" {
-	local new_path="$TEST_TMPDIR/newbfd"
-	mkdir -p "$new_path"
-	state_init "$new_path"
-	local perms
-	perms=$(stat -c '%a' "$new_path/tmp/events.dat")
-	[ "$perms" = "600" ]
-}

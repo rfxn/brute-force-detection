@@ -468,6 +468,42 @@ Daily maintenance (state rotation, cleanup).
 .TP
 .I /var/log/bfd_log
 Application log.
+.SH UPGRADING
+When upgrading from a previous BFD installation (including v1.5\-2),
+.B install.sh
+automatically backs up the existing installation to
+.I /usr/local/bfd.bk.DDMMYYYY\-HHMMSS
+(symlinked as
+.IR /usr/local/bfd.bk.last )
+and runs
+.B importconf
+to merge configuration and preserve state.
+.PP
+.B importconf
+migrates: user configuration (conf.bfd values), legacy variable name
+translations (TRIG \(-> PRESSURE_TRIP, BAN_DURATION \(-> BAN_TTL, etc.),
+per\-rule overrides (thresholds.conf \(-> pressure.conf), firewall backend
+detection, ban state (bans.active, bans.history, events.dat), log tracking
+state (tlog byte\-offsets, journal cursors), custom alert templates, and
+ignore lists.
+.PP
+Post\-upgrade verification:
+.RS 4
+.nf
+bfd \-c          # dry\-run detection cycle
+bfd \-\-status    # show current ban/event summary
+bfd \-\-health    # system health check
+.fi
+.RE
+.PP
+To roll back, flush any new bans and restore the backup:
+.RS 4
+.nf
+bfd \-\-flush\-all
+rm \-rf /usr/local/bfd
+cp \-a /usr/local/bfd.bk.last /usr/local/bfd
+.fi
+.RE
 .SH SIGNALS
 In watch mode
 .RB ( "bfd \-w" ):
