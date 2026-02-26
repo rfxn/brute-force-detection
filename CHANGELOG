@@ -1,4 +1,10 @@
 2.0.1:
+[New] bfd.1: Scan Mode subsection with --scan, --max-lines=, --scan-timeout=;
+      SCAN_MAX_LINES and SCAN_TIMEOUT in Advanced config section
+[New] README: section 5.7 Scan Mode with usage, use cases, safety limits,
+      and lock behavior; SCAN_MAX_LINES/SCAN_TIMEOUT in 3.7 Advanced table
+[Change] bfd.bash-completion: --scan, --max-lines=, --scan-timeout= in long
+      flags; --scan context completes rule names; config_vars updated
 [New] --scan CLI option: scan full logs for all rules or a specific rule;
       supports -d/--dryrun, --max-lines=N, --scan-timeout=N; acquires lock,
       runs check() in scan mode, advances cursors after non-dry-run scan

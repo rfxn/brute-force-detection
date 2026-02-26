@@ -279,6 +279,8 @@ Log paths are auto-detected based on the distribution. Override in `conf.bfd` if
 | `SUBNET_MASK` | `24` | IPv4 subnet mask for distributed detection |
 | `SUBNET_MASK_V6` | `48` | IPv6 subnet mask (must be multiple of 16) |
 | `WATCH_INTERVAL` | `10` | Watch mode polling interval in seconds |
+| `SCAN_MAX_LINES` | `50000` | Max lines per log during scan mode; 0 = unlimited |
+| `SCAN_TIMEOUT` | `120` | Journal timeout per rule during scan in seconds |
 | `OUTPUT_SYSLOG` | `1` | Log to syslog (0 = off, 1 = on) |
 
 Additional variables (`LOG_SOURCE`, `LOCK_FILE_TIMEOUT`, `BAN_RETRY_COUNT`, `OUTPUT_SYSLOG_FILE`) have sensible defaults in `internals.conf` and can be overridden by adding them to `conf.bfd`.
@@ -503,6 +505,29 @@ bfd -l --csv
 ```
 ip,service,ports,banned,expires
 ```
+
+### 5.7 Scan Mode
+
+Scan mode processes the **full current log file** through the detection pipeline, bypassing the incremental tlog reader. This is useful for:
+
+- **First install:** Catch existing attackers immediately instead of waiting for new log events.
+- **Rule changes:** Retroactively apply new rules to existing log data.
+- **Recovery:** Process missed events after a detection gap (daemon down, cron disabled).
+- **Forensic review:** Combine with `-d` (dry-run) to see what would be detected without banning.
+
+```bash
+bfd --scan              # scan all active rules against full logs
+bfd --scan sshd         # scan a specific rule only
+bfd --scan -d           # dry-run: detect without banning or advancing cursors
+bfd --scan --max-lines=100000   # override line limit
+bfd --scan --scan-timeout=60    # override journal timeout
+```
+
+After a non-dry-run scan, tlog cursors are advanced to the current log position so the next normal run starts fresh. In dry-run mode, cursors are not modified.
+
+**Safety limits:** `SCAN_MAX_LINES` (default 50000) bounds the number of lines processed per log file. `SCAN_TIMEOUT` (default 120s) limits journal reads. Set `--max-lines=0` for unlimited (use with caution on large logs). Both can be configured in `conf.bfd` or overridden on the command line.
+
+**Lock behavior:** Scan acquires the same global lock as normal runs. If watch mode is running, stop it first (`systemctl stop bfd-watch`), run the scan, then restart.
 
 ---
 
