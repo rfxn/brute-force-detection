@@ -1163,12 +1163,18 @@ _fw_iptables_setup() {
 	if [ -n "$_FW_IP6T_BIN" ]; then
 		"$_FW_IP6T_BIN" -N bfd 2>/dev/null || true
 		"$_FW_IP6T_BIN" -C INPUT -j bfd 2>/dev/null || "$_FW_IP6T_BIN" -I INPUT -j bfd
+	else
+		eout "{glob} ip6tables not found — IPv6 bans will be skipped" "le"
 	fi
 }
 
 _fw_iptables_ban() {
 	local host="$1"
 	if [[ "$host" == *:* ]]; then
+		if [ -z "$_FW_IP6T_BIN" ]; then
+			eout "{iptables} IPv6 ban skipped — ip6tables not found" "le"
+			return 1
+		fi
 		"$_FW_IP6T_BIN" -A bfd -s "$host" -j DROP 2>/dev/null
 	else
 		"$_FW_IPT_BIN" -A bfd -s "$host" -j DROP
@@ -1178,6 +1184,10 @@ _fw_iptables_ban() {
 _fw_iptables_unban() {
 	local host="$1"
 	if [[ "$host" == *:* ]]; then
+		if [ -z "$_FW_IP6T_BIN" ]; then
+			eout "{iptables} IPv6 unban skipped — ip6tables not found" "le"
+			return 1
+		fi
 		"$_FW_IP6T_BIN" -D bfd -s "$host" -j DROP 2>/dev/null
 	else
 		"$_FW_IPT_BIN" -D bfd -s "$host" -j DROP 2>/dev/null

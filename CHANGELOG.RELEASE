@@ -1,4 +1,13 @@
 2.0.1:
+[Fix] cron.daily: check mkdir-based lock (lock.utime.lk) before rotating state
+      files; prevents racing with running bfd process that uses directory-based
+      locking; flock retained for self-contention between cron.daily invocations
+[Fix] _fw_iptables_ban/_fw_iptables_unban: guard against empty $_FW_IP6T_BIN
+      when ip6tables is not installed; IPv6 bans now log a warning and return 1
+      instead of executing an empty command; _fw_iptables_setup logs one-time
+      warning when ip6tables is missing
+[Fix] README: corrected watch mode lock description from "flock" to "atomic
+      directory creation" to match actual mkdir-based implementation
 [New] GitHub Actions release workflow (.github/workflows/release.yml): builds
       RPM (el7, el8, el9, el10) and DEB packages in parallel Docker containers
       on v* tag push; creates GitHub Release with all packages as assets

@@ -490,7 +490,7 @@ and other daemon-based tools.
 
   bfd --watch
 
-Watch mode holds an flock for its entire lifetime, so cron-based runs
+Watch mode holds a lock (via atomic directory creation) for its entire lifetime, so cron-based runs
 (bfd -q) will silently skip when watch mode is active. If the watch
 daemon exits unexpectedly (OOM, crash), cron automatically detects the
 dead PID and resumes detection within one cycle (~2 minutes). No cron
