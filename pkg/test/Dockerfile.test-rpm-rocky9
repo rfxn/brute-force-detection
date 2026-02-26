@@ -1,0 +1,15 @@
+FROM rockylinux:9
+
+# Install dependencies that BFD requires at runtime
+RUN dnf install -y bash coreutils grep gawk findutils util-linux \
+        iproute sed procps-ng cronie logrotate && \
+    dnf clean all
+
+# Copy RPM and test script from build context
+COPY bfd-*el9*.rpm /tmp/
+COPY test-pkg-install.sh /test/test-pkg-install.sh
+
+# Install the package
+RUN rpm -ivh /tmp/bfd-*el9*.rpm
+
+CMD ["/test/test-pkg-install.sh", "rpm"]

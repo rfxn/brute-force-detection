@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+
+LEGACY_PATH="/usr/local/bfd"
+
+case "$1" in
+    configure)
+        # Set permissions on config files (dpkg may reset to defaults)
+        chmod 640 /etc/bfd/conf.bfd /etc/bfd/internals.conf \
+            /etc/bfd/pressure.conf /etc/bfd/pressure-country.conf \
+            /etc/bfd/exclude.files /etc/bfd/ignore.hosts 2>/dev/null || true
+        # Set permissions on state directories
+        chmod 750 /var/lib/bfd/tmp /var/lib/bfd/stats 2>/dev/null || true
+        # Run importconf if migrating from install.sh backup
+        if [ -d "${LEGACY_PATH}.bk.last" ]; then
+            if [ -x /usr/lib/bfd/importconf ]; then
+                INSTALL_PATH="$LEGACY_PATH" /usr/lib/bfd/importconf || true
+            fi
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
