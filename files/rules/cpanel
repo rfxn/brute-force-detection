@@ -9,14 +9,14 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/local/cpanel/logs/login_log"
+PREREQ="/usr/local/cpanel/logs/login_log"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="2082,2083,2086,2087"
-	LP="/usr/local/cpanel/logs/login_log"
-	TLOG_TF="cpanel"
+	LOG_FILE="/usr/local/cpanel/logs/login_log"
+	LOG_TAG="cpanel"
 
 	## whm, cpanel, webmaild
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"<HOST> -.* FAILED LOGIN")
 fi

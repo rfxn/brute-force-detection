@@ -1,4 +1,8 @@
 2.0.1:
+[Change] rule variables renamed for clarity: REQ→PREREQ, LP→LOG_FILE,
+      TLOG_TF→LOG_TAG, ARG_VAL→MATCHED_HOSTS; all 42 rule files, library
+      functions, and diagnostics updated; _compat_rule_vars() shim provides
+      full backward compatibility for custom rules using old names
 [New] install.sh: auto-enable watch mode on fresh install (systemd + SysVinit);
       upgrades respect existing timer/watch choice
 [Change] install.sh: cleaner post-install output reflecting active scheduling mode

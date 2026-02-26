@@ -537,7 +537,7 @@ that declares the service name, required binary, log path, and a regex pattern
 for matching authentication failures.
 
 Each rule auto-enables based on the existence of a specific application binary
-(REQ). For example, if /usr/sbin/sshd exists, the sshd rule is active. No
+(PREREQ). For example, if /usr/sbin/sshd exists, the sshd rule is active. No
 manual activation is needed — install the application and BFD will detect it.
 
 Use 'bfd -c' to see which rules are active on your system.
@@ -562,11 +562,11 @@ BFD ships with 42 rules:
 6.2) Rule Engine: Rule Customization
 Each rule file supports the following variables:
 
-  REQ             - path to required binary. Rule is active only if this
-                    binary exists.
-  LP              - log file path to monitor (uses config variables like
+  PREREQ          - path to required binary or file. Rule is active only
+                    if this file exists.
+  LOG_FILE        - log file path to monitor (uses config variables like
                     $AUTH_LOG_PATH).
-  ARG_VAL         - extracted IP list — tlog + extract_hosts pipeline using
+  MATCHED_HOSTS   - extracted IP list — tlog + extract_hosts pipeline using
                     <HOST> patterns.
   PRESSURE_WEIGHT - per-service pressure weight (overrides pressure.conf;
                     higher = faster pressure accumulation).
@@ -577,8 +577,8 @@ Each rule file supports the following variables:
   SKIP_ALERT      - set to "1" to suppress email alerts for this service.
   RULE_EMAIL      - override EMAIL_ADDRESS for this rule's alerts (per-rule
                     routing).
-  TLOG_TF         - tracking identifier used by tlog for state file naming
-                    (e.g., "sshd", "dovecot").
+  LOG_TAG         - tracking tag used by tlog for state file naming and
+                    journal filter dispatch (e.g., "sshd", "dovecot").
   IGNOREREGEX     - lines matching this ERE pattern are excluded before IP
                     extraction (fail2ban-compatible).
 

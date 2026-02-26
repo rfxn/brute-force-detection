@@ -10,19 +10,19 @@
 
 # detect nginx error log path
 if [ -f "/var/log/nginx/error.log" ]; then
-	LP="/var/log/nginx/error.log"
+	LOG_FILE="/var/log/nginx/error.log"
 elif [ -f "/usr/local/nginx/logs/error.log" ]; then
-	LP="/usr/local/nginx/logs/error.log"
+	LOG_FILE="/usr/local/nginx/logs/error.log"
 fi
 
 # file must exist for rule to be active
-REQ="${LP:-}"
-if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+PREREQ="${LOG_FILE:-}"
+if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
 	PORTS="80,443"
-	TLOG_TF="nginx.auth"
+	LOG_TAG="nginx.auth"
 
 	## nginx HTTP authentication failures
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"password mismatch, client: <HOST>" \
 		"was not found in .*, client: <HOST>" \
 		"no user/password was provided.*, client: <HOST>")

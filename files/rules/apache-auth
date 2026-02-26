@@ -10,21 +10,21 @@
 
 # detect apache error log path
 if [ -f "/usr/local/apache/logs/error_log" ]; then
-	LP="/usr/local/apache/logs/error_log"
+	LOG_FILE="/usr/local/apache/logs/error_log"
 elif [ -f "/var/log/httpd/error_log" ]; then
-	LP="/var/log/httpd/error_log"
+	LOG_FILE="/var/log/httpd/error_log"
 elif [ -f "/var/log/apache2/error.log" ]; then
-	LP="/var/log/apache2/error.log"
+	LOG_FILE="/var/log/apache2/error.log"
 fi
 
 # file must exist for rule to be active
-REQ="${LP:-}"
-if [ -n "$REQ" ] && [ -f "$REQ" ]; then
+PREREQ="${LOG_FILE:-}"
+if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
 	PORTS="80,443"
-	TLOG_TF="httpd.auth"
+	LOG_TAG="httpd.auth"
 
 	## Apache HTTP authentication failures (2.4 + 2.2)
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"\[client <HOST>.*AH0161[78]" \
 		"\[client <HOST>\].*authentication failure")
 fi

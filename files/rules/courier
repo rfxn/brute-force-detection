@@ -9,14 +9,14 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/lib/courier-imap/libexec/couriertcpd"
+PREREQ="/usr/lib/courier-imap/libexec/couriertcpd"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="110,143,993,995"
-	LP="$MAIL_LOG_PATH"
-	TLOG_TF="courier"
+	LOG_FILE="$MAIL_LOG_PATH"
+	LOG_TAG="courier"
 
 	## courier imap|pop3
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"LOGIN FAILED.*\[<HOST>\]")
 fi

@@ -512,7 +512,7 @@ ip,service,ports,banned,expires
 
 Rules are located under `/usr/local/bfd/rules/`. Each rule is a shell fragment that declares the service name, required binary, log path, and a regex pattern for matching authentication failures.
 
-Each rule auto-enables based on the existence of a specific application binary (`REQ`). For example, if `/usr/sbin/sshd` exists, the sshd rule is active. No manual activation is needed — install the application and BFD will detect it.
+Each rule auto-enables based on the existence of a specific application binary (`PREREQ`). For example, if `/usr/sbin/sshd` exists, the sshd rule is active. No manual activation is needed — install the application and BFD will detect it.
 
 Use `bfd -c` to see which rules are active on your system.
 
@@ -540,15 +540,15 @@ Each rule file supports the following variables:
 
 | Variable | Description |
 |----------|-------------|
-| `REQ` | Path to required binary. Rule is active only if this binary exists |
-| `LP` | Log file path to monitor (uses config variables like `$AUTH_LOG_PATH`) |
-| `ARG_VAL` | Extracted IP list — tlog + extract_hosts pipeline using `<HOST>` patterns |
+| `PREREQ` | Path to required binary or file. Rule is active only if this file exists |
+| `LOG_FILE` | Log file path to monitor (uses config variables like `$AUTH_LOG_PATH`) |
+| `MATCHED_HOSTS` | Extracted IP list — tlog + extract_hosts pipeline using `<HOST>` patterns |
 | `PRESSURE_WEIGHT` | Per-service pressure weight (overrides `pressure.conf`; higher = faster accumulation) |
 | `PRESSURE_TRIP` | Per-service trip point (overrides `pressure.conf` and global `PRESSURE_TRIP`) |
 | `PORTS` | Service ports for port-specific blocking (e.g., `"22"` for sshd) |
 | `SKIP_ALERT` | Set to `"1"` to suppress email alerts for this service |
 | `RULE_EMAIL` | Override `EMAIL_ADDRESS` for this rule's alerts (per-rule routing) |
-| `TLOG_TF` | Tracking identifier used by tlog for state file naming (e.g., `"sshd"`, `"dovecot"`) |
+| `LOG_TAG` | Tracking tag for tlog state file naming and journal filter dispatch (e.g., `"sshd"`, `"dovecot"`) |
 | `IGNOREREGEX` | Lines matching this ERE pattern are excluded before IP extraction (fail2ban-compatible) |
 
 To customize a rule's pressure weight and trip point:

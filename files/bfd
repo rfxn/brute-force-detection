@@ -259,6 +259,7 @@ check() {
 		eout "processing rule file $str"
 		_clear_rule_vars
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
+		_compat_rule_vars
 		_apply_pressure "$str"
 		_apply_thresholds "$str"
 		# resolve effective weight and trip for this rule
@@ -270,8 +271,8 @@ check() {
 		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
 		validate_rule "$str" || continue
 		rules_count=$((rules_count + 1))
-		# process ARG_VAL pipeline once; reuse for iteration and counting
-		HOSTS_PARSED=$(echo "$ARG_VAL" | tr ' ' '\n' | sort)
+		# process MATCHED_HOSTS pipeline once; reuse for iteration and counting
+		HOSTS_PARSED=$(echo "$MATCHED_HOSTS" | tr ' ' '\n' | sort)
 		# count events (raw IP occurrences including duplicates)
 		local host_lines
 		host_lines=$(echo "$HOSTS_PARSED" | grep -c . 2>/dev/null || echo 0)
@@ -329,7 +330,7 @@ check() {
 						# collect alert data for batched delivery
 						if [ "$EMAIL_ALERTS" = "1" ] && [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							local eff_recipient="${RULE_EMAIL:-$EMAIL_ADDRESS}"
-							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${pressure_scaled}|${ban_expiry}|${ban_action}|${recent_bans}|${LP}|${eff_recipient}|${eff_trip}|${PRESSURE_HALF_LIFE}|${scoring_weight}" >> "$alerts_file"
+							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${pressure_scaled}|${ban_expiry}|${ban_action}|${recent_bans}|${LOG_FILE}|${eff_recipient}|${eff_trip}|${PRESSURE_HALF_LIFE}|${scoring_weight}" >> "$alerts_file"
 						fi
 					fi
 				fi

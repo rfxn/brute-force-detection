@@ -9,14 +9,14 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/lib/cyrus-imapd/imapd"
+PREREQ="/usr/lib/cyrus-imapd/imapd"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="143,993,110,995"
-	LP="$MAIL_LOG_PATH"
-	TLOG_TF="cyrus"
+	LOG_FILE="$MAIL_LOG_PATH"
+	LOG_TAG="cyrus"
 
 	## Cyrus IMAP authentication failures
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"badlogin:.*\[<HOST>\].*SASL")
 fi

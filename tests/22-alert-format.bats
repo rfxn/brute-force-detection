@@ -430,12 +430,12 @@ _setup_check_env() {
 	echo "test line" > "$logfile"
 	cat > "$rules_dir/testrule" <<'RULEEOF'
 TRIG="2"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
-LP="$logfile"
-TLOG_TF="testrule"
-ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+LOG_FILE="$logfile"
+LOG_TAG="testrule"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="1"
@@ -462,12 +462,12 @@ MOCK
 	cat > "$rules_dir/testrule" <<'RULEEOF'
 TRIG="2"
 SKIP_ALERT="1"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
-LP="$logfile"
-TLOG_TF="testrule"
-ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+LOG_FILE="$logfile"
+LOG_TAG="testrule"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="1"
@@ -491,12 +491,12 @@ MOCK
 	echo "test line" > "$logfile"
 	cat > "$rules_dir/testrule" <<'RULEEOF'
 TRIG="2"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
-LP="$logfile"
-TLOG_TF="testrule"
-ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+LOG_FILE="$logfile"
+LOG_TAG="testrule"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="1"
@@ -521,12 +521,12 @@ MOCK
 	echo "test line" > "$logfile"
 	cat > "$rules_dir/testrule" <<'RULEEOF'
 TRIG="2"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 RULEEOF
 	cat >> "$rules_dir/testrule" <<EOF
-LP="$logfile"
-TLOG_TF="testrule"
-ARG_VAL="192.0.2.1 192.0.2.1 192.0.2.1"
+LOG_FILE="$logfile"
+LOG_TAG="testrule"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="0"

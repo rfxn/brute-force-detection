@@ -8,7 +8,7 @@
 #   TIME_ZONE      — system timezone offset
 #
 # Single-ban backward compatibility (when ALERT_COUNT=1):
-#   ATTACK_HOST, MOD, ATTACK_COUNT, PORTS, LP, BAN_COMMAND
+#   ATTACK_HOST, MOD, ATTACK_COUNT, PORTS, LOG_FILE, BAN_COMMAND
 #
 cat <<EOF
 BFD Alert for $HOSTNAME ($(date +"%Y-%m-%d %H:%M:%S") GMT $TIME_ZONE)

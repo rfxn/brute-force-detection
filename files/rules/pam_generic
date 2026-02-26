@@ -10,13 +10,13 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="$AUTH_LOG_PATH"
+PREREQ="$AUTH_LOG_PATH"
 
-if [ -f "$REQ" ]; then
-	LP="$AUTH_LOG_PATH"
-	TLOG_TF="pam"
+if [ -f "$PREREQ" ]; then
+	LOG_FILE="$AUTH_LOG_PATH"
+	LOG_TAG="pam"
 
 	## Generic PAM authentication failures (catches any PAM service)
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"pam_unix.*authentication failure.*rhost=<HOST>")
 fi

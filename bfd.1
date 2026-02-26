@@ -361,16 +361,16 @@ Rule files in
 define service-specific detection patterns.
 Each rule sets:
 .TP
-.B REQ
-Path to a binary that must exist for the rule to be active.
+.B PREREQ
+Path to a binary or file that must exist for the rule to be active.
 .TP
-.B LP
-Log file path to scan.
+.B LOG_FILE
+Log file path to scan for authentication failures.
 .TP
-.B TLOG_TF
-Tracking file identifier for tlog byte-offset state.
+.B LOG_TAG
+Tracking tag for tlog byte-offset state and journal filter dispatch.
 .TP
-.B ARG_VAL
+.B MATCHED_HOSTS
 Set by the detection engine; contains extracted IPs from log matching.
 .PP
 Optional per-rule variables:

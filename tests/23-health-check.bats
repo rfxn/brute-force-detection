@@ -98,14 +98,14 @@ teardown() {
 }
 
 @test "health_check: active rule reported correctly" {
-	# create a rule that has REQ pointing to an existing binary
+	# create a rule that has PREREQ pointing to an existing binary
 	cat > "$INSTALL_PATH/rules/testrule" <<EOF
 TRIG="10"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 PORTS="22"
-LP="$AUTH_LOG_PATH"
-TLOG_TF="testrule"
-ARG_VAL=""
+LOG_FILE="$AUTH_LOG_PATH"
+LOG_TAG="testrule"
+MATCHED_HOSTS=""
 EOF
 	run health_check "$INSTALL_PATH"
 	assert_success
@@ -113,13 +113,13 @@ EOF
 	assert_output --partial "trip=10, PORTS=22"
 }
 
-@test "health_check: inactive rule (missing REQ) reported correctly" {
+@test "health_check: inactive rule (missing PREREQ) reported correctly" {
 	cat > "$INSTALL_PATH/rules/missingreq" <<EOF
 TRIG="5"
-REQ="/nonexistent/binary"
-LP="$AUTH_LOG_PATH"
-TLOG_TF="missingreq"
-ARG_VAL=""
+PREREQ="/nonexistent/binary"
+LOG_FILE="$AUTH_LOG_PATH"
+LOG_TAG="missingreq"
+MATCHED_HOSTS=""
 EOF
 	run health_check "$INSTALL_PATH"
 	assert_success
@@ -128,22 +128,22 @@ EOF
 
 @test "health_check: rule count matches" {
 	cat > "$INSTALL_PATH/rules/active1" <<EOF
-REQ="/bin/sh"
-LP="$AUTH_LOG_PATH"
-TLOG_TF="active1"
-ARG_VAL=""
+PREREQ="/bin/sh"
+LOG_FILE="$AUTH_LOG_PATH"
+LOG_TAG="active1"
+MATCHED_HOSTS=""
 EOF
 	cat > "$INSTALL_PATH/rules/inactive1" <<EOF
-REQ="/no/such/bin"
-LP="$AUTH_LOG_PATH"
-TLOG_TF="inactive1"
-ARG_VAL=""
+PREREQ="/no/such/bin"
+LOG_FILE="$AUTH_LOG_PATH"
+LOG_TAG="inactive1"
+MATCHED_HOSTS=""
 EOF
 	cat > "$INSTALL_PATH/rules/inactive2" <<EOF
-REQ="/no/such/bin2"
-LP="$AUTH_LOG_PATH"
-TLOG_TF="inactive2"
-ARG_VAL=""
+PREREQ="/no/such/bin2"
+LOG_FILE="$AUTH_LOG_PATH"
+LOG_TAG="inactive2"
+MATCHED_HOSTS=""
 EOF
 	run health_check "$INSTALL_PATH"
 	assert_success

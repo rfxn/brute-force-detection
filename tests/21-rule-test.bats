@@ -26,11 +26,11 @@ LOGEOF
 	# create test rule file
 	cat > "$INSTALL_PATH/rules/test-sshd" <<RULEEOF
 TRIG="5"
-REQ="/bin/sh"
+PREREQ="/bin/sh"
 PORTS="22"
-LP="$SAMPLE_LOG"
-TLOG_TF="sshd"
-ARG_VAL=\$(_rule_tlog "\$LP" "\$TLOG_TF" | extract_hosts \\
+LOG_FILE="$SAMPLE_LOG"
+LOG_TAG="sshd"
+MATCHED_HOSTS=\$(_rule_tlog "\$LOG_FILE" "\$LOG_TAG" | extract_hosts \\
 	"sshd.*Failed password for .* from <HOST>" \\
 	"sshd.*Invalid user .* from <HOST>")
 RULEEOF
@@ -73,7 +73,7 @@ teardown() {
 	assert_output --partial "not found"
 }
 
-@test "test_rule: custom log file overrides LP" {
+@test "test_rule: custom log file overrides LOG_FILE" {
 	local alt_log="$TEST_TMPDIR/alt.log"
 	echo "Feb 20 10:01:01 server sshd[1234]: Failed password for root from 192.0.2.1 port 22 ssh2" > "$alt_log"
 	run test_rule "$INSTALL_PATH" "test-sshd" "$alt_log"

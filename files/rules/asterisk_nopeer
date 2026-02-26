@@ -9,14 +9,14 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/sbin/asterisk"
+PREREQ="/usr/sbin/asterisk"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="5060,5061"
-	LP="/var/log/asterisk/full"
-	TLOG_TF="asterisk_nopeer"
+	LOG_FILE="/var/log/asterisk/full"
+	LOG_TAG="asterisk_nopeer"
 
 	## ASTERISK NOPEER
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"chan_sip.*No matching peer found.*'<HOST>'")
 fi

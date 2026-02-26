@@ -9,15 +9,15 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/bin/pvesh"
+PREREQ="/usr/bin/pvesh"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="8006"
-	LP="$AUTH_LOG_PATH"
-	TLOG_TF="proxmox"
+	LOG_FILE="$AUTH_LOG_PATH"
+	LOG_TAG="proxmox"
 
 	## PROXMOX VE
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"pvedaemon.*authentication failure.*rhost=<HOST>" \
 		"pveproxy.*authentication failure.*rhost=<HOST>")
 fi

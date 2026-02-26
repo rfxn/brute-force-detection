@@ -32,12 +32,12 @@ setup() {
 	RULES_PATH="$INSTALL_PATH/rules"
 	mkdir -p "$RULES_PATH"
 	cat > "$RULES_PATH/sshd" <<-'RULE'
-	REQ="/bin/sh"
-	LP="/var/log/auth.log"
-	TLOG_TF="sshd"
+	PREREQ="/bin/sh"
+	LOG_FILE="/var/log/auth.log"
+	LOG_TAG="sshd"
 	TRIG="5"
 	PORTS="22"
-	ARG_VAL=""
+	MATCHED_HOSTS=""
 	RULE
 	chmod 644 "$RULES_PATH/sshd"
 	chown root "$RULES_PATH/sshd" 2>/dev/null || true
@@ -77,7 +77,7 @@ teardown() {
 @test "show_status: reports active rules" {
 	run show_status "$INSTALL_PATH"
 	assert_success
-	# sshd rule is active (REQ=/bin/sh exists)
+	# sshd rule is active (PREREQ=/bin/sh exists)
 	assert_output --partial "Active Rules:"
 }
 
@@ -254,10 +254,10 @@ teardown() {
 
 @test "list_rules: shows inactive rule" {
 	cat > "$RULES_PATH/fakeservice" <<-'RULE'
-	REQ="/nonexistent/binary"
-	LP="/var/log/fake.log"
-	TLOG_TF="fake"
-	ARG_VAL=""
+	PREREQ="/nonexistent/binary"
+	LOG_FILE="/var/log/fake.log"
+	LOG_TAG="fake"
+	MATCHED_HOSTS=""
 	RULE
 	chmod 644 "$RULES_PATH/fakeservice"
 	chown root "$RULES_PATH/fakeservice" 2>/dev/null || true

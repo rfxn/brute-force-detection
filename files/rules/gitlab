@@ -9,14 +9,14 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/bin/gitlab-ctl"
+PREREQ="/usr/bin/gitlab-ctl"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="80,443"
-	LP="/var/log/gitlab/gitlab-rails/application.log"
-	TLOG_TF="gitlab"
+	LOG_FILE="/var/log/gitlab/gitlab-rails/application.log"
+	LOG_TAG="gitlab"
 
 	## GITLAB (application.log plain text format)
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"Failed Login.*ip=<HOST>")
 fi

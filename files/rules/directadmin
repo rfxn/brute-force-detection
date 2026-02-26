@@ -9,14 +9,14 @@
 # RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/local/directadmin/directadmin"
+PREREQ="/usr/local/directadmin/directadmin"
 
-if [ -f "$REQ" ]; then
+if [ -f "$PREREQ" ]; then
 	PORTS="2222"
-	LP="/var/log/directadmin/login.log"
-	TLOG_TF="directadmin"
+	LOG_FILE="/var/log/directadmin/login.log"
+	LOG_TAG="directadmin"
 
 	## DirectAdmin authentication failures
-	ARG_VAL=$(_rule_tlog "$LP" "$TLOG_TF" | extract_hosts \
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"'<HOST>' [0-9]+ failed login attempt")
 fi
