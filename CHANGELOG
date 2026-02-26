@@ -1,4 +1,8 @@
 2.0.1:
+[New] 32-scan.bats: 48 tests covering _tlog_read_full, _tlog_journal_read_full,
+      _tlog_advance_scan_cursors, _rule_tlog scan branch, check() scan mode
+      integration, cursor advancement, CLI argument parsing, validate_config,
+      and show_config for scan variables (974 total tests, 0 failures)
 [New] bfd.1: Scan Mode subsection with --scan, --max-lines=, --scan-timeout=;
       SCAN_MAX_LINES and SCAN_TIMEOUT in Advanced config section
 [New] README: section 5.7 Scan Mode with usage, use cases, safety limits,
