@@ -23,9 +23,11 @@ Requires:       util-linux
 Requires:       iproute
 Requires:       sed
 Requires:       procps-ng
+%if 0%{?rhel} >= 8 || 0%{?fedora}
 Recommends:     cronie
 Recommends:     logrotate
 Suggests:       mailx
+%endif
 
 %description
 BFD (Brute Force Detection) is a modular shell-based daemon that parses
