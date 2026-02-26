@@ -243,7 +243,7 @@ echo "$UTIME" > "$LOCK_FILE"
 }
 
 check() {
-	local run_start rules_count=0 events_count=0 bans_count=0
+	local run_start active_count=0 rules_count=0 events_count=0 bans_count=0
 	run_start=$(date +"%s")
 
 	# create alerts temp file for batched email delivery
@@ -256,7 +256,7 @@ check() {
 
 	for str in "$RULES_PATH"/*; do
 		str=$(basename "$str")
-		eout "processing rule file $str"
+		vout "processing rule file $str"
 		_clear_rule_vars
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
 		_compat_rule_vars
@@ -270,6 +270,10 @@ check() {
 		fi
 		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
 		validate_rule "$str" || continue
+		active_count=$((active_count + 1))
+		if [ -z "${MATCHED_HOSTS:-}" ]; then
+			continue  # active but no new events this cycle
+		fi
 		rules_count=$((rules_count + 1))
 		# process MATCHED_HOSTS pipeline once; reuse for iteration and counting
 		HOSTS_PARSED=$(echo "$MATCHED_HOSTS" | tr ' ' '\n' | sort)
@@ -354,7 +358,7 @@ check() {
 	local run_end run_elapsed
 	run_end=$(date +"%s")
 	run_elapsed=$((run_end - run_start))
-	eout "run complete: $rules_count rules checked, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" le
+	eout "run complete: $active_count active rules, $rules_count with events, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" le
 }
 
 _apool_report() {

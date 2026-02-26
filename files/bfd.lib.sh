@@ -708,6 +708,13 @@ tlog_journal_filter() {
 		rh_imapd)   echo "SYSLOG_IDENTIFIER=imapd" ;;
 		rh_ipop3)   echo "SYSLOG_IDENTIFIER=ipop3d" ;;
 		named)      echo "SYSLOG_IDENTIFIER=named" ;;
+		openvpn)    echo "SYSLOG_IDENTIFIER=openvpn" ;;
+		exim_authfail) echo "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim" ;;
+		exim_nxuser)   echo "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim" ;;
+		xrdp)       echo "SYSLOG_IDENTIFIER=xrdp-sesman" ;;
+		asterisk)   echo "SYSLOG_IDENTIFIER=asterisk" ;;
+		asterisk.iax)     echo "SYSLOG_IDENTIFIER=asterisk" ;;
+		asterisk_nopeer)  echo "SYSLOG_IDENTIFIER=asterisk" ;;
 		*) return 1 ;;
 	esac
 	return 0
@@ -831,33 +838,45 @@ extract_hosts() {
 	done
 }
 
-# validate_rule rule_name — check that a sourced rule set required variables
-# requires: LOG_FILE, LOG_TAG to be set by the rule file
-# returns 0 on success, 1 on skip
+# validate_rule rule_name — check that a sourced rule set required variables.
+# Distinguishes three cases:
+#   1. Service not installed (PREREQ set but missing) — silent skip
+#   2. File-detection rule with no match (PREREQ+LOG_FILE both empty) — silent skip
+#   3. Genuine misconfiguration (LOG_FILE/LOG_TAG missing despite PREREQ existing) — logged
+# MATCHED_HOSTS check is NOT here — caller handles it after counting active rules.
+# returns 0 on success (rule is active), 1 on skip
 validate_rule() {
 	local rule_name="$1"
-	if [ -z "${LOG_FILE:-}" ]; then
-		eout "rule $rule_name: LOG_FILE not set (prerequisite not installed?), skipping" le
+	# 1. Service not installed (binary set but missing) — silent skip
+	if [ -n "${PREREQ:-}" ] && [ ! -f "$PREREQ" ]; then
 		return 1
 	fi
+	# 2. File-detection rules with no match — silent skip
+	if [ -z "${PREREQ:-}" ] && [ -z "${LOG_FILE:-}" ]; then
+		return 1
+	fi
+	# 3. LOG_FILE not set despite PREREQ existing — genuine misconfiguration
+	if [ -z "${LOG_FILE:-}" ]; then
+		eout "rule $rule_name: LOG_FILE not set (service found but log path missing), skipping" le
+		return 1
+	fi
+	# 4. LOG_FILE missing — check journal fallback
 	if [ ! -f "$LOG_FILE" ]; then
-		# allow rule if journal fallback is possible
 		if [ "${LOG_SOURCE:-auto}" != "file" ] && \
 		   command -v journalctl >/dev/null 2>&1 && \
 		   tlog_journal_filter "${LOG_TAG:-}" >/dev/null 2>&1; then
-			: # journal-capable, continue validation
+			: # journal-capable, continue
 		else
 			eout "rule $rule_name: log file '$LOG_FILE' does not exist, skipping" le
 			return 1
 		fi
 	fi
+	# 5. LOG_TAG not set
 	if [ -z "${LOG_TAG:-}" ]; then
 		eout "rule $rule_name: LOG_TAG not set, skipping" le
 		return 1
 	fi
-	if [ -z "${MATCHED_HOSTS:-}" ]; then
-		return 1
-	fi
+	# Rule is ACTIVE — MATCHED_HOSTS check moves to caller
 	return 0
 }
 

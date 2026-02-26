@@ -280,9 +280,9 @@ MOCK
 # --- validate_rule() journal awareness tests ---
 
 @test "validate_rule: LOG_FILE missing + journal available + mapping passes" {
+	PREREQ="/bin/sh"
 	LOG_FILE="/nonexistent/auth.log"
 	LOG_TAG="sshd"
-	MATCHED_HOSTS="192.0.2.1"
 	LOG_SOURCE="auto"
 	run validate_rule "sshd"
 	assert_success
@@ -295,9 +295,9 @@ MOCK
 		export BFD_LOG_PATH='$BFD_LOG_PATH'
 		export OUTPUT_SYSLOG='0'
 		export OUTPUT_SYSLOG_FILE='/dev/null'
+		PREREQ='/bin/sh'
 		LOG_FILE='/nonexistent/auth.log'
 		LOG_TAG='sshd'
-		MATCHED_HOSTS='192.0.2.1'
 		LOG_SOURCE='auto'
 		validate_rule 'sshd'
 	"
@@ -306,9 +306,9 @@ MOCK
 }
 
 @test "validate_rule: LOG_FILE missing + LOG_SOURCE=file fails" {
+	PREREQ="/bin/sh"
 	LOG_FILE="/nonexistent/auth.log"
 	LOG_TAG="sshd"
-	MATCHED_HOSTS="192.0.2.1"
 	LOG_SOURCE="file"
 	run validate_rule "sshd"
 	assert_failure
@@ -316,9 +316,9 @@ MOCK
 }
 
 @test "validate_rule: LOG_FILE missing + no mapping fails" {
+	PREREQ="/bin/sh"
 	LOG_FILE="/nonexistent/error.log"
 	LOG_TAG="apache-auth"
-	MATCHED_HOSTS="192.0.2.1"
 	LOG_SOURCE="auto"
 	run validate_rule "apache-auth"
 	assert_failure

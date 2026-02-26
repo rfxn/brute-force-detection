@@ -635,7 +635,7 @@ _run_check_with_stats() {
 	run _run_check_with_stats "$rules_dir"
 	assert_success
 	assert_output --partial "run complete:"
-	assert_output --partial "rules checked"
+	assert_output --partial "active rules"
 	assert_output --partial "events parsed"
 	assert_output --partial "bans executed"
 }
@@ -671,9 +671,9 @@ EOF
 	run _run_check_with_stats "$rules_dir"
 	assert_success
 	# badrule has LOG_FILE that doesn't exist, so validate_rule skips it
-	# testrule1 and testrule2 pass validate_rule but have empty MATCHED_HOSTS so
-	# validate_rule returns 1 for empty MATCHED_HOSTS — 0 valid rules
-	assert_output --partial "0 rules checked"
+	# testrule1 and testrule2 pass validate_rule (2 active) but have empty
+	# MATCHED_HOSTS so 0 rules have events
+	assert_output --partial "2 active rules, 0 with events"
 }
 
 @test "run stats: counts events from HOSTS_PARSED" {
@@ -693,7 +693,7 @@ MATCHED_HOSTS="192.0.2.1 192.0.2.2 192.0.2.1"
 EOF
 	run _run_check_with_stats "$rules_dir"
 	assert_success
-	assert_output --partial "1 rules checked"
+	assert_output --partial "1 with events"
 	assert_output --partial "3 events parsed"
 }
 
@@ -702,7 +702,7 @@ EOF
 	mkdir -p "$rules_dir"
 	run _run_check_with_stats "$rules_dir"
 	assert_success
-	assert_output --partial "0 rules checked, 0 events parsed, 0 bans executed"
+	assert_output --partial "0 active rules, 0 with events, 0 events parsed, 0 bans executed"
 }
 
 @test "run stats: elapsed time is non-negative integer" {

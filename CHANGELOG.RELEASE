@@ -1,4 +1,12 @@
 2.0.1:
+[Change] validate_rule() rewritten to distinguish inactive rules (silent skip)
+      from genuine misconfigurations (logged); PREREQ-missing and file-detection
+      with no match are now silent; MATCHED_HOSTS check moved to caller
+[Change] check() output: "processing rule file" messages now verbose-only;
+      new summary format "N active rules, M with events, P events parsed,
+      K bans executed"; active_count tracks rules passing validate_rule
+[New] tlog_journal_filter() expanded from 16 to 23 entries: openvpn,
+      exim_authfail, exim_nxuser, xrdp, asterisk, asterisk.iax, asterisk_nopeer
 [Change] rule variables renamed for clarity: REQ→PREREQ, LP→LOG_FILE,
       TLOG_TF→LOG_TAG, ARG_VAL→MATCHED_HOSTS; all 42 rule files, library
       functions, and diagnostics updated; _compat_rule_vars() shim provides
