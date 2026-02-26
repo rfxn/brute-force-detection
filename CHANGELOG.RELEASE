@@ -4,10 +4,9 @@
       CLI usage block; SCAN_MAX_LINES/SCAN_TIMEOUT in 3.7 Advanced config;
       TOC entry for section 5.7
 [Change] install.sh: contextual progress output for every blocking stage;
-      echo-n/done pattern on _stop_services() and _enable_services() so
-      systemctl stop/start is never a silent pause; stage markers (upgrade/
-      install header, backing up, installing files, importing configuration);
-      postinfo detail lines indented under ".: BFD installed" banner
+      plain-English verbs with no prefix sigils; echo-n/done on stop/start
+      so systemctl calls are never a silent pause; stage markers (header,
+      backing up, installing, importing); summary block with 2-space indent
 [Fix] install.sh: stop watch mode before upgrade to avoid 15s restart delay
       and stray output from dying process; new _stop_services() called before
       backup(); _enable_services() uses start instead of restart
