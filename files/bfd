@@ -504,6 +504,12 @@ reload_watch() {
 		eout "reload aborted: conf.bfd has unsafe ownership or permissions" le
 		return 1
 	fi
+	# clear config vars BEFORE re-sourcing so conf.bfd values take effect cleanly
+	# (if unset happens after sourcing, it destroys the freshly-sourced values)
+	unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL
+	unset BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW
+	unset TRIG TRIG_WINDOW TRIG_GLOBAL
+	unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
 	# shellcheck disable=SC1090
 	. "$CNF"
 	if [ -f "$INTCNF" ]; then
@@ -528,12 +534,7 @@ reload_watch() {
 	OUTPUT_SYSLOG_FILE="${OUTPUT_SYSLOG_FILE:-$KERNEL_LOG_PATH}"
 	BAN_RETRY_COUNT="${BAN_RETRY_COUNT:-2}"
 	LOG_SOURCE="${LOG_SOURCE:-auto}"
-	# clear derived pressure vars so re-sourced config takes effect
-	unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL
-	unset BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW
-	unset TRIG TRIG_WINDOW TRIG_GLOBAL
-	unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
-	# re-derive pressure model variables after config reload
+	# re-derive pressure model variables (same fallback chain as startup)
 	PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
 	PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
 	PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
@@ -578,7 +579,10 @@ reload_watch() {
 }
 
 watch() {
-	trap cleanup_watch EXIT INT TERM
+	trap cleanup_watch EXIT
+	# shellcheck disable=SC2317 # reached via signal
+	trap 'exit 143' TERM
+	trap 'exit 130' INT
 	trap reload_watch HUP
 	pre
 	get_state

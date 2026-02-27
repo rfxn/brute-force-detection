@@ -1,4 +1,15 @@
 2.0.1:
+[Fix] watch(): SIGTERM/SIGINT now properly exit the daemon; previous trap
+      pattern ran cleanup_watch but let the while-true loop continue; changed
+      to EXIT-only cleanup with separate TERM/INT traps that call exit
+[Fix] reload_watch(): unset config vars BEFORE re-sourcing conf.bfd, not
+      after; previous ordering destroyed freshly-sourced values so config
+      changes (e.g., PRESSURE_TRIP) never took effect on SIGHUP reload
+[New] tests/33-watch-mode.bats: 15 tests for watch mode daemon lifecycle;
+      10 unit tests (cleanup_watch lock removal/logging, reload_watch config
+      re-sourcing/safety-rejection/pressure-array-clearing/fallback-derivation);
+      5 integration tests (lock creation, PID file, start logging, SIGTERM
+      graceful shutdown, SIGHUP config reload)
 [Fix] reload_watch(): clear pressure arrays (_PRESS_WEIGHT/_TRIP/_SKIP_ALERT/
       _RULE_EMAIL) before reload; if pressure.conf is deleted while daemon
       runs, stale arrays no longer persist from previous load
