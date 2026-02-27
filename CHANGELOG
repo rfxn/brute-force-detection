@@ -1,4 +1,7 @@
 2.0.1:
+[New] README, README.md, bfd.1: upgrade documentation section covering
+      importconf migration, config variable renames, state preservation,
+      post-upgrade verification, and rollback procedure
 [Fix] state_init(): enforce 750 permissions on tmp/ and stats/ directories
       (mkdir -m 750); previously relied on pre() to set permissions, leaving an
       unprotected window if state_init() was called independently

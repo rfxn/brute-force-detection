@@ -19,6 +19,7 @@ and IPv4/IPv6 support across 42 service rules.
   - [1.1 Supported Systems](#11-supported-systems)
 - [2. Installation](#2-installation)
   - [2.1 Scheduling](#21-scheduling)
+  - [2.2 Upgrading](#22-upgrading)
 - [3. Configuration](#3-configuration)
   - [3.1 Pressure Model (Detection)](#31-pressure-model-detection)
   - [3.2 Email Alerts](#32-email-alerts)
@@ -183,6 +184,44 @@ chkconfig bfd-watch on    # enable at boot (RHEL)
 The installer places a cronjob at `/etc/cron.d/bfd` that runs BFD every 2 minutes in quiet mode. This serves as a fallback — when watch mode is active, cron runs detect the lock and silently skip. If the watch daemon exits, cron automatically resumes detection within 2 minutes.
 
 The cron entry does not need to be removed when using watch mode.
+
+### 2.2 Upgrading
+
+When upgrading from a previous BFD installation (including v1.5-2), `install.sh` automatically:
+
+- Backs up the existing installation to `/usr/local/bfd.bk.DDMMYYYY-HHMMSS` (symlinked as `/usr/local/bfd.bk.last` for easy access)
+- Runs `importconf` to merge your configuration and preserve state
+
+**What importconf migrates automatically:**
+
+| Category | Details |
+|----------|---------|
+| User configuration | `conf.bfd` values merged onto new template |
+| Legacy variable names | `TRIG` → `PRESSURE_TRIP`, `TRIG_WINDOW` → `PRESSURE_HALF_LIFE`, `TRIG_GLOBAL` → `PRESSURE_TRIP_GLOBAL`, `BAN_DURATION` → `BAN_TTL`, `BAN_PERMANENT_*` → `BAN_ESCALATE_*` |
+| Per-rule overrides | `thresholds.conf` → `pressure.conf` conversion |
+| Firewall backend | Set to `"custom"` if pre-2.0.1 `BAN_COMMAND` detected |
+| Ban state | `bans.active`, `bans.history`, `events.dat` |
+| Log tracking state | tlog byte-offsets, journal cursors |
+| Custom alert template | `alert.bfd` |
+| Ignore lists | `ignore.hosts` |
+
+**Post-upgrade verification:**
+
+```bash
+bfd -c                    # dry-run detection cycle
+bfd --status              # show current ban/event summary
+bfd --health              # system health check
+```
+
+**Rollback:**
+
+If the upgrade causes issues, restore from backup:
+
+```bash
+bfd --flush-all           # clear any new bans
+rm -rf /usr/local/bfd
+cp -a /usr/local/bfd.bk.last /usr/local/bfd
+```
 
 ---
 
