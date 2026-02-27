@@ -1,4 +1,10 @@
 2.0.1:
+[Fix] show_config(): replace eval-based variable indirection with ${!var}
+      indirect expansion; eliminates eval from display path while preserving
+      whitelist validation and BAN_COMMAND case mapping
+[Fix] quiet mode (-q): remove stderr redirect so genuine errors from tlog
+      functions reach cron's mail handler; stdout suppression sufficient for
+      cron silence since eout() writes to log file regardless
 [New] tests: direct test coverage for sanitize_ports() (12 cases) and
       expand_command_template() (7 cases) — security-critical input validation
       and safe template expansion functions

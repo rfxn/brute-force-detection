@@ -604,3 +604,23 @@ run_validate_output() {
 	run _rule_is_active
 	assert_failure
 }
+
+# --- show_config with BAN_COMMAND case mapping (F-019 regression) ---
+
+@test "show_config: BAN_COMMAND returns raw template via case mapping" {
+	BAN_COMMAND_TEMPLATE='/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+	run show_config "BAN_COMMAND"
+	assert_success
+	assert_output '/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+}
+
+@test "show_config: dump all includes BAN_COMMAND mapped value" {
+	BAN_COMMAND_TEMPLATE='/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+	UNBAN_COMMAND_TEMPLATE=""
+	BAN_COMMAND_V6_TEMPLATE=""
+	UNBAN_COMMAND_V6_TEMPLATE=""
+	PRESSURE_TRIP="20"
+	run show_config
+	assert_success
+	assert_output --partial 'BAN_COMMAND=/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+}

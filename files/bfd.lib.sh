@@ -2800,7 +2800,7 @@ show_config() {
 	local var="${1:-}"
 	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT PRESSURE_CONF"
 	if [ -n "$var" ]; then
-		# validate against whitelist before eval
+		# validate against whitelist
 		local _found=0 _v
 		for _v in $config_vars; do
 			if [ "$var" = "$_v" ]; then
@@ -2821,7 +2821,7 @@ show_config() {
 			UNBAN_COMMAND_V6) var="UNBAN_COMMAND_V6_TEMPLATE" ;;
 		esac
 		local val
-		eval "val=\${$var:-}"
+		val="${!var}"
 		echo "$val"
 	else
 		# dump all active config variables
@@ -2834,7 +2834,7 @@ show_config() {
 				BAN_COMMAND_V6)   v="BAN_COMMAND_V6_TEMPLATE" ;;
 				UNBAN_COMMAND_V6) v="UNBAN_COMMAND_V6_TEMPLATE" ;;
 			esac
-			eval "val=\${$v:-}"
+			val="${!v}"
 			echo "$_display=$val"
 		done
 	fi

@@ -625,7 +625,7 @@ set -- "${_bfd_args[@]+"${_bfd_args[@]}"}"
 
 case "${1:-}" in
 -s|--standard)  vhead; run ;;
--q|--quiet)     exec >/dev/null 2>&1; run ;;
+-q|--quiet)     exec >/dev/null; run ;;
 -d|--dryrun)    DRY_RUN=1; vhead; run ;;
 -w|--watch)     vhead; watch ;;
 -a|--attackpool)
