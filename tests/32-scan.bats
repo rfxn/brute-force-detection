@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # Tests for --scan mode: full-log processing
-# Covers: _tlog_read_full, _tlog_journal_read_full, _tlog_advance_scan_cursors,
+# Covers: tlog_read_full, tlog_journal_read_full, tlog_advance_cursors,
 #         _rule_tlog scan branch, check() scan filtering/collection, CLI parsing
 #
 
@@ -23,117 +23,114 @@ teardown() {
 	bfd_teardown
 }
 
-# --- _tlog_read_full ---
+# --- tlog_read_full ---
 
-@test "_tlog_read_full: outputs entire file when max_lines=0" {
+@test "tlog_read_full: outputs entire file when max_lines=0" {
 	local logfile="$TEST_TMPDIR/test.log"
 	printf "line1\nline2\nline3\n" > "$logfile"
-	run _tlog_read_full "$logfile" "0"
+	run tlog_read_full "$logfile" "0"
 	assert_success
 	assert_line --index 0 "line1"
 	assert_line --index 1 "line2"
 	assert_line --index 2 "line3"
 }
 
-@test "_tlog_read_full: outputs last N lines when max_lines > 0" {
+@test "tlog_read_full: outputs last N lines when max_lines > 0" {
 	local logfile="$TEST_TMPDIR/test.log"
 	printf "line1\nline2\nline3\nline4\nline5\n" > "$logfile"
-	run _tlog_read_full "$logfile" "2"
+	run tlog_read_full "$logfile" "2"
 	assert_success
 	assert_line --index 0 "line4"
 	assert_line --index 1 "line5"
 }
 
-@test "_tlog_read_full: outputs all lines when max_lines exceeds file" {
+@test "tlog_read_full: outputs all lines when max_lines exceeds file" {
 	local logfile="$TEST_TMPDIR/test.log"
 	printf "line1\nline2\n" > "$logfile"
-	run _tlog_read_full "$logfile" "100"
+	run tlog_read_full "$logfile" "100"
 	assert_success
 	assert_line --index 0 "line1"
 	assert_line --index 1 "line2"
 }
 
-@test "_tlog_read_full: returns error for missing file" {
-	run _tlog_read_full "$TEST_TMPDIR/nonexistent.log" "0"
+@test "tlog_read_full: returns error for missing file" {
+	run tlog_read_full "$TEST_TMPDIR/nonexistent.log" "0"
 	assert_failure
-	assert_output --partial "not a valid file"
+	assert_output ""
 }
 
-@test "_tlog_read_full: default max_lines=0 outputs full file" {
+@test "tlog_read_full: default max_lines=0 outputs full file" {
 	local logfile="$TEST_TMPDIR/test.log"
 	printf "a\nb\nc\n" > "$logfile"
-	run _tlog_read_full "$logfile"
+	run tlog_read_full "$logfile"
 	assert_success
 	assert_line --index 0 "a"
 	assert_line --index 2 "c"
 }
 
-@test "_tlog_read_full: empty file produces no output" {
+@test "tlog_read_full: empty file produces no output" {
 	local logfile="$TEST_TMPDIR/empty.log"
 	touch "$logfile"
-	run _tlog_read_full "$logfile" "0"
+	run tlog_read_full "$logfile" "0"
 	assert_success
 	assert_output ""
 }
 
-# --- _tlog_journal_read_full ---
+# --- tlog_journal_read_full ---
 
-@test "_tlog_journal_read_full: returns error when no journalctl" {
+@test "tlog_journal_read_full: returns error when no journalctl" {
 	# create empty bin dir, then save PATH and replace
 	mkdir -p "$TEST_TMPDIR/empty_bin"
 	local _oldpath="$PATH"
 	PATH="$TEST_TMPDIR/empty_bin"
-	run _tlog_journal_read_full "sshd" "10" "100"
+	run tlog_journal_read_full "sshd" "10" "100"
 	PATH="$_oldpath"
 	assert_failure
-	assert_output --partial "journalctl not available"
+	assert_output ""
 }
 
-@test "_tlog_journal_read_full: returns error for unmapped tlog name" {
-	run _tlog_journal_read_full "nonexistent_service_xyz" "10" "100"
+@test "tlog_journal_read_full: returns error for unmapped tlog name" {
+	run tlog_journal_read_full "nonexistent_service_xyz" "10" "100"
 	assert_failure
 }
 
-# --- _tlog_advance_scan_cursors ---
+# --- tlog_advance_cursors ---
 
-@test "_tlog_advance_scan_cursors: updates cursor file to current file size" {
+@test "tlog_advance_cursors: updates cursor file to current file size" {
 	local logfile="$TEST_TMPDIR/test.log"
 	printf "1234567890" > "$logfile"
-	_SCAN_LOG_PAIRS="${logfile}|scan_test_tag"
-	_tlog_advance_scan_cursors "$INSTALL_PATH"
+	local log_pairs="${logfile}|scan_test_tag"
+	tlog_advance_cursors "$TLOG_BASERUN" "$log_pairs"
 	local cursor_val
 	cursor_val=$(cat "$TLOG_BASERUN/scan_test_tag")
 	[ "$cursor_val" = "10" ]
 }
 
-@test "_tlog_advance_scan_cursors: deduplicates pairs" {
+@test "tlog_advance_cursors: deduplicates pairs (caller deduplicates)" {
 	local logfile="$TEST_TMPDIR/test.log"
 	printf "12345" > "$logfile"
-	_SCAN_LOG_PAIRS="${logfile}|dedup_tag
-${logfile}|dedup_tag
-${logfile}|dedup_tag
-"
-	_tlog_advance_scan_cursors "$INSTALL_PATH"
+	local log_pairs
+	log_pairs=$(printf '%s\n' "${logfile}|dedup_tag" "${logfile}|dedup_tag" "${logfile}|dedup_tag" | sort -u)
+	tlog_advance_cursors "$TLOG_BASERUN" "$log_pairs"
 	local cursor_val
 	cursor_val=$(cat "$TLOG_BASERUN/dedup_tag")
 	[ "$cursor_val" = "5" ]
 }
 
-@test "_tlog_advance_scan_cursors: no-op when pairs empty" {
-	_SCAN_LOG_PAIRS=""
-	run _tlog_advance_scan_cursors "$INSTALL_PATH"
+@test "tlog_advance_cursors: no-op when pairs empty" {
+	local log_pairs=""
+	run tlog_advance_cursors "$TLOG_BASERUN" "$log_pairs"
 	assert_success
 }
 
-@test "_tlog_advance_scan_cursors: handles multiple distinct pairs" {
+@test "tlog_advance_cursors: handles multiple distinct pairs" {
 	local log1="$TEST_TMPDIR/log1"
 	local log2="$TEST_TMPDIR/log2"
 	printf "aaa" > "$log1"
 	printf "bbbbb" > "$log2"
-	_SCAN_LOG_PAIRS="${log1}|tag1
-${log2}|tag2
-"
-	_tlog_advance_scan_cursors "$INSTALL_PATH"
+	local log_pairs="${log1}|tag1
+${log2}|tag2"
+	tlog_advance_cursors "$TLOG_BASERUN" "$log_pairs"
 	[ "$(cat "$TLOG_BASERUN/tag1")" = "3" ]
 	[ "$(cat "$TLOG_BASERUN/tag2")" = "5" ]
 }
@@ -174,7 +171,7 @@ ${log2}|tag2
 	LOG_SOURCE="file"
 	run _rule_tlog "$TEST_TMPDIR/nonexistent.log" "nonexistent_svc"
 	assert_failure
-	assert_output --partial "not a valid file"
+	assert_output ""
 	_SCAN_MODE=""
 }
 
@@ -393,9 +390,9 @@ EOF
 @test "scan: cursors advanced after non-dry-run" {
 	local logfile="$TEST_TMPDIR/cursor_test.log"
 	printf "1234567890" > "$logfile"
-	_SCAN_LOG_PAIRS="${logfile}|cursor_svc"
+	local log_pairs="${logfile}|cursor_svc"
 	DRY_RUN="0"
-	_tlog_advance_scan_cursors "$INSTALL_PATH"
+	tlog_advance_cursors "$TLOG_BASERUN" "$log_pairs"
 	# cursor file should have file size
 	[ -f "$TLOG_BASERUN/cursor_svc" ]
 	local sz
@@ -404,12 +401,12 @@ EOF
 }
 
 @test "scan: cursors NOT advanced in dry-run (simulated)" {
-	# In the actual CLI flow, dry-run skips calling _tlog_advance_scan_cursors.
+	# In the actual CLI flow, dry-run skips calling tlog_advance_cursors.
 	# Here we verify the flag check pattern works.
 	local logfile="$TEST_TMPDIR/dryrun_cursor.log"
 	printf "hello" > "$logfile"
 	DRY_RUN="1"
-	# Simulate: dry-run does NOT call _tlog_advance_scan_cursors
+	# Simulate: dry-run does NOT call tlog_advance_cursors
 	[ ! -f "$TLOG_BASERUN/dryrun_tag" ]
 }
 

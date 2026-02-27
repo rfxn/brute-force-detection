@@ -1,4 +1,40 @@
 2.0.1:
+[Fix] CI: shellcheck lint step now uses -S warning to filter info/style
+      noise; inline shellcheck directives added for 8 known false positives
+      in bfd.lib.sh (template vars consumed by sourced alert.bfd, read
+      placeholders, mkdir -m with -p where parent always exists)
+[Fix] CI: added files/tlog_lib.sh to shellcheck lint targets
+[Fix] tests/28-install-paths.bats: updated for tlog rewrite — files/tlog no
+      longer contains /usr/local/bfd (uses relative path to tlog_lib.sh);
+      removed tlog from INSPATH sed replacement tests to match install.sh
+[Fix] bfd.lib.sh: removed unused local variable 'expired_line' from
+      process_unbans()
+[Change] tlog functions extracted to shared tlog_lib.sh library; tlog_read(),
+      tlog_journal_filter(), tlog_journal_read() and 4 internal helpers replaced
+      by canonical tlog_lib.sh (sourced at bfd.lib.sh load time)
+[New] tlog_journal_register(): 23 BFD service-to-journalctl filter mappings
+      migrated from hardcoded case statement to dynamic registry
+[New] atomic cursor writes (mktemp+mv) for all tlog operations; replaces
+      non-atomic echo-redirect pattern
+[New] optional flock-based cursor locking enabled in watch mode (TLOG_FLOCK=1);
+      prevents concurrent access between watch daemon and cron.daily
+[New] cursor validation with auto-reset on corruption (exit code 2)
+[New] multi-mode tracking support (bytes default, lines selectable per call)
+[New] stale cursor protection: mtime updated on every tlog_read call
+[New] configurable first-run behavior (TLOG_FIRST_RUN=skip|full)
+[New] tlog_adjust_cursor() for mode-aware in-place log trim support
+[Change] files/tlog replaced with tlog_lib standalone wrapper (sources
+      tlog_lib.sh instead of reimplementing tracking logic)
+[Fix] tlog BASERUN: install.sh replaces default /tmp with $INSPATH/tmp at
+      install time; prevents cursor files from defaulting to world-writable
+      /tmp; source tree keeps canonical /tmp for cross-project hash parity
+[Change] tlog_lib.sh: update to canonical 2.0.1 with multi-format compressed
+      rotation (.xz, .bz2, .zst, .lz4), copytruncate rotation handling, mode
+      validation in tlog_read(), and generic decompression dispatch
+[Change] tlog: update to canonical 2.0.1 CLI with option parsing (-m/--mode,
+      -b/--baserun, -f/--flock, --first-run), subcommands (--full, --status,
+      --reset, --adjust), help system (-v/-h/--help), path traversal rejection,
+      and library security validation; backward-compatible positional interface
 [New] tests/03-validate-rule.bats: 8 _compat_rule_vars() unit tests covering
       all 4 legacy→canonical mappings, preservation semantics when new names
       already set, empty old names, and mixed old/new resolution
@@ -344,6 +380,12 @@
       before re-sourcing, causing stale values when users edit legacy names
 [Fix] ATTACK_COUNT backward compat: send_alerts set to raw pressure_scaled
       (e.g., 18400); now uses pressure/1000 for sensible old-template display
+[Change] test infrastructure: adopt batsman shared BATS framework via submodule
+      at tests/infra (pinned to 1.0.1); 9 Dockerfiles reduced from full OS+BATS
+      install to single-package delta over batsman base images; run-tests.sh
+      replaced with 21-line batsman wrapper; Makefile replaced with 8-line
+      parameterized include; CI test job uses batsman reusable workflow
+[Change] remove legacy run_tests.sh pre-BATS test runner
 
 1.5-2:
 [Change] simplified dovecot rule regex matching

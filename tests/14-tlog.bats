@@ -196,9 +196,10 @@ teardown() {
 @test "_rule_tlog: handles missing log file" {
 	TLOG_BASERUN="$BASERUN"
 	_TLOG_PASSTHROUGH=""
+	LOG_SOURCE="file"
 	run _rule_tlog "$TEST_TMPDIR/nonexistent.log" "rt_test5"
 	assert_failure
-	assert_output --partial "not a valid file"
+	assert_output --partial "tlog: file not found:"
 }
 
 @test "_rule_tlog: handles missing baserun" {
@@ -207,5 +208,5 @@ teardown() {
 	echo "test" > "$TEST_TMPDIR/test.log"
 	run _rule_tlog "$TEST_TMPDIR/test.log" "rt_test6"
 	assert_failure
-	assert_output --partial "not a valid operating path"
+	assert_output --partial "tlog: baserun directory not found:"
 }

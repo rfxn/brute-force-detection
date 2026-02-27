@@ -23,6 +23,46 @@
 # This file is sourced by bfd and test scripts.
 # Functions here are defined but not called; callers invoke as needed.
 
+# Source shared tlog library
+_tlog_lib_path="${INSTALL_PATH:-/usr/local/bfd}/tlog_lib.sh"
+if [ -f "$_tlog_lib_path" ]; then
+	# shellcheck disable=SC1091 source=files/tlog_lib.sh
+	. "$_tlog_lib_path"
+else
+	# Fallback for test environments: try relative to this script
+	_tlog_lib_dir="${BASH_SOURCE[0]%/*}"
+	if [ -f "$_tlog_lib_dir/tlog_lib.sh" ]; then
+		# shellcheck disable=SC1091 source=files/tlog_lib.sh
+		. "$_tlog_lib_dir/tlog_lib.sh"
+	fi
+fi
+unset _tlog_lib_path _tlog_lib_dir
+
+# Register BFD journal filter mappings
+tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+tlog_journal_register "dropbear" "SYSLOG_IDENTIFIER=dropbear"
+tlog_journal_register "dovecot" "SYSLOG_IDENTIFIER=dovecot"
+tlog_journal_register "postfix" "SYSLOG_IDENTIFIER=postfix"
+tlog_journal_register "courier" "SYSLOG_IDENTIFIER=couriertcpd"
+tlog_journal_register "sendmail" "SYSLOG_IDENTIFIER=sm-mta"
+tlog_journal_register "vpopmail" "SYSLOG_IDENTIFIER=vpopmail"
+tlog_journal_register "cyrus" "SYSLOG_IDENTIFIER=cyrus"
+tlog_journal_register "pure-ftpd" "SYSLOG_IDENTIFIER=pure-ftpd"
+tlog_journal_register "proftpd" "SYSLOG_IDENTIFIER=proftpd"
+tlog_journal_register "vsftpd" "SYSLOG_IDENTIFIER=vsftpd"
+tlog_journal_register "webmin" "SYSLOG_IDENTIFIER=webmin"
+tlog_journal_register "wordpress" "SYSLOG_IDENTIFIER=wordpress"
+tlog_journal_register "rh_imapd" "SYSLOG_IDENTIFIER=imapd"
+tlog_journal_register "rh_ipop3" "SYSLOG_IDENTIFIER=ipop3d"
+tlog_journal_register "named" "SYSLOG_IDENTIFIER=named"
+tlog_journal_register "openvpn" "SYSLOG_IDENTIFIER=openvpn"
+tlog_journal_register "exim_authfail" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
+tlog_journal_register "exim_nxuser" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
+tlog_journal_register "xrdp" "SYSLOG_IDENTIFIER=xrdp-sesman"
+tlog_journal_register "asterisk" "SYSLOG_IDENTIFIER=asterisk"
+tlog_journal_register "asterisk.iax" "SYSLOG_IDENTIFIER=asterisk"
+tlog_journal_register "asterisk_nopeer" "SYSLOG_IDENTIFIER=asterisk"
+
 # exit codes (used by bfd, exported for callers)
 # shellcheck disable=SC2034
 EXIT_OK=0
@@ -602,75 +642,6 @@ format_table() {
 	fi
 }
 
-# tlog_read file tlog_name baserun — read new content from a log file
-# Library equivalent of the standalone files/tlog script; both implementations
-# use identical logic (single size read on init, no output on first run) and
-# must stay in sync. Future: callers should migrate here; files/tlog remains
-# for standalone/cron compatibility.
-# Outputs new content to stdout; returns 0 on success, 1 on error.
-tlog_read() {
-	local file="$1" tlog_name="$2" baserun="$3"
-	# Journal dispatch: use journal when file is missing (auto or journal mode)
-	if [ "${LOG_SOURCE:-auto}" != "file" ] && [ ! -f "$file" ]; then
-		if command -v journalctl >/dev/null 2>&1 && \
-		   tlog_journal_filter "$tlog_name" >/dev/null 2>&1; then
-			tlog_journal_read "$tlog_name" "$baserun"
-			return $?
-		fi
-	fi
-	if [ ! -f "$file" ]; then
-		echo "$file is not a valid file, aborting" >&2
-		return 1
-	fi
-	if [ ! -d "$baserun" ]; then
-		echo "$baserun is not a valid operating path, aborting." >&2
-		return 1
-	fi
-	local tsize size newsize
-	if [ -f "$baserun/$tlog_name" ]; then
-		read -r tsize < "$baserun/$tlog_name" 2>/dev/null || tsize=""
-	else
-		tsize=""
-	fi
-	local _tlog_file_size
-	_tlog_file_size() { stat -c %s "$1" 2>/dev/null || wc -c < "$1"; }
-	if [ -z "$tsize" ] || [ "$tsize" = "0" ]; then
-		# first run or reset — record current size, output nothing
-		size=$(_tlog_file_size "$file")
-		echo "$size" > "$baserun/$tlog_name"
-		return 0
-	fi
-	size="$tsize"
-	newsize=$(_tlog_file_size "$file")
-	if [ "$newsize" -gt "$size" ]; then
-		# file grew — output new content
-		tail -c $((newsize - size)) "$file"
-		echo "$newsize" > "$baserun/$tlog_name"
-	elif [ "$newsize" -lt "$size" ]; then
-		# log rotated — output remainder from old file
-		if [ -f "$file.1" ]; then
-			local rtsize
-			rtsize=$(_tlog_file_size "$file.1")
-			if [ "$rtsize" -ge "$size" ]; then
-				tail -c $((rtsize - size)) "$file.1"
-			fi
-		elif [ -f "$file.1.gz" ]; then
-			local rtsize
-			rtsize=$(zcat "$file.1.gz" | wc -c)
-			if [ "$rtsize" -ge "$size" ]; then
-				zcat "$file.1.gz" | tail -c $((rtsize - size))
-			fi
-		fi
-		# output all of current file (new content since rotation)
-		if [ "$newsize" -gt 0 ]; then
-			cat "$file"
-		fi
-		echo "$newsize" > "$baserun/$tlog_name"
-	fi
-	# newsize == size — no change, output nothing
-	return 0
-}
-
 # _rule_tlog log_file log_tag — in-process tlog for rule execution.
 # Replaces the subprocess call: $("$TLOG_PATH" "$LOG_FILE" "$LOG_TAG")
 # When _TLOG_PASSTHROUGH is set, outputs the entire file instead of a delta
@@ -693,209 +664,14 @@ _rule_tlog() {
 		if [ "${LOG_SOURCE:-auto}" != "file" ] && [ ! -f "$lp" ]; then
 			if command -v journalctl >/dev/null 2>&1 && \
 			   tlog_journal_filter "$tlog_tf" >/dev/null 2>&1; then
-				_tlog_journal_read_full "$tlog_tf" "${SCAN_TIMEOUT:-120}" "${SCAN_MAX_LINES:-50000}"
+				tlog_journal_read_full "$tlog_tf" "${SCAN_TIMEOUT:-120}" "${SCAN_MAX_LINES:-50000}"
 				return $?
 			fi
 		fi
-		_tlog_read_full "$lp" "${SCAN_MAX_LINES:-50000}"
+		tlog_read_full "$lp" "${SCAN_MAX_LINES:-50000}"
 		return $?
 	fi
 	tlog_read "$lp" "$tlog_tf" "${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
-}
-
-# _tlog_read_full file max_lines — read full log file without cursor tracking
-# Used by scan mode to process entire log contents. Does NOT read rotated files.
-# max_lines > 0: output last N lines; max_lines = 0: output entire file.
-_tlog_read_full() {
-	local file="$1" max_lines="${2:-0}"
-	if [ ! -f "$file" ]; then
-		echo "$file is not a valid file, aborting" >&2
-		return 1
-	fi
-	if [ "$max_lines" -gt 0 ] 2>/dev/null; then
-		tail -n "$max_lines" "$file"
-	else
-		cat "$file"
-	fi
-}
-
-# _tlog_journal_read_full tlog_name scan_timeout max_lines — read full journal
-# without cursor tracking. Used by scan mode for journal-based log sources.
-# max_lines > 0: limit output; max_lines = 0: no limit (use with caution).
-# scan_timeout: journalctl process timeout in seconds.
-_tlog_journal_read_full() {
-	local tlog_name="$1" scan_timeout="${2:-120}" max_lines="${3:-50000}"
-	local jfilter
-	jfilter=$(tlog_journal_filter "$tlog_name") || return 1
-	if ! command -v journalctl >/dev/null 2>&1; then
-		echo "journalctl not available" >&2
-		return 1
-	fi
-	local jctl_args=""
-	if [ "$max_lines" -gt 0 ] 2>/dev/null; then
-		jctl_args="-n $max_lines"
-	fi
-	# jfilter intentionally unquoted for word splitting (same pattern as tlog_journal_read)
-	# shellcheck disable=SC2086
-	timeout "$scan_timeout" journalctl $jfilter $jctl_args \
-		--output=short --no-pager -q 2>/dev/null
-}
-
-# _tlog_advance_scan_cursors install_path — advance tlog cursors after scan
-# Reads _SCAN_LOG_PAIRS (newline-separated "LOG_FILE|LOG_TAG" pairs collected
-# by check() during scan mode) and updates cursor files to current position.
-# This prevents the next normal run from re-processing scanned data.
-_tlog_advance_scan_cursors() {
-	local install_path="$1"
-	local baserun="${TLOG_BASERUN:-$install_path/tmp}"
-	[ -z "${_SCAN_LOG_PAIRS:-}" ] && return 0
-	local pair lp tlog_tf
-	while IFS='|' read -r lp tlog_tf; do
-		[ -z "$lp" ] || [ -z "$tlog_tf" ] && continue
-		# flat file: record current size
-		if [ -f "$lp" ]; then
-			local fsize
-			fsize=$(stat -c %s "$lp" 2>/dev/null || wc -c < "$lp")
-			echo "$fsize" > "$baserun/$tlog_tf"
-		fi
-		# journal: capture current cursor position
-		if command -v journalctl >/dev/null 2>&1; then
-			local jfilter
-			jfilter=$(tlog_journal_filter "$tlog_tf" 2>/dev/null) || continue
-			local jctl_out
-			# shellcheck disable=SC2086
-			jctl_out=$(timeout 10 journalctl $jfilter -n 0 \
-				--output=short --show-cursor --no-pager -q 2>/dev/null) || continue
-			local new_cursor
-			new_cursor=$(echo "$jctl_out" | grep -m1 '^-- cursor:' | sed 's/^-- cursor: //')
-			if [ -n "$new_cursor" ]; then
-				echo "$new_cursor" > "$baserun/${tlog_tf}.cursor"
-				date +"%s" > "$baserun/${tlog_tf}.jts"
-			fi
-		fi
-	done < <(echo "$_SCAN_LOG_PAIRS" | sort -u)
-}
-
-# tlog_journal_filter log_tag — map LOG_TAG to journalctl filter argument
-# Returns 0 with filter on stdout, or 1 if no mapping exists (not journal-capable).
-tlog_journal_filter() {
-	local tlog_name="$1"
-	case "$tlog_name" in
-		sshd)       echo "SYSLOG_IDENTIFIER=sshd" ;;
-		dropbear)   echo "SYSLOG_IDENTIFIER=dropbear" ;;
-		dovecot)    echo "SYSLOG_IDENTIFIER=dovecot" ;;
-		postfix)    echo "SYSLOG_IDENTIFIER=postfix" ;;
-		courier)    echo "SYSLOG_IDENTIFIER=couriertcpd" ;;
-		sendmail)   echo "SYSLOG_IDENTIFIER=sm-mta" ;;
-		vpopmail)   echo "SYSLOG_IDENTIFIER=vpopmail" ;;
-		cyrus)      echo "SYSLOG_IDENTIFIER=cyrus" ;;
-		pure-ftpd)  echo "SYSLOG_IDENTIFIER=pure-ftpd" ;;
-		proftpd)    echo "SYSLOG_IDENTIFIER=proftpd" ;;
-		vsftpd)     echo "SYSLOG_IDENTIFIER=vsftpd" ;;
-		webmin)     echo "SYSLOG_IDENTIFIER=webmin" ;;
-		wordpress)  echo "SYSLOG_IDENTIFIER=wordpress" ;;
-		rh_imapd)   echo "SYSLOG_IDENTIFIER=imapd" ;;
-		rh_ipop3)   echo "SYSLOG_IDENTIFIER=ipop3d" ;;
-		named)      echo "SYSLOG_IDENTIFIER=named" ;;
-		openvpn)    echo "SYSLOG_IDENTIFIER=openvpn" ;;
-		exim_authfail) echo "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim" ;;
-		exim_nxuser)   echo "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim" ;;
-		xrdp)       echo "SYSLOG_IDENTIFIER=xrdp-sesman" ;;
-		asterisk)   echo "SYSLOG_IDENTIFIER=asterisk" ;;
-		asterisk.iax)     echo "SYSLOG_IDENTIFIER=asterisk" ;;
-		asterisk_nopeer)  echo "SYSLOG_IDENTIFIER=asterisk" ;;
-		*) return 1 ;;
-	esac
-	return 0
-}
-
-# tlog_journal_read tlog_name baserun — read new journal entries for a syslog identifier
-# Uses cursor-based tracking with timestamp fallback.
-# First run saves cursor and outputs nothing (matches tlog first-run behavior).
-# Outputs new journal lines to stdout; returns 0 on success, 1 on error.
-tlog_journal_read() {
-	local tlog_name="$1" baserun="$2"
-	local jfilter cursor_file ts_file
-	jfilter=$(tlog_journal_filter "$tlog_name") || return 1
-	cursor_file="$baserun/${tlog_name}.cursor"
-	ts_file="$baserun/${tlog_name}.jts"
-
-	if [ ! -d "$baserun" ]; then
-		echo "$baserun is not a valid operating path, aborting." >&2
-		return 1
-	fi
-
-	if ! command -v journalctl >/dev/null 2>&1; then
-		echo "journalctl not available" >&2
-		return 1
-	fi
-
-	local jctl_out cursor_line new_cursor now_ts
-
-	# jfilter may contain multiple words (e.g., "SYSLOG_IDENTIFIER=exim4 +
-	# SYSLOG_IDENTIFIER=exim") that journalctl needs as separate arguments,
-	# so we intentionally use unquoted $jfilter for word splitting below.
-	# Content is safe — generated by tlog_journal_filter(), not user input.
-
-	if [ -f "$cursor_file" ]; then
-		local saved_cursor
-		saved_cursor=$(cat "$cursor_file" 2>/dev/null)
-		# try cursor-based read; fall back to timestamp if cursor invalid
-		# shellcheck disable=SC2086
-		jctl_out=$(timeout 30 journalctl $jfilter --after-cursor="$saved_cursor" \
-			--output=short --show-cursor --no-pager -q 2>/dev/null) || {
-			# cursor invalid (journal vacuumed?) — fall back to timestamp
-			if [ -f "$ts_file" ]; then
-				local saved_ts
-				saved_ts=$(cat "$ts_file" 2>/dev/null)
-				# shellcheck disable=SC2086
-				jctl_out=$(timeout 30 journalctl $jfilter --since="@${saved_ts}" \
-					--output=short --show-cursor --no-pager -q 2>/dev/null) || return 1
-			else
-				# no fallback available; treat as first run
-				# shellcheck disable=SC2086
-				jctl_out=$(timeout 30 journalctl $jfilter -n 0 \
-					--output=short --show-cursor --no-pager -q 2>/dev/null) || return 1
-			fi
-		}
-	elif [ -f "$ts_file" ]; then
-		local saved_ts
-		saved_ts=$(cat "$ts_file" 2>/dev/null)
-		# shellcheck disable=SC2086
-		jctl_out=$(timeout 30 journalctl $jfilter --since="@${saved_ts}" \
-			--output=short --show-cursor --no-pager -q 2>/dev/null) || return 1
-	else
-		# first run: get current cursor, output nothing
-		# shellcheck disable=SC2086
-		jctl_out=$(timeout 30 journalctl $jfilter -n 0 \
-			--output=short --show-cursor --no-pager -q 2>/dev/null) || return 1
-		# extract cursor from output
-		cursor_line=$(echo "$jctl_out" | grep '^-- cursor:' | tail -1)
-		if [ -n "$cursor_line" ]; then
-			new_cursor="${cursor_line#-- cursor: }"
-			echo "$new_cursor" > "$cursor_file"
-		fi
-		now_ts=$(date +"%s")
-		echo "$now_ts" > "$ts_file"
-		return 0
-	fi
-
-	# extract and save new cursor
-	cursor_line=$(echo "$jctl_out" | grep '^-- cursor:' | tail -1)
-	if [ -n "$cursor_line" ]; then
-		new_cursor="${cursor_line#-- cursor: }"
-		echo "$new_cursor" > "$cursor_file"
-		# output log lines (everything except the cursor line)
-		echo "$jctl_out" | grep -v '^-- cursor:'
-	else
-		# no cursor in output — no new entries
-		:
-	fi
-
-	# update timestamp on every successful read
-	now_ts=$(date +"%s")
-	echo "$now_ts" > "$ts_file"
-	return 0
 }
 
 # extract_hosts pattern1 [pattern2 ...] — extract IPs from tlog output on stdin
@@ -1417,7 +1193,7 @@ execute_unban() {
 # process_unbans install_path now — expire and unban via firewall backend
 process_unbans() {
 	local install_path="$1" now="$2"
-	local expired_line ts expiry host mod ports
+	local ts expiry host mod ports
 	while IFS=' ' read -r ts expiry host mod ports; do
 		[ -z "$ts" ] && continue
 		if [ "$_FW_BACKEND" = "custom" ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
@@ -1564,9 +1340,11 @@ manual_ban() {
 state_init() {
 	local install_path="$1"
 	if [ ! -d "$install_path/tmp" ]; then
+		# shellcheck disable=SC2174  # parent always exists; -m applies to leaf
 		mkdir -m 750 -p "$install_path/tmp"
 	fi
 	if [ ! -d "$install_path/stats" ]; then
+		# shellcheck disable=SC2174  # parent always exists; -m applies to leaf
 		mkdir -m 750 -p "$install_path/stats"
 	fi
 	local f
@@ -2200,6 +1978,15 @@ _hc_state() {
 		_hc_warn=$((_hc_warn + 1))
 	fi
 
+	local _tlog_lib="${INSTALL_PATH:-$install_path}/tlog_lib.sh"
+	if [ -f "$_tlog_lib" ]; then
+		echo "[PASS] tlog_lib.sh: $_tlog_lib (present)"
+		_hc_pass=$((_hc_pass + 1))
+	else
+		echo "[WARN] tlog_lib.sh: $_tlog_lib (not found)"
+		_hc_warn=$((_hc_warn + 1))
+	fi
+
 	local _tlog_br="${TLOG_BASERUN:-$install_path/tmp}"
 	if [ -d "$_tlog_br" ] && [ -d "$install_path/stats" ]; then
 		echo "[PASS] State: TLOG_BASERUN=$_tlog_br and stats/ exist"
@@ -2404,6 +2191,7 @@ format_alert_body() {
 	# log section
 	local has_logs=0
 	n=0
+	# shellcheck disable=SC2034  # recipient: positional placeholder in read
 	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window weight; do
 		[ -z "$host" ] && continue
 		n=$((n + 1))
@@ -2466,8 +2254,10 @@ send_alerts() {
 		local alert_count
 		alert_count=$(wc -l < "$recip_file")
 
-		# set ALERT_COUNT and ALERT_ENTRIES for template
+		# set ALERT_COUNT and ALERT_ENTRIES for template (consumed by sourced alert.bfd)
+		# shellcheck disable=SC2034
 		ALERT_COUNT="$alert_count"
+		# shellcheck disable=SC2034
 		ALERT_ENTRIES=$(format_alert_body "$recip_file" "$loglines")
 
 		# set backward-compat globals for single-ban case
@@ -2486,6 +2276,7 @@ send_alerts() {
 			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
 				BAN_COMMAND=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
 			else
+				# shellcheck disable=SC2034  # consumed by sourced alert.bfd
 				BAN_COMMAND="fw_ban $_host ($_FW_BACKEND)"
 			fi
 		fi
@@ -2497,6 +2288,7 @@ send_alerts() {
 		fi
 
 		# source template and pipe to mail
+		# shellcheck disable=SC1090  # template path is runtime-configured
 		if ! (. "$template") | mail -s "$mail_subject" "$recip" 2>/dev/null; then
 			eout "alert email to $recip failed (mail command returned non-zero)." le
 		fi

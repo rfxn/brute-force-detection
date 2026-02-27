@@ -56,6 +56,7 @@ install(){
 	chmod 755 /etc/cron.daily/bfd
         find "$INSPATH" -maxdepth 1 -type f -exec chmod 640 {} +
         chmod 750 "$INSPATH/tlog"
+        chmod 750 "$INSPATH/tlog_lib.sh"
         chmod 750 "$INSPATH/bfd"
 	chmod 750 "$INSPATH/rules"
 	chmod 640 "$INSPATH"/rules/*
@@ -108,11 +109,13 @@ install(){
 			fi
 		fi
 	fi
+	# tlog: replace default BASERUN for cursor storage security
+	sed -i "s|BASERUN=\"\${BASERUN:-/tmp}\"|BASERUN=\"\${BASERUN:-$INSPATH/tmp}\"|" "$INSPATH/tlog"
 	# replace default paths when installing to a custom location
 	if [ "$INSPATH" != "/usr/local/bfd" ]; then
 		sed -i "s|/usr/local/bfd|$INSPATH|g" \
 			"$INSPATH/bfd" "$INSPATH/bfd.lib.sh" \
-			"$INSPATH/internals.conf" "$INSPATH/tlog" \
+			"$INSPATH/internals.conf" \
 			"$INSPATH/exclude.files" /etc/cron.daily/bfd
 		if [ -f /usr/share/man/man1/bfd.1 ]; then
 			sed -i "s|/usr/local/bfd|$INSPATH|g" /usr/share/man/man1/bfd.1
