@@ -1,4 +1,10 @@
 2.0.1:
+[Fix] importconf: preserve tlog byte-offset state files on upgrade; loop
+      copies bare-name files (sshd, dovecot, postfix, etc.) from old tmp/,
+      skipping dotfiles and extension files already handled by other cp's
+[Fix] importconf: preserve user's custom alert.bfd template on upgrade;
+      install.sh unconditionally overwrites with new default, importconf
+      now restores from backup if present
 [Fix] show_config(): replace eval-based variable indirection with ${!var}
       indirect expansion; eliminates eval from display path while preserving
       whitelist validation and BAN_COMMAND case mapping

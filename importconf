@@ -234,4 +234,21 @@ cp -f "$INSTALL_PATH.bk.last/stats/"* "$INSTALL_PATH/stats/" 2>/dev/null
 cp -f "$INSTALL_PATH.bk.last/tmp/"*.cursor "$INSTALL_PATH/tmp/" 2>/dev/null
 cp -f "$INSTALL_PATH.bk.last/tmp/"*.jts "$INSTALL_PATH/tmp/" 2>/dev/null
 
+# preserve tlog byte-offset tracking state
+# (files named by LOG_TAG: sshd, dovecot, postfix, etc. — no dots in name)
+for _f in "$INSTALL_PATH.bk.last/tmp/"*; do
+	[ -f "$_f" ] || continue
+	_bn="${_f##*/}"
+	# skip dotfiles, extension files, and already-preserved patterns
+	case "$_bn" in
+		.*|*.*) continue ;;
+	esac
+	cp -f "$_f" "$INSTALL_PATH/tmp/" 2>/dev/null
+done
+
+# preserve user's custom alert template (install.sh overwrites with new default)
+if [ -f "$INSTALL_PATH.bk.last/alert.bfd" ]; then
+	cp -f "$INSTALL_PATH.bk.last/alert.bfd" "$INSTALL_PATH/alert.bfd"
+fi
+
 echo "  Imported config and state from BFD $OV to $NV."
