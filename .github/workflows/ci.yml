@@ -19,7 +19,7 @@ jobs:
           shellcheck install.sh uninstall.sh importconf cron.daily
 
   test:
-    uses: rfxn/batsman/.github/workflows/test.yml@1.0.1
+    uses: rfxn/batsman/.github/workflows/test.yml@v1.0.1
     with:
       project-name: bfd
       os-matrix: '["debian12","centos6","centos7","rocky8","rocky9","ubuntu1204","ubuntu2004","ubuntu2404"]'
