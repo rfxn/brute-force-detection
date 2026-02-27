@@ -15,6 +15,9 @@
 [New] tlog_adjust_cursor() for mode-aware in-place log trim support
 [Change] files/tlog replaced with tlog_lib standalone wrapper (sources
       tlog_lib.sh instead of reimplementing tracking logic)
+[Fix] tlog BASERUN: install.sh replaces default /tmp with $INSPATH/tmp at
+      install time; prevents cursor files from defaulting to world-writable
+      /tmp; source tree keeps canonical /tmp for cross-project hash parity
 [New] tests/03-validate-rule.bats: 8 _compat_rule_vars() unit tests covering
       all 4 legacy→canonical mappings, preservation semantics when new names
       already set, empty old names, and mixed old/new resolution
@@ -360,4 +363,10 @@
       before re-sourcing, causing stale values when users edit legacy names
 [Fix] ATTACK_COUNT backward compat: send_alerts set to raw pressure_scaled
       (e.g., 18400); now uses pressure/1000 for sensible old-template display
+[Change] test infrastructure: adopt batsman shared BATS framework via submodule
+      at tests/infra (pinned to 1.0.1); 9 Dockerfiles reduced from full OS+BATS
+      install to single-package delta over batsman base images; run-tests.sh
+      replaced with 21-line batsman wrapper; Makefile replaced with 8-line
+      parameterized include; CI test job uses batsman reusable workflow
+[Change] remove legacy run_tests.sh pre-BATS test runner
 
