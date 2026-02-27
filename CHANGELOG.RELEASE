@@ -18,6 +18,13 @@
 [Fix] tlog BASERUN: install.sh replaces default /tmp with $INSPATH/tmp at
       install time; prevents cursor files from defaulting to world-writable
       /tmp; source tree keeps canonical /tmp for cross-project hash parity
+[Change] tlog_lib.sh: update to canonical 2.0.1 with multi-format compressed
+      rotation (.xz, .bz2, .zst, .lz4), copytruncate rotation handling, mode
+      validation in tlog_read(), and generic decompression dispatch
+[Change] tlog: update to canonical 2.0.1 CLI with option parsing (-m/--mode,
+      -b/--baserun, -f/--flock, --first-run), subcommands (--full, --status,
+      --reset, --adjust), help system (-v/-h/--help), path traversal rejection,
+      and library security validation; backward-compatible positional interface
 [New] tests/03-validate-rule.bats: 8 _compat_rule_vars() unit tests covering
       all 4 legacy→canonical mappings, preservation semantics when new names
       already set, empty old names, and mixed old/new resolution

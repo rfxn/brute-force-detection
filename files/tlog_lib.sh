@@ -149,21 +149,62 @@ _tlog_output_content() {
 	esac
 }
 
+# _tlog_is_compressed(file)
+# Returns 0 if file has a known compressed extension.
+# Pure case match — no I/O.
+_tlog_is_compressed() {
+	case "$1" in
+		*.gz|*.xz|*.bz2|*.zst|*.lz4) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+# _tlog_cat_file(file)
+# Stream decompressed content to stdout via TOOL -dc pattern.
+# Falls back to cat for uncompressed files.
+_tlog_cat_file() {
+	local file="$1"
+	case "$file" in
+		*.gz)  gzip -dc "$file" ;;
+		*.xz)  xz -dc "$file" ;;
+		*.bz2) bzip2 -dc "$file" ;;
+		*.zst) zstd -dc "$file" 2>/dev/null ;;
+		*.lz4) lz4 -dc "$file" 2>/dev/null ;;
+		*)     cat "$file" ;;
+	esac
+}
+
 # _tlog_find_rotated(file)
-# Locate rotated log: .1 then .1.gz.
+# Locate rotated log file in priority order: uncompressed .1 first,
+# then compressed variants (.gz, .xz, .bz2, .zst, .lz4).
+# Compressed variants only returned if the decompression tool is available.
 # Outputs path on stdout, returns 1 if not found.
 _tlog_find_rotated() {
 	local file="$1"
+	local ext tool
 
+	# Uncompressed — always preferred, no tool needed
 	if [[ -f "${file}.1" ]]; then
 		printf '%s' "${file}.1"
 		return 0
 	fi
 
-	if [[ -f "${file}.1.gz" ]]; then
-		printf '%s' "${file}.1.gz"
-		return 0
-	fi
+	# Compressed variants — check tool availability before returning
+	for ext in gz xz bz2 zst lz4; do
+		if [[ -f "${file}.1.${ext}" ]]; then
+			case "$ext" in
+				gz)  tool="gzip" ;;
+				xz)  tool="xz" ;;
+				bz2) tool="bzip2" ;;
+				zst) tool="zstd" ;;
+				lz4) tool="lz4" ;;
+			esac
+			if command -v "$tool" >/dev/null 2>&1; then
+				printf '%s' "${file}.1.${ext}"
+				return 0
+			fi
+		fi
+	done
 
 	return 1
 }
@@ -215,6 +256,12 @@ tlog_read() {
 	local newsize delta size rtfile rtsize _tlog_fd
 	local cursor_corrupt=0 rc=0
 	local stored_mode parse_rc rt_delta
+
+	# Mode validation — reject typos before any I/O
+	if [[ "$mode" != "bytes" ]] && [[ "$mode" != "lines" ]]; then
+		echo "tlog: invalid mode '$mode' (must be 'bytes' or 'lines')" >&2
+		return 1
+	fi
 
 	# Journal dispatch: file missing and journal not disabled
 	if [[ ! -f "$file" ]] && [[ "${LOG_SOURCE}" != "file" ]]; then
@@ -285,11 +332,11 @@ tlog_read() {
 		rtfile=$(_tlog_find_rotated "$file") || true
 		if [[ -n "$rtfile" ]]; then
 			# Get rotated file size in correct mode
-			if [[ "$rtfile" == *.gz ]]; then
+			if _tlog_is_compressed "$rtfile"; then
 				if [[ "$mode" == "lines" ]]; then
-					rtsize=$(zcat "$rtfile" | wc -l)
+					rtsize=$(_tlog_cat_file "$rtfile" | wc -l)
 				else
-					rtsize=$(zcat "$rtfile" | wc -c)
+					rtsize=$(_tlog_cat_file "$rtfile" | wc -c)
 				fi
 				rtsize="${rtsize## }"
 			else
@@ -300,11 +347,11 @@ tlog_read() {
 			if [[ "$rtsize" -ge "$size" ]]; then
 				rt_delta=$((rtsize - size))
 				if [[ "$rt_delta" -gt 0 ]]; then
-					if [[ "$rtfile" == *.gz ]]; then
+					if _tlog_is_compressed "$rtfile"; then
 						if [[ "$mode" == "lines" ]]; then
-							zcat "$rtfile" | tail -n "$rt_delta"
+							_tlog_cat_file "$rtfile" | tail -n "$rt_delta"
 						else
-							zcat "$rtfile" | tail -c "$rt_delta"
+							_tlog_cat_file "$rtfile" | tail -c "$rt_delta"
 						fi
 					else
 						_tlog_output_content "$rtfile" "$rt_delta" "$mode"
