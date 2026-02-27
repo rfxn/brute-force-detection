@@ -33,6 +33,15 @@ teardown() {
 	[ -f "$INSTALL_PATH/stats/attack.pool" ]
 }
 
+@test "state_init: sets 750 permissions on state directories" {
+	state_init "$INSTALL_PATH"
+	local perms
+	perms=$(stat -c '%a' "$INSTALL_PATH/tmp")
+	[ "$perms" = "750" ]
+	perms=$(stat -c '%a' "$INSTALL_PATH/stats")
+	[ "$perms" = "750" ]
+}
+
 @test "state_init: sets 600 permissions on state files" {
 	state_init "$INSTALL_PATH"
 	local perms

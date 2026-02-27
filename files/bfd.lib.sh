@@ -548,7 +548,7 @@ validate_config() {
 		echo "error: SCAN_MAX_LINES must be a non-negative integer (got '${SCAN_MAX_LINES:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
-	if [ -n "${SCAN_TIMEOUT:-}" ] && ! [[ "${SCAN_TIMEOUT:-120}" =~ $int_pattern ]]; then
+	if [ -n "${SCAN_TIMEOUT:-}" ] && { ! [[ "${SCAN_TIMEOUT:-120}" =~ $int_pattern ]] || [ "${SCAN_TIMEOUT:-120}" -eq 0 ]; }; then
 		echo "error: SCAN_TIMEOUT must be a positive integer (got '${SCAN_TIMEOUT:-}')."
 		exit $EXIT_CONFIG_ERROR
 	fi
@@ -1564,10 +1564,10 @@ manual_ban() {
 state_init() {
 	local install_path="$1"
 	if [ ! -d "$install_path/tmp" ]; then
-		mkdir -p "$install_path/tmp"
+		mkdir -m 750 -p "$install_path/tmp"
 	fi
 	if [ ! -d "$install_path/stats" ]; then
-		mkdir -p "$install_path/stats"
+		mkdir -m 750 -p "$install_path/stats"
 	fi
 	local f
 	for f in "$install_path/tmp/events.dat" "$install_path/tmp/bans.active" \
