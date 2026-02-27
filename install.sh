@@ -109,11 +109,13 @@ install(){
 			fi
 		fi
 	fi
+	# tlog: replace default BASERUN for cursor storage security
+	sed -i "s|BASERUN=\"\${BASERUN:-/tmp}\"|BASERUN=\"\${BASERUN:-$INSPATH/tmp}\"|" "$INSPATH/tlog"
 	# replace default paths when installing to a custom location
 	if [ "$INSPATH" != "/usr/local/bfd" ]; then
 		sed -i "s|/usr/local/bfd|$INSPATH|g" \
 			"$INSPATH/bfd" "$INSPATH/bfd.lib.sh" \
-			"$INSPATH/internals.conf" "$INSPATH/tlog" \
+			"$INSPATH/internals.conf" \
 			"$INSPATH/exclude.files" /etc/cron.daily/bfd
 		if [ -f /usr/share/man/man1/bfd.1 ]; then
 			sed -i "s|/usr/local/bfd|$INSPATH|g" /usr/share/man/man1/bfd.1
