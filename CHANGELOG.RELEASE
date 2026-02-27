@@ -1,4 +1,14 @@
 2.0.1:
+[Fix] CI: shellcheck lint step now uses -S warning to filter info/style
+      noise; inline shellcheck directives added for 8 known false positives
+      in bfd.lib.sh (template vars consumed by sourced alert.bfd, read
+      placeholders, mkdir -m with -p where parent always exists)
+[Fix] CI: added files/tlog_lib.sh to shellcheck lint targets
+[Fix] tests/28-install-paths.bats: updated for tlog rewrite — files/tlog no
+      longer contains /usr/local/bfd (uses relative path to tlog_lib.sh);
+      removed tlog from INSPATH sed replacement tests to match install.sh
+[Fix] bfd.lib.sh: removed unused local variable 'expired_line' from
+      process_unbans()
 [Change] tlog functions extracted to shared tlog_lib.sh library; tlog_read(),
       tlog_journal_filter(), tlog_journal_read() and 4 internal helpers replaced
       by canonical tlog_lib.sh (sourced at bfd.lib.sh load time)

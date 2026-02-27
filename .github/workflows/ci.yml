@@ -15,8 +15,8 @@ jobs:
         run: sudo apt-get install -y shellcheck
       - name: Shellcheck main scripts
         run: |
-          shellcheck files/bfd files/bfd.lib.sh files/tlog
-          shellcheck install.sh uninstall.sh importconf cron.daily
+          shellcheck -S warning files/bfd files/bfd.lib.sh files/tlog files/tlog_lib.sh
+          shellcheck -S warning install.sh uninstall.sh importconf cron.daily
 
   test:
     uses: rfxn/batsman/.github/workflows/test.yml@v1.0.1

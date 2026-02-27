@@ -26,13 +26,13 @@
 # Source shared tlog library
 _tlog_lib_path="${INSTALL_PATH:-/usr/local/bfd}/tlog_lib.sh"
 if [ -f "$_tlog_lib_path" ]; then
-	# shellcheck source=files/tlog_lib.sh
+	# shellcheck disable=SC1091 source=files/tlog_lib.sh
 	. "$_tlog_lib_path"
 else
 	# Fallback for test environments: try relative to this script
 	_tlog_lib_dir="${BASH_SOURCE[0]%/*}"
 	if [ -f "$_tlog_lib_dir/tlog_lib.sh" ]; then
-		# shellcheck source=files/tlog_lib.sh
+		# shellcheck disable=SC1091 source=files/tlog_lib.sh
 		. "$_tlog_lib_dir/tlog_lib.sh"
 	fi
 fi
@@ -1193,7 +1193,7 @@ execute_unban() {
 # process_unbans install_path now — expire and unban via firewall backend
 process_unbans() {
 	local install_path="$1" now="$2"
-	local expired_line ts expiry host mod ports
+	local ts expiry host mod ports
 	while IFS=' ' read -r ts expiry host mod ports; do
 		[ -z "$ts" ] && continue
 		if [ "$_FW_BACKEND" = "custom" ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
@@ -1340,9 +1340,11 @@ manual_ban() {
 state_init() {
 	local install_path="$1"
 	if [ ! -d "$install_path/tmp" ]; then
+		# shellcheck disable=SC2174  # parent always exists; -m applies to leaf
 		mkdir -m 750 -p "$install_path/tmp"
 	fi
 	if [ ! -d "$install_path/stats" ]; then
+		# shellcheck disable=SC2174  # parent always exists; -m applies to leaf
 		mkdir -m 750 -p "$install_path/stats"
 	fi
 	local f
@@ -2189,6 +2191,7 @@ format_alert_body() {
 	# log section
 	local has_logs=0
 	n=0
+	# shellcheck disable=SC2034  # recipient: positional placeholder in read
 	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window weight; do
 		[ -z "$host" ] && continue
 		n=$((n + 1))
@@ -2251,8 +2254,10 @@ send_alerts() {
 		local alert_count
 		alert_count=$(wc -l < "$recip_file")
 
-		# set ALERT_COUNT and ALERT_ENTRIES for template
+		# set ALERT_COUNT and ALERT_ENTRIES for template (consumed by sourced alert.bfd)
+		# shellcheck disable=SC2034
 		ALERT_COUNT="$alert_count"
+		# shellcheck disable=SC2034
 		ALERT_ENTRIES=$(format_alert_body "$recip_file" "$loglines")
 
 		# set backward-compat globals for single-ban case
@@ -2271,6 +2276,7 @@ send_alerts() {
 			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
 				BAN_COMMAND=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
 			else
+				# shellcheck disable=SC2034  # consumed by sourced alert.bfd
 				BAN_COMMAND="fw_ban $_host ($_FW_BACKEND)"
 			fi
 		fi
@@ -2282,6 +2288,7 @@ send_alerts() {
 		fi
 
 		# source template and pipe to mail
+		# shellcheck disable=SC1090  # template path is runtime-configured
 		if ! (. "$template") | mail -s "$mail_subject" "$recip" 2>/dev/null; then
 			eout "alert email to $recip failed (mail command returned non-zero)." le
 		fi

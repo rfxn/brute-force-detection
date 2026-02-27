@@ -25,10 +25,9 @@ teardown() {
 	[ "$output" -ge 1 ]
 }
 
-@test "install-paths: files/tlog contains literal /usr/local/bfd" {
+@test "install-paths: files/tlog does not contain /usr/local/bfd" {
 	run grep -c '/usr/local/bfd' "$PROJECT_ROOT/files/tlog"
-	assert_success
-	[ "$output" -ge 1 ]
+	assert_failure
 }
 
 @test "install-paths: files/exclude.files contains literal /usr/local/bfd" {
@@ -74,14 +73,12 @@ teardown() {
 @test "install-paths: INSPATH sed replaces /usr/local/bfd with custom path" {
 	local custom="/opt/custom/bfd"
 	cp "$PROJECT_ROOT/files/bfd" "$SEDDIR/bfd"
-	cp "$PROJECT_ROOT/files/tlog" "$SEDDIR/tlog"
 	cp "$PROJECT_ROOT/files/exclude.files" "$SEDDIR/exclude.files"
 	cp "$PROJECT_ROOT/cron.daily" "$SEDDIR/cron.daily"
 	sed -i "s|/usr/local/bfd|$custom|g" \
-		"$SEDDIR/bfd" "$SEDDIR/tlog" "$SEDDIR/exclude.files" "$SEDDIR/cron.daily"
+		"$SEDDIR/bfd" "$SEDDIR/exclude.files" "$SEDDIR/cron.daily"
 	# verify custom path present in each file
 	grep -q "$custom" "$SEDDIR/bfd"
-	grep -q "$custom" "$SEDDIR/tlog"
 	grep -q "$custom" "$SEDDIR/exclude.files"
 	grep -q "$custom" "$SEDDIR/cron.daily"
 }
@@ -89,11 +86,10 @@ teardown() {
 @test "install-paths: INSPATH sed leaves no stray defaults" {
 	local custom="/opt/custom/bfd"
 	cp "$PROJECT_ROOT/files/bfd" "$SEDDIR/bfd"
-	cp "$PROJECT_ROOT/files/tlog" "$SEDDIR/tlog"
 	cp "$PROJECT_ROOT/files/exclude.files" "$SEDDIR/exclude.files"
 	cp "$PROJECT_ROOT/cron.daily" "$SEDDIR/cron.daily"
 	sed -i "s|/usr/local/bfd|$custom|g" \
-		"$SEDDIR/bfd" "$SEDDIR/tlog" "$SEDDIR/exclude.files" "$SEDDIR/cron.daily"
+		"$SEDDIR/bfd" "$SEDDIR/exclude.files" "$SEDDIR/cron.daily"
 	# no stray defaults should remain
 	run grep -r '/usr/local/bfd' "$SEDDIR/"
 	assert_failure
@@ -135,7 +131,6 @@ teardown() {
 	local cinst="/opt/mybfd"
 	local cbin="/opt/sbin/mybfd"
 	cp "$PROJECT_ROOT/files/bfd" "$SEDDIR/bfd"
-	cp "$PROJECT_ROOT/files/tlog" "$SEDDIR/tlog"
 	cp "$PROJECT_ROOT/files/exclude.files" "$SEDDIR/exclude.files"
 	cp "$PROJECT_ROOT/cron.daily" "$SEDDIR/cron.daily"
 	cp "$PROJECT_ROOT/cron" "$SEDDIR/cron"
@@ -144,7 +139,7 @@ teardown() {
 	cp "$PROJECT_ROOT/bfd-watch.init" "$SEDDIR/bfd-watch.init"
 	# INSPATH sed
 	sed -i "s|/usr/local/bfd|$cinst|g" \
-		"$SEDDIR/bfd" "$SEDDIR/tlog" "$SEDDIR/exclude.files" "$SEDDIR/cron.daily"
+		"$SEDDIR/bfd" "$SEDDIR/exclude.files" "$SEDDIR/cron.daily"
 	# BINPATH sed
 	sed -i "s|/usr/local/sbin/bfd|$cbin|g" \
 		"$SEDDIR/cron" "$SEDDIR/bfd-watch.service" \
@@ -161,13 +156,10 @@ teardown() {
 @test "install-paths: INSPATH sed preserves bash -n validity" {
 	local custom="/opt/custom/bfd"
 	cp "$PROJECT_ROOT/files/bfd" "$SEDDIR/bfd"
-	cp "$PROJECT_ROOT/files/tlog" "$SEDDIR/tlog"
 	cp "$PROJECT_ROOT/cron.daily" "$SEDDIR/cron.daily"
 	sed -i "s|/usr/local/bfd|$custom|g" \
-		"$SEDDIR/bfd" "$SEDDIR/tlog" "$SEDDIR/cron.daily"
+		"$SEDDIR/bfd" "$SEDDIR/cron.daily"
 	run bash -n "$SEDDIR/bfd"
-	assert_success
-	run bash -n "$SEDDIR/tlog"
 	assert_success
 	run bash -n "$SEDDIR/cron.daily"
 	assert_success
