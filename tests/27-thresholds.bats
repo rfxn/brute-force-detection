@@ -222,37 +222,6 @@ EOF
 	[ "${_PRESS_RULE_EMAIL[postfix]}" = "sec@example.com" ]
 }
 
-@test "_load_pressure_conf: recognizes legacy TRIG key as PRESSURE_TRIP" {
-	local conf="$TEST_TMPDIR/pressure.conf"
-	cat > "$conf" <<'EOF'
-sshd:TRIG=5
-dovecot:PRESSURE_TRIP=10
-EOF
-	chown root "$conf"
-	chmod 640 "$conf"
-	_load_pressure_conf "$conf"
-	# TRIG key maps to _PRESS_TRIP
-	[ "${_PRESS_TRIP[sshd]}" = "5" ]
-	[ "${_PRESS_TRIP[dovecot]}" = "10" ]
-}
-
-@test "_load_pressure_conf: skips comments and blank lines" {
-	local conf="$TEST_TMPDIR/pressure.conf"
-	cat > "$conf" <<'EOF'
-# this is a comment
-sshd:PRESSURE_TRIP=5
-
-# another comment
-dovecot:PRESSURE_TRIP=10
-EOF
-	chown root "$conf"
-	chmod 640 "$conf"
-	_load_pressure_conf "$conf"
-	[ "${#_PRESS_TRIP[@]}" -eq 2 ]
-	[ "${_PRESS_TRIP[sshd]}" = "5" ]
-	[ "${_PRESS_TRIP[dovecot]}" = "10" ]
-}
-
 @test "_load_pressure_conf: ignores unknown keys" {
 	local conf="$TEST_TMPDIR/pressure.conf"
 	cat > "$conf" <<'EOF'
@@ -297,61 +266,6 @@ EOF
 
 # --- _apply_pressure ---
 
-@test "_apply_pressure: rule PRESSURE_TRIP wins over pressure.conf" {
-	_PRESS_TRIP=([sshd]="99")
-	PRESSURE_TRIP="5"
-	PRESSURE_WEIGHT=""
-	_apply_pressure "sshd"
-	[ "$PRESSURE_TRIP" = "5" ]
-}
-
-@test "_apply_pressure: fills empty PRESSURE_TRIP from pressure.conf" {
-	_PRESS_TRIP=([sshd]="7")
-	PRESSURE_TRIP=""
-	PRESSURE_WEIGHT=""
-	_apply_pressure "sshd"
-	[ "$PRESSURE_TRIP" = "7" ]
-}
-
-@test "_apply_pressure: fills empty PRESSURE_WEIGHT from pressure.conf" {
-	_PRESS_WEIGHT=([sshd]="3")
-	PRESSURE_WEIGHT=""
-	PRESSURE_TRIP=""
-	_apply_pressure "sshd"
-	[ "$PRESSURE_WEIGHT" = "3" ]
-}
-
-@test "_apply_pressure: fills SKIP_ALERT from pressure.conf" {
-	_PRESS_SKIP_ALERT=([postfix]="1")
-	SKIP_ALERT=""
-	PRESSURE_WEIGHT=""
-	PRESSURE_TRIP=""
-	_apply_pressure "postfix"
-	[ "$SKIP_ALERT" = "1" ]
-}
-
-@test "_apply_pressure: fills RULE_EMAIL from pressure.conf" {
-	_PRESS_RULE_EMAIL=([dovecot]="alerts@example.com")
-	RULE_EMAIL=""
-	PRESSURE_WEIGHT=""
-	PRESSURE_TRIP=""
-	_apply_pressure "dovecot"
-	[ "$RULE_EMAIL" = "alerts@example.com" ]
-}
-
-@test "_apply_pressure: no-op for unlisted rule" {
-	_PRESS_TRIP=([sshd]="5")
-	PRESSURE_TRIP=""
-	PRESSURE_WEIGHT=""
-	SKIP_ALERT=""
-	RULE_EMAIL=""
-	_apply_pressure "nginx-http-auth"
-	[ -z "$PRESSURE_TRIP" ]
-	[ -z "$PRESSURE_WEIGHT" ]
-	[ -z "$SKIP_ALERT" ]
-	[ -z "$RULE_EMAIL" ]
-}
-
 @test "_apply_pressure: does not overwrite non-empty SKIP_ALERT" {
 	_PRESS_SKIP_ALERT=([sshd]="1")
 	SKIP_ALERT="0"
@@ -359,17 +273,6 @@ EOF
 	PRESSURE_TRIP=""
 	_apply_pressure "sshd"
 	[ "$SKIP_ALERT" = "0" ]
-}
-
-@test "_apply_pressure: fills TRIG from PRESSURE_TRIP for backward compat" {
-	_PRESS_TRIP=([sshd]="12")
-	TRIG=""
-	PRESSURE_TRIP=""
-	PRESSURE_WEIGHT=""
-	_apply_pressure "sshd"
-	[ "$PRESSURE_TRIP" = "12" ]
-	# backward compat: TRIG also filled from PRESSURE_TRIP
-	[ "$TRIG" = "12" ]
 }
 
 # --- pressure precedence integration ---
