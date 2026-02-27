@@ -1,4 +1,13 @@
 2.0.1:
+[New] tests/03-validate-rule.bats: 8 _compat_rule_vars() unit tests covering
+      all 4 legacy→canonical mappings, preservation semantics when new names
+      already set, empty old names, and mixed old/new resolution
+[Fix] show_status(): add missing _compat_rule_vars() call after sourcing rule
+      files; old-style rules using REQ instead of PREREQ were incorrectly
+      counted as inactive in status output
+[Fix] show_rule(), test_rule(): reorder _compat_rule_vars() before
+      _apply_pressure() for consistency with check() and _hc_rules() call
+      order; no functional change (variable sets are non-overlapping)
 [Change] tests: relocate 10 misplaced tests to logical home files —
       extract_command_template (4 tests) from 09-state-io to 22-alert-format;
       _hc_config (1 test) from 04-config-validation to 23-health-check;

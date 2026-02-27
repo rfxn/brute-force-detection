@@ -177,3 +177,75 @@ teardown() {
 	run _rule_is_active
 	assert_failure
 }
+
+# --- _compat_rule_vars ---
+
+@test "_compat_rule_vars: maps REQ to PREREQ when PREREQ empty" {
+	PREREQ="" REQ="/usr/sbin/sshd"
+	LP="" TLOG_TF="" ARG_VAL=""
+	_compat_rule_vars
+	[ "$PREREQ" = "/usr/sbin/sshd" ]
+}
+
+@test "_compat_rule_vars: maps LP to LOG_FILE when LOG_FILE empty" {
+	LOG_FILE="" LP="/var/log/auth.log"
+	REQ="" TLOG_TF="" ARG_VAL=""
+	_compat_rule_vars
+	[ "$LOG_FILE" = "/var/log/auth.log" ]
+}
+
+@test "_compat_rule_vars: maps TLOG_TF to LOG_TAG when LOG_TAG empty" {
+	LOG_TAG="" TLOG_TF="sshd"
+	REQ="" LP="" ARG_VAL=""
+	_compat_rule_vars
+	[ "$LOG_TAG" = "sshd" ]
+}
+
+@test "_compat_rule_vars: maps ARG_VAL to MATCHED_HOSTS when MATCHED_HOSTS empty" {
+	MATCHED_HOSTS="" ARG_VAL="192.0.2.1 192.0.2.2"
+	REQ="" LP="" TLOG_TF=""
+	_compat_rule_vars
+	[ "$MATCHED_HOSTS" = "192.0.2.1 192.0.2.2" ]
+}
+
+@test "_compat_rule_vars: preserves PREREQ when already set (ignores REQ)" {
+	PREREQ="/bin/sh" REQ="/usr/sbin/sshd"
+	LP="" TLOG_TF="" ARG_VAL=""
+	LOG_FILE="" LOG_TAG="" MATCHED_HOSTS=""
+	_compat_rule_vars
+	[ "$PREREQ" = "/bin/sh" ]
+}
+
+@test "_compat_rule_vars: maps all four old names at once" {
+	PREREQ="" LOG_FILE="" LOG_TAG="" MATCHED_HOSTS=""
+	REQ="/bin/sh" LP="/var/log/secure" TLOG_TF="sshd" ARG_VAL="192.0.2.1"
+	_compat_rule_vars
+	[ "$PREREQ" = "/bin/sh" ]
+	[ "$LOG_FILE" = "/var/log/secure" ]
+	[ "$LOG_TAG" = "sshd" ]
+	[ "$MATCHED_HOSTS" = "192.0.2.1" ]
+}
+
+@test "_compat_rule_vars: empty old names leave new names empty" {
+	PREREQ="" LOG_FILE="" LOG_TAG="" MATCHED_HOSTS=""
+	REQ="" LP="" TLOG_TF="" ARG_VAL=""
+	_compat_rule_vars
+	[ -z "$PREREQ" ]
+	[ -z "$LOG_FILE" ]
+	[ -z "$LOG_TAG" ]
+	[ -z "$MATCHED_HOSTS" ]
+}
+
+@test "_compat_rule_vars: mixed old and new resolved independently" {
+	PREREQ="/bin/sh" LOG_FILE="" LOG_TAG="dovecot" MATCHED_HOSTS=""
+	REQ="/usr/sbin/sshd" LP="/var/log/mail.log" TLOG_TF="sshd" ARG_VAL="192.0.2.3"
+	_compat_rule_vars
+	# PREREQ already set — kept as /bin/sh (REQ ignored)
+	[ "$PREREQ" = "/bin/sh" ]
+	# LOG_FILE was empty — mapped from LP
+	[ "$LOG_FILE" = "/var/log/mail.log" ]
+	# LOG_TAG already set — kept as dovecot (TLOG_TF ignored)
+	[ "$LOG_TAG" = "dovecot" ]
+	# MATCHED_HOSTS was empty — mapped from ARG_VAL
+	[ "$MATCHED_HOSTS" = "192.0.2.3" ]
+}
