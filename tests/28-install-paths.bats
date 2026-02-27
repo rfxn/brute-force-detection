@@ -239,3 +239,10 @@ teardown() {
 	assert_success
 	[ "$output" -ge 1 ]
 }
+
+# --- tlog_lib.sh ---
+
+@test "install-paths: files/tlog_lib.sh does not contain /usr/local/bfd" {
+	run grep -c '/usr/local/bfd' "$PROJECT_ROOT/files/tlog_lib.sh"
+	assert_failure
+}

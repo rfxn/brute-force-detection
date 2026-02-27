@@ -1,117 +1,70 @@
 #!/bin/bash
+# tlog — standalone CLI wrapper for tlog_lib.sh
+# Provides incremental log reading via command-line invocation.
+# Delegates all logic to tlog_lib.sh; this script handles argument
+# parsing, library location/validation, and BASERUN setup.
 #
-# Brute Force Detection 2.0.1 - Track Log <bfd@rfxn.com>
-###
-# Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
-# Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
+# Usage: tlog <file> <tlog_name> [mode]
+#   file      — log file to track
+#   tlog_name — cursor identifier (stored in BASERUN directory)
+#   mode      — tracking mode: bytes (default) or lines
 #
-#    This program is free software; you can redistribute it and/or modify
-#    it under the terms of the GNU General Public License as published by
-#    the Free Software Foundation; either version 2 of the License, or
-#    (at your option) any later version.
+# Copyright (C) 2002-2026 R-fx Networks <proj@rfxn.com>
+#                         Ryan MacDonald <ryan@rfxn.com>
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
 #
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU General Public License for more details.
-#
-#    You should have received a copy of the GNU General Public License
-#    along with this program; if not, write to the Free Software
-#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-###
-#
-# PATH export: standalone tlog runs as a subprocess with no inherited PATH.
-# When rules migrate to in-process _rule_tlog(), this script remains for
-# cron.daily and manual invocation where PATH may not be set.
-PATH=/sbin:/usr/sbin:/usr/bin:/usr/local/bin:/usr/local/sbin:$PATH ; export PATH
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
 
+PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin:/usr/local/sbin
+export PATH
 
-# Base run path; no trailing slash
+# BASERUN: cursor storage directory — sed-replaced at install time
 BASERUN="${BASERUN:-/usr/local/bfd/tmp}"
 
-if [ -z "$1" ] && [ -z "$2" ]; then
-	echo "$0 usage: [file] [tlog]"
-	echo "file   :   path to file for tracking"
-	echo "tlog   :   data file name to store tracked sizes"
-	exit 1
-else
-	FILE="$1"
-	TLOG="$2"
-fi
-
-# Journal fallback: use journal when file is missing (auto or journal mode)
-if [ "${LOG_SOURCE:-auto}" != "file" ] && [ ! -f "$FILE" ]; then
-	_LIB="${INSTALL_PATH:-/usr/local/bfd}/bfd.lib.sh"
-	if [ -f "$_LIB" ]; then
-		_lib_owner=$(stat -L -c '%u' "$_LIB" 2>/dev/null) || _lib_owner=""
-		_lib_perms=$(stat -L -c '%a' "$_LIB" 2>/dev/null) || _lib_perms=""
-		_lib_world="${_lib_perms: -1}"
-		if [ "$_lib_owner" != "0" ] || [ "$((_lib_world & 2))" -ne 0 ]; then
-			echo "error: bfd.lib.sh has unsafe ownership or permissions, aborting." >&2
-			exit 1
-		fi
-		# shellcheck disable=SC1090
-		. "$_LIB"
-		if tlog_journal_read "$TLOG" "$BASERUN" 2>/dev/null; then
-			exit 0
-		fi
-	fi
-fi
-
-if [ ! -f "$FILE" ]; then
-	echo "$FILE is not a valid file, aborting"
-	exit 1
-elif [ ! -d "$BASERUN" ]; then
-	echo "$BASERUN is not a valid operating path, aborting."
+# Argument validation
+if [[ -z "$1" ]] || [[ -z "$2" ]]; then
+	echo "usage: tlog <file> <tlog_name> [mode]" >&2
 	exit 1
 fi
 
-get_file_size() {
-	local file="$1"
-	stat -c %s "$file" 2>/dev/null || wc -c < "$file"
-}
+FILE="$1"
+TLOG="$2"
 
-# getsize — read tracked size and current file size into SIZE and NEWSIZE.
-# tlog_read() in bfd.lib.sh is the library equivalent; both must stay in sync.
-# Future: tlog callers should migrate to tlog_read(); this script remains for
-# standalone/cron compatibility.
-getsize() {
-	local tsize=""
-	if [ -f "$BASERUN/$TLOG" ]; then
-		read -r tsize < "$BASERUN/$TLOG" 2>/dev/null || tsize=""
-	fi
-	if [ -z "$tsize" ] || [ "$tsize" = "0" ]; then
-		# first run or reset — record current size, no output
-		SIZE=$(get_file_size "$FILE")
-		echo "$SIZE" > "$BASERUN/$TLOG"
-		NEWSIZE="$SIZE"
-	else
-		SIZE="$tsize"
-		NEWSIZE=$(get_file_size "$FILE")
-	fi
-}
+# Locate tlog_lib.sh relative to this script
+_SCRIPT_DIR="${0%/*}"
+[[ "$_SCRIPT_DIR" == "$0" ]] && _SCRIPT_DIR="."
+_LIB="${_SCRIPT_DIR}/tlog_lib.sh"
 
-getsize
-
-if [ "$NEWSIZE" -gt "$SIZE" ]; then
-	tail -c $((NEWSIZE - SIZE)) "$FILE"
-	echo "$NEWSIZE" > "$BASERUN/$TLOG"
-elif [ "$NEWSIZE" -lt "$SIZE" ]; then
-	# log rotated — output remainder from old (rotated) file
-	if [ -f "$FILE.1" ]; then
-		RTSIZE=$(get_file_size "$FILE.1")
-		if [ "$RTSIZE" -ge "$SIZE" ]; then
-			tail -c $((RTSIZE - SIZE)) "$FILE.1"
-		fi
-	elif [ -f "$FILE.1.gz" ]; then
-		RTSIZE=$(zcat "$FILE.1.gz" | wc -c)
-		if [ "$RTSIZE" -ge "$SIZE" ]; then
-			zcat "$FILE.1.gz" | tail -c $((RTSIZE - SIZE))
-		fi
-	fi
-	# output all of current file (it's new content since rotation)
-	if [ "$NEWSIZE" -gt 0 ]; then
-		cat "$FILE"
-	fi
-	echo "$NEWSIZE" > "$BASERUN/$TLOG"
+if [[ ! -f "$_LIB" ]]; then
+	echo "tlog: library not found: $_LIB" >&2
+	exit 1
 fi
+
+# Security check: library must be root-owned and not world-writable
+_lib_owner=$(stat -L -c '%u' "$_LIB" 2>/dev/null)
+_lib_perms=$(stat -L -c '%a' "$_LIB" 2>/dev/null)
+_lib_world="${_lib_perms: -1}"
+if [[ "$_lib_owner" != "0" ]] || [[ $((_lib_world & 2)) -ne 0 ]]; then
+	echo "tlog: security check failed on $_LIB (owner=$_lib_owner perms=$_lib_perms)" >&2
+	exit 1
+fi
+
+# Source the library
+# shellcheck source=tlog_lib.sh
+. "$_LIB"
+
+# Validate BASERUN directory
+if [[ ! -d "$BASERUN" ]]; then
+	echo "tlog: baserun directory not found: $BASERUN" >&2
+	exit 1
+fi
+
+# Delegate to library
+tlog_read "$FILE" "$TLOG" "$BASERUN" "${3:-}"
+exit $?

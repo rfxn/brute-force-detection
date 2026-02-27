@@ -158,6 +158,10 @@ if [ ! -f "$TLOG_PATH" ]; then
 	eout "could not locate \$TLOG_PATH, aborting."
 	exit "$EXIT_PREREQ_ERROR"
 fi
+if [ ! -f "$INSTALL_PATH/tlog_lib.sh" ]; then
+	eout "could not locate tlog_lib.sh, aborting."
+	exit "$EXIT_PREREQ_ERROR"
+fi
 if [ ! -d "$RULES_PATH" ]; then
 	eout "could not locate \$RULES_PATH, aborting."
 	exit "$EXIT_PREREQ_ERROR"
@@ -587,6 +591,7 @@ watch() {
 	pre
 	get_state
 	eout "watch mode started (interval=${WATCH_INTERVAL}s, pid=$$)" le
+	export TLOG_FLOCK=1
 	while true; do
 		UTIME=$(date +"%s")
 		echo "$UTIME" > "$LOCK_FILE"
@@ -759,7 +764,9 @@ case "${1:-}" in
 	check
 	_SCAN_MODE=""
 	if [ "$DRY_RUN" != "1" ] && [ -n "$_SCAN_LOG_PAIRS" ]; then
-		_tlog_advance_scan_cursors "$INSTALL_PATH"
+		_deduped_pairs=$(printf '%s\n' "$_SCAN_LOG_PAIRS" | sort -u)
+		tlog_advance_cursors "${TLOG_BASERUN:-$INSTALL_PATH/tmp}" "$_deduped_pairs"
+		unset _deduped_pairs
 		eout "scan: cursors advanced to current position" le
 	elif [ "$DRY_RUN" = "1" ]; then
 		vout "scan: dry-run — cursors not advanced"

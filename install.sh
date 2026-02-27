@@ -56,6 +56,7 @@ install(){
 	chmod 755 /etc/cron.daily/bfd
         find "$INSPATH" -maxdepth 1 -type f -exec chmod 640 {} +
         chmod 750 "$INSPATH/tlog"
+        chmod 750 "$INSPATH/tlog_lib.sh"
         chmod 750 "$INSPATH/bfd"
 	chmod 750 "$INSPATH/rules"
 	chmod 640 "$INSPATH"/rules/*

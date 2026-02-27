@@ -224,6 +224,8 @@ _start_watch() {
 	chmod 640 "$inst/bfd.lib.sh"
 	cp "$PROJECT_ROOT/files/tlog" "$inst/tlog"
 	chmod 750 "$inst/tlog"
+	cp "$PROJECT_ROOT/files/tlog_lib.sh" "$inst/tlog_lib.sh"
+	chmod 750 "$inst/tlog_lib.sh"
 	touch "$inst/exclude.files"
 	touch "$inst/alert.bfd"
 

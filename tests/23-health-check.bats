@@ -35,6 +35,9 @@ setup() {
 	# create tlog stub
 	echo '#!/bin/bash' > "$TLOG_PATH"
 	chmod +x "$TLOG_PATH"
+
+	# create tlog_lib.sh stub
+	touch "$INSTALL_PATH/tlog_lib.sh"
 }
 
 teardown() {

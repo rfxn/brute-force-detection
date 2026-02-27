@@ -1,4 +1,20 @@
 2.0.1:
+[Change] tlog functions extracted to shared tlog_lib.sh library; tlog_read(),
+      tlog_journal_filter(), tlog_journal_read() and 4 internal helpers replaced
+      by canonical tlog_lib.sh (sourced at bfd.lib.sh load time)
+[New] tlog_journal_register(): 23 BFD service-to-journalctl filter mappings
+      migrated from hardcoded case statement to dynamic registry
+[New] atomic cursor writes (mktemp+mv) for all tlog operations; replaces
+      non-atomic echo-redirect pattern
+[New] optional flock-based cursor locking enabled in watch mode (TLOG_FLOCK=1);
+      prevents concurrent access between watch daemon and cron.daily
+[New] cursor validation with auto-reset on corruption (exit code 2)
+[New] multi-mode tracking support (bytes default, lines selectable per call)
+[New] stale cursor protection: mtime updated on every tlog_read call
+[New] configurable first-run behavior (TLOG_FIRST_RUN=skip|full)
+[New] tlog_adjust_cursor() for mode-aware in-place log trim support
+[Change] files/tlog replaced with tlog_lib standalone wrapper (sources
+      tlog_lib.sh instead of reimplementing tracking logic)
 [New] tests/03-validate-rule.bats: 8 _compat_rule_vars() unit tests covering
       all 4 legacy→canonical mappings, preservation semantics when new names
       already set, empty old names, and mixed old/new resolution
