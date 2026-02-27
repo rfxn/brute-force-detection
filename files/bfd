@@ -516,7 +516,18 @@ reload_watch() {
 			. "$INTCNF"
 		fi
 	fi
+	# fallbacks for internals.conf variables (same as startup lines 90-100)
+	RULES_PATH="${RULES_PATH:-$INSTALL_PATH/rules}"
+	TLOG_PATH="${TLOG_PATH:-$INSTALL_PATH/tlog}"
 	TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
+	EMAIL_TEMPLATE="${EMAIL_TEMPLATE:-$INSTALL_PATH/alert.bfd}"
+	IGNORE_HOST_FILES="${IGNORE_HOST_FILES:-$INSTALL_PATH/exclude.files}"
+	LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
+	TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
+	LOCK_FILE_TIMEOUT="${LOCK_FILE_TIMEOUT:-300}"
+	OUTPUT_SYSLOG_FILE="${OUTPUT_SYSLOG_FILE:-$KERNEL_LOG_PATH}"
+	BAN_RETRY_COUNT="${BAN_RETRY_COUNT:-2}"
+	LOG_SOURCE="${LOG_SOURCE:-auto}"
 	# clear derived pressure vars so re-sourced config takes effect
 	unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL
 	unset BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW
@@ -537,6 +548,11 @@ reload_watch() {
 	BAN_PERMANENT_AFTER="${BAN_PERMANENT_AFTER:-$BAN_ESCALATE_AFTER}"
 	BAN_PERMANENT_WINDOW="${BAN_PERMANENT_WINDOW:-$BAN_ESCALATE_WINDOW}"
 	GLOB_TRIG="$TRIG"
+	# clear pressure arrays before reload (if file is missing, arrays must be empty)
+	_PRESS_WEIGHT=()
+	_PRESS_TRIP=()
+	_PRESS_SKIP_ALERT=()
+	_PRESS_RULE_EMAIL=()
 	if [ -f "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}" ]; then
 		_load_pressure_conf "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}"
 	elif [ -f "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}" ]; then

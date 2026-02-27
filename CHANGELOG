@@ -1,4 +1,10 @@
 2.0.1:
+[Fix] reload_watch(): clear pressure arrays (_PRESS_WEIGHT/_TRIP/_SKIP_ALERT/
+      _RULE_EMAIL) before reload; if pressure.conf is deleted while daemon
+      runs, stale arrays no longer persist from previous load
+[Fix] reload_watch(): add full fallback variable block matching startup
+      lines 90-100 (RULES_PATH, TLOG_PATH, EMAIL_TEMPLATE, etc.); defends
+      against config-sourcing failures leaving variables unset
 [Fix] importconf: preserve tlog byte-offset state files on upgrade; loop
       copies bare-name files (sshd, dovecot, postfix, etc.) from old tmp/,
       skipping dotfiles and extension files already handled by other cp's
