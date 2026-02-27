@@ -2653,6 +2653,7 @@ show_status() {
 			_save_rule_vars
 			_clear_rule_vars
 			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
+				_compat_rule_vars
 				if _rule_is_active; then
 					rules_active=$((rules_active + 1))
 				fi
@@ -3040,10 +3041,9 @@ show_rule() {
 		_restore_rule_vars
 		return 1
 	fi
+	_compat_rule_vars
 	_apply_pressure "$rule_name"
 	_apply_thresholds "$rule_name"
-
-	_compat_rule_vars
 
 	if _rule_is_active; then
 		echo "  Status:     active"
@@ -3106,10 +3106,9 @@ test_rule() {
 		_restore_rule_vars
 		return 1
 	fi
+	_compat_rule_vars
 	_apply_pressure "$rule_name"
 	_apply_thresholds "$rule_name"
-
-	_compat_rule_vars
 
 	# report
 	echo "Rule:         $rule_name"

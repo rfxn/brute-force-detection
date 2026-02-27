@@ -270,3 +270,22 @@ EOF
 	assert_success
 	assert_output --partial "[PASS] Email alerts: disabled"
 }
+
+# --- _hc_config ---
+
+@test "_hc_config: validates log paths with case statement" {
+	AUTH_LOG_PATH="/var/log/auth.log"
+	KERNEL_LOG_PATH=""
+	MAIL_LOG_PATH="/var/log/mail.log"
+	_hc_pass=0
+	_hc_warn=0
+	_hc_fail=0
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	UNBAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	UNBAN_COMMAND_V6_TEMPLATE=""
+	_FW_BACKEND="custom"
+	# just test config section's log path logic
+	run _hc_config
+	assert_output --partial "KERNEL_LOG_PATH: not configured"
+}
