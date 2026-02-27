@@ -114,3 +114,66 @@ teardown() {
 	run validate_rule "http_401"
 	assert_success
 }
+
+# --- _save_rule_vars / _restore_rule_vars ---
+
+@test "_save/_restore_rule_vars: round-trip preserves values" {
+	PREREQ="/usr/sbin/sshd" LOG_FILE="/var/log/auth.log" TRIG="10"
+	LOG_TAG="sshd" PORTS="22" MATCHED_HOSTS="192.0.2.4" IGNOREREGEX="^ignore"
+	PRESSURE_WEIGHT="3" PRESSURE_TRIP="10"
+	_save_rule_vars
+	PREREQ="" LOG_FILE="" TRIG="" LOG_TAG="" PORTS="" MATCHED_HOSTS="" IGNOREREGEX=""
+	PRESSURE_WEIGHT="" PRESSURE_TRIP=""
+	_restore_rule_vars
+	[ "$PREREQ" = "/usr/sbin/sshd" ]
+	[ "$LOG_FILE" = "/var/log/auth.log" ]
+	[ "$TRIG" = "10" ]
+	[ "$LOG_TAG" = "sshd" ]
+	[ "$PORTS" = "22" ]
+	[ "$MATCHED_HOSTS" = "192.0.2.4" ]
+	[ "$IGNOREREGEX" = "^ignore" ]
+	[ "$PRESSURE_WEIGHT" = "3" ]
+	[ "$PRESSURE_TRIP" = "10" ]
+}
+
+# --- _clear_rule_vars ---
+
+@test "_clear_rule_vars: clears all rule variables" {
+	PREREQ="/usr/sbin/sshd" LOG_FILE="/var/log/auth.log" TRIG="10"
+	LOG_TAG="sshd" PORTS="22" MATCHED_HOSTS="192.0.2.4" IGNOREREGEX="^ignore"
+	SKIP_ALERT="1" RULE_EMAIL="test@example.com"
+	PRESSURE_WEIGHT="3" PRESSURE_TRIP="10"
+	_clear_rule_vars
+	[ -z "$PREREQ" ]
+	[ -z "$LOG_FILE" ]
+	[ -z "$TRIG" ]
+	[ -z "$LOG_TAG" ]
+	[ -z "$PORTS" ]
+	[ -z "$MATCHED_HOSTS" ]
+	[ -z "$IGNOREREGEX" ]
+	[ -z "$SKIP_ALERT" ]
+	[ -z "$RULE_EMAIL" ]
+	[ -z "$PRESSURE_WEIGHT" ]
+	[ -z "$PRESSURE_TRIP" ]
+}
+
+# --- _rule_is_active ---
+
+@test "_rule_is_active: active when PREREQ exists" {
+	PREREQ="$TEST_TMPDIR/fake_binary"
+	touch "$PREREQ"
+	run _rule_is_active
+	assert_success
+}
+
+@test "_rule_is_active: inactive when PREREQ missing" {
+	PREREQ="$TEST_TMPDIR/nonexistent"
+	run _rule_is_active
+	assert_failure
+}
+
+@test "_rule_is_active: inactive when PREREQ empty" {
+	PREREQ=""
+	run _rule_is_active
+	assert_failure
+}

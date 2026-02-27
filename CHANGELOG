@@ -1,4 +1,9 @@
 2.0.1:
+[Change] tests: relocate 10 misplaced tests to logical home files —
+      extract_command_template (4 tests) from 09-state-io to 22-alert-format;
+      _hc_config (1 test) from 04-config-validation to 23-health-check;
+      _save/_restore/_clear_rule_vars and _rule_is_active (5 tests) from
+      04-config-validation to 03-validate-rule
 [New] README, README.md, bfd.1: upgrade documentation section covering
       importconf migration, config variable renames, state preservation,
       post-upgrade verification, and rollback procedure

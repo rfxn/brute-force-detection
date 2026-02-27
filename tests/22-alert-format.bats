@@ -92,6 +92,36 @@ teardown() {
 	assert_output "192.0.2.1 to 192.0.2.1"
 }
 
+# --- extract_command_template ---
+
+@test "extract_command_template: extracts unquoted value" {
+	local tmpconf="$TEST_TMPDIR/test.conf"
+	echo 'BAN_COMMAND=/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP' > "$tmpconf"
+	run extract_command_template "$tmpconf" "BAN_COMMAND"
+	assert_output '/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+}
+
+@test "extract_command_template: extracts quoted value" {
+	local tmpconf="$TEST_TMPDIR/test.conf"
+	echo 'BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"' > "$tmpconf"
+	run extract_command_template "$tmpconf" "BAN_COMMAND"
+	assert_output '/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}'
+}
+
+@test "extract_command_template: takes last occurrence" {
+	local tmpconf="$TEST_TMPDIR/test.conf"
+	printf 'BAN_COMMAND="first"\nBAN_COMMAND="second"\n' > "$tmpconf"
+	run extract_command_template "$tmpconf" "BAN_COMMAND"
+	assert_output "second"
+}
+
+@test "extract_command_template: returns empty for missing var" {
+	local tmpconf="$TEST_TMPDIR/test.conf"
+	echo 'OTHER_VAR="value"' > "$tmpconf"
+	run extract_command_template "$tmpconf" "BAN_COMMAND"
+	assert_output ""
+}
+
 # --- format_duration ---
 
 @test "format_duration: 0 returns permanent" {
