@@ -36,6 +36,16 @@ bfd_common_setup() {
 	touch "$BFD_LOG_PATH"
 	OUTPUT_SYSLOG="0"
 	OUTPUT_SYSLOG_FILE="$TEST_TMPDIR/syslog"
+	# elog_lib defaults for test environment
+	ELOG_APP="bfd"
+	ELOG_LOG_FILE="$BFD_LOG_PATH"
+	ELOG_SYSLOG_FILE=""
+	ELOG_STDOUT="always"
+	ELOG_STDOUT_PREFIX="full"
+	ELOG_TS_FORMAT="%b %e %H:%M:%S"
+	ELOG_LEVEL="1"
+	ELOG_VERBOSE="0"
+	ELOG_FORMAT="classic"
 }
 
 # bfd_standard_setup: full test environment (common + state + config defaults)

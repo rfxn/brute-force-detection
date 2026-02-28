@@ -102,6 +102,16 @@ OUTPUT_SYSLOG_FILE="${OUTPUT_SYSLOG_FILE:-$KERNEL_LOG_PATH}"
 BAN_RETRY_COUNT="${BAN_RETRY_COUNT:-2}"
 LOG_SOURCE="${LOG_SOURCE:-auto}"
 export LOG_SOURCE
+# Configure elog_lib for BFD
+ELOG_APP="bfd"
+ELOG_TS_FORMAT="%b %e %H:%M:%S"
+ELOG_STDOUT="always"
+ELOG_STDOUT_PREFIX="full"
+ELOG_LOG_FILE="$BFD_LOG_PATH"
+ELOG_SYSLOG_FILE=""
+[ "${OUTPUT_SYSLOG:-0}" = "1" ] && ELOG_SYSLOG_FILE="$OUTPUT_SYSLOG_FILE"
+ELOG_FORMAT="${LOG_FORMAT:-classic}"
+ELOG_LEVEL="${LOG_LEVEL:-1}"
 # backward compat: map old variable names to new pressure model names
 PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
 PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
@@ -158,15 +168,15 @@ fi
 
 pre() {
 if [ ! -f "$TLOG_PATH" ]; then
-	eout "could not locate \$TLOG_PATH, aborting."
+	elog error "could not locate \$TLOG_PATH, aborting."
 	exit "$EXIT_PREREQ_ERROR"
 fi
 if [ ! -f "$INSTALL_PATH/tlog_lib.sh" ]; then
-	eout "could not locate tlog_lib.sh, aborting."
+	elog error "could not locate tlog_lib.sh, aborting."
 	exit "$EXIT_PREREQ_ERROR"
 fi
 if [ ! -d "$RULES_PATH" ]; then
-	eout "could not locate \$RULES_PATH, aborting."
+	elog error "could not locate \$RULES_PATH, aborting."
 	exit "$EXIT_PREREQ_ERROR"
 fi
 if [ ! -d "$TLOG_BASERUN" ]; then
@@ -217,10 +227,10 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 		OVAL=$(cat "$LOCK_FILE")
 		DIFF=$((UTIME - OVAL))
 		if [ "$DIFF" -gt "$LOCK_FILE_TIMEOUT" ]; then
-			eout "cleared stale lock (${DIFF}s old, pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null || echo unknown))."
+			elog warn "cleared stale lock (${DIFF}s old, pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null || echo unknown))."
 			rm -rf "$LOCK_FILE.lk"
 			mkdir "$LOCK_FILE.lk" 2>/dev/null || {
-				eout "unable to acquire lock after stale cleanup, aborting."
+				elog error "unable to acquire lock after stale cleanup, aborting."
 				exit "$EXIT_LOCK_ERROR"
 			}
 		else
@@ -228,19 +238,19 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 			local _lock_pid
 			_lock_pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null)
 			if [ -n "$_lock_pid" ] && ! kill -0 "$_lock_pid" 2>/dev/null; then
-				eout "cleared dead lock (pid=$_lock_pid exited, lock ${DIFF}s old)."
+				elog warn "cleared dead lock (pid=$_lock_pid exited, lock ${DIFF}s old)."
 				rm -rf "$LOCK_FILE.lk"
 				mkdir "$LOCK_FILE.lk" 2>/dev/null || {
-					eout "unable to acquire lock after dead-pid cleanup, aborting."
+					elog error "unable to acquire lock after dead-pid cleanup, aborting."
 					exit "$EXIT_LOCK_ERROR"
 				}
 			else
-				eout "locked subsystem, already running ? ($LOCK_FILE is $DIFF seconds old), aborting."
+				elog warn "locked subsystem, already running ? ($LOCK_FILE is $DIFF seconds old), aborting."
 				exit "$EXIT_LOCK_ERROR"
 			fi
 		fi
 	else
-		eout "lock directory exists but no timestamp file, aborting."
+		elog error "lock directory exists but no timestamp file, aborting."
 		exit "$EXIT_LOCK_ERROR"
 	fi
 fi
@@ -285,7 +295,7 @@ check() {
 		if [ -z "$TRIG" ]; then
 			TRIG="$GLOB_TRIG"
 		fi
-		MOD=$(sanitize_mod "$str") || { eout "invalid rule name '$str', skipping" le; continue; }
+		MOD=$(sanitize_mod "$str") || { elog warn "invalid rule name '$str', skipping" le; continue; }
 		validate_rule "$str" || continue
 		active_count=$((active_count + 1))
 		# scan mode: collect log file/tag pairs for cursor advancement
@@ -344,7 +354,7 @@ check() {
 				if [ "$filter_rc" -eq 2 ]; then
 					# local address
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
-					eout "{$MOD} $ATTACK_HOST is a local address, skipping ban." le
+					elog warn "{$MOD} $ATTACK_HOST is a local address, skipping ban."
 				else
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD"
 					if execute_ban "$ATTACK_HOST" "$MOD" "$DRY_RUN" "${PORTS:-all}"; then
@@ -524,7 +534,7 @@ reload_watch() {
 	_cnf_perms=$(stat -L -c '%a' "$CNF")
 	_cnf_world="${_cnf_perms: -1}"
 	if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
-		eout "reload aborted: conf.bfd has unsafe ownership or permissions" le
+		elog error "reload aborted: conf.bfd has unsafe ownership or permissions"
 		return 1
 	fi
 	# clear config vars BEFORE re-sourcing so conf.bfd values take effect cleanly
@@ -659,7 +669,7 @@ for _arg in "$@"; do
 	case "$_arg" in
 		--json) OUTPUT_FORMAT="json" ;;
 		--csv)  OUTPUT_FORMAT="csv" ;;
-		--verbose|-V) VERBOSE=1 ;;
+		--verbose|-V) VERBOSE=1; ELOG_VERBOSE=1 ;;
 		--max-lines=*) _CLI_SCAN_MAX_LINES="${_arg#--max-lines=}" ;;
 		--scan-timeout=*) _CLI_SCAN_TIMEOUT="${_arg#--scan-timeout=}" ;;
 		*)      _bfd_args+=("$_arg") ;;

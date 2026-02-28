@@ -321,8 +321,16 @@ Log paths are auto-detected based on the distribution. Override in `conf.bfd` if
 | `SCAN_MAX_LINES` | `50000` | Max lines per log during scan mode; 0 = unlimited |
 | `SCAN_TIMEOUT` | `120` | Journal timeout per rule during scan in seconds |
 | `OUTPUT_SYSLOG` | `1` | Log to syslog (0 = off, 1 = on) |
+| `LOG_FORMAT` | `classic` | Log format: `classic` (syslog-style) or `json` (JSONL) |
+| `LOG_LEVEL` | `1` | Min severity: 0=debug, 1=info, 2=warn, 3=error |
 
 Additional variables (`LOG_SOURCE`, `LOCK_FILE_TIMEOUT`, `BAN_RETRY_COUNT`, `OUTPUT_SYSLOG_FILE`) have sensible defaults in `internals.conf` and can be overridden by adding them to `conf.bfd`.
+
+**JSON log format**: When `LOG_FORMAT="json"`, each log line is a JSON object with fields: `ts` (ISO 8601), `host`, `app`, `pid` (integer), `level` (debug/info/warn/error/critical), `tag` (service name, extracted from `{tag}` prefix if present), `msg`. Example:
+
+```json
+{"ts":"2026-02-27T14:30:00+0000","host":"srv1","app":"bfd","pid":1234,"level":"info","tag":"sshd","msg":"192.0.2.1 exceeded login failures"}
+```
 
 ### 3.8 Country Weighting
 

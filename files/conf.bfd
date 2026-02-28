@@ -165,3 +165,9 @@ SCAN_TIMEOUT="120"
 
 # echo BFD log messages to syslog [0 = off, 1 = on]
 OUTPUT_SYSLOG="1"
+
+# log output format [classic = syslog-style, json = one JSON object per line]
+LOG_FORMAT="classic"
+
+# minimum log severity [0 = debug, 1 = info, 2 = warn, 3 = error]
+LOG_LEVEL="1"

@@ -1,4 +1,13 @@
 2.0.1:
+[New] elog_lib.sh: shared structured logging library (v1.0.0) with severity
+      levels (debug/info/warn/error/critical), classic syslog-style and JSON
+      (JSONL) output formats, configurable via ELOG_* variables
+[New] conf.bfd: LOG_FORMAT (classic/json) and LOG_LEVEL (0-4) variables for
+      structured logging control
+[Change] eout()/vout(): rewritten as thin wrappers delegating to elog library;
+      format-identical output preserves full backward compatibility
+[Change] ~29 log calls in bfd.lib.sh and bfd assigned explicit severity levels
+      (error for failures, warn for degraded/skipped, info for normal operations)
 [Change] update-ipcountry.sh: download timeout (120s default, DL_TIMEOUT var),
       TLS fallback with warning for legacy CA bundles, temp files in
       INSTALL_PATH/tmp instead of /tmp, INSTALL_PATH uses ${:-} default
