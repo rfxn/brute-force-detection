@@ -282,7 +282,7 @@ _load_thresholds() {
 	_tc_perms=$(stat -L -c '%a' "$conf_file")
 	_tc_world="${_tc_perms: -1}"
 	if [ "$_tc_owner" != "0" ] || [ "$((_tc_world & 2))" -ne 0 ]; then
-		eout "thresholds.conf has unsafe ownership (uid=$_tc_owner) or permissions ($_tc_perms), skipping" le
+		elog warn "thresholds.conf has unsafe ownership (uid=$_tc_owner) or permissions ($_tc_perms), skipping"
 		return 0
 	fi
 
@@ -355,7 +355,7 @@ _load_pressure_conf() {
 	_pc_perms=$(stat -L -c '%a' "$conf_file")
 	_pc_world="${_pc_perms: -1}"
 	if [ "$_pc_owner" != "0" ] || [ "$((_pc_world & 2))" -ne 0 ]; then
-		eout "pressure.conf has unsafe ownership (uid=$_pc_owner) or permissions ($_pc_perms), skipping" le
+		elog warn "pressure.conf has unsafe ownership (uid=$_pc_owner) or permissions ($_pc_perms), skipping"
 		return 0
 	fi
 
@@ -385,14 +385,14 @@ _load_pressure_conf() {
 					if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 0 ]; then
 						_PRESS_WEIGHT["$rule_name"]="$val"
 					else
-						eout "pressure.conf: $rule_name PRESSURE_WEIGHT='$val' invalid (must be positive integer), skipping" le
+						elog warn "pressure.conf: $rule_name PRESSURE_WEIGHT='$val' invalid (must be positive integer), skipping"
 					fi
 					;;
 				PRESSURE_TRIP|TRIG)
 					if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 0 ]; then
 						_PRESS_TRIP["$rule_name"]="$val"
 					else
-						eout "pressure.conf: $rule_name PRESSURE_TRIP='$val' invalid (must be positive integer), skipping" le
+						elog warn "pressure.conf: $rule_name PRESSURE_TRIP='$val' invalid (must be positive integer), skipping"
 					fi
 					;;
 				SKIP_ALERT)       _PRESS_SKIP_ALERT["$rule_name"]="$val" ;;
@@ -476,13 +476,13 @@ safe_source() {
 	local file="$1"
 	local label="${2:-$file}"
 	if [ ! -f "$file" ]; then
-		eout "safe_source: $label does not exist." le
+		elog error "safe_source: $label does not exist."
 		return 1
 	fi
 	local fowner
 	fowner=$(stat -L -c '%u' "$file")
 	if [ "$fowner" != "0" ]; then
-		eout "safe_source: $label is not owned by root (uid=$fowner)." le
+		elog error "safe_source: $label is not owned by root (uid=$fowner)."
 		return 1
 	fi
 	local fperms
@@ -490,7 +490,7 @@ safe_source() {
 	# check world-writable: last digit has write bit (2, 3, 6, 7)
 	local world_digit="${fperms: -1}"
 	if [ "$((world_digit & 2))" -ne 0 ]; then
-		eout "safe_source: $label is world-writable (perms=$fperms)." le
+		elog error "safe_source: $label is world-writable (perms=$fperms)."
 		return 1
 	fi
 	# shellcheck disable=SC1090
@@ -773,7 +773,7 @@ validate_rule() {
 	fi
 	# 3. LOG_FILE not set despite PREREQ existing — genuine misconfiguration
 	if [ -z "${LOG_FILE:-}" ]; then
-		eout "rule $rule_name: LOG_FILE not set (service found but log path missing), skipping" le
+		elog warn "rule $rule_name: LOG_FILE not set (service found but log path missing), skipping"
 		return 1
 	fi
 	# 4. LOG_FILE missing — check journal fallback
@@ -783,13 +783,13 @@ validate_rule() {
 		   tlog_journal_filter "${LOG_TAG:-}" >/dev/null 2>&1; then
 			: # journal-capable, continue
 		else
-			eout "rule $rule_name: log file '$LOG_FILE' does not exist, skipping" le
+			elog warn "rule $rule_name: log file '$LOG_FILE' does not exist, skipping"
 			return 1
 		fi
 	fi
 	# 5. LOG_TAG not set
 	if [ -z "${LOG_TAG:-}" ]; then
-		eout "rule $rule_name: LOG_TAG not set, skipping" le
+		elog warn "rule $rule_name: LOG_TAG not set, skipping"
 		return 1
 	fi
 	# Rule is ACTIVE — MATCHED_HOSTS check moves to caller
@@ -873,7 +873,7 @@ detect_firewall() {
 _fw_apf_setup() {
 	_FW_APF_BIN=$(command -v apf 2>/dev/null) || _FW_APF_BIN=""
 	if [ -z "$_FW_APF_BIN" ]; then
-		eout "{glob} apf binary not found" "le"
+		elog error "{glob} apf binary not found"
 		return 1
 	fi
 }
@@ -896,7 +896,7 @@ _fw_apf_status() {
 _fw_csf_setup() {
 	_FW_CSF_BIN=$(command -v csf 2>/dev/null) || _FW_CSF_BIN=""
 	if [ -z "$_FW_CSF_BIN" ]; then
-		eout "{glob} csf binary not found" "le"
+		elog error "{glob} csf binary not found"
 		return 1
 	fi
 }
@@ -995,7 +995,7 @@ _fw_iptables_setup() {
 	_FW_IPT_BIN=$(command -v iptables 2>/dev/null) || _FW_IPT_BIN=""
 	_FW_IP6T_BIN=$(command -v ip6tables 2>/dev/null) || _FW_IP6T_BIN=""
 	if [ -z "$_FW_IPT_BIN" ]; then
-		eout "{glob} iptables binary not found" "le"
+		elog error "{glob} iptables binary not found"
 		return 1
 	fi
 	"$_FW_IPT_BIN" -N bfd 2>/dev/null || true
@@ -1004,7 +1004,7 @@ _fw_iptables_setup() {
 		"$_FW_IP6T_BIN" -N bfd 2>/dev/null || true
 		"$_FW_IP6T_BIN" -C INPUT -j bfd 2>/dev/null || "$_FW_IP6T_BIN" -I INPUT -j bfd
 	else
-		eout "{glob} ip6tables not found — IPv6 bans will be skipped" "le"
+		elog warn "{glob} ip6tables not found — IPv6 bans will be skipped"
 	fi
 }
 
@@ -1012,7 +1012,7 @@ _fw_iptables_ban() {
 	local host="$1"
 	if [[ "$host" == *:* ]]; then
 		if [ -z "$_FW_IP6T_BIN" ]; then
-			eout "{iptables} IPv6 ban skipped — ip6tables not found" "le"
+			elog warn "{iptables} IPv6 ban skipped — ip6tables not found"
 			return 1
 		fi
 		"$_FW_IP6T_BIN" -A bfd -s "$host" -j DROP 2>/dev/null
@@ -1025,7 +1025,7 @@ _fw_iptables_unban() {
 	local host="$1"
 	if [[ "$host" == *:* ]]; then
 		if [ -z "$_FW_IP6T_BIN" ]; then
-			eout "{iptables} IPv6 unban skipped — ip6tables not found" "le"
+			elog warn "{iptables} IPv6 unban skipped — ip6tables not found"
 			return 1
 		fi
 		"$_FW_IP6T_BIN" -D bfd -s "$host" -j DROP 2>/dev/null
@@ -1047,7 +1047,7 @@ _fw_iptables_status() {
 _fw_route_setup() {
 	_FW_ROUTE_IP_BIN=$(command -v ip 2>/dev/null) || _FW_ROUTE_IP_BIN=""
 	if [ -z "$_FW_ROUTE_IP_BIN" ]; then
-		eout "{glob} ip binary not found" "le"
+		elog error "{glob} ip binary not found"
 		return 1
 	fi
 }
@@ -1085,7 +1085,7 @@ _fw_custom_setup() { :; }
 
 _fw_custom_ban() {
 	local host="$1" mod="$2" ports="$3"
-	ports=$(sanitize_ports "$ports") || { eout "invalid PORTS value '$3'" "le"; return 1; }
+	ports=$(sanitize_ports "$ports") || { elog error "invalid PORTS value '$3'" "le"; return 1; }
 	local cmd="$BAN_COMMAND_TEMPLATE"
 	if [ -n "${BAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]]; then
 		cmd="$BAN_COMMAND_V6_TEMPLATE"
@@ -1101,7 +1101,7 @@ _fw_custom_ban() {
 
 _fw_custom_unban() {
 	local host="$1" mod="$2" ports="$3"
-	ports=$(sanitize_ports "$ports") || { eout "invalid PORTS value '$3'" "le"; return 1; }
+	ports=$(sanitize_ports "$ports") || { elog error "invalid PORTS value '$3'" "le"; return 1; }
 	local cmd="$UNBAN_COMMAND_TEMPLATE"
 	if [ -n "${UNBAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]]; then
 		cmd="$UNBAN_COMMAND_V6_TEMPLATE"
@@ -1214,14 +1214,14 @@ execute_ban() {
 		fw_ban "$host" "$mod" "$ports"
 		ban_rc=$?
 		if [ "$ban_rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
-			eout "{$mod} ban for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s." le
+			elog error "{$mod} ban for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s."
 			sleep "$retry_delay"
 			retry_delay=$((retry_delay * 2))
 		fi
 		attempt=$((attempt + 1))
 	done
 	if [ "$ban_rc" -ne 0 ]; then
-		eout "{$mod} ban for $host failed after $attempt attempt(s) via $_FW_BACKEND." le
+		elog error "{$mod} ban for $host failed after $attempt attempt(s) via $_FW_BACKEND."
 	fi
 	return $ban_rc
 }
@@ -1242,14 +1242,14 @@ execute_unban() {
 		fw_unban "$host" "$mod" "$ports"
 		unban_rc=$?
 		if [ "$unban_rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
-			eout "{$mod} unban for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s." le
+			elog error "{$mod} unban for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s."
 			sleep "$retry_delay"
 			retry_delay=$((retry_delay * 2))
 		fi
 		attempt=$((attempt + 1))
 	done
 	if [ "$unban_rc" -ne 0 ]; then
-		eout "{$mod} unban for $host failed after $attempt attempt(s) via $_FW_BACKEND." le
+		elog error "{$mod} unban for $host failed after $attempt attempt(s) via $_FW_BACKEND."
 	fi
 	return $unban_rc
 }
@@ -1309,7 +1309,7 @@ record_ban() {
 		"$esc_window" "$utime" "$esc_after"; then
 		ban_expiry=0
 		ban_action="escalate"
-		eout "{$mod} $host escalated to permanent ban (repeat offender)." le
+		elog warn "{$mod} $host escalated to permanent ban (repeat offender)."
 	else
 		local computed_duration
 		computed_duration=$(compute_ban_duration "$ban_ttl" "$recent_bans" \
@@ -1876,7 +1876,7 @@ check_distributed() {
 			eout "{$mod} subnet $subnet already banned, skipping." le
 			continue
 		fi
-		eout "{$mod} distributed attack detected: $unique_count unique IPs from $subnet." le
+		elog warn "{$mod} distributed attack detected: $unique_count unique IPs from $subnet."
 		if execute_ban "$subnet" "$mod" "$DRY_RUN" "all"; then
 			ban_count=$((ban_count + 1))
 			local ban_result
@@ -2311,7 +2311,7 @@ send_alerts() {
 
 	# validate template safety before sourcing
 	if [ ! -f "$template" ]; then
-		eout "alert template '$template' not found, skipping alerts." le
+		elog warn "alert template '$template' not found, skipping alerts."
 		rm -f "$alerts_file"
 		return 1
 	fi
@@ -2320,7 +2320,7 @@ send_alerts() {
 	_tmpl_perms=$(stat -L -c '%a' "$template")
 	_tmpl_world="${_tmpl_perms: -1}"
 	if [ "$_tmpl_owner" != "0" ] || [ "$((_tmpl_world & 2))" -ne 0 ]; then
-		eout "alert template has unsafe ownership or permissions, skipping alerts." le
+		elog warn "alert template has unsafe ownership or permissions, skipping alerts."
 		rm -f "$alerts_file"
 		return 1
 	fi
@@ -2376,7 +2376,7 @@ send_alerts() {
 		# source template and pipe to mail
 		# shellcheck disable=SC1090  # template path is runtime-configured
 		if ! (. "$template") | mail -s "$mail_subject" "$recip" 2>/dev/null; then
-			eout "alert email to $recip failed (mail command returned non-zero)." le
+			elog error "alert email to $recip failed (mail command returned non-zero)."
 		fi
 
 		rm -f "$recip_file"
