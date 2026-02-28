@@ -41,7 +41,7 @@ unset _tlog_lib_path _tlog_lib_dir
 # Source shared elog library
 _elog_lib_path="${INSTALL_PATH:-/usr/local/bfd}/elog_lib.sh"
 if [ -f "$_elog_lib_path" ]; then
-	# shellcheck disable=SC1091
+	# shellcheck disable=SC1090,SC1091
 	. "$_elog_lib_path"
 else
 	_elog_lib_dir="${BASH_SOURCE[0]%/*}"
@@ -467,6 +467,7 @@ eout() {
 # vout — verbose-only output via elog debug level
 # Syncs VERBOSE to ELOG_VERBOSE so callers setting VERBOSE=1 still work.
 vout() {
+	# shellcheck disable=SC2034
 	ELOG_VERBOSE="${VERBOSE:-0}"
 	elog debug "$*"
 }

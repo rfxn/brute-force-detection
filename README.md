@@ -37,6 +37,7 @@ and IPv4/IPv6 support across 42 service rules.
   - [5.4 Watch Mode](#54-watch-mode)
   - [5.5 Flush Bans](#55-flush-bans)
   - [5.6 Structured Output](#56-structured-output)
+  - [5.7 Scan Mode](#57-scan-mode)
 - [6. Rule Engine](#6-rule-engine)
   - [6.1 Rule Catalog](#61-rule-catalog)
   - [6.2 Rule Customization](#62-rule-customization)

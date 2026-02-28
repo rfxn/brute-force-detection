@@ -1,4 +1,13 @@
 2.0.1:
+[Fix] README.md: add missing scan mode (5.7) entry to table of contents
+[Change] ci.yml: add bash -n syntax check step before shellcheck; add
+      files/update-ipcountry.sh to lint targets
+[Fix] shellcheck: add SC2034 directives for ELOG_* variables consumed by
+      sourced elog_lib.sh; add SC1090 to dynamic source directive (fixes
+      CI lint job failure)
+[Change] bfd.1: add missing FILES entries — elog_lib.sh, tlog_lib.sh,
+      update-ipcountry.sh, logrotate, systemd units, SysVinit init script,
+      bash completion (19 → 28 entries)
 [Fix] tests/31-country.bats: replace private IPs (10.0.0.1, 172.16.0.1)
       with RFC 5737 documentation-range IPs for project compliance
 [New] tests: 4 apool_list() tests covering empty pool, full report output,
