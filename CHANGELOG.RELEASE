@@ -1,4 +1,6 @@
 2.0.1:
+[New] conf.bfd: LOG_SOURCE, LOCK_FILE_TIMEOUT, and BAN_RETRY_COUNT now
+      documented as commented entries for user discoverability
 [Change] Error and warning messages now write to stderr per UNIX convention;
       affects validate_config(), CLI dispatcher, manual_ban/unban, show_config,
       search_ip, list_rules, show_rule, test_rule, and test_pattern

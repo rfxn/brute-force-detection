@@ -136,6 +136,10 @@ MAIL_LOG_PATH="/var/log/maillog"
 # BFD's own application log
 BFD_LOG_PATH="/var/log/bfd_log"
 
+# log source: auto (file with journal fallback), file (only), journal (only)
+# auto-detection tries log files first, falls back to journalctl if missing
+#LOG_SOURCE="auto"
+
 # =============================================
 # Advanced
 # =============================================
@@ -171,3 +175,11 @@ LOG_FORMAT="classic"
 
 # minimum log severity [0 = debug, 1 = info, 2 = warn, 3 = error]
 LOG_LEVEL="1"
+
+# stale lock detection threshold in seconds (default 300 = 5 minutes)
+# if a lock file is older than this, it is assumed stale and cleared
+#LOCK_FILE_TIMEOUT="300"
+
+# ban/unban command retry count with exponential backoff (default 2)
+# set to 0 to disable retries (useful for testing)
+#BAN_RETRY_COUNT="2"
