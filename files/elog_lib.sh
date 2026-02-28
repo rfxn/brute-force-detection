@@ -124,18 +124,20 @@ elog() {
 
 	local _level_num
 	_level_num=$(_elog_level_num "$_level")
-	local _min_level="${ELOG_LEVEL:-1}"
 
-	# below minimum severity — suppress
-	[ "$_level_num" -lt "$_min_level" ] && return 0
-
-	# debug level: stdout only (bare text), gated by ELOG_VERBOSE
+	# debug level: stdout only (bare text), gated solely by ELOG_VERBOSE
+	# (not subject to ELOG_LEVEL filtering — ELOG_VERBOSE is its own gate)
 	if [ "$_level_num" -eq 0 ]; then
 		if [ "${ELOG_VERBOSE:-0}" = "1" ]; then
 			echo "$_msg"
 		fi
 		return 0
 	fi
+
+	local _min_level="${ELOG_LEVEL:-1}"
+
+	# below minimum severity — suppress
+	[ "$_level_num" -lt "$_min_level" ] && return 0
 
 	# info+ levels: format and route
 	local _ts _host _app _pid _line

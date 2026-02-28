@@ -669,7 +669,7 @@ for _arg in "$@"; do
 	case "$_arg" in
 		--json) OUTPUT_FORMAT="json" ;;
 		--csv)  OUTPUT_FORMAT="csv" ;;
-		--verbose|-V) VERBOSE=1 ;;
+		--verbose|-V) VERBOSE=1; ELOG_VERBOSE=1 ;;
 		--max-lines=*) _CLI_SCAN_MAX_LINES="${_arg#--max-lines=}" ;;
 		--scan-timeout=*) _CLI_SCAN_TIMEOUT="${_arg#--scan-timeout=}" ;;
 		*)      _bfd_args+=("$_arg") ;;

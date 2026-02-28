@@ -435,29 +435,40 @@ _rule_is_active() {
 	[ -n "${PREREQ:-}" ] && [ -f "$PREREQ" ]
 }
 
-# eout requires: BFD_LOG_PATH, OUTPUT_SYSLOG, OUTPUT_SYSLOG_FILE
+# eout(message [, "le"])
+# Backward-compatible wrapper delegating to elog().
+# Contract: always echo to stdout; "le" = also write to log + syslog.
+# Syncs BFD config vars (OUTPUT_SYSLOG, BFD_LOG_PATH) to ELOG at call time
+# so tests that change these mid-flight still work.
 eout() {
-	local arg="${1:-}"
-	local val="${2:-}"
-	if [ -n "$arg" ]; then
-		local ts
-		ts=$(date +"%b %e %H:%M:%S")
-		local host
-		host=$(hostname -s)
-		echo "$ts $host bfd($$): $arg"
-		if [ "$val" = "le" ]; then
-			echo "$ts $host bfd($$): $arg" >> "$BFD_LOG_PATH"
+	local _msg="${1:-}"
+	local _flag="${2:-}"
+	[ -z "$_msg" ] && return 0
+	if [ "$_flag" = "le" ]; then
+		ELOG_LOG_FILE="${BFD_LOG_PATH:-}"
+		if [ "${OUTPUT_SYSLOG:-0}" = "1" ]; then
+			ELOG_SYSLOG_FILE="${OUTPUT_SYSLOG_FILE:-}"
+		else
+			ELOG_SYSLOG_FILE=""
 		fi
-		if [ "$OUTPUT_SYSLOG" = "1" ] && [ "$val" = "le" ]; then
-			echo "$ts $host bfd($$): $arg" >> "$OUTPUT_SYSLOG_FILE"
-		fi
+		elog info "$_msg"
+	else
+		# stdout-only: bypass file logging
+		local _saved_log="${ELOG_LOG_FILE:-}"
+		local _saved_syslog="${ELOG_SYSLOG_FILE:-}"
+		ELOG_LOG_FILE=""
+		ELOG_SYSLOG_FILE=""
+		elog info "$_msg"
+		ELOG_LOG_FILE="$_saved_log"
+		ELOG_SYSLOG_FILE="$_saved_syslog"
 	fi
 }
 
-# vout — verbose-only output. Prints to stdout when VERBOSE=1.
+# vout — verbose-only output via elog debug level
+# Syncs VERBOSE to ELOG_VERBOSE so callers setting VERBOSE=1 still work.
 vout() {
-	[ "${VERBOSE:-0}" = "1" ] && echo "$@"
-	return 0
+	ELOG_VERBOSE="${VERBOSE:-0}"
+	elog debug "$*"
 }
 
 # safe_source requires: eout() to be functional
