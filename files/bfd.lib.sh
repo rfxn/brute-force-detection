@@ -172,6 +172,10 @@ ip_to_subnet() {
 	# IPv4
 	local o1 o2 o3 o4
 	IFS='.' read -r o1 o2 o3 o4 <<< "$ip"
+	if [ "$mask" -lt 8 ]; then
+		echo "${ip}/${mask}"
+		return 0
+	fi
 	if [ "$mask" -ge 24 ]; then
 		local shift=$((32 - mask))
 		o4=$(( (o4 >> shift) << shift ))
@@ -363,8 +367,20 @@ _load_pressure_conf() {
 			key="${pair%%=*}"
 			val="${pair#*=}"
 			case "$key" in
-				PRESSURE_WEIGHT)  _PRESS_WEIGHT["$rule_name"]="$val" ;;
-				PRESSURE_TRIP|TRIG) _PRESS_TRIP["$rule_name"]="$val" ;;
+				PRESSURE_WEIGHT)
+					if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 0 ]; then
+						_PRESS_WEIGHT["$rule_name"]="$val"
+					else
+						eout "pressure.conf: $rule_name PRESSURE_WEIGHT='$val' invalid (must be positive integer), skipping" le
+					fi
+					;;
+				PRESSURE_TRIP|TRIG)
+					if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 0 ]; then
+						_PRESS_TRIP["$rule_name"]="$val"
+					else
+						eout "pressure.conf: $rule_name PRESSURE_TRIP='$val' invalid (must be positive integer), skipping" le
+					fi
+					;;
 				SKIP_ALERT)       _PRESS_SKIP_ALERT["$rule_name"]="$val" ;;
 				RULE_EMAIL)       _PRESS_RULE_EMAIL["$rule_name"]="$val" ;;
 			esac
@@ -757,19 +773,25 @@ validate_rule() {
 
 # filter_host host ignore_host_files lo_hosts — check if host should be excluded
 # returns: 0 = not filtered (proceed), 1 = ignored (in ignore list), 2 = local address
+# When _IGNORE_CACHE_FILE is set, uses the pre-built merged ignore list for O(1)
+# grep lookups instead of re-reading and stripping every ignore file per IP.
 filter_host() {
 	local host="$1" ignore_host_files="$2" lo_hosts="$3"
-	# check ignore lists
-	if [ -f "$ignore_host_files" ]; then
+	# check ignore lists — use pre-built cache if available
+	if [ -n "${_IGNORE_CACHE_FILE:-}" ] && [ -f "$_IGNORE_CACHE_FILE" ]; then
+		if grep -qFx "$host" "$_IGNORE_CACHE_FILE" 2>/dev/null; then
+			return 1
+		fi
+	elif [ -f "$ignore_host_files" ]; then
 		local file
 		while IFS= read -r file; do
 			[ -z "$file" ] && continue
 			if [ -f "$file" ]; then
-				if grep -v "#" "$file" | grep -qFx "$host"; then
+				if sed 's/[[:space:]]*#.*//' "$file" | grep -v '^[[:space:]]*$' | grep -qFx "$host"; then
 					return 1
 				fi
 			fi
-		done < <(grep -v "#" "$ignore_host_files")
+		done < <(sed 's/[[:space:]]*#.*//' "$ignore_host_files" | grep -v '^[[:space:]]*$')
 	fi
 	# check local addresses
 	if [ -f "$lo_hosts" ]; then
@@ -782,6 +804,23 @@ filter_host() {
 		done < "$lo_hosts"
 	fi
 	return 0
+}
+
+# _build_ignore_cache ignore_host_files cache_file — pre-load all ignore lists
+# into a single merged file (comment-stripped, blank-stripped, one IP per line).
+# Used by check() to avoid repeated file reads in the per-IP inner loop.
+_build_ignore_cache() {
+	local ignore_host_files="$1" cache_file="$2"
+	if [ ! -f "$ignore_host_files" ]; then
+		return 0
+	fi
+	local _igf
+	while IFS= read -r _igf; do
+		[ -z "$_igf" ] && continue
+		if [ -f "$_igf" ]; then
+			sed 's/[[:space:]]*#.*//' "$_igf" | grep -v '^[[:space:]]*$'
+		fi
+	done < <(sed 's/[[:space:]]*#.*//' "$ignore_host_files" | grep -v '^[[:space:]]*$') > "$cache_file"
 }
 
 # --- Firewall backend system ---
@@ -1601,17 +1640,21 @@ pressure_format() {
 	echo "${whole}.${frac}"
 }
 
-# record_and_score host hosts_parsed install_path half_life now mod weight
+# record_and_score host hosts_parsed install_path half_life now mod weight [count]
 # Replacement for count_failures() using pressure scoring:
-#   1. Count host occurrences in hosts_parsed (grep -cxF)
+#   1. Count host occurrences in hosts_parsed (grep -cxF), or use pre-computed count
 #   2. Append that many weighted events to events.dat
 #   3. Compute per-service pressure (decayed sum)
 #   4. Return pressure * 1000 as integer
+# When count (arg 8) is provided, skips the O(n) grep scan — check() pre-computes
+# counts via uniq -c to avoid O(n^2) repeated grep passes over HOSTS_PARSED.
 record_and_score() {
 	local host="$1" hosts_parsed="$2" install_path="$3"
 	local half_life="$4" now="$5" mod="$6" weight="${7:-1}"
-	local count
-	count=$(echo "$hosts_parsed" | grep -cxF "$host")
+	local count="${8:-}"
+	if [ -z "$count" ]; then
+		count=$(echo "$hosts_parsed" | grep -cxF "$host")
+	fi
 	if [ "$count" -gt 0 ]; then
 		state_events_append "$install_path" "$now" "$host" "$mod" "$count" "$weight"
 	fi
@@ -1621,8 +1664,10 @@ record_and_score() {
 # --- Country multiplier functions ---
 
 # ip_to_country ip db_file — look up 2-letter country code for an IPv4 address
-# Uses awk binary search on sorted integer ranges in ipcountry.dat.
+# Uses awk linear scan on sorted integer ranges in ipcountry.dat.
 # Returns CC to stdout, or empty string if not found or IPv6.
+# When _COUNTRY_CACHE_FILE is set, caches lookups to avoid repeated scans of
+# the 190K-line database (reduces O(IPs * DB_lines) to O(IPs + DB_lines)).
 ip_to_country() {
 	local ip="$1" db_file="$2"
 	# IPv6 not supported in v1
@@ -1634,7 +1679,18 @@ ip_to_country() {
 		echo ""
 		return 0
 	fi
-	awk -v ip="$ip" '
+	# per-cycle cache: check before expensive awk scan
+	if [ -n "${_COUNTRY_CACHE_FILE:-}" ] && [ -f "$_COUNTRY_CACHE_FILE" ]; then
+		local _cached_line
+		_cached_line=$(grep -m1 "^${ip} " "$_COUNTRY_CACHE_FILE" 2>/dev/null) || true
+		if [ -n "$_cached_line" ]; then
+			local _cached_cc="${_cached_line#* }"
+			if [ "$_cached_cc" = "-" ]; then echo ""; else echo "$_cached_cc"; fi
+			return 0
+		fi
+	fi
+	local cc
+	cc=$(awk -v ip="$ip" '
 	BEGIN {
 		n = split(ip, p, ".")
 		if (n != 4) { print ""; exit }
@@ -1647,7 +1703,12 @@ ip_to_country() {
 			exit
 		}
 	}
-	END {}' "$db_file"
+	END {}' "$db_file")
+	# populate cache (use "-" sentinel for empty results)
+	if [ -n "${_COUNTRY_CACHE_FILE:-}" ]; then
+		echo "$ip ${cc:--}" >> "$_COUNTRY_CACHE_FILE"
+	fi
+	echo "$cc"
 }
 
 # country_weight cc weights_file — look up pressure multiplier for a country code

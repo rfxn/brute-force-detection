@@ -222,6 +222,22 @@ teardown() {
 	assert_output "1000"
 }
 
+@test "record_and_score: pre-computed count (8th arg) skips grep" {
+	local now; now=$(date +%s)
+	# hosts_parsed is irrelevant when count is provided directly
+	run record_and_score "192.0.2.1" "" "$INSTALL_PATH" "300" "$now" "sshd" "3" "3"
+	assert_success
+	# 3 events * weight 3 at t=0 → 9000
+	assert_output "9000"
+}
+
+@test "record_and_score: pre-computed count=0 appends nothing" {
+	local now; now=$(date +%s)
+	record_and_score "192.0.2.1" "" "$INSTALL_PATH" "300" "$now" "sshd" "1" "0" > /dev/null
+	# events.dat should not exist or be empty
+	[ ! -s "$INSTALL_PATH/tmp/events.dat" ]
+}
+
 # ============================================================
 # _load_pressure_conf()
 # ============================================================
@@ -282,6 +298,36 @@ teardown() {
 	[ "${_PRESS_TRIP[sshd]}" = "15" ]
 	[ "${_PRESS_TRIP[dovecot]}" = "20" ]
 	[ "${_PRESS_TRIP[cpanel]}" = "10" ]
+}
+
+@test "_load_pressure_conf: non-numeric PRESSURE_WEIGHT skipped" {
+	local pconf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_WEIGHT=abc:PRESSURE_TRIP=15" > "$pconf"
+	_load_pressure_conf "$pconf"
+	[ -z "${_PRESS_WEIGHT[sshd]:-}" ]
+	[ "${_PRESS_TRIP[sshd]}" = "15" ]
+}
+
+@test "_load_pressure_conf: zero PRESSURE_WEIGHT skipped" {
+	local pconf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_WEIGHT=0" > "$pconf"
+	_load_pressure_conf "$pconf"
+	[ -z "${_PRESS_WEIGHT[sshd]:-}" ]
+}
+
+@test "_load_pressure_conf: non-numeric PRESSURE_TRIP skipped" {
+	local pconf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_WEIGHT=3:PRESSURE_TRIP=foo" > "$pconf"
+	_load_pressure_conf "$pconf"
+	[ "${_PRESS_WEIGHT[sshd]}" = "3" ]
+	[ -z "${_PRESS_TRIP[sshd]:-}" ]
+}
+
+@test "_load_pressure_conf: negative PRESSURE_TRIP skipped" {
+	local pconf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_TRIP=-5" > "$pconf"
+	_load_pressure_conf "$pconf"
+	[ -z "${_PRESS_TRIP[sshd]:-}" ]
 }
 
 # ============================================================

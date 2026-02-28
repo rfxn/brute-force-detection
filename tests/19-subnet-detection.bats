@@ -60,6 +60,12 @@ teardown() {
 	assert_output "198.51.96.0/20"
 }
 
+@test "ip_to_subnet: IPv4 mask below /8 returns IP with mask" {
+	run ip_to_subnet "198.51.100.130" "4"
+	assert_success
+	assert_output "198.51.100.130/4"
+}
+
 @test "ip_to_subnet: IPv6 /48 with ::" {
 	run ip_to_subnet "2001:db8:1234:5678::1" "48"
 	assert_success

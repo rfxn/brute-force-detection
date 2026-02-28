@@ -12,11 +12,12 @@
 # keep the country database current.
 #
 # Usage: update-ipcountry.sh [output_file]
-#   output_file defaults to /usr/local/bfd/ipcountry.dat
+#   output_file defaults to $INSTALL_PATH/ipcountry.dat
 
-INSTALL_PATH="/usr/local/bfd"
+INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
 OUTPUT="${1:-$INSTALL_PATH/ipcountry.dat}"
 DBIP_URL="https://download.db-ip.com/free/dbip-country-lite-$(date +%Y-%m).csv.gz"
+DL_TIMEOUT="${DL_TIMEOUT:-120}"
 
 WGET_BIN=$(command -v wget 2>/dev/null)
 CURL_BIN=$(command -v curl 2>/dev/null)
@@ -27,25 +28,41 @@ if [ -z "$GZIP_BIN" ]; then
 	exit 1
 fi
 
-tmpdir=$(mktemp -d /tmp/bfd-ipcountry.XXXXXX)
+# prefer INSTALL_PATH/tmp for temp files (owned by root, mode 750);
+# fall back to /tmp if install path is not yet available
+if [ -d "$INSTALL_PATH/tmp" ] && [ -w "$INSTALL_PATH/tmp" ]; then
+	tmpdir=$(mktemp -d "$INSTALL_PATH/tmp/ipcountry.XXXXXX")
+else
+	tmpdir=$(mktemp -d /tmp/bfd-ipcountry.XXXXXX)
+fi
 trap 'rm -rf "$tmpdir"' EXIT INT TERM
 
 csv_gz="$tmpdir/dbip.csv.gz"
 csv_file="$tmpdir/dbip.csv"
 
+# _download url output — download with timeout, TLS fallback for legacy systems
+_download() {
+	local url="$1" out="$2"
+	if [ -n "$WGET_BIN" ]; then
+		"$WGET_BIN" -q --timeout="$DL_TIMEOUT" -O "$out" "$url" 2>/dev/null && return 0
+		# TLS fallback: retry without certificate verification (legacy CA bundles)
+		echo "warning: TLS download failed, retrying without certificate verification."
+		"$WGET_BIN" -q --timeout="$DL_TIMEOUT" --no-check-certificate -O "$out" "$url" && return 0
+	elif [ -n "$CURL_BIN" ]; then
+		"$CURL_BIN" -sL --connect-timeout 15 --max-time "$DL_TIMEOUT" -o "$out" "$url" 2>/dev/null && return 0
+		# TLS fallback: retry without certificate verification (legacy CA bundles)
+		echo "warning: TLS download failed, retrying without certificate verification."
+		"$CURL_BIN" -sL --connect-timeout 15 --max-time "$DL_TIMEOUT" -k -o "$out" "$url" && return 0
+	else
+		echo "error: neither wget nor curl found."
+		return 1
+	fi
+	return 1
+}
+
 echo "Downloading DB-IP country database..."
-if [ -n "$WGET_BIN" ]; then
-	"$WGET_BIN" -q -O "$csv_gz" "$DBIP_URL" || {
-		echo "error: download failed."
-		exit 1
-	}
-elif [ -n "$CURL_BIN" ]; then
-	"$CURL_BIN" -sL -o "$csv_gz" "$DBIP_URL" || {
-		echo "error: download failed."
-		exit 1
-	}
-else
-	echo "error: neither wget nor curl found."
+if ! _download "$DBIP_URL" "$csv_gz"; then
+	echo "error: download failed."
 	exit 1
 fi
 

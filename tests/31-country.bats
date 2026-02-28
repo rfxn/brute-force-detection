@@ -190,3 +190,59 @@ teardown() {
 	assert_success
 	assert_output "1"
 }
+
+# ============================================================
+# ip_to_country() cache behavior (_COUNTRY_CACHE_FILE)
+# ============================================================
+
+@test "ip_to_country: cache miss populates cache file" {
+	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
+	run ip_to_country "10.0.0.1" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output "CN"
+	# verify cache was populated
+	run grep -c "^10.0.0.1 " "$_COUNTRY_CACHE_FILE"
+	assert_output "1"
+	rm -f "$_COUNTRY_CACHE_FILE"
+	_COUNTRY_CACHE_FILE=""
+}
+
+@test "ip_to_country: cache hit returns cached value over DB" {
+	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
+	# cache says ZZ, DB says CN — cache must win
+	echo "10.0.0.1 ZZ" > "$_COUNTRY_CACHE_FILE"
+	run ip_to_country "10.0.0.1" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output "ZZ"
+	rm -f "$_COUNTRY_CACHE_FILE"
+	_COUNTRY_CACHE_FILE=""
+}
+
+@test "ip_to_country: cache stores sentinel for unknown IPs" {
+	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
+	run ip_to_country "172.16.0.1" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output ""
+	# verify sentinel "-" stored
+	run grep "^172.16.0.1 " "$_COUNTRY_CACHE_FILE"
+	assert_output "172.16.0.1 -"
+	rm -f "$_COUNTRY_CACHE_FILE"
+	_COUNTRY_CACHE_FILE=""
+}
+
+@test "ip_to_country: cached sentinel returns empty string" {
+	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
+	echo "172.16.0.1 -" > "$_COUNTRY_CACHE_FILE"
+	run ip_to_country "172.16.0.1" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output ""
+	rm -f "$_COUNTRY_CACHE_FILE"
+	_COUNTRY_CACHE_FILE=""
+}
+
+@test "ip_to_country: no cache when _COUNTRY_CACHE_FILE unset" {
+	_COUNTRY_CACHE_FILE=""
+	run ip_to_country "10.0.0.1" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output "CN"
+}
