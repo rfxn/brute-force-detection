@@ -338,6 +338,24 @@ Override with
 .TP
 .B OUTPUT_SYSLOG
 Echo BFD log messages to syslog: 0 or 1 (default: 1).
+.TP
+.B LOG_FORMAT
+Log output format (default: classic).
+.B classic
+produces traditional syslog\-style lines.
+.B json
+produces one JSON object per line (JSONL) with fields:
+.IR ts ", " host ", " app ", " pid ", " level ", " tag " (optional), " msg .
+Suitable for ELK, Graylog, or similar log aggregation systems.
+.TP
+.B LOG_LEVEL
+Minimum log severity threshold (default: 1).
+0\ =\ debug, 1\ =\ info, 2\ =\ warn, 3\ =\ error.
+Messages below the threshold are suppressed.
+Debug messages are stdout\-only and controlled by
+.B \-\-verbose
+rather than
+.BR LOG_LEVEL .
 .SH PRESSURE MODEL
 BFD uses a three-tier pressure precedence system:
 .IP 1. 3

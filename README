@@ -387,6 +387,16 @@ SCAN_TIMEOUT="120" - journal read timeout in seconds per rule during scan.
 
 OUTPUT_SYSLOG="1" - echo BFD log messages to syslog (0 = off, 1 = on).
 
+LOG_FORMAT="classic" - log output format.
+  classic: traditional syslog-style (timestamp hostname app(pid): message).
+  json: one JSON object per line (JSONL). Fields: ts, host, app, pid, level,
+  tag (if message has {tag} prefix), msg. Suitable for ELK, Graylog, etc.
+
+LOG_LEVEL="1" - minimum log severity threshold.
+  0 = debug (all messages including verbose), 1 = info (default),
+  2 = warn, 3 = error. Messages below the threshold are suppressed.
+  Debug messages are stdout-only and controlled by --verbose, not LOG_LEVEL.
+
 Additional variables (LOG_SOURCE, LOCK_FILE_TIMEOUT, BAN_RETRY_COUNT,
 OUTPUT_SYSLOG_FILE) have sensible defaults in internals.conf and can be
 overridden by adding them to conf.bfd.
