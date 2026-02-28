@@ -1,4 +1,6 @@
 2.0.1:
+[Fix] tests/31-country.bats: replace private IPs (10.0.0.1, 172.16.0.1)
+      with RFC 5737 documentation-range IPs for project compliance
 [New] tests: 4 apool_list() tests covering empty pool, full report output,
       search filter mode, and temp file cleanup
 [New] conf.bfd: LOG_SOURCE, LOCK_FILE_TIMEOUT, and BAN_RETRY_COUNT now
