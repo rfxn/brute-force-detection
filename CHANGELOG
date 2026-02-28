@@ -1,4 +1,11 @@
 2.0.1:
+[Fix] tests/32-scan.bats: SCAN_TIMEOUT validation test was tautological —
+      rewritten to mirror actual rejection logic (F-054)
+[Change] tests/32-scan.bats: CLI validation tests annotated with rationale;
+      SCAN_MAX_LINES rejection test simplified to mirror dispatch code (F-055)
+[Fix] help text, README, README.md: standardize -a argument label from
+      IP|STR to IP|STRING matching man page (F-088)
+[Change] ci.yml: test job now depends on lint job via needs: lint (F-095)
 [Fix] README.md: add missing --scan, --max-lines, --scan-timeout flags to
       CLI usage block (F-036)
 [Fix] README, README.md: add database rules to weight tier description —

@@ -430,6 +430,9 @@ EOF
 }
 
 # --- CLI argument parsing (validate via variable inspection) ---
+# These tests replicate the case/regex logic from files/bfd (pre-processing
+# loop at line 675 and --scan dispatch at line 754) because invoking the full
+# CLI requires an installed environment with root, config, and firewall setup.
 
 @test "CLI: --max-lines= is extracted by pre-processing" {
 	# Simulate the pre-processing logic
@@ -451,13 +454,10 @@ EOF
 }
 
 @test "CLI: SCAN_MAX_LINES validation rejects non-integer" {
+	# mirrors bfd:769 — non-integer must fail the regex match
 	local int_p='^[0-9]+$'
 	local val="abc"
-	if [[ "$val" =~ $int_p ]]; then
-		false  # should not reach here
-	else
-		true
-	fi
+	! [[ "$val" =~ $int_p ]]
 }
 
 @test "CLI: SCAN_MAX_LINES validation accepts zero" {
@@ -467,10 +467,15 @@ EOF
 }
 
 @test "CLI: SCAN_TIMEOUT validation rejects zero" {
+	# mirrors bfd:773 — zero matches the regex but must be rejected as non-positive
 	local int_p='^[0-9]+$'
 	local val="0"
-	[[ "$val" =~ $int_p ]] && [ "$val" -eq 0 ]
-	# zero should be rejected (must be positive)
+	# the actual validation: ! regex-match OR equals-zero → reject
+	if ! [[ "$val" =~ $int_p ]] || [ "$val" -eq 0 ]; then
+		true  # correctly rejected
+	else
+		false  # should not reach here
+	fi
 }
 
 @test "CLI: SCAN_TIMEOUT validation accepts positive integer" {

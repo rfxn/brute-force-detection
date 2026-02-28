@@ -643,7 +643,7 @@ usage() {
 	echo "-q|--quiet ................. run quiet with output hidden"
 	echo "-d|--dryrun ................ run detection without banning"
 	echo "-w|--watch ................. run in continuous watch mode (foreground)"
-	echo "-a|--attackpool [IP|STR] ... attack pool; valid IP shows full report"
+	echo "-a|--attackpool [IP|STRING] . attack pool; valid IP shows full report"
 	echo "-c|--check ................. health check and diagnostics"
 	echo "-l|--list .................. list active bans"
 	echo "-u|--unban IP .............. unban an IP address"

@@ -23,6 +23,7 @@ jobs:
           shellcheck -S warning install.sh uninstall.sh importconf cron.daily bfd-watch.init
 
   test:
+    needs: lint
     uses: rfxn/batsman/.github/workflows/test.yml@v1.0.1
     with:
       project-name: bfd
