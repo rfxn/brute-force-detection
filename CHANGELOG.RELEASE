@@ -1,4 +1,12 @@
 2.0.1:
+[Fix] README.md: add missing --scan, --max-lines, --scan-timeout flags to
+      CLI usage block (F-036)
+[Fix] README, README.md: add database rules to weight tier description —
+      mysqld-auth, postgresql, mongodb are weight=3 (F-090)
+[Fix] README: add update-ipcountry.sh mention to country weighting section,
+      matching README.md (F-091)
+[Change] ci.yml: add bfd-watch.init to bash -n and shellcheck lint targets
+      (F-047)
 [Fix] README.md: add missing scan mode (5.7) entry to table of contents
 [Change] ci.yml: add bash -n syntax check step before shellcheck; add
       files/update-ipcountry.sh to lint targets
