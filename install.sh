@@ -58,6 +58,7 @@ install(){
         chmod 750 "$INSPATH/tlog"
         chmod 750 "$INSPATH/tlog_lib.sh"
         chmod 750 "$INSPATH/bfd"
+	chmod 750 "$INSPATH/update-ipcountry.sh"
 	chmod 750 "$INSPATH/rules"
 	chmod 640 "$INSPATH"/rules/*
 	chmod 750 "$INSPATH/tmp"
@@ -116,7 +117,8 @@ install(){
 		sed -i "s|/usr/local/bfd|$INSPATH|g" \
 			"$INSPATH/bfd" "$INSPATH/bfd.lib.sh" \
 			"$INSPATH/internals.conf" \
-			"$INSPATH/exclude.files" /etc/cron.daily/bfd
+			"$INSPATH/exclude.files" \
+			"$INSPATH/update-ipcountry.sh" /etc/cron.daily/bfd
 		if [ -f /usr/share/man/man1/bfd.1 ]; then
 			sed -i "s|/usr/local/bfd|$INSPATH|g" /usr/share/man/man1/bfd.1
 		fi

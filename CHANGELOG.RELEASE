@@ -1,4 +1,19 @@
 2.0.1:
+[Change] update-ipcountry.sh: download timeout (120s default, DL_TIMEOUT var),
+      TLS fallback with warning for legacy CA bundles, temp files in
+      INSTALL_PATH/tmp instead of /tmp, INSTALL_PATH uses ${:-} default
+[Fix] install.sh: update-ipcountry.sh now chmod 750 (was 640 from blanket) and
+      included in custom INSTALL_PATH sed replacement list
+[Change] check(): per-cycle caching for ip_to_country (eliminates repeated awk
+      scans of 190K-line ipcountry.dat), pre-built ignore list cache (single
+      grep vs per-IP file re-reads), pre-computed IP occurrence counts via
+      uniq -c (O(n log n) vs O(n^2) grep in record_and_score)
+[New] _build_ignore_cache(): merges all ignore files into single comment-stripped
+      file for O(1) per-IP lookup during detection cycles
+[Note] F-066 (pressure_compute per-IP awk) deferred — events.dat is 10-100x
+      smaller than country DB; batching requires loop restructuring
+[Note] F-067 (state_bans_active_check per-IP) — false positive in practice;
+      bans.active is small and only checked for threshold-tripping IPs
 [Fix] filter_host: inline comments after IPs in ignore files now handled
       correctly; grep -v "#" replaced with sed comment-strip pipeline
 [Fix] ip_to_subnet: added defensive guard for subnet masks below /8

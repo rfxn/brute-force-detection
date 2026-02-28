@@ -153,3 +153,58 @@ teardown() {
 	run filter_host "203.0.113.100" "$IGNORE_HOST_FILES" "$LO_HOSTS"
 	[ "$status" -eq 2 ]
 }
+
+# --- cached ignore list (_IGNORE_CACHE_FILE) ---
+
+@test "filter_host: cached ignore list matches host" {
+	_IGNORE_CACHE_FILE="$TEST_TMPDIR/ig_cache"
+	echo "192.0.2.1" > "$_IGNORE_CACHE_FILE"
+	run filter_host "192.0.2.1" "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	[ "$status" -eq 1 ]
+	_IGNORE_CACHE_FILE=""
+}
+
+@test "filter_host: cached ignore list does not match absent host" {
+	_IGNORE_CACHE_FILE="$TEST_TMPDIR/ig_cache"
+	echo "192.0.2.99" > "$_IGNORE_CACHE_FILE"
+	run filter_host "192.0.2.1" "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	assert_success
+	_IGNORE_CACHE_FILE=""
+}
+
+@test "filter_host: cached mode still checks local addresses" {
+	_IGNORE_CACHE_FILE="$TEST_TMPDIR/ig_cache"
+	> "$_IGNORE_CACHE_FILE"
+	echo "203.0.113.1" > "$LO_HOSTS"
+	run filter_host "203.0.113.1" "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	[ "$status" -eq 2 ]
+	_IGNORE_CACHE_FILE=""
+}
+
+@test "_build_ignore_cache: merges multiple ignore files" {
+	local list1="$TEST_TMPDIR/ignore1.hosts"
+	local list2="$TEST_TMPDIR/ignore2.hosts"
+	echo "192.0.2.1" > "$list1"
+	echo "192.0.2.2" > "$list2"
+	printf "%s\n%s\n" "$list1" "$list2" > "$IGNORE_HOST_FILES"
+	local cache="$TEST_TMPDIR/ig_cache"
+	_build_ignore_cache "$IGNORE_HOST_FILES" "$cache"
+	run grep -c . "$cache"
+	assert_output "2"
+	run grep -Fx "192.0.2.1" "$cache"
+	assert_success
+	run grep -Fx "192.0.2.2" "$cache"
+	assert_success
+}
+
+@test "_build_ignore_cache: strips comments from merged output" {
+	local list1="$TEST_TMPDIR/ignore1.hosts"
+	printf "192.0.2.1 # comment\n# full line comment\n192.0.2.2\n" > "$list1"
+	echo "$list1" > "$IGNORE_HOST_FILES"
+	local cache="$TEST_TMPDIR/ig_cache"
+	_build_ignore_cache "$IGNORE_HOST_FILES" "$cache"
+	run grep -c . "$cache"
+	assert_output "2"
+	run grep "comment" "$cache"
+	assert_failure
+}

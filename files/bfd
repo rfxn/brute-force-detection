@@ -41,11 +41,14 @@ fi
 # initialize variables that may be unset
 SKIP_ALERT=""
 DRY_RUN=0
+_COUNTRY_CACHE_FILE=""
+_IGNORE_CACHE_FILE=""
 
 # shellcheck disable=SC2317 # called via trap
 cleanup() {
 	rm -rf "$LOCK_FILE.lk" 2>/dev/null
 	rm -f "$LOCK_FILE" 2>/dev/null
+	rm -f "${_COUNTRY_CACHE_FILE:-}" "${_IGNORE_CACHE_FILE:-}" 2>/dev/null
 }
 trap cleanup EXIT INT TERM
 
@@ -253,6 +256,13 @@ check() {
 	local alerts_file
 	alerts_file=$(mktemp "$INSTALL_PATH/tmp/.alerts.XXXXXX")
 
+	# --- per-cycle caches (cleaned up at end of check) ---
+	# country cache: avoids repeated awk scans of 190K-line ipcountry.dat per IP
+	_COUNTRY_CACHE_FILE=$(mktemp "$INSTALL_PATH/tmp/.cc_cache.XXXXXX")
+	# ignore cache: pre-loads all ignore lists into a single file for fast grep
+	_IGNORE_CACHE_FILE=$(mktemp "$INSTALL_PATH/tmp/.ig_cache.XXXXXX")
+	_build_ignore_cache "$IGNORE_HOST_FILES" "$_IGNORE_CACHE_FILE"
+
 	# prune expired events once per run (10 half-lives = negligible contribution)
 	local prune_window=$((PRESSURE_HALF_LIFE * 10))
 	state_events_prune "$INSTALL_PATH" "$prune_window" "$UTIME"
@@ -294,7 +304,10 @@ check() {
 		host_lines=$(echo "$HOSTS_PARSED" | grep -c . 2>/dev/null || echo 0)
 		vout "  $str: ${host_lines:-0} events, weight=$eff_weight, trip=$eff_trip"
 		events_count=$((events_count + host_lines))
-		while IFS= read -r ahost; do
+		# iterate unique IPs with pre-computed occurrence counts (uniq -c)
+		# avoids O(n^2) grep in record_and_score by passing count directly
+		local _host_count
+		while read -r _host_count ahost; do
 			[ -z "$ahost" ] && continue
 			ATTACK_HOST=$(validate_ip_any "$ahost") || continue
 			local filter_rc=0
@@ -308,7 +321,7 @@ check() {
 			scoring_weight=$(pressure_effective_weight "$eff_weight" "$ATTACK_HOST" "$INSTALL_PATH")
 			local pressure_scaled
 			pressure_scaled=$(record_and_score "$ATTACK_HOST" "$HOSTS_PARSED" \
-				"$INSTALL_PATH" "$PRESSURE_HALF_LIFE" "$UTIME" "$MOD" "$scoring_weight")
+				"$INSTALL_PATH" "$PRESSURE_HALF_LIFE" "$UTIME" "$MOD" "$scoring_weight" "$_host_count")
 			if [ -z "$pressure_scaled" ]; then
 				pressure_scaled=0
 			fi
@@ -349,7 +362,7 @@ check() {
 					fi
 				fi
 			fi
-		done < <(echo "$HOSTS_PARSED" | uniq)
+		done < <(echo "$HOSTS_PARSED" | uniq -c)
 	done
 
 	# distributed attack detection
@@ -364,6 +377,11 @@ check() {
 		send_alerts "$alerts_file" "$EMAIL_SUBJECT" "$EMAIL_TEMPLATE" "${EMAIL_LOGLINES:-50}"
 	fi
 	rm -f "$alerts_file"
+
+	# cleanup per-cycle caches
+	rm -f "$_COUNTRY_CACHE_FILE" "$_IGNORE_CACHE_FILE"
+	_COUNTRY_CACHE_FILE=""
+	_IGNORE_CACHE_FILE=""
 
 	local run_end run_elapsed
 	run_end=$(date +"%s")
@@ -494,6 +512,7 @@ cleanup_watch() {
 	eout "watch mode shutting down (pid=$$)" le
 	rm -rf "$LOCK_FILE.lk" 2>/dev/null
 	rm -f "$LOCK_FILE" 2>/dev/null
+	rm -f "${_COUNTRY_CACHE_FILE:-}" "${_IGNORE_CACHE_FILE:-}" 2>/dev/null
 }
 
 # shellcheck disable=SC2317 # called via trap
