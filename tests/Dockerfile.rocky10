@@ -17,7 +17,7 @@ COPY install.sh /opt/bfd/install.sh
 COPY uninstall.sh /opt/bfd/uninstall.sh
 COPY bfd.1 /opt/bfd/bfd.1
 COPY bfd.bash-completion /opt/bfd/bfd.bash-completion
-COPY tests/ /opt/bfd/tests/
+COPY tests/ /opt/tests/
 
-WORKDIR /opt/bfd/tests
-CMD ["bats", "--formatter", "tap", "/opt/bfd/tests/"]
+WORKDIR /opt/tests
+CMD ["bats", "--formatter", "tap", "/opt/tests/"]

@@ -1,4 +1,6 @@
 2.0.1:
+[Change] Standardize container test path from /opt/bfd/tests to /opt/tests —
+      aligns with batsman default, eliminates need for test-path CI override
 [New] validate_email(): email format validation function rejects shell-unsafe
       characters (semicolons, pipes, backticks, spaces) in addresses (F-022)
 [Change] validate_config(): warns on malformed EMAIL_ADDRESS values (advisory,

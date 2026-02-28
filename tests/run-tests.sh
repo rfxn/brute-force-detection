@@ -13,7 +13,7 @@ BATSMAN_TESTS_DIR="$SCRIPT_DIR"
 BATSMAN_INFRA_DIR="$SCRIPT_DIR/infra"
 BATSMAN_DOCKER_FLAGS=""
 BATSMAN_DEFAULT_OS="debian12"
-BATSMAN_CONTAINER_TEST_PATH="/opt/bfd/tests"
+BATSMAN_CONTAINER_TEST_PATH="/opt/tests"
 BATSMAN_SUPPORTED_OS="debian12 centos6 centos7 rocky8 rocky9 rocky10 ubuntu1204 ubuntu2004 ubuntu2404"
 
 source "$BATSMAN_INFRA_DIR/lib/run-tests-core.sh"
