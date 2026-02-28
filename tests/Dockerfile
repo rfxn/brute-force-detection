@@ -5,19 +5,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iproute2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy BFD source and tests
-COPY files/ /opt/bfd/files/
-COPY importconf /opt/bfd/importconf
-COPY bfd-watch.init /opt/bfd/bfd-watch.init
-COPY bfd-watch.service /opt/bfd/bfd-watch.service
-COPY bfd.service /opt/bfd/bfd.service
-COPY cron /opt/bfd/cron
-COPY cron.daily /opt/bfd/cron.daily
-COPY install.sh /opt/bfd/install.sh
-COPY uninstall.sh /opt/bfd/uninstall.sh
-COPY bfd.1 /opt/bfd/bfd.1
-COPY bfd.bash-completion /opt/bfd/bfd.bash-completion
-COPY tests/ /opt/bfd/tests/
+# Copy BFD source and tests — files/ at /opt/files/ so PROJECT_ROOT=/opt
+COPY files/ /opt/files/
+COPY importconf /opt/importconf
+COPY bfd-watch.init /opt/bfd-watch.init
+COPY bfd-watch.service /opt/bfd-watch.service
+COPY bfd.service /opt/bfd.service
+COPY cron /opt/cron
+COPY cron.daily /opt/cron.daily
+COPY install.sh /opt/install.sh
+COPY uninstall.sh /opt/uninstall.sh
+COPY bfd.1 /opt/bfd.1
+COPY bfd.bash-completion /opt/bfd.bash-completion
+COPY tests/ /opt/tests/
 
-WORKDIR /opt/bfd/tests
-CMD ["bats", "--formatter", "tap", "/opt/bfd/tests/"]
+WORKDIR /opt/tests
+CMD ["bats", "--formatter", "tap", "/opt/tests/"]

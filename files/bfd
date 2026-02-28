@@ -341,6 +341,16 @@ check() {
 			if [ -z "$pressure_scaled" ]; then
 				pressure_scaled=0
 			fi
+			# verbose: show per-IP pressure score
+			if [ "${VERBOSE:-0}" = "1" ]; then
+				local _p_fmt
+				_p_fmt=$(pressure_format "$pressure_scaled")
+				if [ "$scoring_weight" != "$eff_weight" ]; then
+					vout "  $ATTACK_HOST: $MOD pressure=${_p_fmt}/${eff_trip} weight=${eff_weight}->${scoring_weight}"
+				else
+					vout "  $ATTACK_HOST: $MOD pressure=${_p_fmt}/${eff_trip} weight=${eff_weight}"
+				fi
+			fi
 			local trip_scaled=$((eff_trip * 1000))
 			local should_ban=0
 			if [ "$pressure_scaled" -ge "$trip_scaled" ]; then
@@ -350,6 +360,11 @@ check() {
 				gp=$(pressure_compute "$INSTALL_PATH" "$ATTACK_HOST" "$PRESSURE_HALF_LIFE" "$UTIME")
 				if [ "$gp" -ge $((PRESSURE_TRIP_GLOBAL * 1000)) ]; then
 					should_ban=1
+					if [ "${VERBOSE:-0}" = "1" ]; then
+						local _gp_fmt
+						_gp_fmt=$(pressure_format "$gp")
+						vout "  $ATTACK_HOST: global pressure=${_gp_fmt}/${PRESSURE_TRIP_GLOBAL} -> ban"
+					fi
 				fi
 			fi
 			if [ "$should_ban" -eq 1 ]; then
