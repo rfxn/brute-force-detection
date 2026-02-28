@@ -1466,6 +1466,7 @@ state_bans_active_remove() {
 		flock -x 200
 		awk -v ip="$host" '$3 != ip' "$bans_file" > "$bans_file.new" || true
 		mv "$bans_file.new" "$bans_file"
+		chmod 600 "$bans_file"
 	) 200>>"$bans_file"
 }
 
@@ -1593,6 +1594,7 @@ state_events_prune() {
 		awk -v cutoff="$cutoff" '$1+0 >= cutoff' "$events_file" \
 			| tail -n "$max_lines" > "$events_file.new"
 		mv "$events_file.new" "$events_file"
+		chmod 600 "$events_file"
 	) 200>>"$events_file"
 }
 
