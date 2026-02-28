@@ -436,6 +436,12 @@ Main executable.
 .I /usr/local/bfd/bfd.lib.sh
 Function library (sourced by bfd).
 .TP
+.I /usr/local/bfd/elog_lib.sh
+Structured logging library (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/tlog_lib.sh
+Log tracking library for incremental reads (sourced by bfd).
+.TP
 .I /usr/local/bfd/conf.bfd
 User configuration.
 .TP
@@ -452,7 +458,10 @@ Country pressure multiplier table (active when entries are uncommented).
 IP-to-country lookup database.
 .TP
 .I /usr/local/bfd/tlog
-Track log \(em byte-offset log reader for rotation-safe incremental reads.
+Track log \(em byte-offset log reader CLI wrapper.
+.TP
+.I /usr/local/bfd/update-ipcountry.sh
+Script to download and update the IP-to-country database.
 .TP
 .I /usr/local/bfd/alert.bfd
 Email alert template.
@@ -483,6 +492,24 @@ Cron job (batch mode, every 2 minutes).
 .TP
 .I /etc/cron.daily/bfd
 Daily maintenance (state rotation, cleanup).
+.TP
+.I /etc/logrotate.d/bfd
+Log rotation configuration (copytruncate, weekly).
+.TP
+.I /etc/systemd/system/bfd-watch.service
+Systemd unit for watch mode (recommended).
+.TP
+.I /etc/systemd/system/bfd.service
+Systemd unit for batch mode.
+.TP
+.I /etc/systemd/system/bfd.timer
+Systemd timer for batch mode (alternative to cron).
+.TP
+.I /etc/init.d/bfd-watch
+SysVinit init script for watch mode (CentOS 6/7, Ubuntu 14.04).
+.TP
+.I /etc/bash_completion.d/bfd
+Bash tab completion for bfd commands.
 .TP
 .I /var/log/bfd_log
 Application log.

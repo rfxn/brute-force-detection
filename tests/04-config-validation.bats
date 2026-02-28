@@ -508,3 +508,73 @@ run_validate_output() {
 	assert_success
 	assert_output --partial 'BAN_COMMAND=/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
 }
+
+# ============================================================
+# validate_email() unit tests (F-022)
+# ============================================================
+
+@test "validate_email: accepts user@domain.tld" {
+	run validate_email "user@domain.tld"
+	assert_success
+}
+
+@test "validate_email: accepts user+tag@sub.domain.com" {
+	run validate_email "user+tag@sub.domain.com"
+	assert_success
+}
+
+@test "validate_email: accepts root@localhost" {
+	run validate_email "root@localhost"
+	assert_success
+}
+
+@test "validate_email: rejects empty string" {
+	run validate_email ""
+	assert_failure
+}
+
+@test "validate_email: rejects address without @" {
+	run validate_email "nodomain"
+	assert_failure
+}
+
+@test "validate_email: rejects address with semicolon" {
+	run validate_email "user@domain.com;rm -rf /"
+	assert_failure
+}
+
+@test "validate_email: rejects address with pipe" {
+	run validate_email "user@domain.com|cat /etc/passwd"
+	assert_failure
+}
+
+@test "validate_email: rejects address with spaces" {
+	run validate_email "user @domain.com"
+	assert_failure
+}
+
+@test "validate_email: rejects address with backtick" {
+	run validate_email 'user@`hostname`'
+	assert_failure
+}
+
+# --- validate_config email integration tests (F-022) ---
+
+@test "validate_config: warns on invalid EMAIL_ADDRESS" {
+	run run_validate_output 'EMAIL_ALERTS="1"; EMAIL_ADDRESS="not-an-email"'
+	assert_success
+	assert_output --partial "warning"
+	assert_output --partial "invalid address"
+}
+
+@test "validate_config: no warning on valid EMAIL_ADDRESS" {
+	run run_validate_output 'EMAIL_ALERTS="1"; EMAIL_ADDRESS="admin@example.com"'
+	assert_success
+	refute_output --partial "invalid address"
+}
+
+@test "validate_config: warns on invalid address in comma list" {
+	run run_validate_output 'EMAIL_ALERTS="1"; EMAIL_ADDRESS="good@example.com,bad addr,ok@test.com"'
+	assert_success
+	assert_output --partial "invalid address 'bad addr'"
+}

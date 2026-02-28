@@ -1,4 +1,45 @@
 2.0.1:
+[New] validate_email(): email format validation function rejects shell-unsafe
+      characters (semicolons, pipes, backticks, spaces) in addresses (F-022)
+[Change] validate_config(): warns on malformed EMAIL_ADDRESS values (advisory,
+      non-blocking for backward compatibility)
+[Change] _load_pressure_conf()/_load_thresholds(): RULE_EMAIL values validated
+      via validate_email(), invalid entries skipped with warning
+[Fix] tests/32-scan.bats: SCAN_TIMEOUT validation test was tautological —
+      rewritten to mirror actual rejection logic (F-054)
+[Change] tests/32-scan.bats: CLI validation tests annotated with rationale;
+      SCAN_MAX_LINES rejection test simplified to mirror dispatch code (F-055)
+[Fix] help text, README, README.md: standardize -a argument label from
+      IP|STR to IP|STRING matching man page (F-088)
+[Change] ci.yml: test job now depends on lint job via needs: lint (F-095)
+[Fix] README.md: add missing --scan, --max-lines, --scan-timeout flags to
+      CLI usage block (F-036)
+[Fix] README, README.md: add database rules to weight tier description —
+      mysqld-auth, postgresql, mongodb are weight=3 (F-090)
+[Fix] README: add update-ipcountry.sh mention to country weighting section,
+      matching README.md (F-091)
+[Change] ci.yml: add bfd-watch.init to bash -n and shellcheck lint targets
+      (F-047)
+[Fix] README.md: add missing scan mode (5.7) entry to table of contents
+[Change] ci.yml: add bash -n syntax check step before shellcheck; add
+      files/update-ipcountry.sh to lint targets
+[Fix] shellcheck: add SC2034 directives for ELOG_* variables consumed by
+      sourced elog_lib.sh; add SC1090 to dynamic source directive (fixes
+      CI lint job failure)
+[Change] bfd.1: add missing FILES entries — elog_lib.sh, tlog_lib.sh,
+      update-ipcountry.sh, logrotate, systemd units, SysVinit init script,
+      bash completion (19 → 28 entries)
+[Fix] tests/31-country.bats: replace private IPs (10.0.0.1, 172.16.0.1)
+      with RFC 5737 documentation-range IPs for project compliance
+[New] tests: 4 apool_list() tests covering empty pool, full report output,
+      search filter mode, and temp file cleanup
+[New] conf.bfd: LOG_SOURCE, LOCK_FILE_TIMEOUT, and BAN_RETRY_COUNT now
+      documented as commented entries for user discoverability
+[Change] Error and warning messages now write to stderr per UNIX convention;
+      affects validate_config(), CLI dispatcher, manual_ban/unban, show_config,
+      search_ip, list_rules, show_rule, test_rule, and test_pattern
+[Fix] state_bans_active_remove/state_events_prune: restore 600 permissions on
+      state files after awk rewrite (temp file inherits umask, not original perms)
 [New] elog_lib.sh: shared structured logging library (v1.0.0) with severity
       levels (debug/info/warn/error/critical), classic syslog-style and JSON
       (JSONL) output formats, configurable via ELOG_* variables

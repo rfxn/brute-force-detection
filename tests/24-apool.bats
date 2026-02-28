@@ -9,10 +9,11 @@ load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
-# Source _apool_report, _apool_service_summary, _apool_ban_status from bfd
+# Source _apool_report, _apool_service_summary, _apool_ban_status, apool_list from bfd
 eval "$(awk '/^_apool_report\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
 eval "$(awk '/^_apool_ban_status\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
 eval "$(awk '/^_apool_service_summary\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
+eval "$(awk '/^apool_list\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
 
 setup() {
 	bfd_standard_setup
@@ -162,4 +163,44 @@ teardown() {
 	assert_success
 	assert_output --partial "192.0.2.1"
 	refute_output --partial "10x0x0x1"
+}
+
+# --- apool_list() orchestrator ---
+
+@test "apool_list: empty pool produces no crash" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	> "$APOOL_LIST"
+	run apool_list
+	assert_success
+}
+
+@test "apool_list: pool with entries shows today report and service summary" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	echo "1000 192.0.2.1 sshd" >> "$APOOL_LIST"
+	echo "1001 192.0.2.2 dovecot" >> "$APOOL_LIST"
+	run apool_list
+	assert_success
+	assert_output --partial "Top 25 brute force attackers today"
+	assert_output --partial "Per-service breakdown"
+	assert_output --partial "Top 25 brute force attackers this week"
+}
+
+@test "apool_list: search filter shows filtered results" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	echo "1000 192.0.2.1 sshd" >> "$APOOL_LIST"
+	echo "1001 192.0.2.2 dovecot" >> "$APOOL_LIST"
+	run apool_list "sshd"
+	assert_success
+	assert_output --partial "Events for search string"
+	assert_output --partial "sshd"
+}
+
+@test "apool_list: cleans up temp file after execution" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	echo "1000 192.0.2.1 sshd" >> "$APOOL_LIST"
+	apool_list >/dev/null 2>&1
+	# verify no leftover weekly temp files
+	local leftover
+	leftover=$(find "$INSTALL_PATH/tmp" -name '.weekly.apool.*' 2>/dev/null | wc -l)
+	[ "$leftover" -eq 0 ]
 }

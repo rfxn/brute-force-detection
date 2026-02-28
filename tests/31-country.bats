@@ -10,17 +10,17 @@ load 'helpers/bfd-common'
 
 setup() {
 	bfd_standard_setup
-	# create a small test IP-to-country database
+	# create a small test IP-to-country database (RFC 5737 ranges only)
 	cat > "$INSTALL_PATH/ipcountry.dat" <<'EOF'
-# Test IP-to-country database
-# 10.0.0.0/8 = CN (for testing — 167772160-184549375)
-167772160 184549375 CN
-# 192.0.2.0/24 = XX (RFC 5737 test range — 3221225984-3221226239)
-3221225984 3221226239 XX
-# 198.51.100.0/24 = RU (test range — 3325256704-3325256959)
-3325256704 3325256959 RU
-# 203.0.113.0/24 = US (test range — 3405803776-3405804031)
-3405803776 3405804031 US
+# Test IP-to-country database — RFC 5737 documentation ranges only
+# 192.0.2.0-127 = XX (TEST-NET-1 lower half)
+3221225984 3221226111 XX
+# 192.0.2.128-255 = CN (TEST-NET-1 upper half)
+3221226112 3221226239 CN
+# 198.51.100.0-125 = RU (TEST-NET-2 partial)
+3325256704 3325256829 RU
+# 203.0.113.0-124 = US (TEST-NET-3 partial)
+3405803776 3405803900 US
 EOF
 
 	# create a test weights file
@@ -41,13 +41,13 @@ teardown() {
 # ip_to_country()
 # ============================================================
 
-@test "ip_to_country: finds CN for 10.0.0.1" {
-	run ip_to_country "10.0.0.1" "$INSTALL_PATH/ipcountry.dat"
+@test "ip_to_country: finds CN for 192.0.2.128 (upper half)" {
+	run ip_to_country "192.0.2.128" "$INSTALL_PATH/ipcountry.dat"
 	assert_success
 	assert_output "CN"
 }
 
-@test "ip_to_country: finds XX for 192.0.2.1" {
+@test "ip_to_country: finds XX for 192.0.2.1 (lower half)" {
 	run ip_to_country "192.0.2.1" "$INSTALL_PATH/ipcountry.dat"
 	assert_success
 	assert_output "XX"
@@ -66,7 +66,7 @@ teardown() {
 }
 
 @test "ip_to_country: returns empty for unknown IP" {
-	run ip_to_country "172.16.0.1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "198.51.100.200" "$INSTALL_PATH/ipcountry.dat"
 	assert_success
 	assert_output ""
 }
@@ -136,7 +136,7 @@ teardown() {
 
 @test "pressure_effective_weight: multiplies by country factor" {
 	# CN = 20 (2.0x), rule weight = 3 → 3*20/10 = 6
-	run pressure_effective_weight "3" "10.0.0.1" "$INSTALL_PATH"
+	run pressure_effective_weight "3" "192.0.2.128" "$INSTALL_PATH"
 	assert_success
 	assert_output "6"
 }
@@ -157,21 +157,21 @@ teardown() {
 
 @test "pressure_effective_weight: unknown IP returns weight unchanged" {
 	# unknown IP → no country → passthrough
-	run pressure_effective_weight "3" "172.16.0.1" "$INSTALL_PATH"
+	run pressure_effective_weight "3" "198.51.100.200" "$INSTALL_PATH"
 	assert_success
 	assert_output "3"
 }
 
 @test "pressure_effective_weight: missing DB returns weight unchanged" {
 	rm -f "$INSTALL_PATH/ipcountry.dat"
-	run pressure_effective_weight "3" "10.0.0.1" "$INSTALL_PATH"
+	run pressure_effective_weight "3" "192.0.2.128" "$INSTALL_PATH"
 	assert_success
 	assert_output "3"
 }
 
 @test "pressure_effective_weight: missing weights file returns weight unchanged" {
 	rm -f "$INSTALL_PATH/pressure-country.conf"
-	run pressure_effective_weight "3" "10.0.0.1" "$INSTALL_PATH"
+	run pressure_effective_weight "3" "192.0.2.128" "$INSTALL_PATH"
 	assert_success
 	assert_output "3"
 }
@@ -197,11 +197,11 @@ teardown() {
 
 @test "ip_to_country: cache miss populates cache file" {
 	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
-	run ip_to_country "10.0.0.1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "192.0.2.128" "$INSTALL_PATH/ipcountry.dat"
 	assert_success
 	assert_output "CN"
 	# verify cache was populated
-	run grep -c "^10.0.0.1 " "$_COUNTRY_CACHE_FILE"
+	run grep -c "^192.0.2.128 " "$_COUNTRY_CACHE_FILE"
 	assert_output "1"
 	rm -f "$_COUNTRY_CACHE_FILE"
 	_COUNTRY_CACHE_FILE=""
@@ -209,9 +209,9 @@ teardown() {
 
 @test "ip_to_country: cache hit returns cached value over DB" {
 	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
-	# cache says ZZ, DB says CN — cache must win
-	echo "10.0.0.1 ZZ" > "$_COUNTRY_CACHE_FILE"
-	run ip_to_country "10.0.0.1" "$INSTALL_PATH/ipcountry.dat"
+	# cache says ZZ, DB says CN for 192.0.2.128 — cache must win
+	echo "192.0.2.128 ZZ" > "$_COUNTRY_CACHE_FILE"
+	run ip_to_country "192.0.2.128" "$INSTALL_PATH/ipcountry.dat"
 	assert_success
 	assert_output "ZZ"
 	rm -f "$_COUNTRY_CACHE_FILE"
@@ -220,20 +220,20 @@ teardown() {
 
 @test "ip_to_country: cache stores sentinel for unknown IPs" {
 	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
-	run ip_to_country "172.16.0.1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "198.51.100.200" "$INSTALL_PATH/ipcountry.dat"
 	assert_success
 	assert_output ""
 	# verify sentinel "-" stored
-	run grep "^172.16.0.1 " "$_COUNTRY_CACHE_FILE"
-	assert_output "172.16.0.1 -"
+	run grep "^198.51.100.200 " "$_COUNTRY_CACHE_FILE"
+	assert_output "198.51.100.200 -"
 	rm -f "$_COUNTRY_CACHE_FILE"
 	_COUNTRY_CACHE_FILE=""
 }
 
 @test "ip_to_country: cached sentinel returns empty string" {
 	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
-	echo "172.16.0.1 -" > "$_COUNTRY_CACHE_FILE"
-	run ip_to_country "172.16.0.1" "$INSTALL_PATH/ipcountry.dat"
+	echo "198.51.100.200 -" > "$_COUNTRY_CACHE_FILE"
+	run ip_to_country "198.51.100.200" "$INSTALL_PATH/ipcountry.dat"
 	assert_success
 	assert_output ""
 	rm -f "$_COUNTRY_CACHE_FILE"
@@ -242,7 +242,7 @@ teardown() {
 
 @test "ip_to_country: no cache when _COUNTRY_CACHE_FILE unset" {
 	_COUNTRY_CACHE_FILE=""
-	run ip_to_country "10.0.0.1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "192.0.2.128" "$INSTALL_PATH/ipcountry.dat"
 	assert_success
 	assert_output "CN"
 }

@@ -13,12 +13,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install shellcheck
         run: sudo apt-get install -y shellcheck
+      - name: Syntax check (bash -n)
+        run: |
+          bash -n files/bfd files/bfd.lib.sh files/elog_lib.sh files/tlog files/tlog_lib.sh files/update-ipcountry.sh
+          bash -n install.sh uninstall.sh importconf cron.daily bfd-watch.init
       - name: Shellcheck main scripts
         run: |
-          shellcheck -S warning files/bfd files/bfd.lib.sh files/elog_lib.sh files/tlog files/tlog_lib.sh
-          shellcheck -S warning install.sh uninstall.sh importconf cron.daily
+          shellcheck -S warning files/bfd files/bfd.lib.sh files/elog_lib.sh files/tlog files/tlog_lib.sh files/update-ipcountry.sh
+          shellcheck -S warning install.sh uninstall.sh importconf cron.daily bfd-watch.init
 
   test:
+    needs: lint
     uses: rfxn/batsman/.github/workflows/test.yml@v1.0.1
     with:
       project-name: bfd

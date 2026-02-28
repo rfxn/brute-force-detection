@@ -86,7 +86,7 @@ if [ -f "$INTCNF" ]; then
 		# shellcheck disable=SC1090
 		. "$INTCNF"
 	else
-		echo "warning: internals.conf has unsafe ownership or permissions, using defaults."
+		echo "warning: internals.conf has unsafe ownership or permissions, using defaults." >&2
 	fi
 fi
 # fallbacks for internals.conf variables (backward compat with pre-split installs)
@@ -102,15 +102,21 @@ OUTPUT_SYSLOG_FILE="${OUTPUT_SYSLOG_FILE:-$KERNEL_LOG_PATH}"
 BAN_RETRY_COUNT="${BAN_RETRY_COUNT:-2}"
 LOG_SOURCE="${LOG_SOURCE:-auto}"
 export LOG_SOURCE
-# Configure elog_lib for BFD
+# Configure elog_lib for BFD (consumed by sourced elog_lib.sh)
+# shellcheck disable=SC2034
 ELOG_APP="bfd"
+# shellcheck disable=SC2034
 ELOG_TS_FORMAT="%b %e %H:%M:%S"
+# shellcheck disable=SC2034
 ELOG_STDOUT="always"
+# shellcheck disable=SC2034
 ELOG_STDOUT_PREFIX="full"
 ELOG_LOG_FILE="$BFD_LOG_PATH"
 ELOG_SYSLOG_FILE=""
 [ "${OUTPUT_SYSLOG:-0}" = "1" ] && ELOG_SYSLOG_FILE="$OUTPUT_SYSLOG_FILE"
+# shellcheck disable=SC2034
 ELOG_FORMAT="${LOG_FORMAT:-classic}"
+# shellcheck disable=SC2034
 ELOG_LEVEL="${LOG_LEVEL:-1}"
 # backward compat: map old variable names to new pressure model names
 PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
@@ -155,12 +161,12 @@ fw_setup
 if [ "$_FW_BACKEND" = "custom" ]; then
 	_ban_cmd_bin=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
 	if [ -n "$_ban_cmd_bin" ] && [ ! -x "$_ban_cmd_bin" ]; then
-		echo "warning: BAN_COMMAND binary '$_ban_cmd_bin' not found or not executable."
+		echo "warning: BAN_COMMAND binary '$_ban_cmd_bin' not found or not executable." >&2
 	fi
 	if [ -n "$BAN_COMMAND_V6_TEMPLATE" ]; then
 		_ban_cmd_v6_bin=$(echo "$BAN_COMMAND_V6_TEMPLATE" | awk '{print $1}')
 		if [ -n "$_ban_cmd_v6_bin" ] && [ ! -x "$_ban_cmd_v6_bin" ]; then
-			echo "warning: BAN_COMMAND_V6 binary '$_ban_cmd_v6_bin' not found or not executable."
+			echo "warning: BAN_COMMAND_V6 binary '$_ban_cmd_v6_bin' not found or not executable." >&2
 		fi
 	fi
 	unset _ban_cmd_bin _ban_cmd_v6_bin
@@ -637,7 +643,7 @@ usage() {
 	echo "-q|--quiet ................. run quiet with output hidden"
 	echo "-d|--dryrun ................ run detection without banning"
 	echo "-w|--watch ................. run in continuous watch mode (foreground)"
-	echo "-a|--attackpool [IP|STR] ... attack pool; valid IP shows full report"
+	echo "-a|--attackpool [IP|STRING] . attack pool; valid IP shows full report"
 	echo "-c|--check ................. health check and diagnostics"
 	echo "-l|--list .................. list active bans"
 	echo "-u|--unban IP .............. unban an IP address"
@@ -665,6 +671,7 @@ OUTPUT_FORMAT="table"
 _CLI_SCAN_MAX_LINES=""
 _CLI_SCAN_TIMEOUT=""
 declare -a _bfd_args=()
+# shellcheck disable=SC2034
 for _arg in "$@"; do
 	case "$_arg" in
 		--json) OUTPUT_FORMAT="json" ;;
@@ -702,14 +709,14 @@ case "${1:-}" in
 -u|--unban)
 	vhead; pre
 	if [ -z "${2:-}" ]; then
-		echo "error: -u requires an IP address."; echo; usage; exit "$EXIT_CONFIG_ERROR"
+		echo "error: -u requires an IP address." >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
 	fi
 	manual_unban "$INSTALL_PATH" "$2" "$UTIME" || exit "$?"
 	;;
 -b|--ban)
 	vhead; pre
 	if [ -z "${2:-}" ]; then
-		echo "error: -b requires an IP address."; echo; usage; exit "$EXIT_CONFIG_ERROR"
+		echo "error: -b requires an IP address." >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
 	fi
 	manual_ban "$INSTALL_PATH" "$2" "$UTIME" "${3:-manual}" "all" || exit "$?"
 	;;
@@ -733,14 +740,14 @@ case "${1:-}" in
 -T|--test)
 	vhead; pre
 	if [ -z "${2:-}" ]; then
-		echo "error: -T requires a rule name."; echo; usage; exit "$EXIT_CONFIG_ERROR"
+		echo "error: -T requires a rule name." >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
 	fi
 	test_rule "$INSTALL_PATH" "$2" "${3:-}" || exit "$?"
 	;;
 --test-pattern)
 	vhead
 	if [ -z "${2:-}" ]; then
-		echo "error: --test-pattern requires a pattern."; echo; usage; exit "$EXIT_CONFIG_ERROR"
+		echo "error: --test-pattern requires a pattern." >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
 	fi
 	test_pattern "$2" "${3:-}" || exit "$?"
 	;;
@@ -760,11 +767,11 @@ case "${1:-}" in
 	# validate limits
 	_int_p='^[0-9]+$'
 	if ! [[ "$SCAN_MAX_LINES" =~ $_int_p ]]; then
-		echo "error: --max-lines must be a non-negative integer (got '$SCAN_MAX_LINES')."
+		echo "error: --max-lines must be a non-negative integer (got '$SCAN_MAX_LINES')." >&2
 		exit "$EXIT_CONFIG_ERROR"
 	fi
 	if ! [[ "$SCAN_TIMEOUT" =~ $_int_p ]] || [ "$SCAN_TIMEOUT" -eq 0 ]; then
-		echo "error: --scan-timeout must be a positive integer (got '$SCAN_TIMEOUT')."
+		echo "error: --scan-timeout must be a positive integer (got '$SCAN_TIMEOUT')." >&2
 		exit "$EXIT_CONFIG_ERROR"
 	fi
 	# parse sub-args: optional RULE and -d/--dryrun (order-independent)
@@ -773,17 +780,17 @@ case "${1:-}" in
 	case "$_s2" in
 		-d|--dryrun) DRY_RUN=1 ;;
 		"") ;;
-		-*) echo "error: unknown scan option '$_s2'"; echo; usage; exit "$EXIT_CONFIG_ERROR" ;;
+		-*) echo "error: unknown scan option '$_s2'" >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR" ;;
 		*)  _SCAN_RULE="$_s2" ;;
 	esac
 	case "$_s3" in
 		-d|--dryrun) DRY_RUN=1 ;;
 		"") ;;
-		-*) echo "error: unknown scan option '$_s3'"; echo; usage; exit "$EXIT_CONFIG_ERROR" ;;
+		-*) echo "error: unknown scan option '$_s3'" >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR" ;;
 		*)  [ -z "$_SCAN_RULE" ] && _SCAN_RULE="$_s3" ;;
 	esac
 	if [ -n "$_SCAN_RULE" ] && [ ! -f "$RULES_PATH/$_SCAN_RULE" ]; then
-		echo "error: rule '$_SCAN_RULE' not found."; echo; usage; exit "$EXIT_CONFIG_ERROR"
+		echo "error: rule '$_SCAN_RULE' not found." >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
 	fi
 	get_state
 	_SCAN_MODE=1
@@ -806,6 +813,6 @@ case "${1:-}" in
 -v|--version)   vhead ;;
 -h|--help)      vhead; usage ;;
 "")             vhead; usage ;;
-*)              vhead; echo "error: unknown option '$1'"; echo; usage; exit "$EXIT_CONFIG_ERROR" ;;
+*)              vhead; echo "error: unknown option '$1'" >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR" ;;
 esac
 exit "$EXIT_OK"

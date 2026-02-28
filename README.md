@@ -37,6 +37,7 @@ and IPv4/IPv6 support across 42 service rules.
   - [5.4 Watch Mode](#54-watch-mode)
   - [5.5 Flush Bans](#55-flush-bans)
   - [5.6 Structured Output](#56-structured-output)
+  - [5.7 Scan Mode](#57-scan-mode)
 - [6. Rule Engine](#6-rule-engine)
   - [6.1 Rule Catalog](#61-rule-catalog)
   - [6.2 Rule Customization](#62-rule-customization)
@@ -247,7 +248,7 @@ pressure = SUM { weight * 2^(-(now - event_time) / half_life) }
 |----------|---------|-------------|
 | `PRESSURE_TRIP` | `20` | Accumulated pressure needed to trigger a ban; per-rule overrides in rule files or `pressure.conf` |
 | `PRESSURE_HALF_LIFE` | `300` | Half-life in seconds (how fast pressure decays); shorter = more forgiving |
-Per-rule weights are configured in `pressure.conf` (centralized) or in individual rule files via `PRESSURE_WEIGHT`. Higher weight = faster pressure accumulation. Default tiers: 5 (control panels), 3 (SSH/VPN/critical), 2 (mail/FTP/web), 1 (noisy/generic).
+Per-rule weights are configured in `pressure.conf` (centralized) or in individual rule files via `PRESSURE_WEIGHT`. Higher weight = faster pressure accumulation. Default tiers: 5 (control panels), 3 (SSH/VPN/database/critical), 2 (mail/FTP/web), 1 (noisy/generic).
 
 ### 3.2 Email Alerts
 
@@ -416,7 +417,7 @@ usage: bfd [OPTION]
 -q|--quiet ................. run quiet with output hidden
 -d|--dryrun ................ run detection without banning
 -w|--watch ................. run in continuous watch mode (foreground)
--a|--attackpool [IP|STR] ... attack pool; valid IP shows full report
+-a|--attackpool [IP|STRING] . attack pool; valid IP shows full report
 -c|--check ................. health check and diagnostics
 -l|--list .................. list active bans
 -u|--unban IP .............. unban an IP address
@@ -430,6 +431,9 @@ usage: bfd [OPTION]
    --flush-all ............. unban all bans
    --json .................. output in JSON format (with -l)
    --csv ................... output in CSV format (with -l)
+   --scan [RULE] [-d] ...... scan full log (all rules or specific rule)
+   --max-lines=N ........... max lines per log during scan (default 50000)
+   --scan-timeout=N ........ journal timeout per rule during scan (default 120)
 -V|--verbose ............... show detailed output
 -v|--version ............... display version
 -h|--help .................. display this help
