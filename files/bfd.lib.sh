@@ -310,7 +310,13 @@ _load_thresholds() {
 			case "$key" in
 				TRIG)       _THRESH_TRIG["$rule_name"]="$val" ;;
 				SKIP_ALERT) _THRESH_SKIP_ALERT["$rule_name"]="$val" ;;
-				RULE_EMAIL) _THRESH_RULE_EMAIL["$rule_name"]="$val" ;;
+				RULE_EMAIL)
+					if validate_email "$val"; then
+						_THRESH_RULE_EMAIL["$rule_name"]="$val"
+					else
+						elog warn "thresholds.conf: $rule_name RULE_EMAIL='$val' invalid, skipping"
+					fi
+					;;
 			esac
 		done
 	done < "$conf_file"
@@ -396,7 +402,13 @@ _load_pressure_conf() {
 					fi
 					;;
 				SKIP_ALERT)       _PRESS_SKIP_ALERT["$rule_name"]="$val" ;;
-				RULE_EMAIL)       _PRESS_RULE_EMAIL["$rule_name"]="$val" ;;
+				RULE_EMAIL)
+					if validate_email "$val"; then
+						_PRESS_RULE_EMAIL["$rule_name"]="$val"
+					else
+						elog warn "pressure.conf: $rule_name RULE_EMAIL='$val' invalid, skipping"
+					fi
+					;;
 			esac
 		done
 	done < "$conf_file"
@@ -498,6 +510,15 @@ safe_source() {
 	. "$file"
 }
 
+# validate_email addr — check basic email format (user@domain)
+# Returns 0 if valid, 1 if invalid. Rejects empty, missing @, semicolons,
+# pipes, backticks, spaces, and other shell-unsafe characters.
+validate_email() {
+	local addr="$1"
+	local email_p='^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$'
+	[[ "$addr" =~ $email_p ]]
+}
+
 # extract_command_template config_file var_name — extract raw template value
 # Reads the last occurrence of VAR_NAME="value" from config_file without
 # shell expansion (preserves $ATTACK_HOST, $MOD, $PORTS as literals).
@@ -578,6 +599,19 @@ validate_config() {
 	if [ "$EMAIL_ALERTS" = "1" ] && [ -z "${EMAIL_ADDRESS:-}" ]; then
 		echo "error: EMAIL_ADDRESS must be set when EMAIL_ALERTS=1." >&2
 		exit $EXIT_CONFIG_ERROR
+	fi
+	if [ "$EMAIL_ALERTS" = "1" ] && [ -n "${EMAIL_ADDRESS:-}" ]; then
+		local _ea _ifs_save="$IFS"
+		IFS=','
+		for _ea in $EMAIL_ADDRESS; do
+			IFS="$_ifs_save"
+			_ea="${_ea## }"
+			_ea="${_ea%% }"
+			if [ -n "$_ea" ] && ! validate_email "$_ea"; then
+				echo "warning: EMAIL_ADDRESS contains invalid address '$_ea'." >&2
+			fi
+		done
+		IFS="$_ifs_save"
 	fi
 	local _os="${OUTPUT_SYSLOG:-0}"
 	if [ "$_os" != "0" ] && [ "$_os" != "1" ]; then

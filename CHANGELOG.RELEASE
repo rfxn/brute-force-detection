@@ -1,4 +1,10 @@
 2.0.1:
+[New] validate_email(): email format validation function rejects shell-unsafe
+      characters (semicolons, pipes, backticks, spaces) in addresses (F-022)
+[Change] validate_config(): warns on malformed EMAIL_ADDRESS values (advisory,
+      non-blocking for backward compatibility)
+[Change] _load_pressure_conf()/_load_thresholds(): RULE_EMAIL values validated
+      via validate_email(), invalid entries skipped with warning
 [Fix] tests/32-scan.bats: SCAN_TIMEOUT validation test was tautological —
       rewritten to mirror actual rejection logic (F-054)
 [Change] tests/32-scan.bats: CLI validation tests annotated with rationale;
