@@ -527,64 +527,64 @@ validate_config() {
 	# Use ${VAR-default} (no colon) so explicit empty is validated, not skipped
 	local _pt="${PRESSURE_TRIP-${TRIG:-20}}"
 	if [ -z "$_pt" ] || ! [[ "$_pt" =~ $int_pattern ]] || [ "$_pt" -eq 0 ]; then
-		echo "error: PRESSURE_TRIP must be a positive integer (got '${PRESSURE_TRIP:-${TRIG:-}}')."
+		echo "error: PRESSURE_TRIP must be a positive integer (got '${PRESSURE_TRIP:-${TRIG:-}}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _phl="${PRESSURE_HALF_LIFE-${TRIG_WINDOW:-300}}"
 	if [ -z "$_phl" ] || ! [[ "$_phl" =~ $int_pattern ]] || [ "$_phl" -eq 0 ]; then
-		echo "error: PRESSURE_HALF_LIFE must be a positive integer (got '${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-}}')."
+		echo "error: PRESSURE_HALF_LIFE must be a positive integer (got '${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-}}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _ptg="${PRESSURE_TRIP_GLOBAL-${TRIG_GLOBAL:-0}}"
 	if [ -z "$_ptg" ] || ! [[ "$_ptg" =~ $int_pattern ]]; then
-		echo "error: PRESSURE_TRIP_GLOBAL must be a non-negative integer (got '${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-}}')."
+		echo "error: PRESSURE_TRIP_GLOBAL must be a non-negative integer (got '${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-}}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _st="${SUBNET_TRIG:-0}"
 	if ! [[ "$_st" =~ $int_pattern ]]; then
-		echo "error: SUBNET_TRIG must be a non-negative integer (got '${SUBNET_TRIG:-}')."
+		echo "error: SUBNET_TRIG must be a non-negative integer (got '${SUBNET_TRIG:-}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _sm="${SUBNET_MASK:-24}"
 	if ! [[ "$_sm" =~ $int_pattern ]] || [ "$_sm" -lt 8 ] || [ "$_sm" -gt 32 ]; then
-		echo "error: SUBNET_MASK must be an integer between 8 and 32 (got '${SUBNET_MASK:-}')."
+		echo "error: SUBNET_MASK must be an integer between 8 and 32 (got '${SUBNET_MASK:-}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _sm6="${SUBNET_MASK_V6:-48}"
 	if ! [[ "$_sm6" =~ $int_pattern ]] || [ "$_sm6" -lt 16 ] || [ "$_sm6" -gt 128 ] || [ $((_sm6 % 16)) -ne 0 ]; then
-		echo "error: SUBNET_MASK_V6 must be a multiple of 16 between 16 and 128 (got '${SUBNET_MASK_V6:-}')."
+		echo "error: SUBNET_MASK_V6 must be a multiple of 16 between 16 and 128 (got '${SUBNET_MASK_V6:-}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_TTL:-${BAN_DURATION:-0}}" =~ $int_pattern ]]; then
-		echo "error: BAN_TTL must be a non-negative integer (got '${BAN_TTL:-${BAN_DURATION:-}}')."
+		echo "error: BAN_TTL must be a non-negative integer (got '${BAN_TTL:-${BAN_DURATION:-}}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}" =~ $int_pattern ]]; then
-		echo "error: BAN_ESCALATE_AFTER must be a non-negative integer (got '${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-}}')."
+		echo "error: BAN_ESCALATE_AFTER must be a non-negative integer (got '${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-}}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-1}}" =~ $int_pattern ]] || [ "${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-1}}" -eq 0 ]; then
-		echo "error: BAN_ESCALATE_WINDOW must be a positive integer (got '${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-}}')."
+		echo "error: BAN_ESCALATE_WINDOW must be a positive integer (got '${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-}}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if [ "${FIREWALL:-auto}" = "custom" ] && [ "${BAN_TTL:-${BAN_DURATION:-0}}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
-		echo "warning: BAN_TTL>0 but UNBAN_COMMAND is empty; auto-unban will only remove state, not firewall rules."
+		echo "warning: BAN_TTL>0 but UNBAN_COMMAND is empty; auto-unban will only remove state, not firewall rules." >&2
 	fi
 	if [ "$EMAIL_ALERTS" != "0" ] && [ "$EMAIL_ALERTS" != "1" ]; then
-		echo "error: EMAIL_ALERTS must be 0 or 1 (got '$EMAIL_ALERTS')."
+		echo "error: EMAIL_ALERTS must be 0 or 1 (got '$EMAIL_ALERTS')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if [ "$EMAIL_ALERTS" = "1" ] && [ -z "${EMAIL_ADDRESS:-}" ]; then
-		echo "error: EMAIL_ADDRESS must be set when EMAIL_ALERTS=1."
+		echo "error: EMAIL_ADDRESS must be set when EMAIL_ALERTS=1." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _os="${OUTPUT_SYSLOG:-0}"
 	if [ "$_os" != "0" ] && [ "$_os" != "1" ]; then
-		echo "error: OUTPUT_SYSLOG must be 0 or 1 (got '${OUTPUT_SYSLOG:-}')."
+		echo "error: OUTPUT_SYSLOG must be 0 or 1 (got '${OUTPUT_SYSLOG:-}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "$LOCK_FILE_TIMEOUT" =~ $int_pattern ]] || [ "$LOCK_FILE_TIMEOUT" -eq 0 ]; then
-		echo "error: LOCK_FILE_TIMEOUT must be a positive integer (got '$LOCK_FILE_TIMEOUT')."
+		echo "error: LOCK_FILE_TIMEOUT must be a positive integer (got '$LOCK_FILE_TIMEOUT')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local valid_fw="auto apf csf firewalld ufw nftables iptables route custom"
@@ -597,57 +597,57 @@ validate_config() {
 			fi
 		done
 		if [ "$_fw_valid" -eq 0 ]; then
-			echo "error: FIREWALL must be one of: $valid_fw (got '$FIREWALL')."
+			echo "error: FIREWALL must be one of: $valid_fw (got '$FIREWALL')." >&2
 			exit $EXIT_CONFIG_ERROR
 		fi
 	fi
 	if [ "${FIREWALL:-auto}" = "custom" ] && [ -z "$BAN_COMMAND_TEMPLATE" ]; then
-		echo "error: BAN_COMMAND must not be empty when FIREWALL=custom."
+		echo "error: BAN_COMMAND must not be empty when FIREWALL=custom." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if [ ! -d "$INSTALL_PATH" ]; then
-		echo "error: INSTALL_PATH '$INSTALL_PATH' does not exist."
+		echo "error: INSTALL_PATH '$INSTALL_PATH' does not exist." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if [ -z "${BFD_LOG_PATH:-}" ]; then
-		echo "error: BFD_LOG_PATH must not be empty."
+		echo "error: BFD_LOG_PATH must not be empty." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if [ -n "${LOG_SOURCE:-}" ] && \
 	   [ "$LOG_SOURCE" != "auto" ] && \
 	   [ "$LOG_SOURCE" != "file" ] && \
 	   [ "$LOG_SOURCE" != "journal" ]; then
-		echo "error: LOG_SOURCE must be auto, file, or journal (got '$LOG_SOURCE')."
+		echo "error: LOG_SOURCE must be auto, file, or journal (got '$LOG_SOURCE')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _wi="${WATCH_INTERVAL:-10}"
 	if ! [[ "$_wi" =~ $int_pattern ]] || [ "$_wi" -eq 0 ]; then
-		echo "error: WATCH_INTERVAL must be a positive integer (got '${WATCH_INTERVAL:-}')."
+		echo "error: WATCH_INTERVAL must be a positive integer (got '${WATCH_INTERVAL:-}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if [ -n "${SCAN_MAX_LINES:-}" ] && ! [[ "${SCAN_MAX_LINES:-0}" =~ $int_pattern ]]; then
-		echo "error: SCAN_MAX_LINES must be a non-negative integer (got '${SCAN_MAX_LINES:-}')."
+		echo "error: SCAN_MAX_LINES must be a non-negative integer (got '${SCAN_MAX_LINES:-}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if [ -n "${SCAN_TIMEOUT:-}" ] && { ! [[ "${SCAN_TIMEOUT:-120}" =~ $int_pattern ]] || [ "${SCAN_TIMEOUT:-120}" -eq 0 ]; }; then
-		echo "error: SCAN_TIMEOUT must be a positive integer (got '${SCAN_TIMEOUT:-}')."
+		echo "error: SCAN_TIMEOUT must be a positive integer (got '${SCAN_TIMEOUT:-}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	local _esc="${BAN_ESCALATION:-none}"
 	if [ "$_esc" != "none" ] && [ "$_esc" != "linear" ] && [ "$_esc" != "double" ] && [ "$_esc" != "exponential" ]; then
-		echo "error: BAN_ESCALATION must be none, linear, or double (got '$_esc')."
+		echo "error: BAN_ESCALATION must be none, linear, or double (got '$_esc')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_ESCALATION_CAP:-0}" =~ $int_pattern ]]; then
-		echo "error: BAN_ESCALATION_CAP must be a non-negative integer (got '${BAN_ESCALATION_CAP:-}')."
+		echo "error: BAN_ESCALATION_CAP must be a non-negative integer (got '${BAN_ESCALATION_CAP:-}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_RETRY_COUNT:-0}" =~ $int_pattern ]]; then
-		echo "error: BAN_RETRY_COUNT must be a non-negative integer (got '${BAN_RETRY_COUNT:-}')."
+		echo "error: BAN_RETRY_COUNT must be a non-negative integer (got '${BAN_RETRY_COUNT:-}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${EMAIL_LOGLINES:-50}" =~ $int_pattern ]] || [ "${EMAIL_LOGLINES:-50}" -eq 0 ]; then
-		echo "error: EMAIL_LOGLINES must be a positive integer (got '${EMAIL_LOGLINES:-}')."
+		echo "error: EMAIL_LOGLINES must be a positive integer (got '${EMAIL_LOGLINES:-}')." >&2
 		exit $EXIT_CONFIG_ERROR
 	fi
 }
@@ -1363,10 +1363,10 @@ list_bans() {
 # manual_unban install_path ip utime — manually unban an IP via firewall backend
 manual_unban() {
 	local install_path="$1" ip="$2" utime="$3"
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
+	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
 	state_init "$install_path"
 	if ! state_bans_active_check "$install_path" "$ip"; then
-		echo "error: $ip is not in the active ban list."
+		echo "error: $ip is not in the active ban list." >&2
 		return 1
 	fi
 	local ban_mod ban_ports
@@ -1383,11 +1383,11 @@ manual_ban() {
 	local install_path="$1" ip="$2" utime="$3"
 	local mod="${4:-manual}"
 	local ports="${5:-all}"
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
-	mod=$(sanitize_mod "$mod") || { echo "error: invalid service name '$mod'."; return 1; }
+	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
+	mod=$(sanitize_mod "$mod") || { echo "error: invalid service name '$mod'." >&2; return 1; }
 	state_init "$install_path"
 	if state_bans_active_check "$install_path" "$ip"; then
-		echo "error: $ip is already banned."
+		echo "error: $ip is already banned." >&2
 		return 1
 	fi
 	execute_ban "$ip" "$mod" "0" "$ports"
@@ -2690,7 +2690,7 @@ show_config() {
 			fi
 		done
 		if [ "$_found" -eq 0 ]; then
-			echo "error: unknown config variable '$var'."
+			echo "error: unknown config variable '$var'." >&2
 			return 1
 		fi
 		# map user-facing BAN_COMMAND names to _TEMPLATE variants
@@ -2757,7 +2757,7 @@ search_ip() {
 	local now
 	now=$(date +"%s")
 
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'."; return 1; }
+	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
 
 	echo "IP Report: $ip"
 	echo ""
@@ -2844,7 +2844,7 @@ list_rules() {
 	local log_source="${LOG_SOURCE:-auto}"
 
 	if [ ! -d "$rules_dir" ]; then
-		echo "error: rules directory not found."
+		echo "error: rules directory not found." >&2
 		return 1
 	fi
 
@@ -2907,7 +2907,7 @@ show_rule() {
 	local log_source="${LOG_SOURCE:-auto}"
 
 	if [ ! -f "$rule_file" ]; then
-		echo "error: rule '$rule_name' not found."
+		echo "error: rule '$rule_name' not found." >&2
 		return 1
 	fi
 
@@ -2958,7 +2958,7 @@ test_rule() {
 	local install_path="$1" rule_name="$2" log_file="${3:-}"
 	local rules_dir="${RULES_PATH:-$install_path/rules}"
 	local rule_file="$rules_dir/$rule_name"
-	[ ! -f "$rule_file" ] && { echo "error: rule '$rule_name' not found"; return 1; }
+	[ ! -f "$rule_file" ] && { echo "error: rule '$rule_name' not found" >&2; return 1; }
 
 	local stdin_file=""
 	if [ "$log_file" = "-" ]; then
@@ -2966,7 +2966,7 @@ test_rule() {
 		cat > "$stdin_file"
 		_TLOG_PASSTHROUGH="$stdin_file"
 	elif [ -n "$log_file" ]; then
-		[ ! -f "$log_file" ] && { echo "error: file '$log_file' not found"; return 1; }
+		[ ! -f "$log_file" ] && { echo "error: file '$log_file' not found" >&2; return 1; }
 		_TLOG_PASSTHROUGH="$log_file"
 	else
 		_TLOG_PASSTHROUGH="1"
@@ -2981,7 +2981,7 @@ test_rule() {
 	_TLOG_PASSTHROUGH=""
 
 	if [ "$src_rc" -ne 0 ]; then
-		echo "error: failed to source rule '$rule_name'"
+		echo "error: failed to source rule '$rule_name'" >&2
 		rm -f "$stdin_file"
 		_restore_rule_vars
 		return 1
@@ -3025,7 +3025,7 @@ test_pattern() {
 	if [ -z "$log_file" ] || [ "$log_file" = "-" ]; then
 		input=$(cat)
 	else
-		[ ! -f "$log_file" ] && { echo "error: file '$log_file' not found"; return 1; }
+		[ ! -f "$log_file" ] && { echo "error: file '$log_file' not found" >&2; return 1; }
 		input=$(cat "$log_file")
 	fi
 

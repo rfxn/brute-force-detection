@@ -1,4 +1,7 @@
 2.0.1:
+[Change] Error and warning messages now write to stderr per UNIX convention;
+      affects validate_config(), CLI dispatcher, manual_ban/unban, show_config,
+      search_ip, list_rules, show_rule, test_rule, and test_pattern
 [Fix] state_bans_active_remove/state_events_prune: restore 600 permissions on
       state files after awk rewrite (temp file inherits umask, not original perms)
 [New] elog_lib.sh: shared structured logging library (v1.0.0) with severity
