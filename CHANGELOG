@@ -1,4 +1,6 @@
 2.0.1:
+[New] tests: 4 apool_list() tests covering empty pool, full report output,
+      search filter mode, and temp file cleanup
 [New] conf.bfd: LOG_SOURCE, LOCK_FILE_TIMEOUT, and BAN_RETRY_COUNT now
       documented as commented entries for user discoverability
 [Change] Error and warning messages now write to stderr per UNIX convention;
