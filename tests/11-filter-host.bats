@@ -62,6 +62,27 @@ teardown() {
 	assert_success
 }
 
+@test "filter_host: matches IP with inline comment in ignore list" {
+	echo "192.0.2.1 # office gateway" > "$IGNORE_LIST"
+	echo "$IGNORE_LIST" > "$IGNORE_HOST_FILES"
+	run filter_host "192.0.2.1" "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	[ "$status" -eq 1 ]
+}
+
+@test "filter_host: matches IP with tab-comment in ignore list" {
+	printf "192.0.2.1\t# office\n" > "$IGNORE_LIST"
+	echo "$IGNORE_LIST" > "$IGNORE_HOST_FILES"
+	run filter_host "192.0.2.1" "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	[ "$status" -eq 1 ]
+}
+
+@test "filter_host: exclude files entry with inline comment resolved" {
+	echo "192.0.2.1" > "$IGNORE_LIST"
+	echo "$IGNORE_LIST # main ignore list" > "$IGNORE_HOST_FILES"
+	run filter_host "192.0.2.1" "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	[ "$status" -eq 1 ]
+}
+
 @test "filter_host: multiple ignore files checked" {
 	local list2="$TEST_TMPDIR/ignore2.hosts"
 	echo "192.0.2.1" > "$list2"

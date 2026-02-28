@@ -1,4 +1,11 @@
 2.0.1:
+[Fix] filter_host: inline comments after IPs in ignore files now handled
+      correctly; grep -v "#" replaced with sed comment-strip pipeline
+[Fix] ip_to_subnet: added defensive guard for subnet masks below /8
+[Fix] _load_pressure_conf: PRESSURE_WEIGHT and PRESSURE_TRIP values now
+      type-validated; non-numeric or zero values logged and skipped
+[Note] F-018 (pam_generic/sshd overlap) verified as intentional design
+[Note] F-033 (-b SERVICE validation) verified as correct — freeform label
 [Fix] CI: shellcheck lint step now uses -S warning to filter info/style
       noise; inline shellcheck directives added for 8 known false positives
       in bfd.lib.sh (template vars consumed by sourced alert.bfd, read

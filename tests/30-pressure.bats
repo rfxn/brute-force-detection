@@ -284,6 +284,36 @@ teardown() {
 	[ "${_PRESS_TRIP[cpanel]}" = "10" ]
 }
 
+@test "_load_pressure_conf: non-numeric PRESSURE_WEIGHT skipped" {
+	local pconf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_WEIGHT=abc:PRESSURE_TRIP=15" > "$pconf"
+	_load_pressure_conf "$pconf"
+	[ -z "${_PRESS_WEIGHT[sshd]:-}" ]
+	[ "${_PRESS_TRIP[sshd]}" = "15" ]
+}
+
+@test "_load_pressure_conf: zero PRESSURE_WEIGHT skipped" {
+	local pconf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_WEIGHT=0" > "$pconf"
+	_load_pressure_conf "$pconf"
+	[ -z "${_PRESS_WEIGHT[sshd]:-}" ]
+}
+
+@test "_load_pressure_conf: non-numeric PRESSURE_TRIP skipped" {
+	local pconf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_WEIGHT=3:PRESSURE_TRIP=foo" > "$pconf"
+	_load_pressure_conf "$pconf"
+	[ "${_PRESS_WEIGHT[sshd]}" = "3" ]
+	[ -z "${_PRESS_TRIP[sshd]:-}" ]
+}
+
+@test "_load_pressure_conf: negative PRESSURE_TRIP skipped" {
+	local pconf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_TRIP=-5" > "$pconf"
+	_load_pressure_conf "$pconf"
+	[ -z "${_PRESS_TRIP[sshd]:-}" ]
+}
+
 # ============================================================
 # _apply_pressure()
 # ============================================================

@@ -172,6 +172,10 @@ ip_to_subnet() {
 	# IPv4
 	local o1 o2 o3 o4
 	IFS='.' read -r o1 o2 o3 o4 <<< "$ip"
+	if [ "$mask" -lt 8 ]; then
+		echo "${ip}/${mask}"
+		return 0
+	fi
 	if [ "$mask" -ge 24 ]; then
 		local shift=$((32 - mask))
 		o4=$(( (o4 >> shift) << shift ))
@@ -363,8 +367,20 @@ _load_pressure_conf() {
 			key="${pair%%=*}"
 			val="${pair#*=}"
 			case "$key" in
-				PRESSURE_WEIGHT)  _PRESS_WEIGHT["$rule_name"]="$val" ;;
-				PRESSURE_TRIP|TRIG) _PRESS_TRIP["$rule_name"]="$val" ;;
+				PRESSURE_WEIGHT)
+					if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 0 ]; then
+						_PRESS_WEIGHT["$rule_name"]="$val"
+					else
+						eout "pressure.conf: $rule_name PRESSURE_WEIGHT='$val' invalid (must be positive integer), skipping" le
+					fi
+					;;
+				PRESSURE_TRIP|TRIG)
+					if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 0 ]; then
+						_PRESS_TRIP["$rule_name"]="$val"
+					else
+						eout "pressure.conf: $rule_name PRESSURE_TRIP='$val' invalid (must be positive integer), skipping" le
+					fi
+					;;
 				SKIP_ALERT)       _PRESS_SKIP_ALERT["$rule_name"]="$val" ;;
 				RULE_EMAIL)       _PRESS_RULE_EMAIL["$rule_name"]="$val" ;;
 			esac
@@ -765,11 +781,11 @@ filter_host() {
 		while IFS= read -r file; do
 			[ -z "$file" ] && continue
 			if [ -f "$file" ]; then
-				if grep -v "#" "$file" | grep -qFx "$host"; then
+				if sed 's/[[:space:]]*#.*//' "$file" | grep -v '^[[:space:]]*$' | grep -qFx "$host"; then
 					return 1
 				fi
 			fi
-		done < <(grep -v "#" "$ignore_host_files")
+		done < <(sed 's/[[:space:]]*#.*//' "$ignore_host_files" | grep -v '^[[:space:]]*$')
 	fi
 	# check local addresses
 	if [ -f "$lo_hosts" ]; then
