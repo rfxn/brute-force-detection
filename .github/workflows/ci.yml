@@ -15,7 +15,7 @@ jobs:
         run: sudo apt-get install -y shellcheck
       - name: Shellcheck main scripts
         run: |
-          shellcheck -S warning files/bfd files/bfd.lib.sh files/tlog files/tlog_lib.sh
+          shellcheck -S warning files/bfd files/bfd.lib.sh files/elog_lib.sh files/tlog files/tlog_lib.sh
           shellcheck -S warning install.sh uninstall.sh importconf cron.daily
 
   test:

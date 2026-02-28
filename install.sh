@@ -58,6 +58,7 @@ install(){
         chmod 750 "$INSPATH/tlog"
         chmod 750 "$INSPATH/tlog_lib.sh"
         chmod 750 "$INSPATH/bfd"
+	chmod 750 "$INSPATH/elog_lib.sh"
 	chmod 750 "$INSPATH/update-ipcountry.sh"
 	chmod 750 "$INSPATH/rules"
 	chmod 640 "$INSPATH"/rules/*

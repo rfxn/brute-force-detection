@@ -38,6 +38,20 @@ else
 fi
 unset _tlog_lib_path _tlog_lib_dir
 
+# Source shared elog library
+_elog_lib_path="${INSTALL_PATH:-/usr/local/bfd}/elog_lib.sh"
+if [ -f "$_elog_lib_path" ]; then
+	# shellcheck disable=SC1091
+	. "$_elog_lib_path"
+else
+	_elog_lib_dir="${BASH_SOURCE[0]%/*}"
+	if [ -f "$_elog_lib_dir/elog_lib.sh" ]; then
+		# shellcheck disable=SC1091
+		. "$_elog_lib_dir/elog_lib.sh"
+	fi
+fi
+unset _elog_lib_path _elog_lib_dir
+
 # Register BFD journal filter mappings
 tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
 tlog_journal_register "dropbear" "SYSLOG_IDENTIFIER=dropbear"
