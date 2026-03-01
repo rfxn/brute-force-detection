@@ -1,4 +1,15 @@
 2.0.1:
+[New] --json/--csv for --events: structured output for events dashboard,
+      per-IP detail, and CIDR subnet reports
+[New] --json/--csv for -a: structured output for attack pool reports,
+      per-service breakdown, and search_ip unified IP reports
+[New] _json_array_from_csv(): helper converts comma-separated service lists
+      to JSON arrays for structured output
+[Change] events_dashboard()/events_cidr() refactored: shared awk helpers
+      (_events_dashboard_awk, _events_cidr_awk) for reuse by JSON/CSV variants
+[Change] _apool_report() refactored: shared _apool_awk() pipeline for reuse
+      by JSON/CSV variants
+[Change] usage(): --json/--csv scope expanded from -l to -l, -e, -a
 [New] --events: active pressure dashboard showing all tracked IPs with
       pressure scores, event counts, services, and ban proximity
 [New] --events IP: per-IP pressure detail with per-service breakdown,
