@@ -429,32 +429,21 @@ _apool_report() {
 	local atmp
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.alist.XXXXXX")
 	echo "[+] $title" && echo
-	echo "#EVENTS|IP|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
-	local cnt aip first_ts last_ts mods first_fmt last_fmt ban_status
+	echo "#EVENTS|IP|PRESSURE|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
+	local now half_life trip
+	now=$(date +"%s")
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+	local cnt aip first_ts last_ts mods first_fmt last_fmt ban_status _gp _gp_fmt
 	while IFS='|' read -r cnt aip first_ts last_ts mods; do
 		[ -z "$cnt" ] && continue
 		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$first_ts")
 		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$last_ts")
 		ban_status=$(_apool_ban_status "$aip")
-		echo "$cnt|$aip|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
-	done < <(
-		if [ -n "$search" ]; then
-			grep -F "$search" "$source_file"
-		else
-			cat "$source_file"
-		fi | awk '{
-			ip = $2; ts = $1 + 0; rule = $3
-			count[ip]++
-			if (!(ip in first) || ts < first[ip]) first[ip] = ts
-			if (!(ip in last) || ts > last[ip]) last[ip] = ts
-			if (rules[ip] == "") rules[ip] = rule
-			else if (index(rules[ip], rule) == 0) rules[ip] = rules[ip] "," rule
-		}
-		END {
-			for (ip in count)
-				print count[ip] "|" ip "|" first[ip] "|" last[ip] "|" rules[ip]
-		}' | sort -t'|' -k1 -nr | head -n 25
-	)
+		_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
+		_gp_fmt=$(pressure_format "$_gp")
+		echo "$cnt|$aip|${_gp_fmt}/${trip}|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
+	done < <(_apool_awk "$source_file" "$search")
 	format_table < "$atmp"
 	rm -f "$atmp"
 }
@@ -527,6 +516,196 @@ apool_list() {
 		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
 		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
 		_apool_report "$WAPOOL_LIST" "Top 25 brute force attackers this week"
+		rm -f "$WAPOOL_LIST"
+	fi
+}
+
+# --- Structured output for attack pool ---
+
+# _apool_awk source_file [search] — shared aggregation pipeline for attack pool
+# Outputs pipe-delimited: cnt|ip|first_ts|last_ts|rules_csv
+_apool_awk() {
+	local source_file="$1"
+	local search="${2:-}"
+	if [ -n "$search" ]; then
+		grep -F "$search" "$source_file"
+	else
+		cat "$source_file"
+	fi | awk '{
+		ip = $2; ts = $1 + 0; rule = $3
+		count[ip]++
+		if (!(ip in first) || ts < first[ip]) first[ip] = ts
+		if (!(ip in last) || ts > last[ip]) last[ip] = ts
+		if (rules[ip] == "") rules[ip] = rule
+		else if (index(rules[ip], rule) == 0) rules[ip] = rules[ip] "," rule
+	}
+	END {
+		for (ip in count)
+			print count[ip] "|" ip "|" first[ip] "|" last[ip] "|" rules[ip]
+	}' | sort -t'|' -k1 -nr | head -n 25
+}
+
+# _apool_report_json source_file [search] — JSON array of attack pool entries
+_apool_report_json() {
+	local source_file="$1"
+	local search="${2:-}"
+	local now half_life trip
+	now=$(date +"%s")
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+	echo "["
+	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
+		local first=1
+		local cnt aip first_ts last_ts mods
+		_apool_awk "$source_file" "$search" | \
+		while IFS='|' read -r cnt aip first_ts last_ts mods; do
+			[ -z "$cnt" ] && continue
+			local first_fmt last_fmt ban_status _gp _gp_fmt
+			first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
+			last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
+			ban_status=$(_apool_ban_status "$aip")
+			[ -z "$ban_status" ] && ban_status="not banned"
+			_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
+			_gp_fmt=$(pressure_format "$_gp")
+			if [ "$first" -eq 1 ]; then
+				first=0
+			else
+				echo ","
+			fi
+			printf '    {"events": %s, "ip": "%s", "pressure": %s, "pressure_trip": %s, "first_seen": "%s", "last_seen": "%s", "rules": %s, "status": "%s"}' \
+				"$cnt" "$(_json_escape "$aip")" "$_gp_fmt" "$trip" "$first_fmt" "$last_fmt" \
+				"$(_json_array_from_csv "$mods")" "$(_json_escape "$ban_status")"
+		done
+	fi
+	echo ""
+	echo "  ]"
+}
+
+# _apool_report_csv source_file [search] — CSV formatted attack pool entries
+_apool_report_csv() {
+	local source_file="$1"
+	local search="${2:-}"
+	local now half_life trip
+	now=$(date +"%s")
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+	echo "events,ip,pressure,pressure_trip,first_seen,last_seen,rules,status"
+	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
+		local cnt aip first_ts last_ts mods
+		_apool_awk "$source_file" "$search" | \
+		while IFS='|' read -r cnt aip first_ts last_ts mods; do
+			[ -z "$cnt" ] && continue
+			local first_fmt last_fmt ban_status _gp _gp_fmt
+			first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
+			last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
+			ban_status=$(_apool_ban_status "$aip")
+			[ -z "$ban_status" ] && ban_status="not banned"
+			_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
+			_gp_fmt=$(pressure_format "$_gp")
+			echo "$cnt,$aip,$_gp_fmt,$trip,$first_fmt,$last_fmt,$mods,$ban_status"
+		done
+	fi
+}
+
+# _apool_service_summary_json source_file — JSON array of per-service breakdown
+_apool_service_summary_json() {
+	local source_file="$1"
+	echo "["
+	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
+		local first=1
+		awk '{
+			svc[$3]++
+			key = $3 " " $2
+			if (!(key in seen)) { seen[key] = 1; uniq[$3]++ }
+		}
+		END {
+			for (s in svc) print svc[s] "|" s "|" uniq[s]
+		}' "$source_file" | sort -t'|' -k1 -nr | \
+		while IFS='|' read -r svc_cnt svc_name svc_uniq; do
+			[ -z "$svc_cnt" ] && continue
+			if [ "$first" -eq 1 ]; then
+				first=0
+			else
+				echo ","
+			fi
+			printf '    {"service": "%s", "events": %s, "unique_ips": %s}' \
+				"$(_json_escape "$svc_name")" "$svc_cnt" "$svc_uniq"
+		done
+	fi
+	echo ""
+	echo "  ]"
+}
+
+# _apool_service_summary_csv source_file — CSV formatted per-service breakdown
+_apool_service_summary_csv() {
+	local source_file="$1"
+	echo "service,events,unique_ips"
+	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
+		awk '{
+			svc[$3]++
+			key = $3 " " $2
+			if (!(key in seen)) { seen[key] = 1; uniq[$3]++ }
+		}
+		END {
+			for (s in svc) print svc[s] "|" s "|" uniq[s]
+		}' "$source_file" | sort -t'|' -k1 -nr | \
+		while IFS='|' read -r svc_cnt svc_name svc_uniq; do
+			[ -z "$svc_cnt" ] && continue
+			echo "$svc_name,$svc_cnt,$svc_uniq"
+		done
+	fi
+}
+
+# apool_list_json [search] — JSON formatted attack pool report
+apool_list_json() {
+	local ahost="${1:-}"
+	if [ -n "$ahost" ]; then
+		local WAPOOL_LIST
+		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
+		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
+		printf '{"search": "%s", "results": ' "$(_json_escape "$ahost")"
+		_apool_report_json "$WAPOOL_LIST" "$ahost"
+		echo "}"
+		rm -f "$WAPOOL_LIST"
+	elif [ -f "$APOOL_LIST" ]; then
+		local WAPOOL_LIST
+		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
+		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
+		printf '{"today": '
+		_apool_report_json "$APOOL_LIST"
+		printf ', "services": '
+		_apool_service_summary_json "$APOOL_LIST"
+		printf ', "this_week": '
+		_apool_report_json "$WAPOOL_LIST"
+		echo "}"
+		rm -f "$WAPOOL_LIST"
+	else
+		echo "{}"
+	fi
+}
+
+# apool_list_csv [search] — CSV formatted attack pool report
+apool_list_csv() {
+	local ahost="${1:-}"
+	if [ -n "$ahost" ]; then
+		local WAPOOL_LIST
+		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
+		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
+		echo "# search: $ahost"
+		_apool_report_csv "$WAPOOL_LIST" "$ahost"
+		rm -f "$WAPOOL_LIST"
+	elif [ -f "$APOOL_LIST" ]; then
+		local WAPOOL_LIST
+		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
+		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
+		echo "# today"
+		_apool_report_csv "$APOOL_LIST"
+		echo ""
+		echo "# services"
+		_apool_service_summary_csv "$APOOL_LIST"
+		echo ""
+		echo "# this_week"
+		_apool_report_csv "$WAPOOL_LIST"
 		rm -f "$WAPOOL_LIST"
 	fi
 }
@@ -659,6 +838,7 @@ usage() {
 	echo "-d|--dryrun ................ run detection without banning"
 	echo "-w|--watch ................. run in continuous watch mode (foreground)"
 	echo "-a|--attackpool [IP|STRING] . attack pool; valid IP shows full report"
+echo "-e|--events [IP|CIDR] ...... active events; pressure dashboard, IP or subnet detail"
 	echo "-c|--check ................. health check and diagnostics"
 	echo "-l|--list .................. list active bans"
 	echo "-u|--unban IP .............. unban an IP address"
@@ -673,8 +853,8 @@ usage() {
 	echo "   --scan-timeout=N ........ journal timeout per rule during scan (default 120)"
 	echo "   --flush-temp ............ unban all temporary bans"
 	echo "   --flush-all ............. unban all bans"
-	echo "   --json .................. output in JSON format (with -l)"
-	echo "   --csv ................... output in CSV format (with -l)"
+	echo "   --json .................. output in JSON format (with -l, -e, -a)"
+	echo "   --csv ................... output in CSV format (with -l, -e, -a)"
 	echo "-V|--verbose ............... show detailed output"
 	echo "-v|--version ............... display version"
 	echo "-h|--help .................. display this help"
@@ -707,9 +887,39 @@ case "${1:-}" in
 -a|--attackpool)
 	vhead; pre
 	if [ -n "${2:-}" ] && validate_ip_any "$2" >/dev/null 2>&1; then
-		search_ip "$INSTALL_PATH" "$2"
+		case "$OUTPUT_FORMAT" in
+			json) search_ip_json "$INSTALL_PATH" "$2" ;;
+			csv)  search_ip_csv "$INSTALL_PATH" "$2" ;;
+			*)    search_ip "$INSTALL_PATH" "$2" ;;
+		esac
 	else
-		apool_list "${2:-}"
+		case "$OUTPUT_FORMAT" in
+			json) apool_list_json "${2:-}" ;;
+			csv)  apool_list_csv "${2:-}" ;;
+			*)    apool_list "${2:-}" ;;
+		esac
+	fi
+	;;
+-e|--events)
+	vhead; pre
+	if [ -n "${2:-}" ] && validate_ip_any "$2" >/dev/null 2>&1; then
+		case "$OUTPUT_FORMAT" in
+			json) events_ip_json "$INSTALL_PATH" "$2" ;;
+			csv)  events_ip_csv "$INSTALL_PATH" "$2" ;;
+			*)    events_ip "$INSTALL_PATH" "$2" ;;
+		esac
+	elif [ -n "${2:-}" ] && [[ "$2" == */* ]]; then
+		case "$OUTPUT_FORMAT" in
+			json) events_cidr_json "$INSTALL_PATH" "$2" || exit "$?" ;;
+			csv)  events_cidr_csv "$INSTALL_PATH" "$2" || exit "$?" ;;
+			*)    events_cidr "$INSTALL_PATH" "$2" || exit "$?" ;;
+		esac
+	else
+		case "$OUTPUT_FORMAT" in
+			json) events_dashboard_json "$INSTALL_PATH" ;;
+			csv)  events_dashboard_csv "$INSTALL_PATH" ;;
+			*)    events_dashboard "$INSTALL_PATH" ;;
+		esac
 	fi
 	;;
 -c|--check)     vhead; pre; health_check "$INSTALL_PATH" ;;

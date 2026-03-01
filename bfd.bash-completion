@@ -10,8 +10,8 @@ _bfd_completions() {
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 
 	# Flag lists
-	local short_flags="-s -q -d -w -a -c -l -u -b -S -C -R -T -v -h -V"
-	local long_flags="--standard --quiet --dryrun --watch --attackpool --check --list --unban --ban --status --config --rules --test --test-pattern --scan --max-lines= --scan-timeout= --flush-temp --flush-all --json --csv --verbose --version --help"
+	local short_flags="-s -q -d -w -a -e -c -l -u -b -S -C -R -T -v -h -V"
+	local long_flags="--standard --quiet --dryrun --watch --attackpool --events --check --list --unban --ban --status --config --rules --test --test-pattern --scan --max-lines= --scan-timeout= --flush-temp --flush-all --json --csv --verbose --version --help"
 
 	# Context-sensitive completions
 	case "$prev" in

@@ -9,7 +9,8 @@ load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
-# Source _apool_report, _apool_service_summary, _apool_ban_status, apool_list from bfd
+# Source _apool_report, _apool_service_summary, _apool_ban_status, _apool_awk, apool_list from bfd
+eval "$(awk '/^_apool_awk\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
 eval "$(awk '/^_apool_report\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
 eval "$(awk '/^_apool_ban_status\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
 eval "$(awk '/^_apool_service_summary\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
@@ -108,6 +109,29 @@ teardown() {
 	run _apool_ban_status "192.0.2.99"
 	assert_success
 	assert_output ""
+}
+
+# --- _apool_report with PRESSURE column ---
+
+@test "apool report: header includes PRESSURE column" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	echo "1000 192.0.2.1 sshd" >> "$pool"
+	run _apool_report "$pool" "Test report"
+	assert_success
+	assert_output --partial "PRESSURE"
+}
+
+@test "apool report: pressure value shown for IP with events" {
+	local now
+	now=$(date +"%s")
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	echo "$now 192.0.2.1 sshd" >> "$pool"
+	# create matching events so pressure_compute returns non-zero
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "5" "3"
+	run _apool_report "$pool" "Test report"
+	assert_success
+	# pressure column should show format like X.Y/20
+	assert_output --partial "/20"
 }
 
 # --- _apool_report with ban status column ---

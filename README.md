@@ -38,6 +38,7 @@ and IPv4/IPv6 support across 42 service rules.
   - [5.5 Flush Bans](#55-flush-bans)
   - [5.6 Structured Output](#56-structured-output)
   - [5.7 Scan Mode](#57-scan-mode)
+  - [5.8 Events Dashboard](#58-events-dashboard)
 - [6. Rule Engine](#6-rule-engine)
   - [6.1 Rule Catalog](#61-rule-catalog)
   - [6.2 Rule Customization](#62-rule-customization)
@@ -418,6 +419,7 @@ usage: bfd [OPTION]
 -d|--dryrun ................ run detection without banning
 -w|--watch ................. run in continuous watch mode (foreground)
 -a|--attackpool [IP|STRING] . attack pool; valid IP shows full report
+-e|--events [IP|CIDR] ...... active events; pressure dashboard, IP or subnet detail
 -c|--check ................. health check and diagnostics
 -l|--list .................. list active bans
 -u|--unban IP .............. unban an IP address
@@ -429,8 +431,8 @@ usage: bfd [OPTION]
    --test-pattern PAT [FILE|-] test a raw <HOST> pattern against log or stdin
    --flush-temp ............ unban all temporary bans
    --flush-all ............. unban all bans
-   --json .................. output in JSON format (with -l)
-   --csv ................... output in CSV format (with -l)
+   --json .................. output in JSON format (with -l, -e, -a)
+   --csv ................... output in CSV format (with -l, -e, -a)
    --scan [RULE] [-d] ...... scan full log (all rules or specific rule)
    --max-lines=N ........... max lines per log during scan (default 50000)
    --scan-timeout=N ........ journal timeout per rule during scan (default 120)
@@ -540,22 +542,29 @@ Flushed bans are recorded in the ban history.
 
 ### 5.6 Structured Output
 
-Use `--json` or `--csv` with `-l` for machine-readable ban lists:
+Use `--json` or `--csv` with `-l`, `-e`, or `-a` for machine-readable output:
 
 ```bash
-bfd -l --json
-bfd -l --csv
+bfd -l --json          # active bans as JSON
+bfd -l --csv           # active bans as CSV
+bfd -e --json          # events dashboard as JSON
+bfd -e 192.0.2.1 --csv # per-IP events as CSV
+bfd -a --json          # attack pool as JSON
+bfd -a 192.0.2.1 --csv # IP report as CSV
 ```
 
-**JSON** outputs an array of objects:
+**JSON** outputs arrays of objects (or nested objects for IP detail and CIDR):
 ```json
-[{"ip": "...", "service": "...", "ports": "...", "banned": "ISO-8601", "expires": "ISO-8601|permanent"}]
+[{"ip": "...", "pressure": 18.4, "pressure_trip": 20, "events": 5, "services": ["sshd"], ...}]
 ```
 
 **CSV** outputs with a header row:
 ```
-ip,service,ports,banned,expires
+ip,pressure,pressure_trip,events,services,first_seen,last_seen,status
 ```
+
+Timestamps in structured output use ISO 8601 format (`YYYY-MM-DDTHH:MM:SS`).
+Pressure values are unquoted numbers in JSON.
 
 ### 5.7 Scan Mode
 
@@ -579,6 +588,30 @@ After a non-dry-run scan, tlog cursors are advanced to the current log position 
 **Safety limits:** `SCAN_MAX_LINES` (default 50000) bounds the number of lines processed per log file. `SCAN_TIMEOUT` (default 120s) limits journal reads. Set `--max-lines=0` for unlimited (use with caution on large logs). Both can be configured in `conf.bfd` or overridden on the command line.
 
 **Lock behavior:** Scan acquires the same global lock as normal runs. If watch mode is running, stop it first (`systemctl stop bfd-watch`), run the scan, then restart.
+
+### 5.8 Events Dashboard
+
+The `--events` command provides real-time visibility into the pressure model:
+
+```bash
+bfd --events                  # pressure dashboard — all tracked IPs
+bfd --events 192.0.2.1        # per-IP detail — service breakdown
+bfd --events 192.0.2.0/24     # CIDR report — subnet-scoped view
+```
+
+**Dashboard mode** (no argument) shows all IPs with active pressure events, sorted by pressure score descending. Columns: IP, pressure/trip, event count, services, first/last seen, ban status.
+
+**IP mode** shows overall pressure with half-life context, a per-service breakdown table (service, weight, events, pressure), first/last timestamps, and ban status.
+
+**CIDR mode** filters the dashboard to a subnet (IPv4, mask 8-32) and includes a summary line with match count, total events, and banned count.
+
+All three modes support `--json` and `--csv`:
+
+```bash
+bfd --events --json           # dashboard as JSON array
+bfd --events 192.0.2.1 --json # per-IP as single JSON object
+bfd --events 10.0.0.0/8 --csv # CIDR as CSV
+```
 
 ---
 

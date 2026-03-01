@@ -231,6 +231,27 @@ teardown() {
 	assert_output --partial "2 total triggers"
 }
 
+@test "search_ip: shows pressure score" {
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "5" "3"
+	run search_ip "$INSTALL_PATH" "192.0.2.1"
+	assert_success
+	assert_output --partial "Pressure:"
+	assert_output --partial "/${GLOB_PRESSURE_TRIP}"
+}
+
+@test "search_ip: shows per-service pressure" {
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "3" "3"
+	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.1" "dovecot" "2" "2"
+	run search_ip "$INSTALL_PATH" "192.0.2.1"
+	assert_success
+	assert_output --partial "sshd:"
+	assert_output --partial "dovecot:"
+}
+
 @test "search_ip: rejects invalid IP" {
 	run search_ip "$INSTALL_PATH" "not-an-ip"
 	assert_failure
