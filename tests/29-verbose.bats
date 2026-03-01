@@ -178,3 +178,83 @@ teardown() {
 	assert_success
 	refute_output --partial "unban: 192.0.2.1 expired"
 }
+
+# --- verbose pressure in check() ---
+
+# Helper: set up common check() test environment
+_check_verbose_setup() {
+	PRESSURE_TRIP="100"
+	GLOB_PRESSURE_TRIP="100"
+	PRESSURE_HALF_LIFE="300"
+	PRESSURE_TRIP_GLOBAL="0"
+	EMAIL_ALERTS="0"
+	SUBNET_TRIG="0"
+	DRY_RUN=1
+	UTIME=$(date +"%s")
+	IGNORE_HOST_FILES="$INSTALL_PATH/exclude.files"
+	touch "$IGNORE_HOST_FILES"
+	LO_HOSTS="$INSTALL_PATH/ignore.hosts.local"
+	touch "$LO_HOSTS"
+	_COUNTRY_CACHE_FILE=""
+	_IGNORE_CACHE_FILE=""
+	# source the check function from files/bfd
+	eval "$(awk '/^check\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
+}
+
+_make_rule_body() {
+	local ip="${1:-192.0.2.50}" weight="${2:-3}"
+	local logf="$INSTALL_PATH/tmp/test.log"
+	touch "$logf"
+	printf 'PREREQ=""\nLOG_FILE="%s"\nLOG_TAG="test"\nMATCHED_HOSTS="%s"\nPRESSURE_WEIGHT="%s"\n' "$logf" "$ip" "$weight"
+}
+
+@test "check verbose: per-IP pressure line shown when VERBOSE=1" {
+	VERBOSE=1
+	ELOG_VERBOSE=1
+	_check_verbose_setup
+	create_mock_rule "testrule" "$(_make_rule_body)"
+	run check
+	assert_success
+	assert_output --partial "pressure="
+	assert_output --partial "weight="
+}
+
+@test "check verbose: weight arrow shown when country multiplier applied" {
+	VERBOSE=1
+	ELOG_VERBOSE=1
+	_check_verbose_setup
+	# create a mock country database with high multiplier for 192.0.2.x
+	# 192.0.2.0 = 3221225984; range covers .0-.255
+	echo "3221225984 3221226239 XX" > "$INSTALL_PATH/ipcountry.dat"
+	echo "XX=30" > "$INSTALL_PATH/pressure-country.conf"
+	create_mock_rule "testrule" "$(_make_rule_body)"
+	run check
+	assert_success
+	assert_output --partial "->"
+}
+
+@test "check verbose: global pressure ban line shown" {
+	VERBOSE=1
+	ELOG_VERBOSE=1
+	_check_verbose_setup
+	PRESSURE_TRIP_GLOBAL="1"
+	# seed enough events to trigger global
+	local i
+	for i in $(seq 1 20); do
+		state_events_append "$INSTALL_PATH" "$((UTIME - i))" "192.0.2.60" "sshd" "1" "3"
+	done
+	create_mock_rule "testrule" "$(_make_rule_body 192.0.2.60 1)"
+	run check
+	assert_success
+	assert_output --partial "global pressure="
+}
+
+@test "check verbose: no pressure output when VERBOSE=0" {
+	VERBOSE=0
+	ELOG_VERBOSE=0
+	_check_verbose_setup
+	create_mock_rule "testrule" "$(_make_rule_body)"
+	run check
+	assert_success
+	refute_output --partial "pressure="
+}
