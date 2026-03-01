@@ -86,6 +86,7 @@ INTEOF
 }
 
 setup() {
+	bfd_require_bash42
 	bfd_common_setup
 	_load_watch_functions
 	_setup_watch_env

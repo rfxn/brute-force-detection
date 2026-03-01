@@ -198,7 +198,7 @@ _check_verbose_setup() {
 	_COUNTRY_CACHE_FILE=""
 	_IGNORE_CACHE_FILE=""
 	# source the check function from files/bfd
-	eval "$(awk '/^check\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
+	bfd_load_function check
 }
 
 _make_rule_body() {

@@ -17,49 +17,6 @@ teardown() {
 	bfd_teardown
 }
 
-# --- count_failures (windowed replacement) ---
-
-@test "count_failures: counts host in windowed mode" {
-	local hosts_parsed
-	hosts_parsed=$(printf "192.0.2.1\n192.0.2.2\n192.0.2.1\n")
-	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
-	assert_success
-	assert_output "2"
-}
-
-@test "count_failures: accumulates within window" {
-	local hosts_parsed
-	hosts_parsed=$(printf "192.0.2.1\n192.0.2.1\n192.0.2.1\n")
-	# first run at t=900
-	count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "900" "sshd" >/dev/null
-	# second run at t=1000 (within window)
-	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
-	assert_success
-	assert_output "6"
-}
-
-@test "count_failures: old events expire outside window" {
-	# seed old events at t=100
-	state_events_append "$INSTALL_PATH" "100" "192.0.2.1" "sshd" "5"
-	local hosts_parsed
-	hosts_parsed=$(printf "192.0.2.1\n192.0.2.1\n")
-	# now=1000, window=300, cutoff=700 => old events at t=100 excluded
-	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
-	assert_success
-	assert_output "2"
-}
-
-@test "count_failures: per-service isolation in windowed mode" {
-	# seed dovecot events in window
-	state_events_append "$INSTALL_PATH" "900" "192.0.2.1" "dovecot" "10"
-	local hosts_parsed
-	hosts_parsed=$(printf "192.0.2.1\n192.0.2.1\n")
-	# count sshd only
-	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
-	assert_success
-	assert_output "2"
-}
-
 # --- PRESSURE_TRIP_GLOBAL ---
 
 @test "pipeline: PRESSURE_TRIP_GLOBAL triggers ban across services" {
@@ -70,20 +27,6 @@ teardown() {
 	local global_count
 	global_count=$(state_events_count "$INSTALL_PATH" "192.0.2.1" "300" "1000")
 	[ "$global_count" -ge 5 ]
-}
-
-@test "pipeline: PRESSURE_TRIP_GLOBAL=0 disables cross-service check" {
-	# With PRESSURE_TRIP_GLOBAL=0, should not trigger
-	local trig_global=0
-	local should_ban=0
-	local attack_count=2
-	local trig=5
-	if [ "$attack_count" -ge "$trig" ]; then
-		should_ban=1
-	elif [ "$trig_global" -gt 0 ]; then
-		should_ban=1
-	fi
-	[ "$should_ban" -eq 0 ]
 }
 
 # --- execute_ban ---
@@ -559,28 +502,6 @@ EOF
 	[ ! -f "$marker_v6" ]
 }
 
-# --- IPv6 local address detection ---
-
-@test "filter_host: IPv6 local address detected" {
-	local ignore_files="$TEST_TMPDIR/exclude.files"
-	local lo_hosts="$TEST_TMPDIR/lo_hosts"
-	touch "$ignore_files"
-	echo "2001:db8::1" > "$lo_hosts"
-	local filter_rc=0
-	filter_host "2001:db8::1" "$ignore_files" "$lo_hosts" || filter_rc=$?
-	[ "$filter_rc" -eq 2 ]
-}
-
-@test "filter_host: IPv6 loopback detected" {
-	local ignore_files="$TEST_TMPDIR/exclude.files"
-	local lo_hosts="$TEST_TMPDIR/lo_hosts"
-	touch "$ignore_files"
-	echo "::1" > "$lo_hosts"
-	local filter_rc=0
-	filter_host "::1" "$ignore_files" "$lo_hosts" || filter_rc=$?
-	[ "$filter_rc" -eq 2 ]
-}
-
 # --- IPv6 manual ban/unban ---
 
 @test "manual_ban: accepts IPv6 address" {
@@ -599,12 +520,11 @@ EOF
 # --- run statistics (Phase 13A) ---
 
 # Source check() function from bfd (defined there, not in bfd.lib.sh)
-eval "$(awk '/^check\(\)/ { p=1 } p { print; if (/^\}$/) exit }' "$PROJECT_ROOT/files/bfd")"
+bfd_load_function check
 
-# Helper to run check() with controlled rules dir and capture output
-_run_check_with_stats() {
+# _setup_check_env: set up minimal environment for check()
+_setup_check_env() {
 	local rules_dir="$1"
-	# set up minimal environment for check()
 	RULES_PATH="$rules_dir"
 	GLOB_PRESSURE_TRIP="5"
 	GLOB_TRIG="5"
@@ -626,6 +546,13 @@ _run_check_with_stats() {
 	BAN_ESCALATE_WINDOW="86400"
 	BAN_PERMANENT_WINDOW="86400"
 	SKIP_ALERT=""
+	EMAIL_ALERTS="0"
+	SUBNET_TRIG="0"
+}
+
+# Helper to run check() with controlled rules dir and capture output
+_run_check_with_stats() {
+	_setup_check_env "$1"
 	check
 }
 
@@ -752,21 +679,6 @@ EOF
 	[ "$count" -eq 1 ]
 }
 
-@test "filter_host: IPv6 does not false-match prefix in ignore list" {
-	local ignore_files="$TEST_TMPDIR/exclude.files"
-	local hosts_file="$TEST_TMPDIR/ignore.hosts"
-	echo "$hosts_file" > "$ignore_files"
-	echo "2001:db8::1" > "$hosts_file"
-	local lo_hosts="$TEST_TMPDIR/lo_hosts"
-	touch "$lo_hosts"
-	# 2001:db8::10 should NOT be ignored
-	run filter_host "2001:db8::10" "$ignore_files" "$lo_hosts"
-	assert_success
-	# 2001:db8::1 should be ignored
-	run filter_host "2001:db8::1" "$ignore_files" "$lo_hosts"
-	assert_failure
-}
-
 @test "check_recidivism: works with IPv6 addresses" {
 	local i
 	for i in 1 2 3 4 5; do
@@ -819,28 +731,7 @@ MATCHED_HOSTS=""
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
-	# run check and verify IGNOREREGEX is empty after rule2
-	RULES_PATH="$rules_dir"
-	GLOB_PRESSURE_TRIP="5"
-	GLOB_TRIG="5"
-	PRESSURE_HALF_LIFE="300"
-	TRIG_WINDOW="300"
-	PRESSURE_TRIP_GLOBAL="0"
-	TRIG_GLOBAL="0"
-	UTIME="1000"
-	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
-	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
-	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
-	BAN_COMMAND_TEMPLATE="true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	DRY_RUN="1"
-	BAN_TTL="0"
-	BAN_DURATION="0"
-	BAN_ESCALATE_AFTER="0"
-	BAN_PERMANENT_AFTER="0"
-	BAN_ESCALATE_WINDOW="86400"
-	BAN_PERMANENT_WINDOW="86400"
-	SKIP_ALERT=""
+	_setup_check_env "$rules_dir"
 	# After processing rule2, IGNOREREGEX should be empty
 	check
 	[ -z "$IGNOREREGEX" ]
@@ -870,27 +761,7 @@ MATCHED_HOSTS=""
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
-	RULES_PATH="$rules_dir"
-	GLOB_PRESSURE_TRIP="5"
-	GLOB_TRIG="5"
-	PRESSURE_HALF_LIFE="300"
-	TRIG_WINDOW="300"
-	PRESSURE_TRIP_GLOBAL="0"
-	TRIG_GLOBAL="0"
-	UTIME="1000"
-	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
-	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
-	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
-	BAN_COMMAND_TEMPLATE="true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	DRY_RUN="1"
-	BAN_TTL="0"
-	BAN_DURATION="0"
-	BAN_ESCALATE_AFTER="0"
-	BAN_PERMANENT_AFTER="0"
-	BAN_ESCALATE_WINDOW="86400"
-	BAN_PERMANENT_WINDOW="86400"
-	SKIP_ALERT=""
+	_setup_check_env "$rules_dir"
 	check
 	[ -z "$PORTS" ]
 }
@@ -933,27 +804,7 @@ MATCHED_HOSTS=""
 EOF
 	chmod 644 "$rules_dir/testrule"
 	chown root "$rules_dir/testrule"
-	RULES_PATH="$rules_dir"
-	GLOB_PRESSURE_TRIP="5"
-	GLOB_TRIG="5"
-	PRESSURE_HALF_LIFE="300"
-	TRIG_WINDOW="300"
-	PRESSURE_TRIP_GLOBAL="0"
-	TRIG_GLOBAL="0"
-	UTIME="1000"
-	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
-	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
-	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
-	BAN_COMMAND_TEMPLATE="true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	DRY_RUN="1"
-	BAN_TTL="0"
-	BAN_DURATION="0"
-	BAN_ESCALATE_AFTER="0"
-	BAN_PERMANENT_AFTER="0"
-	BAN_ESCALATE_WINDOW="86400"
-	BAN_PERMANENT_WINDOW="86400"
-	SKIP_ALERT=""
+	_setup_check_env "$rules_dir"
 	check
 	# PORTS should be empty (reset by check before sourcing rule)
 	[ -z "$PORTS" ]
@@ -1012,30 +863,10 @@ MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
-	RULES_PATH="$rules_dir"
-	GLOB_PRESSURE_TRIP="5"
-	GLOB_TRIG="5"
-	PRESSURE_HALF_LIFE="300"
-	TRIG_WINDOW="300"
-	PRESSURE_TRIP_GLOBAL="0"
-	TRIG_GLOBAL="0"
-	UTIME="1000"
-	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
-	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
-	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	_setup_check_env "$rules_dir"
 	BAN_COMMAND_TEMPLATE="/bin/true"
-	BAN_COMMAND_V6_TEMPLATE=""
 	DRY_RUN="0"
-	BAN_TTL="0"
-	BAN_DURATION="0"
-	BAN_ESCALATE_AFTER="0"
-	BAN_PERMANENT_AFTER="0"
-	BAN_ESCALATE_WINDOW="86400"
-	BAN_PERMANENT_WINDOW="86400"
-	SKIP_ALERT=""
-	EMAIL_ALERTS="0"
-	SUBNET_TRIG="0"
-	run _run_check_with_stats "$rules_dir"
+	run check
 	assert_success
 	# only 1 ban executed, not 2 (state_bans_active_check dedup)
 	assert_output --partial "1 bans executed"
@@ -1067,31 +898,9 @@ MATCHED_HOSTS="127.0.0.1 127.0.0.1 127.0.0.1"
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
-	# create lo_hosts with 127.0.0.1 so filter_host returns 2
-	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	_setup_check_env "$rules_dir"
+	# override lo_hosts with 127.0.0.1 so filter_host returns 2
 	echo "127.0.0.1" > "$LO_HOSTS"
-	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
-	touch "$IGNORE_HOST_FILES"
-	RULES_PATH="$rules_dir"
-	GLOB_PRESSURE_TRIP="5"
-	GLOB_TRIG="5"
-	PRESSURE_HALF_LIFE="300"
-	TRIG_WINDOW="300"
-	PRESSURE_TRIP_GLOBAL="0"
-	TRIG_GLOBAL="0"
-	UTIME="1000"
-	BAN_COMMAND_TEMPLATE="/bin/true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	DRY_RUN="1"
-	BAN_TTL="0"
-	BAN_DURATION="0"
-	BAN_ESCALATE_AFTER="0"
-	BAN_PERMANENT_AFTER="0"
-	BAN_ESCALATE_WINDOW="86400"
-	BAN_PERMANENT_WINDOW="86400"
-	SKIP_ALERT=""
-	EMAIL_ALERTS="0"
-	SUBNET_TRIG="0"
 	check
 	# pool entries from both rules should exist
 	local pool_count
@@ -1198,6 +1007,7 @@ EOF
 # --- pressure.conf / thresholds.conf precedence integration ---
 
 @test "check: pressure.conf PRESSURE_TRIP used when rule TRIG commented out" {
+	bfd_require_bash42
 	local rules_dir="$TEST_TMPDIR/rules"
 	mkdir -p "$rules_dir"
 	local logfile="$TEST_TMPDIR/test.log"
@@ -1256,6 +1066,7 @@ EOF
 }
 
 @test "check: rule file TRIG overrides pressure.conf PRESSURE_TRIP" {
+	bfd_require_bash42
 	local rules_dir="$TEST_TMPDIR/rules"
 	mkdir -p "$rules_dir"
 	local logfile="$TEST_TMPDIR/test.log"
@@ -1410,6 +1221,7 @@ EOF
 }
 
 @test "check: PRESSURE_WEIGHT from pressure.conf affects ban decision" {
+	bfd_require_bash42
 	# Scenario: 2 events with weight=5 (from pressure.conf)
 	# Pressure: 2 * 5.0 = 10.0 >= trip 8 → BAN
 	# Without weight override: 2 * 1.0 = 2.0 < 8 → NO BAN

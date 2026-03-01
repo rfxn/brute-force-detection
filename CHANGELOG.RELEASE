@@ -1,4 +1,26 @@
 2.0.1:
+[Fix] Packaging: add tlog_lib.sh and elog_lib.sh to RPM spec and DEB
+      manifests — both libraries are sourced at startup but were missing
+      from package file lists, rendering RPM/DEB installs non-functional
+[Change] Test suite: relocate 3 filter_host IPv6 unit tests from
+      17-check-pipeline.bats to 11-filter-host.bats (canonical home)
+[Change] Test suite: rewrite 4 vacuous APF/CSF ban/unban tests in
+      18-firewall-backend.bats to use mock binaries instead of inline stubs
+[Change] Test helpers: extract _setup_mock_mail_silent() and _setup_mock_mail_log()
+      in 22-alert-format.bats, replace 6 inline mock mail patterns
+[Change] Test helpers: extract _setup_check_env() in 17-check-pipeline.bats,
+      replace 6 repeated ~20-line variable blocks with helper + overrides
+[Change] Test helpers: add bfd_load_function() to bfd-common.bash, replace 18
+      inline eval+awk function extraction calls across 7 test files
+[Change] Test suite cleanup: remove 13 duplicate/vacuous tests across 5 files
+      (17, 20, 21, 30, 32); 4 count_failures dupes, 3 show_status label-only
+      checks, 2 state_events_append dupes, 1 _load_pressure_conf dupe,
+      1 rule-test subset, 1 vacuous shell-only test, 1 always-true assertion
+[Fix] Test suite: replace assert_line --index -1 with bash 4.1-compatible
+      last-line check in 19-subnet-detection.bats (3 check_distributed tests)
+[Fix] Test suite: CentOS 6 (bash 4.1) compatibility — conditional declare -gA
+      fallback in bfd_standard_setup(), bfd_require_bash42() skip guard for
+      tests needing string-keyed associative arrays (739 failures → 0)
 [Change] bfd.1: add --events option, update --json/--csv scope to -l/-e/-a
 [Change] README.md, README: add section 5.8 Events Dashboard; update section
       5.6 Structured Output with events/attackpool examples; add -e to CLI block

@@ -31,6 +31,8 @@ override_dh_auto_install:
 	install -D -m 755 files/bfd $(CURDIR)/debian/bfd/usr/sbin/bfd
 	# Library files
 	install -D -m 644 files/bfd.lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/bfd.lib.sh
+	install -D -m 644 files/tlog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/tlog_lib.sh
+	install -D -m 644 files/elog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/elog_lib.sh
 	install -D -m 755 files/tlog $(CURDIR)/debian/bfd/usr/lib/bfd/tlog
 	install -D -m 644 files/alert.bfd $(CURDIR)/debian/bfd/usr/lib/bfd/alert.bfd
 	install -D -m 755 files/update-ipcountry.sh $(CURDIR)/debian/bfd/usr/lib/bfd/update-ipcountry.sh

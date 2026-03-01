@@ -170,8 +170,8 @@ teardown() {
 
 	run check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$now" "$alerts_file"
 	assert_success
-	# last line of output is the ban count
-	assert_line --index -1 "1"
+	# last line of output is the ban count (avoid --index -1 for bash 4.1)
+	[ "${lines[$(( ${#lines[@]} - 1 ))]}" = "1" ]
 
 	# verify bans.active has CIDR entry
 	run cat "$INSTALL_PATH/tmp/bans.active"
@@ -198,7 +198,8 @@ teardown() {
 
 	run check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$now" "$alerts_file"
 	assert_success
-	assert_line --index -1 "0"
+	# last line of output is the ban count (avoid --index -1 for bash 4.1)
+	[ "${lines[$(( ${#lines[@]} - 1 ))]}" = "0" ]
 }
 
 @test "check_distributed: no bans when SUBNET_TRIG not met" {
@@ -262,7 +263,8 @@ teardown() {
 	run check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$now" "$alerts_file"
 	assert_success
 	# dry-run: execute_ban returns 0, state is recorded (consistent with per-IP)
-	assert_line --index -1 "1"
+	# last line is ban count (avoid --index -1 for bash 4.1)
+	[ "${lines[$(( ${#lines[@]} - 1 ))]}" = "1" ]
 	assert_output --partial "dry-run"
 }
 

@@ -208,3 +208,30 @@ teardown() {
 	run grep "comment" "$cache"
 	assert_failure
 }
+
+# --- IPv6 support ---
+
+@test "filter_host: IPv6 local address detected" {
+	echo "2001:db8::1" > "$LO_HOSTS"
+	local filter_rc=0
+	filter_host "2001:db8::1" "$IGNORE_HOST_FILES" "$LO_HOSTS" || filter_rc=$?
+	[ "$filter_rc" -eq 2 ]
+}
+
+@test "filter_host: IPv6 loopback detected" {
+	echo "::1" > "$LO_HOSTS"
+	local filter_rc=0
+	filter_host "::1" "$IGNORE_HOST_FILES" "$LO_HOSTS" || filter_rc=$?
+	[ "$filter_rc" -eq 2 ]
+}
+
+@test "filter_host: IPv6 does not false-match prefix in ignore list" {
+	echo "2001:db8::1" > "$IGNORE_LIST"
+	echo "$IGNORE_LIST" > "$IGNORE_HOST_FILES"
+	# 2001:db8::10 should NOT be ignored
+	run filter_host "2001:db8::10" "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	assert_success
+	# 2001:db8::1 should be ignored
+	run filter_host "2001:db8::1" "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	assert_failure
+}

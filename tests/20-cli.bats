@@ -496,20 +496,3 @@ teardown() {
 	[ "$line_count" -eq 1 ]
 }
 
-@test "show_status: displays mode line" {
-	run show_status "$INSTALL_PATH"
-	assert_success
-	assert_output --partial "Mode:"
-}
-
-@test "show_status: displays active bans line" {
-	run show_status "$INSTALL_PATH"
-	assert_success
-	assert_output --partial "Active bans:"
-}
-
-@test "show_status: displays events line" {
-	run show_status "$INSTALL_PATH"
-	assert_success
-	assert_output --partial "Events (24h):"
-}

@@ -9,14 +9,14 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 # Source apool functions from bfd (needed by structured output tests)
-eval "$(awk '/^_apool_ban_status\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
-eval "$(awk '/^_apool_awk\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
-eval "$(awk '/^_apool_report_json\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
-eval "$(awk '/^_apool_report_csv\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
-eval "$(awk '/^_apool_service_summary_json\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
-eval "$(awk '/^_apool_service_summary_csv\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
-eval "$(awk '/^apool_list_json\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
-eval "$(awk '/^apool_list_csv\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
+bfd_load_function _apool_ban_status
+bfd_load_function _apool_awk
+bfd_load_function _apool_report_json
+bfd_load_function _apool_report_csv
+bfd_load_function _apool_service_summary_json
+bfd_load_function _apool_service_summary_csv
+bfd_load_function apool_list_json
+bfd_load_function apool_list_csv
 
 setup() {
 	bfd_standard_setup

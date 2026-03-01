@@ -456,12 +456,7 @@ MOCK
 @test "send_alerts: single-ban backward compat sets ATTACK_HOST global" {
 	local af="$TEST_TMPDIR/alerts_compat"
 	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
-	# mock mail (just succeed)
-	mkdir -p "$TEST_TMPDIR/bin"
-	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
-	echo 'cat > /dev/null' >> "$TEST_TMPDIR/bin/mail"
-	chmod +x "$TEST_TMPDIR/bin/mail"
-	export PATH="$TEST_TMPDIR/bin:$PATH"
+	_setup_mock_mail_silent
 	send_alerts "$af" "$EMAIL_SUBJECT" "$EMAIL_TEMPLATE" "50"
 	[ "$ATTACK_HOST" = "192.0.2.1" ]
 	[ "$MOD" = "sshd" ]
@@ -472,11 +467,7 @@ MOCK
 @test "send_alerts: ATTACK_COUNT minimum is 1 even for low pressure" {
 	local af="$TEST_TMPDIR/alerts_lowpressure"
 	echo "192.0.2.1|sshd|22|500|0|ban|0|/dev/null|root|5|300|1" > "$af"
-	mkdir -p "$TEST_TMPDIR/bin"
-	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
-	echo 'cat > /dev/null' >> "$TEST_TMPDIR/bin/mail"
-	chmod +x "$TEST_TMPDIR/bin/mail"
-	export PATH="$TEST_TMPDIR/bin:$PATH"
+	_setup_mock_mail_silent
 	send_alerts "$af" "$EMAIL_SUBJECT" "$EMAIL_TEMPLATE" "50"
 	# 500/1000 = 0 → clamped to 1
 	[ "$ATTACK_COUNT" = "1" ]
@@ -485,7 +476,28 @@ MOCK
 # --- check() pipeline integration ---
 
 # Source check() function from bfd
-eval "$(awk '/^check\(\)/ { p=1 } p { print; if (/^\}$/) exit }' "$PROJECT_ROOT/files/bfd")"
+bfd_load_function check
+
+# _setup_mock_mail_silent: create mock mail that silently discards input
+_setup_mock_mail_silent() {
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
+	echo 'cat > /dev/null' >> "$TEST_TMPDIR/bin/mail"
+	chmod +x "$TEST_TMPDIR/bin/mail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+}
+
+# _setup_mock_mail_log: create mock mail that logs calls to $MAIL_LOG
+_setup_mock_mail_log() {
+	mkdir -p "$TEST_TMPDIR/bin"
+	cat > "$TEST_TMPDIR/bin/mail" <<'MOCK'
+#!/bin/bash
+echo "CALLED" >> "$MAIL_LOG"
+cat > /dev/null
+MOCK
+	chmod +x "$TEST_TMPDIR/bin/mail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+}
 
 _setup_check_env() {
 	local rules_dir="$1"
@@ -510,12 +522,7 @@ _setup_check_env() {
 	EMAIL_SUBJECT="Test Alert"
 	EMAIL_LOGLINES="50"
 	LOG_SOURCE="file"
-	# mock mail command
-	mkdir -p "$TEST_TMPDIR/bin"
-	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
-	echo 'cat > /dev/null' >> "$TEST_TMPDIR/bin/mail"
-	chmod +x "$TEST_TMPDIR/bin/mail"
-	export PATH="$TEST_TMPDIR/bin:$PATH"
+	_setup_mock_mail_silent
 }
 
 @test "pipeline: alerts file populated after ban with EMAIL_ALERTS=1" {
@@ -534,16 +541,9 @@ MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="1"
-	# run check — it creates and cleans up alerts file
-	# we can verify that mail was called via the mock
 	local mail_log="$TEST_TMPDIR/mail_calls"
-	cat > "$TEST_TMPDIR/bin/mail" <<'MOCK'
-#!/bin/bash
-echo "CALLED" >> "$MAIL_LOG"
-cat > /dev/null
-MOCK
-	chmod +x "$TEST_TMPDIR/bin/mail"
 	export MAIL_LOG="$mail_log"
+	_setup_mock_mail_log
 	check >/dev/null 2>&1
 	# mail should have been called
 	[ -f "$mail_log" ]
@@ -567,13 +567,8 @@ EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="1"
 	local mail_log="$TEST_TMPDIR/mail_calls"
-	cat > "$TEST_TMPDIR/bin/mail" <<'MOCK'
-#!/bin/bash
-echo "CALLED" >> "$MAIL_LOG"
-cat > /dev/null
-MOCK
-	chmod +x "$TEST_TMPDIR/bin/mail"
 	export MAIL_LOG="$mail_log"
+	_setup_mock_mail_log
 	check >/dev/null 2>&1
 	# mail should NOT have been called
 	[ ! -f "$mail_log" ]
@@ -597,13 +592,8 @@ EOF
 	EMAIL_ALERTS="1"
 	DRY_RUN="1"
 	local mail_log="$TEST_TMPDIR/mail_calls"
-	cat > "$TEST_TMPDIR/bin/mail" <<'MOCK'
-#!/bin/bash
-echo "CALLED" >> "$MAIL_LOG"
-cat > /dev/null
-MOCK
-	chmod +x "$TEST_TMPDIR/bin/mail"
 	export MAIL_LOG="$mail_log"
+	_setup_mock_mail_log
 	check >/dev/null 2>&1
 	# mail should NOT have been called
 	[ ! -f "$mail_log" ]
@@ -626,13 +616,8 @@ EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="0"
 	local mail_log="$TEST_TMPDIR/mail_calls"
-	cat > "$TEST_TMPDIR/bin/mail" <<'MOCK'
-#!/bin/bash
-echo "CALLED" >> "$MAIL_LOG"
-cat > /dev/null
-MOCK
-	chmod +x "$TEST_TMPDIR/bin/mail"
 	export MAIL_LOG="$mail_log"
+	_setup_mock_mail_log
 	check >/dev/null 2>&1
 	# mail should NOT have been called
 	[ ! -f "$mail_log" ]
