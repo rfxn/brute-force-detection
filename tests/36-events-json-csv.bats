@@ -259,6 +259,8 @@ teardown() {
 	assert_success
 	assert_output --partial '"ip": "192.0.2.10"'
 	assert_output --partial '"status":'
+	assert_output --partial '"pressure":'
+	assert_output --partial '"pressure_trip":'
 	assert_output --partial '"ban_history_24h":'
 	assert_output --partial '"ban_history_total":'
 	assert_output --partial '"events_24h":'
@@ -286,13 +288,13 @@ teardown() {
 @test "search_ip_csv: header and single row" {
 	run search_ip_csv "$INSTALL_PATH" "192.0.2.10"
 	assert_success
-	assert_output --partial "ip,status,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers"
+	assert_output --partial "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers"
 	[ "$(echo "$output" | wc -l)" -eq 2 ]
 }
 
 # --- _apool_report_json ---
 
-@test "_apool_report_json: formats entries as JSON array" {
+@test "_apool_report_json: formats entries as JSON array with pressure" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
 	echo "1000 192.0.2.1 sshd" >> "$pool"
 	echo "1001 192.0.2.1 sshd" >> "$pool"
@@ -301,6 +303,8 @@ teardown() {
 	assert_output --partial '"events": 2'
 	assert_output --partial '"ip": "192.0.2.1"'
 	assert_output --partial '"rules": ["sshd"]'
+	assert_output --partial '"pressure":'
+	assert_output --partial '"pressure_trip":'
 }
 
 @test "_apool_report_json: empty pool returns empty array" {
@@ -315,12 +319,12 @@ teardown() {
 
 # --- _apool_report_csv ---
 
-@test "_apool_report_csv: header and data" {
+@test "_apool_report_csv: header includes pressure columns" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
 	echo "1000 192.0.2.1 sshd" >> "$pool"
 	run _apool_report_csv "$pool"
 	assert_success
-	assert_output --partial "events,ip,first_seen,last_seen,rules,status"
+	assert_output --partial "events,ip,pressure,pressure_trip,first_seen,last_seen,rules,status"
 	assert_output --partial "192.0.2.1"
 }
 

@@ -2882,6 +2882,26 @@ search_ip() {
 		if [ -n "$last_seen" ] && [ "$last_seen" -gt 0 ] 2>/dev/null; then
 			echo "  Last seen:      $(date -d "@${last_seen}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$last_seen")"
 		fi
+
+		# Pressure
+		local half_life trip
+		half_life="${PRESSURE_HALF_LIFE:-300}"
+		trip="${GLOB_PRESSURE_TRIP:-20}"
+		local _gp _gp_fmt
+		_gp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now")
+		_gp_fmt=$(pressure_format "$_gp")
+		echo "  Pressure:       ${_gp_fmt}/${trip} (half-life=${half_life}s)"
+		# per-service pressure
+		local _svc_list _svc _sp _sp_fmt
+		_svc_list=$(awk -v ip="$ip" '$2 == ip {s[$3]=1} END {for(k in s) print k}' "$events_file")
+		if [ -n "$_svc_list" ]; then
+			while IFS= read -r _svc; do
+				[ -z "$_svc" ] && continue
+				_sp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now" "$_svc")
+				_sp_fmt=$(pressure_format "$_sp")
+				echo "                  ${_svc}: ${_sp_fmt}/${trip}"
+			done <<< "$_svc_list"
+		fi
 	else
 		echo "  Events (24h):   0"
 	fi
@@ -3805,6 +3825,17 @@ search_ip_json() {
 		fi
 	fi
 
+	# Pressure
+	local half_life trip _gp _gp_fmt
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+	_gp=0
+	_gp_fmt="0.0"
+	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+		_gp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now")
+		_gp_fmt=$(pressure_format "$_gp")
+	fi
+
 	# Attack pool
 	local pool_file="$install_path/stats/attack.pool"
 	local pool_count=0
@@ -3812,8 +3843,9 @@ search_ip_json() {
 		pool_count=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
 	fi
 
-	printf '{"ip": "%s", "status": "%s", "ban_history_24h": %d, "ban_history_total": %d, "events_24h": %d, "services": %s, "first_seen": %s, "last_seen": %s, "attack_pool_triggers": %d}\n' \
+	printf '{"ip": "%s", "status": "%s", "pressure": %s, "pressure_trip": %s, "ban_history_24h": %d, "ban_history_total": %d, "events_24h": %d, "services": %s, "first_seen": %s, "last_seen": %s, "attack_pool_triggers": %d}\n' \
 		"$(_json_escape "$ip")" "$(_json_escape "$status_str")" \
+		"$_gp_fmt" "$trip" \
 		"$hist_bans" "$hist_total" "$evt_count" "$svcs_json" \
 		"$first_fmt" "$last_fmt" "$pool_count"
 }
@@ -3826,7 +3858,7 @@ search_ip_csv() {
 
 	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
 
-	echo "ip,status,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers"
+	echo "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers"
 
 	# Ban status
 	local status_str="not banned"
@@ -3877,6 +3909,16 @@ search_ip_csv() {
 		fi
 	fi
 
+	# Pressure
+	local half_life trip _gp _gp_fmt
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+	_gp_fmt="0.0"
+	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+		_gp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now")
+		_gp_fmt=$(pressure_format "$_gp")
+	fi
+
 	# Attack pool
 	local pool_file="$install_path/stats/attack.pool"
 	local pool_count=0
@@ -3884,5 +3926,5 @@ search_ip_csv() {
 		pool_count=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
 	fi
 
-	echo "$ip,$status_str,$hist_bans,$hist_total,$evt_count,$first_fmt,$last_fmt,$pool_count"
+	echo "$ip,$status_str,$_gp_fmt,$trip,$hist_bans,$hist_total,$evt_count,$first_fmt,$last_fmt,$pool_count"
 }

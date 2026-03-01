@@ -1,4 +1,8 @@
 2.0.1:
+[New] search_ip(): live pressure score and per-service pressure breakdown
+      shown in unified IP report (text, JSON, CSV)
+[New] _apool_report(): PRESSURE column with live per-IP pressure scores
+      for attack pool top-25 reports (text, JSON, CSV)
 [New] --json/--csv for --events: structured output for events dashboard,
       per-IP detail, and CIDR subnet reports
 [New] --json/--csv for -a: structured output for attack pool reports,

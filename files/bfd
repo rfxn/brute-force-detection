@@ -429,32 +429,21 @@ _apool_report() {
 	local atmp
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.alist.XXXXXX")
 	echo "[+] $title" && echo
-	echo "#EVENTS|IP|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
-	local cnt aip first_ts last_ts mods first_fmt last_fmt ban_status
+	echo "#EVENTS|IP|PRESSURE|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
+	local now half_life trip
+	now=$(date +"%s")
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+	local cnt aip first_ts last_ts mods first_fmt last_fmt ban_status _gp _gp_fmt
 	while IFS='|' read -r cnt aip first_ts last_ts mods; do
 		[ -z "$cnt" ] && continue
 		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$first_ts")
 		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$last_ts")
 		ban_status=$(_apool_ban_status "$aip")
-		echo "$cnt|$aip|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
-	done < <(
-		if [ -n "$search" ]; then
-			grep -F "$search" "$source_file"
-		else
-			cat "$source_file"
-		fi | awk '{
-			ip = $2; ts = $1 + 0; rule = $3
-			count[ip]++
-			if (!(ip in first) || ts < first[ip]) first[ip] = ts
-			if (!(ip in last) || ts > last[ip]) last[ip] = ts
-			if (rules[ip] == "") rules[ip] = rule
-			else if (index(rules[ip], rule) == 0) rules[ip] = rules[ip] "," rule
-		}
-		END {
-			for (ip in count)
-				print count[ip] "|" ip "|" first[ip] "|" last[ip] "|" rules[ip]
-		}' | sort -t'|' -k1 -nr | head -n 25
-	)
+		_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
+		_gp_fmt=$(pressure_format "$_gp")
+		echo "$cnt|$aip|${_gp_fmt}/${trip}|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
+	done < <(_apool_awk "$source_file" "$search")
 	format_table < "$atmp"
 	rm -f "$atmp"
 }
@@ -560,6 +549,10 @@ _apool_awk() {
 _apool_report_json() {
 	local source_file="$1"
 	local search="${2:-}"
+	local now half_life trip
+	now=$(date +"%s")
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
 	echo "["
 	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
 		local first=1
@@ -567,18 +560,20 @@ _apool_report_json() {
 		_apool_awk "$source_file" "$search" | \
 		while IFS='|' read -r cnt aip first_ts last_ts mods; do
 			[ -z "$cnt" ] && continue
-			local first_fmt last_fmt ban_status
+			local first_fmt last_fmt ban_status _gp _gp_fmt
 			first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
 			last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
 			ban_status=$(_apool_ban_status "$aip")
 			[ -z "$ban_status" ] && ban_status="not banned"
+			_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
+			_gp_fmt=$(pressure_format "$_gp")
 			if [ "$first" -eq 1 ]; then
 				first=0
 			else
 				echo ","
 			fi
-			printf '    {"events": %s, "ip": "%s", "first_seen": "%s", "last_seen": "%s", "rules": %s, "status": "%s"}' \
-				"$cnt" "$(_json_escape "$aip")" "$first_fmt" "$last_fmt" \
+			printf '    {"events": %s, "ip": "%s", "pressure": %s, "pressure_trip": %s, "first_seen": "%s", "last_seen": "%s", "rules": %s, "status": "%s"}' \
+				"$cnt" "$(_json_escape "$aip")" "$_gp_fmt" "$trip" "$first_fmt" "$last_fmt" \
 				"$(_json_array_from_csv "$mods")" "$(_json_escape "$ban_status")"
 		done
 	fi
@@ -590,18 +585,24 @@ _apool_report_json() {
 _apool_report_csv() {
 	local source_file="$1"
 	local search="${2:-}"
-	echo "events,ip,first_seen,last_seen,rules,status"
+	local now half_life trip
+	now=$(date +"%s")
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+	echo "events,ip,pressure,pressure_trip,first_seen,last_seen,rules,status"
 	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
 		local cnt aip first_ts last_ts mods
 		_apool_awk "$source_file" "$search" | \
 		while IFS='|' read -r cnt aip first_ts last_ts mods; do
 			[ -z "$cnt" ] && continue
-			local first_fmt last_fmt ban_status
+			local first_fmt last_fmt ban_status _gp _gp_fmt
 			first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
 			last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
 			ban_status=$(_apool_ban_status "$aip")
 			[ -z "$ban_status" ] && ban_status="not banned"
-			echo "$cnt,$aip,$first_fmt,$last_fmt,$mods,$ban_status"
+			_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
+			_gp_fmt=$(pressure_format "$_gp")
+			echo "$cnt,$aip,$_gp_fmt,$trip,$first_fmt,$last_fmt,$mods,$ban_status"
 		done
 	fi
 }
