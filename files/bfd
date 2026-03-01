@@ -659,6 +659,7 @@ usage() {
 	echo "-d|--dryrun ................ run detection without banning"
 	echo "-w|--watch ................. run in continuous watch mode (foreground)"
 	echo "-a|--attackpool [IP|STRING] . attack pool; valid IP shows full report"
+echo "-e|--events [IP|CIDR] ...... active events; pressure dashboard, IP or subnet detail"
 	echo "-c|--check ................. health check and diagnostics"
 	echo "-l|--list .................. list active bans"
 	echo "-u|--unban IP .............. unban an IP address"
@@ -710,6 +711,16 @@ case "${1:-}" in
 		search_ip "$INSTALL_PATH" "$2"
 	else
 		apool_list "${2:-}"
+	fi
+	;;
+-e|--events)
+	vhead; pre
+	if [ -n "${2:-}" ] && validate_ip_any "$2" >/dev/null 2>&1; then
+		events_ip "$INSTALL_PATH" "$2"
+	elif [ -n "${2:-}" ] && [[ "$2" == */* ]]; then
+		events_cidr "$INSTALL_PATH" "$2" || exit "$?"
+	else
+		events_dashboard "$INSTALL_PATH"
 	fi
 	;;
 -c|--check)     vhead; pre; health_check "$INSTALL_PATH" ;;

@@ -140,6 +140,29 @@ validate_ip_any() {
 	validate_ip6 "$1" 2>/dev/null
 }
 
+# validate_cidr input — validate IPv4 CIDR notation
+# Returns 0 and echoes normalized addr/mask on success. IPv4 only, mask 8-32.
+validate_cidr() {
+	local input="$1"
+	local addr mask
+	addr="${input%/*}"
+	mask="${input#*/}"
+	if [ "$addr" = "$input" ] || [ -z "$mask" ]; then
+		return 1
+	fi
+	# validate mask is numeric 8-32
+	case "$mask" in
+		*[!0-9]*) return 1 ;;
+	esac
+	if [ "$mask" -lt 8 ] || [ "$mask" -gt 32 ]; then
+		return 1
+	fi
+	# validate IP portion
+	addr=$(validate_ip "$addr") || return 1
+	echo "$addr/$mask"
+	return 0
+}
+
 # ip_to_subnet ip mask — compute the network address for an IP and prefix length
 # Library utility exercised by tests and available for external callers;
 # production subnet math is inline in count_subnet_attackers() for performance.
@@ -3149,4 +3172,230 @@ list_bans_csv() {
 			echo "$host,$mod,$ports,$banned_fmt,$expiry_fmt"
 		done < "$bans_file"
 	fi
+}
+
+# --- Events CLI functions ---
+
+# events_dashboard install_path — show all IPs with active pressure
+# Single-pass awk over events.dat computes per-IP pressure aggregates,
+# outputs pipe-delimited table sorted by pressure descending.
+events_dashboard() {
+	local install_path="$1"
+	local events_file="$install_path/tmp/events.dat"
+	local now half_life trip
+	now=$(date +"%s")
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+	local cutoff=$((now - half_life * 10))
+
+	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
+		echo "No active events."
+		return 0
+	fi
+
+	local atmp
+	atmp=$(mktemp "$install_path/tmp/.events.XXXXXX")
+	echo "#IP|PRESSURE|EVENTS|SERVICES|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
+	# single-pass awk: compute per-IP aggregates with decay
+	awk -v cutoff="$cutoff" -v now="$now" -v hl="$half_life" \
+		-v trip="$trip" '
+	BEGIN { ln2 = 0.693147180559945 }
+	$1+0 >= cutoff {
+		ip = $2; mod = $3; ts = $1+0
+		w = ($4+0 > 0) ? $4+0 : 1
+		age = now - ts
+		p[ip] += w * exp(-ln2 * age / hl)
+		cnt[ip]++
+		if (!(ip SUBSEP mod in sm)) { sm[ip SUBSEP mod] = 1; svcs[ip] = (svcs[ip] == "" ? mod : svcs[ip] "," mod) }
+		if (!(ip in first) || ts < first[ip]) first[ip] = ts
+		if (ts > last[ip]) last[ip] = ts
+	}
+	END {
+		for (ip in p) {
+			pv = int(p[ip] * 1000)
+			pw = int(pv / 1000)
+			pf = int((pv % 1000 + 50) / 100)
+			if (pf >= 10) { pw++; pf = 0 }
+			printf "%d|%s|%s.%d/%d|%d|%s|%d|%d\n", pv, ip, pw, pf, trip, cnt[ip], svcs[ip], first[ip], last[ip]
+		}
+	}' "$events_file" | sort -t'|' -k1 -nr | while IFS='|' read -r _sort_key ip pressure cnt svcs first_ts last_ts; do
+		local first_fmt last_fmt ban_status
+		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$first_ts")
+		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$last_ts")
+		ban_status=$(_apool_ban_status "$ip")
+		echo "$ip|$pressure|$cnt|$svcs|$first_fmt|$last_fmt|$ban_status"
+	done >> "$atmp"
+	format_table < "$atmp"
+	rm -f "$atmp"
+}
+
+# events_ip install_path ip — per-IP pressure detail with service breakdown
+events_ip() {
+	local install_path="$1" ip="$2"
+	local events_file="$install_path/tmp/events.dat"
+	local now half_life trip
+	now=$(date +"%s")
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+
+	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
+
+	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
+		echo "No active events for $ip."
+		return 0
+	fi
+
+	# check if IP has any events
+	if ! awk -v ip="$ip" '$2 == ip {found=1; exit} END {exit !found}' "$events_file"; then
+		echo "No active events for $ip."
+		return 0
+	fi
+
+	# overall pressure
+	local _gp _gp_fmt
+	_gp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now")
+	_gp_fmt=$(pressure_format "$_gp")
+	echo "IP:               $ip"
+	echo "Pressure:         ${_gp_fmt}/${trip} (half-life=${half_life}s)"
+	echo ""
+
+	# per-service breakdown
+	local atmp
+	atmp=$(mktemp "$install_path/tmp/.evtip.XXXXXX")
+	echo "#SERVICE|WEIGHT|EVENTS|PRESSURE" > "$atmp"
+	local _svc_list _svc _sp _sp_fmt _svc_cnt _svc_weight
+	_svc_list=$(awk -v ip="$ip" '$2 == ip {s[$3]=1} END {for(k in s) print k}' "$events_file")
+	if [ -n "$_svc_list" ]; then
+		while IFS= read -r _svc; do
+			[ -z "$_svc" ] && continue
+			_sp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now" "$_svc")
+			_sp_fmt=$(pressure_format "$_sp")
+			_svc_cnt=$(awk -v ip="$ip" -v mod="$_svc" '$2 == ip && $3 == mod {c++} END {print c+0}' "$events_file")
+			_svc_weight=$(awk -v ip="$ip" -v mod="$_svc" '$2 == ip && $3 == mod && $4+0 > 0 {w=$4} END {print w+0}' "$events_file")
+			[ "$_svc_weight" -eq 0 ] && _svc_weight=1
+			echo "$_svc|$_svc_weight|$_svc_cnt|${_sp_fmt}/${trip}" >> "$atmp"
+		done <<< "$_svc_list"
+	fi
+	format_table < "$atmp"
+	rm -f "$atmp"
+	echo ""
+
+	# first/last seen
+	local first_seen last_seen
+	first_seen=$(awk -v ip="$ip" '$2 == ip {print $1; exit}' "$events_file")
+	last_seen=$(awk -v ip="$ip" '$2 == ip {ts=$1} END {print ts+0}' "$events_file")
+	if [ -n "$first_seen" ] && [ "$first_seen" -gt 0 ] 2>/dev/null; then
+		echo "First seen:       $(date -d "@${first_seen}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$first_seen")"
+	fi
+	if [ -n "$last_seen" ] && [ "$last_seen" -gt 0 ] 2>/dev/null; then
+		echo "Last seen:        $(date -d "@${last_seen}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$last_seen")"
+	fi
+
+	# ban status
+	local ban_status
+	ban_status=$(_apool_ban_status "$ip")
+	if [ -n "$ban_status" ]; then
+		echo "Status:           $ban_status"
+	else
+		echo "Status:           not banned"
+	fi
+}
+
+# events_cidr install_path cidr — subnet-scoped pressure report
+# Uses mawk-compatible ipv4_subnet() for CIDR matching (IPv4 only, mask 8-32).
+events_cidr() {
+	local install_path="$1" cidr="$2"
+	local events_file="$install_path/tmp/events.dat"
+	local now half_life trip
+	now=$(date +"%s")
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+	local cutoff=$((now - half_life * 10))
+
+	cidr=$(validate_cidr "$cidr") || { echo "error: invalid CIDR notation '$2' (IPv4, mask 8-32)." >&2; return 1; }
+	local target_addr target_mask
+	target_addr="${cidr%/*}"
+	target_mask="${cidr#*/}"
+
+	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
+		echo "No events found for $cidr."
+		return 0
+	fi
+
+	local atmp
+	atmp=$(mktemp "$install_path/tmp/.evtcidr.XXXXXX")
+	echo "#IP|PRESSURE|EVENTS|SERVICES|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
+	local match_count=0 total_events=0 banned_count=0
+	# single-pass awk: filter IPs in CIDR range, compute pressure
+	awk -v cutoff="$cutoff" -v now="$now" -v hl="$half_life" \
+		-v trip="$trip" -v tmask="$target_mask" -v taddr="$target_addr" '
+	function pow2(n,    r, i) {
+		r = 1; for (i = 0; i < n; i++) r = r * 2; return r
+	}
+	function ipv4_subnet(ip, m,    parts, n, o1, o2, o3, o4, sh, divisor) {
+		n = split(ip, parts, ".")
+		if (n != 4) return ""
+		o1 = parts[1]+0; o2 = parts[2]+0; o3 = parts[3]+0; o4 = parts[4]+0
+		if (m >= 24) {
+			sh = 32 - m; divisor = pow2(sh)
+			o4 = int(o4 / divisor) * divisor
+			return o1 "." o2 "." o3 "." o4
+		} else if (m >= 16) {
+			sh = 24 - m; divisor = pow2(sh)
+			o3 = int(o3 / divisor) * divisor
+			return o1 "." o2 "." o3 ".0"
+		} else if (m >= 8) {
+			sh = 16 - m; divisor = pow2(sh)
+			o2 = int(o2 / divisor) * divisor
+			return o1 "." o2 ".0.0"
+		}
+		return ""
+	}
+	BEGIN { ln2 = 0.693147180559945; target_net = ipv4_subnet(taddr, tmask) }
+	$1+0 >= cutoff {
+		ip = $2; mod = $3; ts = $1+0
+		# skip IPv6
+		if (index(ip, ":") > 0) next
+		if (ipv4_subnet(ip, tmask) != target_net) next
+		w = ($4+0 > 0) ? $4+0 : 1
+		age = now - ts
+		p[ip] += w * exp(-ln2 * age / hl)
+		cnt[ip]++
+		if (!(ip SUBSEP mod in sm)) { sm[ip SUBSEP mod] = 1; svcs[ip] = (svcs[ip] == "" ? mod : svcs[ip] "," mod) }
+		if (!(ip in first) || ts < first[ip]) first[ip] = ts
+		if (ts > last[ip]) last[ip] = ts
+	}
+	END {
+		for (ip in p) {
+			pv = int(p[ip] * 1000)
+			pw = int(pv / 1000)
+			pf = int((pv % 1000 + 50) / 100)
+			if (pf >= 10) { pw++; pf = 0 }
+			printf "%d|%s|%s.%d/%d|%d|%s|%d|%d\n", pv, ip, pw, pf, trip, cnt[ip], svcs[ip], first[ip], last[ip]
+		}
+	}' "$events_file" | sort -t'|' -k1 -nr | while IFS='|' read -r _sort_key ip pressure cnt svcs first_ts last_ts; do
+		local first_fmt last_fmt ban_status
+		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$first_ts")
+		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$last_ts")
+		ban_status=$(_apool_ban_status "$ip")
+		echo "$ip|$pressure|$cnt|$svcs|$first_fmt|$last_fmt|$ban_status"
+		# counters for summary (write to fd 3)
+		echo "M|$cnt|${ban_status:+1}" >&3
+	done 3>"$atmp.summary" >> "$atmp"
+	# compute summary from fd 3 output
+	if [ -f "$atmp.summary" ] && [ -s "$atmp.summary" ]; then
+		match_count=$(wc -l < "$atmp.summary")
+		total_events=$(awk -F'|' '{s+=$2} END {print s+0}' "$atmp.summary")
+		banned_count=$(awk -F'|' '$3 != "" {c++} END {print c+0}' "$atmp.summary")
+	fi
+	rm -f "$atmp.summary"
+	if [ "$match_count" -eq 0 ]; then
+		rm -f "$atmp"
+		echo "No events found for $cidr."
+		return 0
+	fi
+	format_table < "$atmp"
+	echo ""
+	echo "$match_count IPs, $total_events events, $banned_count banned"
+	rm -f "$atmp"
 }

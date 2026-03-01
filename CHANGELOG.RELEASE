@@ -1,4 +1,11 @@
 2.0.1:
+[New] --events: active pressure dashboard showing all tracked IPs with
+      pressure scores, event counts, services, and ban proximity
+[New] --events IP: per-IP pressure detail with per-service breakdown,
+      weights, event counts, and scoring context
+[New] --events CIDR: subnet-scoped pressure report for IPv4 (mask 8-32)
+      using mawk-compatible CIDR math
+[New] validate_cidr(): validates IPv4 CIDR notation (mask 8-32)
 [New] verbose pressure: -V shows per-IP pressure score, trip threshold, and
       effective weight during detection cycles; country multiplier arrow when
       weight differs; global pressure ban line when cross-service triggers
