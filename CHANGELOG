@@ -1,4 +1,7 @@
 2.0.1:
+[Change] bfd.1: add --events option, update --json/--csv scope to -l/-e/-a
+[Change] README.md, README: add section 5.8 Events Dashboard; update section
+      5.6 Structured Output with events/attackpool examples; add -e to CLI block
 [New] search_ip(): live pressure score and per-service pressure breakdown
       shown in unified IP report (text, JSON, CSV)
 [New] _apool_report(): PRESSURE column with live per-IP pressure scores

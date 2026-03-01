@@ -22,6 +22,8 @@ bfd \- brute force detection and IP banning
 .RB [ \-l ]
 .RB [ \-a
 .RI [ IP | STRING ]]
+.RB [ \-e
+.RI [ IP | CIDR ]]
 .RB [ \-S
 .RI [ SERVICE ]]
 .RB [ \-C
@@ -150,10 +152,31 @@ for structured output.
 .TP
 .BI \-a " \fR[" IP | STRING \fR]
 Attack pool report.
-Without arguments, shows top 25 attackers for today and this week.
+Without arguments, shows top 25 attackers for today and this week
+with live pressure scores.
 With a valid IP, shows an enriched report with ban status, history,
-events, and attack pool triggers.
+events, pressure, and attack pool triggers.
 With a string, searches attack pool entries.
+Combine with
+.B \-\-json
+or
+.B \-\-csv
+for structured output.
+.TP
+.BI \-e " \fR[" IP | CIDR \fR]
+Active events and pressure report.
+Without arguments, shows a pressure dashboard of all tracked IPs
+sorted by pressure descending, with event counts, services,
+and ban status.
+With a valid IP, shows per-IP pressure detail including per-service
+breakdown with individual weights, event counts, and sub-scores.
+With an IPv4 CIDR (mask 8\-32), shows a subnet-scoped report with
+matching IPs and a summary line.
+Combine with
+.B \-\-json
+or
+.B \-\-csv
+for structured output.
 .TP
 .BI \-S " \fR[" SERVICE \fR]
 System status overview, or per-service status when
@@ -188,12 +211,14 @@ pattern against a log file or stdin.
 .SS Output Modifiers
 .TP
 .B \-\-json
-Output in JSON format (with
-.BR \-l ).
+Output in JSON format.
+Supported with
+.BR \-l ", " \-e ", and " \-a .
 .TP
 .B \-\-csv
-Output in CSV format (with
-.BR \-l ).
+Output in CSV format.
+Supported with
+.BR \-l ", " \-e ", and " \-a .
 .TP
 .BR \-V ", " \-\-verbose
 Show detailed output.
