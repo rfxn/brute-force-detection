@@ -9,7 +9,7 @@ load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
 # Source _apool_ban_status from bfd (needed by events functions)
-eval "$(awk '/^_apool_ban_status\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
+bfd_load_function _apool_ban_status
 
 setup() {
 	bfd_standard_setup

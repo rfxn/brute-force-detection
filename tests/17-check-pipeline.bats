@@ -542,7 +542,7 @@ EOF
 # --- run statistics (Phase 13A) ---
 
 # Source check() function from bfd (defined there, not in bfd.lib.sh)
-eval "$(awk '/^check\(\)/ { p=1 } p { print; if (/^\}$/) exit }' "$PROJECT_ROOT/files/bfd")"
+bfd_load_function check
 
 # Helper to run check() with controlled rules dir and capture output
 _run_check_with_stats() {

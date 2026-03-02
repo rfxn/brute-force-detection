@@ -7,6 +7,7 @@
 #   bfd_common_setup   — minimal tmpdir + logging (for unit tests)
 #   bfd_standard_setup — full state + config defaults (for integration tests)
 #   bfd_teardown       — cleanup tmpdir
+#   bfd_load_function  — extract+eval a function from bfd or bfd.lib.sh
 #   create_mock_bin    — mock binary creation (from bfd-mock.bash)
 #   create_mock_rule   — mock rule creation (from bfd-mock.bash)
 #   assert_banned, refute_banned, assert_ban_count, assert_event_count,
@@ -97,6 +98,14 @@ bfd_standard_setup() {
 	BAN_COMMAND_V6_TEMPLATE=""
 	UNBAN_COMMAND_V6_TEMPLATE=""
 	_FW_BACKEND="custom"
+}
+
+# bfd_load_function: extract and eval a single function from a source file.
+# Usage: bfd_load_function "func_name" [source_file]
+# Default source: $PROJECT_ROOT/files/bfd
+bfd_load_function() {
+	local func="$1" src="${2:-$PROJECT_ROOT/files/bfd}"
+	eval "$(awk "/^${func}\\(\\)/ { p=1 } p { print; if (/^\\}\$/) exit }" "$src")"
 }
 
 # bfd_teardown: cleanup test environment

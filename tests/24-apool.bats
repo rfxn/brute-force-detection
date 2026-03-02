@@ -9,12 +9,12 @@ load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
-# Source _apool_report, _apool_service_summary, _apool_ban_status, _apool_awk, apool_list from bfd
-eval "$(awk '/^_apool_awk\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
-eval "$(awk '/^_apool_report\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
-eval "$(awk '/^_apool_ban_status\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
-eval "$(awk '/^_apool_service_summary\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
-eval "$(awk '/^apool_list\(\)/ { p=1 } p { print; if (/^\}$/) { p=0 } }' "$PROJECT_ROOT/files/bfd")"
+# Source apool functions from bfd (defined there, not in bfd.lib.sh)
+bfd_load_function _apool_awk
+bfd_load_function _apool_report
+bfd_load_function _apool_ban_status
+bfd_load_function _apool_service_summary
+bfd_load_function apool_list
 
 setup() {
 	bfd_standard_setup

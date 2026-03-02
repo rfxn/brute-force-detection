@@ -485,7 +485,7 @@ MOCK
 # --- check() pipeline integration ---
 
 # Source check() function from bfd
-eval "$(awk '/^check\(\)/ { p=1 } p { print; if (/^\}$/) exit }' "$PROJECT_ROOT/files/bfd")"
+bfd_load_function check
 
 _setup_check_env() {
 	local rules_dir="$1"

@@ -195,7 +195,7 @@ ${log2}|tag2"
 # --- check() scan mode integration ---
 
 # Source check() function from bfd (defined there, not in bfd.lib.sh)
-eval "$(awk '/^check\(\)/ { p=1 } p { print; if (/^\}$/) exit }' "$PROJECT_ROOT/files/bfd")"
+bfd_load_function check
 
 # Helper: set up minimal check() environment with scan mode
 _setup_scan_check() {
