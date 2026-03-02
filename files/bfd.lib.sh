@@ -1409,18 +1409,44 @@ compute_ban_duration() {
 	echo "$d"
 }
 
+# _list_bans_data install_path — output raw pipe-delimited active ban data
+# Outputs: ts|expiry|host|mod|ports (one line per ban, raw timestamps)
+# Returns 1 if no active bans.
+_list_bans_data() {
+	local install_path="$1"
+	local bans_file="$install_path/tmp/bans.active"
+	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
+		return 1
+	fi
+	local ts expiry host mod ports
+	while IFS=' ' read -r ts expiry host mod ports; do
+		[ -z "$ts" ] && continue
+		echo "$ts|$expiry|$host|$mod|$ports"
+	done < "$bans_file"
+}
+
 # list_bans install_path — display formatted active ban list
 list_bans() {
 	local install_path="$1"
 	state_init "$install_path"
-	local listing
-	listing=$(state_bans_active_list "$install_path")
-	if [ -z "$listing" ]; then
-		echo "No active bans."
-		return 0
-	fi
+	local raw
+	raw=$(_list_bans_data "$install_path") || { echo "No active bans."; return 0; }
 	echo "[+] Active bans" && echo
-	printf "IP|SERVICE|PORTS|BANNED|EXPIRES\n%s\n" "$listing" | format_table
+	local atmp
+	atmp=$(mktemp "$install_path/tmp/.lbans.XXXXXX")
+	echo "IP|SERVICE|PORTS|BANNED|EXPIRES" > "$atmp"
+	local ts expiry host mod ports banned_fmt expiry_fmt
+	while IFS='|' read -r ts expiry host mod ports; do
+		banned_fmt=$(date -d "@${ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$ts")
+		if [ "$expiry" = "0" ]; then
+			expiry_fmt="permanent"
+		else
+			expiry_fmt=$(date -d "@${expiry}" +"%D %H:%M:%S" 2>/dev/null || echo "$expiry")
+		fi
+		echo "$host|$mod|$ports|$banned_fmt|$expiry_fmt"
+	done <<< "$raw" >> "$atmp"
+	format_table < "$atmp"
+	rm -f "$atmp"
 }
 
 # manual_unban install_path ip utime — manually unban an IP via firewall backend
@@ -1543,15 +1569,13 @@ state_bans_active_check() {
 }
 
 # state_bans_active_list install_path — output formatted active ban lines
+# Thin wrapper over _list_bans_data() — preserves backward compat for callers.
 state_bans_active_list() {
 	local install_path="$1"
-	local bans_file="$install_path/tmp/bans.active"
-	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
-		return 0
-	fi
+	local raw
+	raw=$(_list_bans_data "$install_path") || return 0
 	local ts expiry host mod ports banned_fmt expiry_fmt
-	while IFS=' ' read -r ts expiry host mod ports; do
-		[ -z "$ts" ] && continue
+	while IFS='|' read -r ts expiry host mod ports; do
 		banned_fmt=$(date -d "@${ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$ts")
 		if [ "$expiry" = "0" ]; then
 			expiry_fmt="permanent"
@@ -1559,7 +1583,7 @@ state_bans_active_list() {
 			expiry_fmt=$(date -d "@${expiry}" +"%D %H:%M:%S" 2>/dev/null || echo "$expiry")
 		fi
 		echo "$host|$mod|$ports|$banned_fmt|$expiry_fmt"
-	done < "$bans_file"
+	done <<< "$raw"
 }
 
 # state_bans_active_expired install_path now — output entries where EXPIRY>0 and EXPIRY<=now
@@ -3176,13 +3200,12 @@ _json_array_from_csv() {
 # list_bans_json install_path — JSON formatted active ban list
 list_bans_json() {
 	local install_path="$1"
-	local bans_file="$install_path/tmp/bans.active"
 	echo "["
-	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
+	local raw
+	if raw=$(_list_bans_data "$install_path"); then
 		local first=1
 		local ts expiry host mod ports
-		while IFS=' ' read -r ts expiry host mod ports; do
-			[ -z "$ts" ] && continue
+		while IFS='|' read -r ts expiry host mod ports; do
 			local banned_fmt expiry_fmt
 			banned_fmt=$(date -d "@${ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$ts")
 			if [ "$expiry" = "0" ]; then
@@ -3198,7 +3221,7 @@ list_bans_json() {
 			printf '  {"ip": "%s", "service": "%s", "ports": "%s", "banned": "%s", "expires": "%s"}' \
 				"$(_json_escape "$host")" "$(_json_escape "$mod")" "$(_json_escape "$ports")" \
 				"$banned_fmt" "$expiry_fmt"
-		done < "$bans_file"
+		done <<< "$raw"
 	fi
 	echo ""
 	echo "]"
@@ -3207,12 +3230,11 @@ list_bans_json() {
 # list_bans_csv install_path — CSV formatted active ban list
 list_bans_csv() {
 	local install_path="$1"
-	local bans_file="$install_path/tmp/bans.active"
 	echo "ip,service,ports,banned,expires"
-	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
+	local raw
+	if raw=$(_list_bans_data "$install_path"); then
 		local ts expiry host mod ports
-		while IFS=' ' read -r ts expiry host mod ports; do
-			[ -z "$ts" ] && continue
+		while IFS='|' read -r ts expiry host mod ports; do
 			local banned_fmt expiry_fmt
 			banned_fmt=$(date -d "@${ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$ts")
 			if [ "$expiry" = "0" ]; then
@@ -3221,7 +3243,7 @@ list_bans_csv() {
 				expiry_fmt=$(date -d "@${expiry}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$expiry")
 			fi
 			echo "$host,$mod,$ports,$banned_fmt,$expiry_fmt"
-		done < "$bans_file"
+		done <<< "$raw"
 	fi
 }
 

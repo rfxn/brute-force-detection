@@ -1,4 +1,7 @@
 2.0.1:
+[Change] list_bans/json/csv: extract shared _list_bans_data() helper; bans.active
+      file read and date formatting now shared across all three formats;
+      state_bans_active_list() refactored as thin wrapper (F-004 3/5)
 [Change] apool_list/json/csv: extract shared _apool_prepare_weekly() helper;
       weekly pool mktemp+find logic now in exactly one place (F-004 2/5)
 [Change] _apool_service_summary/json/csv: extract shared _apool_service_summary_awk()
