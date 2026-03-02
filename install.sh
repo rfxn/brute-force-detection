@@ -242,6 +242,25 @@ postinfo(){
 		enabled)
 			echo "  Watch mode:    enabled and started (~10s detection latency)"
 			echo "  Cron fallback: active (skipped while watch runs)"
+			if [ "${_IS_UPGRADE:-0}" = "1" ]; then
+				echo ""
+				echo "  NOTE: Watch mode is new in BFD 2.x and has been enabled for"
+				echo "  this upgrade. It replaces cron-only scheduling (~2m latency)"
+				echo "  with a persistent daemon (~10s latency). The cron fallback"
+				echo "  remains active and resumes automatically if the daemon stops."
+				echo ""
+				echo "  To revert to cron-only scheduling:"
+				if command -v systemctl >/dev/null 2>&1; then
+					echo "    systemctl disable --now bfd-watch.service"
+				else
+					echo "    service bfd-watch stop"
+					if command -v chkconfig >/dev/null 2>&1; then
+						echo "    chkconfig bfd-watch off"
+					elif command -v update-rc.d >/dev/null 2>&1; then
+						echo "    update-rc.d bfd-watch disable"
+					fi
+				fi
+			fi
 			;;
 		restarted)
 			echo "  Watch mode:    restarted with updated installation"
@@ -266,6 +285,7 @@ postinfo(){
 }
 
 if [ -d "$INSPATH" ]; then
+	_IS_UPGRADE=1
 	echo "BFD $VER upgrade"
 	_stop_services
 	backup

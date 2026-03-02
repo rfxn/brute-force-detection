@@ -238,3 +238,17 @@ teardown() {
 	run grep -c '/usr/local/bfd' "$PROJECT_ROOT/files/tlog_lib.sh"
 	assert_failure
 }
+
+# --- Upgrade notice ---
+
+@test "install-paths: upgrade notice references _IS_UPGRADE" {
+	run grep -c '_IS_UPGRADE' "$PROJECT_ROOT/install.sh"
+	assert_success
+	[ "$output" -ge 2 ]
+}
+
+@test "install-paths: upgrade notice includes revert instructions" {
+	run grep -c 'revert to cron-only' "$PROJECT_ROOT/install.sh"
+	assert_success
+	[ "$output" -ge 1 ]
+}

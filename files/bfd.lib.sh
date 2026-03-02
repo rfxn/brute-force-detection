@@ -52,30 +52,35 @@ else
 fi
 unset _elog_lib_path _elog_lib_dir
 
-# Register BFD journal filter mappings
-tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
-tlog_journal_register "dropbear" "SYSLOG_IDENTIFIER=dropbear"
-tlog_journal_register "dovecot" "SYSLOG_IDENTIFIER=dovecot"
-tlog_journal_register "postfix" "SYSLOG_IDENTIFIER=postfix"
-tlog_journal_register "courier" "SYSLOG_IDENTIFIER=couriertcpd"
-tlog_journal_register "sendmail" "SYSLOG_IDENTIFIER=sm-mta"
-tlog_journal_register "vpopmail" "SYSLOG_IDENTIFIER=vpopmail"
-tlog_journal_register "cyrus" "SYSLOG_IDENTIFIER=cyrus"
-tlog_journal_register "pure-ftpd" "SYSLOG_IDENTIFIER=pure-ftpd"
-tlog_journal_register "proftpd" "SYSLOG_IDENTIFIER=proftpd"
-tlog_journal_register "vsftpd" "SYSLOG_IDENTIFIER=vsftpd"
-tlog_journal_register "webmin" "SYSLOG_IDENTIFIER=webmin"
-tlog_journal_register "wordpress" "SYSLOG_IDENTIFIER=wordpress"
-tlog_journal_register "rh_imapd" "SYSLOG_IDENTIFIER=imapd"
-tlog_journal_register "rh_ipop3" "SYSLOG_IDENTIFIER=ipop3d"
-tlog_journal_register "named" "SYSLOG_IDENTIFIER=named"
-tlog_journal_register "openvpn" "SYSLOG_IDENTIFIER=openvpn"
-tlog_journal_register "exim_authfail" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
-tlog_journal_register "exim_nxuser" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
-tlog_journal_register "xrdp" "SYSLOG_IDENTIFIER=xrdp-sesman"
-tlog_journal_register "asterisk" "SYSLOG_IDENTIFIER=asterisk"
-tlog_journal_register "asterisk.iax" "SYSLOG_IDENTIFIER=asterisk"
-tlog_journal_register "asterisk_nopeer" "SYSLOG_IDENTIFIER=asterisk"
+# _bfd_journal_register_all: populate journal filter mappings for all BFD rules
+# Wrapped in a function so reload_watch can re-register after clearing arrays
+_bfd_journal_register_all() {
+	tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+	tlog_journal_register "dropbear" "SYSLOG_IDENTIFIER=dropbear"
+	tlog_journal_register "dovecot" "SYSLOG_IDENTIFIER=dovecot"
+	tlog_journal_register "postfix" "SYSLOG_IDENTIFIER=postfix"
+	tlog_journal_register "courier" "SYSLOG_IDENTIFIER=couriertcpd"
+	tlog_journal_register "sendmail" "SYSLOG_IDENTIFIER=sm-mta"
+	tlog_journal_register "vpopmail" "SYSLOG_IDENTIFIER=vpopmail"
+	tlog_journal_register "cyrus" "SYSLOG_IDENTIFIER=cyrus"
+	tlog_journal_register "pure-ftpd" "SYSLOG_IDENTIFIER=pure-ftpd"
+	tlog_journal_register "proftpd" "SYSLOG_IDENTIFIER=proftpd"
+	tlog_journal_register "vsftpd" "SYSLOG_IDENTIFIER=vsftpd"
+	tlog_journal_register "webmin" "SYSLOG_IDENTIFIER=webmin"
+	tlog_journal_register "wordpress" "SYSLOG_IDENTIFIER=wordpress"
+	tlog_journal_register "rh_imapd" "SYSLOG_IDENTIFIER=imapd"
+	tlog_journal_register "rh_ipop3" "SYSLOG_IDENTIFIER=ipop3d"
+	tlog_journal_register "named" "SYSLOG_IDENTIFIER=named"
+	tlog_journal_register "openvpn" "SYSLOG_IDENTIFIER=openvpn"
+	tlog_journal_register "exim_authfail" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
+	tlog_journal_register "exim_nxuser" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
+	tlog_journal_register "xrdp" "SYSLOG_IDENTIFIER=xrdp-sesman"
+	tlog_journal_register "asterisk" "SYSLOG_IDENTIFIER=asterisk"
+	tlog_journal_register "asterisk.iax" "SYSLOG_IDENTIFIER=asterisk"
+	tlog_journal_register "asterisk_nopeer" "SYSLOG_IDENTIFIER=asterisk"
+}
+# Register at module load
+_bfd_journal_register_all
 
 # exit codes (used by bfd, exported for callers)
 # shellcheck disable=SC2034
@@ -573,55 +578,55 @@ validate_config() {
 	local _pt="${PRESSURE_TRIP-${TRIG:-20}}"
 	if [ -z "$_pt" ] || ! [[ "$_pt" =~ $int_pattern ]] || [ "$_pt" -eq 0 ]; then
 		echo "error: PRESSURE_TRIP must be a positive integer (got '${PRESSURE_TRIP:-${TRIG:-}}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	local _phl="${PRESSURE_HALF_LIFE-${TRIG_WINDOW:-300}}"
 	if [ -z "$_phl" ] || ! [[ "$_phl" =~ $int_pattern ]] || [ "$_phl" -eq 0 ]; then
 		echo "error: PRESSURE_HALF_LIFE must be a positive integer (got '${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-}}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	local _ptg="${PRESSURE_TRIP_GLOBAL-${TRIG_GLOBAL:-0}}"
 	if [ -z "$_ptg" ] || ! [[ "$_ptg" =~ $int_pattern ]]; then
 		echo "error: PRESSURE_TRIP_GLOBAL must be a non-negative integer (got '${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-}}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	local _st="${SUBNET_TRIG:-0}"
 	if ! [[ "$_st" =~ $int_pattern ]]; then
 		echo "error: SUBNET_TRIG must be a non-negative integer (got '${SUBNET_TRIG:-}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	local _sm="${SUBNET_MASK:-24}"
 	if ! [[ "$_sm" =~ $int_pattern ]] || [ "$_sm" -lt 8 ] || [ "$_sm" -gt 32 ]; then
 		echo "error: SUBNET_MASK must be an integer between 8 and 32 (got '${SUBNET_MASK:-}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	local _sm6="${SUBNET_MASK_V6:-48}"
 	if ! [[ "$_sm6" =~ $int_pattern ]] || [ "$_sm6" -lt 16 ] || [ "$_sm6" -gt 128 ] || [ $((_sm6 % 16)) -ne 0 ]; then
 		echo "error: SUBNET_MASK_V6 must be a multiple of 16 between 16 and 128 (got '${SUBNET_MASK_V6:-}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_TTL:-${BAN_DURATION:-0}}" =~ $int_pattern ]]; then
 		echo "error: BAN_TTL must be a non-negative integer (got '${BAN_TTL:-${BAN_DURATION:-}}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}" =~ $int_pattern ]]; then
 		echo "error: BAN_ESCALATE_AFTER must be a non-negative integer (got '${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-}}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-1}}" =~ $int_pattern ]] || [ "${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-1}}" -eq 0 ]; then
 		echo "error: BAN_ESCALATE_WINDOW must be a positive integer (got '${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-}}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if [ "${FIREWALL:-auto}" = "custom" ] && [ "${BAN_TTL:-${BAN_DURATION:-0}}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
 		echo "warning: BAN_TTL>0 but UNBAN_COMMAND is empty; auto-unban will only remove state, not firewall rules." >&2
 	fi
 	if [ "$EMAIL_ALERTS" != "0" ] && [ "$EMAIL_ALERTS" != "1" ]; then
 		echo "error: EMAIL_ALERTS must be 0 or 1 (got '$EMAIL_ALERTS')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if [ "$EMAIL_ALERTS" = "1" ] && [ -z "${EMAIL_ADDRESS:-}" ]; then
 		echo "error: EMAIL_ADDRESS must be set when EMAIL_ALERTS=1." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if [ "$EMAIL_ALERTS" = "1" ] && [ -n "${EMAIL_ADDRESS:-}" ]; then
 		local _ea _ifs_save="$IFS"
@@ -639,11 +644,11 @@ validate_config() {
 	local _os="${OUTPUT_SYSLOG:-0}"
 	if [ "$_os" != "0" ] && [ "$_os" != "1" ]; then
 		echo "error: OUTPUT_SYSLOG must be 0 or 1 (got '${OUTPUT_SYSLOG:-}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "$LOCK_FILE_TIMEOUT" =~ $int_pattern ]] || [ "$LOCK_FILE_TIMEOUT" -eq 0 ]; then
 		echo "error: LOCK_FILE_TIMEOUT must be a positive integer (got '$LOCK_FILE_TIMEOUT')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	local valid_fw="auto apf csf firewalld ufw nftables iptables route custom"
 	if [ -n "${FIREWALL:-}" ]; then
@@ -656,57 +661,57 @@ validate_config() {
 		done
 		if [ "$_fw_valid" -eq 0 ]; then
 			echo "error: FIREWALL must be one of: $valid_fw (got '$FIREWALL')." >&2
-			exit $EXIT_CONFIG_ERROR
+			return $EXIT_CONFIG_ERROR
 		fi
 	fi
 	if [ "${FIREWALL:-auto}" = "custom" ] && [ -z "$BAN_COMMAND_TEMPLATE" ]; then
 		echo "error: BAN_COMMAND must not be empty when FIREWALL=custom." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if [ ! -d "$INSTALL_PATH" ]; then
 		echo "error: INSTALL_PATH '$INSTALL_PATH' does not exist." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if [ -z "${BFD_LOG_PATH:-}" ]; then
 		echo "error: BFD_LOG_PATH must not be empty." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if [ -n "${LOG_SOURCE:-}" ] && \
 	   [ "$LOG_SOURCE" != "auto" ] && \
 	   [ "$LOG_SOURCE" != "file" ] && \
 	   [ "$LOG_SOURCE" != "journal" ]; then
 		echo "error: LOG_SOURCE must be auto, file, or journal (got '$LOG_SOURCE')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	local _wi="${WATCH_INTERVAL:-10}"
 	if ! [[ "$_wi" =~ $int_pattern ]] || [ "$_wi" -eq 0 ]; then
 		echo "error: WATCH_INTERVAL must be a positive integer (got '${WATCH_INTERVAL:-}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if [ -n "${SCAN_MAX_LINES:-}" ] && ! [[ "${SCAN_MAX_LINES:-0}" =~ $int_pattern ]]; then
 		echo "error: SCAN_MAX_LINES must be a non-negative integer (got '${SCAN_MAX_LINES:-}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if [ -n "${SCAN_TIMEOUT:-}" ] && { ! [[ "${SCAN_TIMEOUT:-120}" =~ $int_pattern ]] || [ "${SCAN_TIMEOUT:-120}" -eq 0 ]; }; then
 		echo "error: SCAN_TIMEOUT must be a positive integer (got '${SCAN_TIMEOUT:-}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	local _esc="${BAN_ESCALATION:-none}"
 	if [ "$_esc" != "none" ] && [ "$_esc" != "linear" ] && [ "$_esc" != "double" ] && [ "$_esc" != "exponential" ]; then
 		echo "error: BAN_ESCALATION must be none, linear, or double (got '$_esc')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_ESCALATION_CAP:-0}" =~ $int_pattern ]]; then
 		echo "error: BAN_ESCALATION_CAP must be a non-negative integer (got '${BAN_ESCALATION_CAP:-}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_RETRY_COUNT:-0}" =~ $int_pattern ]]; then
 		echo "error: BAN_RETRY_COUNT must be a non-negative integer (got '${BAN_RETRY_COUNT:-}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${EMAIL_LOGLINES:-50}" =~ $int_pattern ]] || [ "${EMAIL_LOGLINES:-50}" -eq 0 ]; then
 		echo "error: EMAIL_LOGLINES must be a positive integer (got '${EMAIL_LOGLINES:-}')." >&2
-		exit $EXIT_CONFIG_ERROR
+		return $EXIT_CONFIG_ERROR
 	fi
 }
 
@@ -1404,18 +1409,44 @@ compute_ban_duration() {
 	echo "$d"
 }
 
+# _list_bans_data install_path — output raw pipe-delimited active ban data
+# Outputs: ts|expiry|host|mod|ports (one line per ban, raw timestamps)
+# Returns 1 if no active bans.
+_list_bans_data() {
+	local install_path="$1"
+	local bans_file="$install_path/tmp/bans.active"
+	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
+		return 1
+	fi
+	local ts expiry host mod ports
+	while IFS=' ' read -r ts expiry host mod ports; do
+		[ -z "$ts" ] && continue
+		echo "$ts|$expiry|$host|$mod|$ports"
+	done < "$bans_file"
+}
+
 # list_bans install_path — display formatted active ban list
 list_bans() {
 	local install_path="$1"
 	state_init "$install_path"
-	local listing
-	listing=$(state_bans_active_list "$install_path")
-	if [ -z "$listing" ]; then
-		echo "No active bans."
-		return 0
-	fi
+	local raw
+	raw=$(_list_bans_data "$install_path") || { echo "No active bans."; return 0; }
 	echo "[+] Active bans" && echo
-	printf "IP|SERVICE|PORTS|BANNED|EXPIRES\n%s\n" "$listing" | format_table
+	local atmp
+	atmp=$(mktemp "$install_path/tmp/.lbans.XXXXXX")
+	echo "IP|SERVICE|PORTS|BANNED|EXPIRES" > "$atmp"
+	local ts expiry host mod ports banned_fmt expiry_fmt
+	while IFS='|' read -r ts expiry host mod ports; do
+		banned_fmt=$(date -d "@${ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$ts")
+		if [ "$expiry" = "0" ]; then
+			expiry_fmt="permanent"
+		else
+			expiry_fmt=$(date -d "@${expiry}" +"%D %H:%M:%S" 2>/dev/null || echo "$expiry")
+		fi
+		echo "$host|$mod|$ports|$banned_fmt|$expiry_fmt"
+	done <<< "$raw" >> "$atmp"
+	format_table < "$atmp"
+	rm -f "$atmp"
 }
 
 # manual_unban install_path ip utime — manually unban an IP via firewall backend
@@ -1538,15 +1569,13 @@ state_bans_active_check() {
 }
 
 # state_bans_active_list install_path — output formatted active ban lines
+# Thin wrapper over _list_bans_data() — preserves backward compat for callers.
 state_bans_active_list() {
 	local install_path="$1"
-	local bans_file="$install_path/tmp/bans.active"
-	if [ ! -f "$bans_file" ] || [ ! -s "$bans_file" ]; then
-		return 0
-	fi
+	local raw
+	raw=$(_list_bans_data "$install_path") || return 0
 	local ts expiry host mod ports banned_fmt expiry_fmt
-	while IFS=' ' read -r ts expiry host mod ports; do
-		[ -z "$ts" ] && continue
+	while IFS='|' read -r ts expiry host mod ports; do
 		banned_fmt=$(date -d "@${ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$ts")
 		if [ "$expiry" = "0" ]; then
 			expiry_fmt="permanent"
@@ -1554,7 +1583,7 @@ state_bans_active_list() {
 			expiry_fmt=$(date -d "@${expiry}" +"%D %H:%M:%S" 2>/dev/null || echo "$expiry")
 		fi
 		echo "$host|$mod|$ports|$banned_fmt|$expiry_fmt"
-	done < "$bans_file"
+	done <<< "$raw"
 }
 
 # state_bans_active_expired install_path now — output entries where EXPIRY>0 and EXPIRY<=now
@@ -2809,108 +2838,196 @@ flush_bans() {
 	echo "$count bans removed."
 }
 
-# search_ip install_path ip — unified IP search across all state files
-search_ip() {
+# _search_ip_data install_path ip — shared data gatherer for search_ip triplet
+# Validates IP, reads all state files once.
+# Outputs multi-line structured data:
+#   D|ban_ts|ban_expiry|hist_24h|hist_total|evt_count|first_ts|last_ts|pressure_fmt|trip|half_life|pool_count
+#   E|service|count_24h         (one per service with 24h events)
+#   P|service|pressure_fmt      (one per service, overall pressure window)
+# Returns 1 if invalid IP (with error on stderr).
+_search_ip_data() {
 	local install_path="$1" ip="$2"
 	local now
 	now=$(date +"%s")
 
 	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
 
+	local half_life trip
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+
+	# Ban status (bans.active)
+	local ban_ts="" ban_expiry=""
+	local bans_file="$install_path/tmp/bans.active"
+	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
+		local ban_line
+		ban_line=$(awk -v ip="$ip" '$3 == ip {print $1, $2; exit}' "$bans_file")
+		if [ -n "$ban_line" ]; then
+			ban_ts="${ban_line%% *}"
+			ban_expiry="${ban_line##* }"
+		fi
+	fi
+
+	# Ban history (bans.history) — single AWK for both 24h and total
+	local hist_24h=0 hist_total=0
+	local history_file="$install_path/tmp/bans.history"
+	local cutoff_24h=$((now - 86400))
+	if [ -f "$history_file" ] && [ -s "$history_file" ]; then
+		local hist_raw
+		hist_raw=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" '
+			$3 == ip && ($5 == "ban" || $5 == "escalate") {
+				total++
+				if ($1+0 >= cutoff) recent++
+			}
+			END { print recent+0 "|" total+0 }' "$history_file")
+		IFS='|' read -r hist_24h hist_total <<< "$hist_raw"
+	fi
+
+	# Events (events.dat) — 24h event count and per-service counts
+	local events_file="$install_path/tmp/events.dat"
+	local evt_count=0 first_ts="" last_ts=""
+	local _gp_fmt="0.0"
+	local has_events=0
+	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+		# Single AWK: 24h count, per-service 24h counts, first/last seen
+		local evt_raw
+		evt_raw=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" '
+			$2 == ip {
+				ts = $1+0
+				if (!(first) || ts < first) first = ts
+				if (ts > last) last = ts
+				if (ts >= cutoff) {
+					total++
+					svc[$3]++
+				}
+			}
+			END {
+				printf "X|%d|%d|%d\n", total+0, first+0, last+0
+				for (s in svc) printf "E|%s|%d\n", s, svc[s]
+			}' "$events_file")
+		if [ -n "$evt_raw" ]; then
+			local x_line
+			x_line=$(echo "$evt_raw" | grep '^X|')
+			IFS='|' read -r _ evt_count first_ts last_ts <<< "$x_line"
+			if [ "$first_ts" -gt 0 ] 2>/dev/null; then
+				has_events=1
+			fi
+		fi
+
+		# Pressure — reuse _events_ip_awk for single-pass computation
+		if [ "$has_events" -eq 1 ]; then
+			local ip_awk_raw
+			ip_awk_raw=$(_events_ip_awk "$events_file" "$ip" "$now" "$half_life")
+			if [ -n "$ip_awk_raw" ]; then
+				# extract overall pressure from H line
+				local h_line _gp
+				h_line=$(echo "$ip_awk_raw" | grep '^H|')
+				IFS='|' read -r _ _gp _ _ <<< "$h_line"
+				_gp_fmt=$(pressure_format "$_gp")
+			fi
+		fi
+	fi
+
+	# Attack pool
+	local pool_file="$install_path/stats/attack.pool"
+	local pool_count=0
+	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
+		pool_count=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
+	fi
+
+	# Output: D line (core data)
+	echo "D|$ban_ts|$ban_expiry|$hist_24h|$hist_total|$evt_count|$first_ts|$last_ts|$_gp_fmt|$trip|$half_life|$pool_count"
+
+	# Output: E lines (per-service 24h event counts)
+	if [ -n "${evt_raw:-}" ]; then
+		echo "$evt_raw" | grep '^E|'
+	fi
+
+	# Output: P lines (per-service pressure)
+	if [ "$has_events" -eq 1 ] && [ -n "${ip_awk_raw:-}" ]; then
+		local _type _svc _wt _cnt _sp
+		while IFS='|' read -r _type _svc _wt _cnt _sp; do
+			[ "$_type" != "S" ] && continue
+			local _sp_fmt
+			_sp_fmt=$(pressure_format "$_sp")
+			echo "P|$_svc|$_sp_fmt"
+		done <<< "$ip_awk_raw"
+	fi
+}
+
+# search_ip install_path ip — unified IP search across all state files
+search_ip() {
+	local install_path="$1" ip="$2"
+
+	local data
+	data=$(_search_ip_data "$install_path" "$ip") || return 1
+
+	# parse D line
+	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count
+	d_line=$(echo "$data" | grep '^D|')
+	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count <<< "$d_line"
+
+	local now
+	now=$(date +"%s")
+
 	echo "IP Report: $ip"
 	echo ""
 
 	# Ban status
-	local bans_file="$install_path/tmp/bans.active"
-	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
-		local ban_line
-		ban_line=$(awk -v ip="$ip" '$3 == ip' "$bans_file" | head -1)
-		if [ -n "$ban_line" ]; then
-			local b_ts b_expiry
-			b_ts=$(echo "$ban_line" | awk '{print $1}')
-			b_expiry=$(echo "$ban_line" | awk '{print $2}')
-			local ban_since
-			ban_since=$(date -d "@${b_ts}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$b_ts")
-			if [ "$b_expiry" = "0" ]; then
-				echo "  Status:         BANNED (permanent since $ban_since)"
-			else
-				local remain=$(( (b_expiry - now) / 60 ))
-				[ "$remain" -lt 0 ] && remain=0
-				echo "  Status:         BANNED (temporary, ${remain}m remaining)"
-			fi
+	if [ -n "$ban_ts" ]; then
+		local ban_since
+		ban_since=$(date -d "@${ban_ts}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$ban_ts")
+		if [ "$ban_expiry" = "0" ]; then
+			echo "  Status:         BANNED (permanent since $ban_since)"
 		else
-			echo "  Status:         not banned"
+			local remain=$(( (ban_expiry - now) / 60 ))
+			[ "$remain" -lt 0 ] && remain=0
+			echo "  Status:         BANNED (temporary, ${remain}m remaining)"
 		fi
 	else
 		echo "  Status:         not banned"
 	fi
 
 	# Ban history
-	local history_file="$install_path/tmp/bans.history"
-	local cutoff_24h=$((now - 86400))
-	if [ -f "$history_file" ] && [ -s "$history_file" ]; then
-		local hist_bans hist_total
-		hist_bans=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" \
-			'$3 == ip && $1+0 >= cutoff && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
-			"$history_file")
-		hist_total=$(awk -v ip="$ip" \
-			'$3 == ip && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
-			"$history_file")
-		echo "  Ban history:    $hist_bans bans in 24h ($hist_total total)"
+	if [ "$hist_24h" -gt 0 ] 2>/dev/null || [ "$hist_total" -gt 0 ] 2>/dev/null; then
+		echo "  Ban history:    $hist_24h bans in 24h ($hist_total total)"
 	else
 		echo "  Ban history:    none"
 	fi
 
 	# Events
-	local events_file="$install_path/tmp/events.dat"
-	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
-		local evt_count evt_svcs
-		evt_count=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" \
-			'$1+0 >= cutoff && $2 == ip' "$events_file" | wc -l)
-		evt_svcs=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" \
-			'$1+0 >= cutoff && $2 == ip {s[$3]++} END {for(k in s) printf "%s(%s) ", k, s[k]}' \
-			"$events_file")
+	if [ "$evt_count" -gt 0 ] 2>/dev/null; then
+		# Build svc_summary from E lines: "sshd(5) dovecot(2)"
+		local evt_svcs=""
+		local _type _svc _cnt
+		while IFS='|' read -r _type _svc _cnt; do
+			[ "$_type" != "E" ] && continue
+			evt_svcs="${evt_svcs}${_svc}(${_cnt}) "
+		done <<< "$data"
 		echo "  Events (24h):   $evt_count failures across $evt_svcs"
 
 		# First/last seen
-		local first_seen last_seen
-		first_seen=$(awk -v ip="$ip" '$2 == ip {print $1; exit}' "$events_file")
-		last_seen=$(awk -v ip="$ip" '$2 == ip {ts=$1} END {print ts+0}' "$events_file")
-		if [ -n "$first_seen" ] && [ "$first_seen" -gt 0 ] 2>/dev/null; then
-			echo "  First seen:     $(date -d "@${first_seen}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$first_seen")"
+		if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
+			echo "  First seen:     $(date -d "@${first_ts}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$first_ts")"
 		fi
-		if [ -n "$last_seen" ] && [ "$last_seen" -gt 0 ] 2>/dev/null; then
-			echo "  Last seen:      $(date -d "@${last_seen}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$last_seen")"
+		if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
+			echo "  Last seen:      $(date -d "@${last_ts}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$last_ts")"
 		fi
 
 		# Pressure
-		local half_life trip
-		half_life="${PRESSURE_HALF_LIFE:-300}"
-		trip="${GLOB_PRESSURE_TRIP:-20}"
-		local _gp _gp_fmt
-		_gp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now")
-		_gp_fmt=$(pressure_format "$_gp")
 		echo "  Pressure:       ${_gp_fmt}/${trip} (half-life=${half_life}s)"
-		# per-service pressure
-		local _svc_list _svc _sp _sp_fmt
-		_svc_list=$(awk -v ip="$ip" '$2 == ip {s[$3]=1} END {for(k in s) print k}' "$events_file")
-		if [ -n "$_svc_list" ]; then
-			while IFS= read -r _svc; do
-				[ -z "$_svc" ] && continue
-				_sp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now" "$_svc")
-				_sp_fmt=$(pressure_format "$_sp")
-				echo "                  ${_svc}: ${_sp_fmt}/${trip}"
-			done <<< "$_svc_list"
-		fi
+		# Per-service pressure from P lines
+		local _ptype _psvc _pfmt
+		while IFS='|' read -r _ptype _psvc _pfmt; do
+			[ "$_ptype" != "P" ] && continue
+			echo "                  ${_psvc}: ${_pfmt}/${trip}"
+		done <<< "$data"
 	else
 		echo "  Events (24h):   0"
 	fi
 
 	# Attack pool
-	local pool_file="$install_path/stats/attack.pool"
-	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
-		local pool_count
-		pool_count=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
+	if [ "$pool_count" -gt 0 ] 2>/dev/null; then
 		echo "  Attack pool:    $pool_count total triggers"
 	fi
 }
@@ -3134,11 +3251,16 @@ test_pattern() {
 
 # --- Structured output formatters ---
 
-# _json_escape str — escape string for JSON output
+# _json_escape str — escape string for JSON output (RFC 8259 §7)
 _json_escape() {
 	local s="$1"
 	s="${s//\\/\\\\}"
 	s="${s//\"/\\\"}"
+	s="${s//$'\n'/\\n}"
+	s="${s//$'\t'/\\t}"
+	s="${s//$'\r'/\\r}"
+	s="${s//$'\b'/\\b}"
+	s="${s//$'\f'/\\f}"
 	echo "$s"
 }
 
@@ -3166,13 +3288,12 @@ _json_array_from_csv() {
 # list_bans_json install_path — JSON formatted active ban list
 list_bans_json() {
 	local install_path="$1"
-	local bans_file="$install_path/tmp/bans.active"
 	echo "["
-	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
+	local raw
+	if raw=$(_list_bans_data "$install_path"); then
 		local first=1
 		local ts expiry host mod ports
-		while IFS=' ' read -r ts expiry host mod ports; do
-			[ -z "$ts" ] && continue
+		while IFS='|' read -r ts expiry host mod ports; do
 			local banned_fmt expiry_fmt
 			banned_fmt=$(date -d "@${ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$ts")
 			if [ "$expiry" = "0" ]; then
@@ -3188,7 +3309,7 @@ list_bans_json() {
 			printf '  {"ip": "%s", "service": "%s", "ports": "%s", "banned": "%s", "expires": "%s"}' \
 				"$(_json_escape "$host")" "$(_json_escape "$mod")" "$(_json_escape "$ports")" \
 				"$banned_fmt" "$expiry_fmt"
-		done < "$bans_file"
+		done <<< "$raw"
 	fi
 	echo ""
 	echo "]"
@@ -3197,12 +3318,11 @@ list_bans_json() {
 # list_bans_csv install_path — CSV formatted active ban list
 list_bans_csv() {
 	local install_path="$1"
-	local bans_file="$install_path/tmp/bans.active"
 	echo "ip,service,ports,banned,expires"
-	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
+	local raw
+	if raw=$(_list_bans_data "$install_path"); then
 		local ts expiry host mod ports
-		while IFS=' ' read -r ts expiry host mod ports; do
-			[ -z "$ts" ] && continue
+		while IFS='|' read -r ts expiry host mod ports; do
 			local banned_fmt expiry_fmt
 			banned_fmt=$(date -d "@${ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$ts")
 			if [ "$expiry" = "0" ]; then
@@ -3211,7 +3331,7 @@ list_bans_csv() {
 				expiry_fmt=$(date -d "@${expiry}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$expiry")
 			fi
 			echo "$host,$mod,$ports,$banned_fmt,$expiry_fmt"
-		done < "$bans_file"
+		done <<< "$raw"
 	fi
 }
 
@@ -3279,8 +3399,46 @@ events_dashboard() {
 	rm -f "$atmp"
 }
 
-# events_ip install_path ip — per-IP pressure detail with service breakdown
-events_ip() {
+# _events_ip_awk events_file ip now half_life — single-pass per-IP data extraction
+# Outputs per service: S|service|weight|event_count|pressure_scaled
+# Summary line:        H|overall_pressure_scaled|first_ts|last_ts
+# Returns no output if IP has no events (caller checks).
+_events_ip_awk() {
+	local events_file="$1" ip="$2" now="$3" half_life="$4"
+	local cutoff=$((now - half_life * 10))
+	awk -v cutoff="$cutoff" -v now="$now" -v hl="$half_life" -v tgt="$ip" '
+	BEGIN { ln2 = 0.693147180559945; gfirst = 0; glast = 0 }
+	$1+0 >= cutoff && $2 == tgt {
+		mod = $3; ts = $1+0
+		w = ($4+0 > 0) ? $4+0 : 1
+		age = now - ts
+		decay = w * exp(-ln2 * age / hl)
+		gp += decay
+		sp[mod] += decay
+		cnt[mod]++
+		if (w > wt[mod]) wt[mod] = w
+		if (!(mod in sfirst) || ts < sfirst[mod]) sfirst[mod] = ts
+		if (ts > slast[mod]) slast[mod] = ts
+		if (gfirst == 0 || ts < gfirst) gfirst = ts
+		if (ts > glast) glast = ts
+	}
+	END {
+		if (length(cnt) == 0) exit
+		for (mod in cnt) {
+			printf "S|%s|%d|%d|%d\n", mod, (wt[mod] > 0 ? wt[mod] : 1), cnt[mod], int(sp[mod] * 1000)
+		}
+		printf "H|%d|%d|%d\n", int(gp * 1000), gfirst, glast
+	}' "$events_file"
+}
+
+# _events_ip_data install_path ip — shared data gatherer for events_ip triplet
+# Validates IP, checks for events, runs single-pass AWK, adds ban status.
+# Outputs:
+#   H|pressure_fmt|trip|half_life|first_ts|last_ts|ban_status
+#   S|service|weight|count|pressure_fmt
+# Returns 1 if invalid IP (with error on stderr).
+# Returns 2 if no events for IP.
+_events_ip_data() {
 	local install_path="$1" ip="$2"
 	local events_file="$install_path/tmp/events.dat"
 	local now half_life trip
@@ -3291,60 +3449,87 @@ events_ip() {
 	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
 
 	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
-		echo "No active events for $ip."
-		return 0
+		return 2
 	fi
 
-	# check if IP has any events
-	if ! awk -v ip="$ip" '$2 == ip {found=1; exit} END {exit !found}' "$events_file"; then
-		echo "No active events for $ip."
-		return 0
+	local raw
+	raw=$(_events_ip_awk "$events_file" "$ip" "$now" "$half_life")
+	if [ -z "$raw" ]; then
+		return 2
 	fi
 
-	# overall pressure
-	local _gp _gp_fmt
-	_gp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now")
+	# extract header line
+	local h_line _gp _gp_fmt first_ts last_ts
+	h_line=$(echo "$raw" | grep '^H|')
+	IFS='|' read -r _ _gp first_ts last_ts <<< "$h_line"
 	_gp_fmt=$(pressure_format "$_gp")
+
+	# ban status
+	local ban_status
+	ban_status=$(_apool_ban_status "$ip")
+	[ -z "$ban_status" ] && ban_status="not banned"
+
+	echo "H|$_gp_fmt|$trip|$half_life|$first_ts|$last_ts|$ban_status"
+
+	# emit service lines with formatted pressure
+	local _type _svc _wt _cnt _sp _sp_fmt
+	while IFS='|' read -r _type _svc _wt _cnt _sp; do
+		[ "$_type" != "S" ] && continue
+		_sp_fmt=$(pressure_format "$_sp")
+		echo "S|$_svc|$_wt|$_cnt|$_sp_fmt"
+	done <<< "$raw"
+}
+
+# events_ip install_path ip — per-IP pressure detail with service breakdown
+events_ip() {
+	local install_path="$1" ip="$2"
+	local half_life trip
+	half_life="${PRESSURE_HALF_LIFE:-300}"
+	trip="${GLOB_PRESSURE_TRIP:-20}"
+
+	local data rc=0
+	data=$(_events_ip_data "$install_path" "$ip") || rc=$?
+	if [ "$rc" -eq 1 ]; then
+		return 1
+	fi
+	if [ "$rc" -eq 2 ]; then
+		ip=$(validate_ip_any "$ip" 2>/dev/null) || ip="$2"
+		echo "No active events for $ip."
+		return 0
+	fi
+
+	# parse header
+	local h_line _gp_fmt _trip _hl first_ts last_ts ban_status
+	h_line=$(echo "$data" | grep '^H|')
+	IFS='|' read -r _ _gp_fmt _trip _hl first_ts last_ts ban_status <<< "$h_line"
+
 	echo "IP:               $ip"
-	echo "Pressure:         ${_gp_fmt}/${trip} (half-life=${half_life}s)"
+	echo "Pressure:         ${_gp_fmt}/${_trip} (half-life=${_hl}s)"
 	echo ""
 
-	# per-service breakdown
+	# per-service table
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.evtip.XXXXXX")
 	echo "#SERVICE|WEIGHT|EVENTS|PRESSURE" > "$atmp"
-	local _svc_list _svc _sp _sp_fmt _svc_cnt _svc_weight
-	_svc_list=$(awk -v ip="$ip" '$2 == ip {s[$3]=1} END {for(k in s) print k}' "$events_file")
-	if [ -n "$_svc_list" ]; then
-		while IFS= read -r _svc; do
-			[ -z "$_svc" ] && continue
-			_sp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now" "$_svc")
-			_sp_fmt=$(pressure_format "$_sp")
-			_svc_cnt=$(awk -v ip="$ip" -v mod="$_svc" '$2 == ip && $3 == mod {c++} END {print c+0}' "$events_file")
-			_svc_weight=$(awk -v ip="$ip" -v mod="$_svc" '$2 == ip && $3 == mod && $4+0 > 0 {w=$4} END {print w+0}' "$events_file")
-			[ "$_svc_weight" -eq 0 ] && _svc_weight=1
-			echo "$_svc|$_svc_weight|$_svc_cnt|${_sp_fmt}/${trip}" >> "$atmp"
-		done <<< "$_svc_list"
-	fi
+	local _type _svc _wt _cnt _sp_fmt
+	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
+		[ "$_type" != "S" ] && continue
+		echo "$_svc|$_wt|$_cnt|${_sp_fmt}/${_trip}" >> "$atmp"
+	done <<< "$data"
 	format_table < "$atmp"
 	rm -f "$atmp"
 	echo ""
 
 	# first/last seen
-	local first_seen last_seen
-	first_seen=$(awk -v ip="$ip" '$2 == ip {print $1; exit}' "$events_file")
-	last_seen=$(awk -v ip="$ip" '$2 == ip {ts=$1} END {print ts+0}' "$events_file")
-	if [ -n "$first_seen" ] && [ "$first_seen" -gt 0 ] 2>/dev/null; then
-		echo "First seen:       $(date -d "@${first_seen}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$first_seen")"
+	if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
+		echo "First seen:       $(date -d "@${first_ts}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$first_ts")"
 	fi
-	if [ -n "$last_seen" ] && [ "$last_seen" -gt 0 ] 2>/dev/null; then
-		echo "Last seen:        $(date -d "@${last_seen}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$last_seen")"
+	if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
+		echo "Last seen:        $(date -d "@${last_ts}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$last_ts")"
 	fi
 
 	# ban status
-	local ban_status
-	ban_status=$(_apool_ban_status "$ip")
-	if [ -n "$ban_status" ]; then
+	if [ "$ban_status" != "not banned" ]; then
 		echo "Status:           $ban_status"
 	else
 		echo "Status:           not banned"
@@ -3527,75 +3712,53 @@ events_dashboard_csv() {
 # events_ip_json install_path ip — JSON object for per-IP pressure detail
 events_ip_json() {
 	local install_path="$1" ip="$2"
-	local events_file="$install_path/tmp/events.dat"
-	local now half_life trip
-	now=$(date +"%s")
+	local half_life trip
 	half_life="${PRESSURE_HALF_LIFE:-300}"
 	trip="${GLOB_PRESSURE_TRIP:-20}"
 
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
-
-	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
+	local data rc=0
+	data=$(_events_ip_data "$install_path" "$ip") || rc=$?
+	if [ "$rc" -eq 1 ]; then
+		return 1
+	fi
+	if [ "$rc" -eq 2 ]; then
+		ip=$(validate_ip_any "$ip" 2>/dev/null) || ip="$2"
 		printf '{"ip": "%s", "pressure": 0.0, "pressure_trip": %s, "half_life": %s, "services": [], "first_seen": null, "last_seen": null, "status": "not banned"}\n' \
 			"$(_json_escape "$ip")" "$trip" "$half_life"
 		return 0
 	fi
 
-	# check if IP has any events
-	if ! awk -v ip="$ip" '$2 == ip {found=1; exit} END {exit !found}' "$events_file"; then
-		printf '{"ip": "%s", "pressure": 0.0, "pressure_trip": %s, "half_life": %s, "services": [], "first_seen": null, "last_seen": null, "status": "not banned"}\n' \
-			"$(_json_escape "$ip")" "$trip" "$half_life"
-		return 0
-	fi
+	# parse header
+	local h_line _gp_fmt _trip _hl first_ts last_ts ban_status
+	h_line=$(echo "$data" | grep '^H|')
+	IFS='|' read -r _ _gp_fmt _trip _hl first_ts last_ts ban_status <<< "$h_line"
 
-	# overall pressure
-	local _gp _gp_fmt
-	_gp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now")
-	_gp_fmt=$(pressure_format "$_gp")
-
-	# per-service breakdown
+	# build services JSON array
 	local svcs_json="["
 	local svc_first=1
-	local _svc_list _svc _sp _sp_fmt _svc_cnt _svc_weight
-	_svc_list=$(awk -v ip="$ip" '$2 == ip {s[$3]=1} END {for(k in s) print k}' "$events_file")
-	if [ -n "$_svc_list" ]; then
-		while IFS= read -r _svc; do
-			[ -z "$_svc" ] && continue
-			_sp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now" "$_svc")
-			_sp_fmt=$(pressure_format "$_sp")
-			_svc_cnt=$(awk -v ip="$ip" -v mod="$_svc" '$2 == ip && $3 == mod {c++} END {print c+0}' "$events_file")
-			_svc_weight=$(awk -v ip="$ip" -v mod="$_svc" '$2 == ip && $3 == mod && $4+0 > 0 {w=$4} END {print w+0}' "$events_file")
-			[ "$_svc_weight" -eq 0 ] && _svc_weight=1
-			if [ "$svc_first" -eq 1 ]; then
-				svc_first=0
-			else
-				svcs_json="$svcs_json, "
-			fi
-			svcs_json="$svcs_json{\"service\": \"$(_json_escape "$_svc")\", \"weight\": $_svc_weight, \"events\": $_svc_cnt, \"pressure\": $_sp_fmt}"
-		done <<< "$_svc_list"
-	fi
+	local _type _svc _wt _cnt _sp_fmt
+	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
+		[ "$_type" != "S" ] && continue
+		if [ "$svc_first" -eq 1 ]; then
+			svc_first=0
+		else
+			svcs_json="$svcs_json, "
+		fi
+		svcs_json="$svcs_json{\"service\": \"$(_json_escape "$_svc")\", \"weight\": $_wt, \"events\": $_cnt, \"pressure\": $_sp_fmt}"
+	done <<< "$data"
 	svcs_json="$svcs_json]"
 
 	# first/last seen
-	local first_seen last_seen first_fmt last_fmt
-	first_seen=$(awk -v ip="$ip" '$2 == ip {print $1; exit}' "$events_file")
-	last_seen=$(awk -v ip="$ip" '$2 == ip {ts=$1} END {print ts+0}' "$events_file")
-	first_fmt="null"
-	last_fmt="null"
-	if [ -n "$first_seen" ] && [ "$first_seen" -gt 0 ] 2>/dev/null; then
-		first_fmt="\"$(date -d "@${first_seen}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_seen")\""
+	local first_fmt="null" last_fmt="null"
+	if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
+		first_fmt="\"$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")\""
 	fi
-	if [ -n "$last_seen" ] && [ "$last_seen" -gt 0 ] 2>/dev/null; then
-		last_fmt="\"$(date -d "@${last_seen}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_seen")\""
+	if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
+		last_fmt="\"$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")\""
 	fi
-
-	# ban status
-	local ban_status
-	ban_status=$(_apool_ban_status "$ip")
-	[ -z "$ban_status" ] && ban_status="not banned"
 
 	printf '{"ip": "%s", "pressure": %s, "pressure_trip": %s, "half_life": %s, "services": %s, "first_seen": %s, "last_seen": %s, "status": "%s"}\n' \
-		"$(_json_escape "$ip")" "$_gp_fmt" "$trip" "$half_life" \
+		"$(_json_escape "$ip")" "$_gp_fmt" "$_trip" "$_hl" \
 		"$svcs_json" "$first_fmt" "$last_fmt" "$(_json_escape "$ban_status")"
 }
 
@@ -3603,9 +3766,7 @@ events_ip_json() {
 # One row per service, IP repeated on each row.
 events_ip_csv() {
 	local install_path="$1" ip="$2"
-	local events_file="$install_path/tmp/events.dat"
-	local now half_life trip
-	now=$(date +"%s")
+	local half_life trip
 	half_life="${PRESSURE_HALF_LIFE:-300}"
 	trip="${GLOB_PRESSURE_TRIP:-20}"
 
@@ -3613,50 +3774,32 @@ events_ip_csv() {
 
 	echo "ip,pressure,pressure_trip,half_life,service,weight,events,service_pressure,first_seen,last_seen,status"
 
-	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
-		return 0
-	fi
-	if ! awk -v ip="$ip" '$2 == ip {found=1; exit} END {exit !found}' "$events_file"; then
+	local data rc=0
+	data=$(_events_ip_data "$install_path" "$ip") || rc=$?
+	if [ "$rc" -ne 0 ]; then
 		return 0
 	fi
 
-	# overall pressure
-	local _gp _gp_fmt
-	_gp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now")
-	_gp_fmt=$(pressure_format "$_gp")
+	# parse header
+	local h_line _gp_fmt _trip _hl first_ts last_ts ban_status
+	h_line=$(echo "$data" | grep '^H|')
+	IFS='|' read -r _ _gp_fmt _trip _hl first_ts last_ts ban_status <<< "$h_line"
 
 	# first/last seen
-	local first_seen last_seen first_fmt last_fmt
-	first_seen=$(awk -v ip="$ip" '$2 == ip {print $1; exit}' "$events_file")
-	last_seen=$(awk -v ip="$ip" '$2 == ip {ts=$1} END {print ts+0}' "$events_file")
-	first_fmt=""
-	last_fmt=""
-	if [ -n "$first_seen" ] && [ "$first_seen" -gt 0 ] 2>/dev/null; then
-		first_fmt=$(date -d "@${first_seen}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_seen")
+	local first_fmt="" last_fmt=""
+	if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
+		first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
 	fi
-	if [ -n "$last_seen" ] && [ "$last_seen" -gt 0 ] 2>/dev/null; then
-		last_fmt=$(date -d "@${last_seen}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_seen")
+	if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
+		last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
 	fi
-
-	# ban status
-	local ban_status
-	ban_status=$(_apool_ban_status "$ip")
-	[ -z "$ban_status" ] && ban_status="not banned"
 
 	# per-service rows
-	local _svc_list _svc _sp _sp_fmt _svc_cnt _svc_weight
-	_svc_list=$(awk -v ip="$ip" '$2 == ip {s[$3]=1} END {for(k in s) print k}' "$events_file")
-	if [ -n "$_svc_list" ]; then
-		while IFS= read -r _svc; do
-			[ -z "$_svc" ] && continue
-			_sp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now" "$_svc")
-			_sp_fmt=$(pressure_format "$_sp")
-			_svc_cnt=$(awk -v ip="$ip" -v mod="$_svc" '$2 == ip && $3 == mod {c++} END {print c+0}' "$events_file")
-			_svc_weight=$(awk -v ip="$ip" -v mod="$_svc" '$2 == ip && $3 == mod && $4+0 > 0 {w=$4} END {print w+0}' "$events_file")
-			[ "$_svc_weight" -eq 0 ] && _svc_weight=1
-			echo "$ip,$_gp_fmt,$trip,$half_life,$_svc,$_svc_weight,$_svc_cnt,$_sp_fmt,$first_fmt,$last_fmt,$ban_status"
-		done <<< "$_svc_list"
-	fi
+	local _type _svc _wt _cnt _sp_fmt
+	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
+		[ "$_type" != "S" ] && continue
+		echo "$ip,$_gp_fmt,$_trip,$_hl,$_svc,$_wt,$_cnt,$_sp_fmt,$first_fmt,$last_fmt,$ban_status"
+	done <<< "$data"
 }
 
 # events_cidr_json install_path cidr — JSON object with CIDR summary and IP list
@@ -3681,6 +3824,10 @@ events_cidr_json() {
 
 	local match_count=0 total_events=0 banned_count=0
 	local first=1
+	local _cidr_summary _cidr_ips
+	_cidr_summary=$(mktemp "$install_path/tmp/.cidr_json_summary.XXXXXX")
+	_cidr_ips=$(mktemp "$install_path/tmp/.cidr_json_ips.XXXXXX")
+
 	_events_cidr_awk "$events_file" "$now" "$half_life" "$trip" "$target_addr" "$target_mask" | \
 	while IFS='|' read -r _ ip pw pf _trip cnt svcs first_ts last_ts; do
 		local first_fmt last_fmt ban_status
@@ -3699,22 +3846,21 @@ events_cidr_json() {
 			"$(_json_escape "$ban_status")"
 		# summary counters to fd 3
 		echo "$cnt|${ban_status}" >&3
-	done 3>"$install_path/tmp/.cidr_json_summary.$$" > "$install_path/tmp/.cidr_json_ips.$$"
+	done 3>"$_cidr_summary" > "$_cidr_ips"
 
 	# compute summary
-	local summary_file="$install_path/tmp/.cidr_json_summary.$$"
-	if [ -f "$summary_file" ] && [ -s "$summary_file" ]; then
-		match_count=$(wc -l < "$summary_file")
-		total_events=$(awk -F'|' '{s+=$1} END {print s+0}' "$summary_file")
-		banned_count=$(awk -F'|' '$2 != "not banned" && $2 != "" {c++} END {print c+0}' "$summary_file")
+	if [ -f "$_cidr_summary" ] && [ -s "$_cidr_summary" ]; then
+		match_count=$(wc -l < "$_cidr_summary")
+		total_events=$(awk -F'|' '{s+=$1} END {print s+0}' "$_cidr_summary")
+		banned_count=$(awk -F'|' '$2 != "not banned" && $2 != "" {c++} END {print c+0}' "$_cidr_summary")
 	fi
 
 	printf '{"cidr": "%s", "summary": {"match_count": %d, "total_events": %d, "banned_count": %d}, "ips": [\n' \
 		"$(_json_escape "$cidr")" "$match_count" "$total_events" "$banned_count"
-	cat "$install_path/tmp/.cidr_json_ips.$$" 2>/dev/null
+	cat "$_cidr_ips" 2>/dev/null
 	echo ""
 	echo "]}"
-	rm -f "$install_path/tmp/.cidr_json_summary.$$" "$install_path/tmp/.cidr_json_ips.$$"
+	rm -f "$_cidr_summary" "$_cidr_ips"
 }
 
 # events_cidr_csv install_path cidr — CSV formatted CIDR pressure report
@@ -3750,181 +3896,103 @@ events_cidr_csv() {
 # search_ip_json install_path ip — JSON formatted unified IP report
 search_ip_json() {
 	local install_path="$1" ip="$2"
+
+	local data
+	data=$(_search_ip_data "$install_path" "$ip") || return 1
+
+	# parse D line
+	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count
+	d_line=$(echo "$data" | grep '^D|')
+	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count <<< "$d_line"
+
 	local now
 	now=$(date +"%s")
 
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
-
-	# Ban status
+	# Ban status (compact format)
 	local status_str="not banned"
-	local bans_file="$install_path/tmp/bans.active"
-	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
-		local ban_line
-		ban_line=$(awk -v ip="$ip" '$3 == ip' "$bans_file" | head -1)
-		if [ -n "$ban_line" ]; then
-			local b_expiry
-			b_expiry=$(echo "$ban_line" | awk '{print $2}')
-			if [ "$b_expiry" = "0" ]; then
-				status_str="BANNED(perm)"
+	if [ -n "$ban_ts" ]; then
+		if [ "$ban_expiry" = "0" ]; then
+			status_str="BANNED(perm)"
+		else
+			local remain=$(( (ban_expiry - now) / 60 ))
+			[ "$remain" -lt 0 ] && remain=0
+			status_str="BANNED(${remain}m)"
+		fi
+	fi
+
+	# Per-service counts as JSON object from E lines
+	local svcs_json="{}"
+	local e_lines
+	e_lines=$(echo "$data" | grep '^E|')
+	if [ -n "$e_lines" ]; then
+		svcs_json="{"
+		local svc_first=1
+		local _type _svc _cnt
+		while IFS='|' read -r _type _svc _cnt; do
+			[ "$_type" != "E" ] && continue
+			if [ "$svc_first" -eq 1 ]; then
+				svc_first=0
 			else
-				local remain=$(( (b_expiry - now) / 60 ))
-				[ "$remain" -lt 0 ] && remain=0
-				status_str="BANNED(${remain}m)"
+				svcs_json="$svcs_json, "
 			fi
-		fi
+			svcs_json="$svcs_json\"$(_json_escape "$_svc")\": $_cnt"
+		done <<< "$e_lines"
+		svcs_json="$svcs_json}"
 	fi
 
-	# Ban history
-	local history_file="$install_path/tmp/bans.history"
-	local cutoff_24h=$((now - 86400))
-	local hist_bans=0 hist_total=0
-	if [ -f "$history_file" ] && [ -s "$history_file" ]; then
-		hist_bans=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" \
-			'$3 == ip && $1+0 >= cutoff && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
-			"$history_file")
-		hist_total=$(awk -v ip="$ip" \
-			'$3 == ip && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
-			"$history_file")
+	# First/last seen
+	local first_fmt="null" last_fmt="null"
+	if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
+		first_fmt="\"$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")\""
 	fi
-
-	# Events
-	local events_file="$install_path/tmp/events.dat"
-	local evt_count=0 first_fmt="null" last_fmt="null" svcs_json="{}"
-	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
-		evt_count=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" \
-			'$1+0 >= cutoff && $2 == ip' "$events_file" | wc -l)
-		# per-service counts as JSON object
-		local svc_pairs
-		svc_pairs=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" \
-			'$1+0 >= cutoff && $2 == ip {s[$3]++} END {for(k in s) printf "%s|%d\n", k, s[k]}' \
-			"$events_file")
-		if [ -n "$svc_pairs" ]; then
-			svcs_json="{"
-			local svc_first=1
-			while IFS='|' read -r sname scount; do
-				[ -z "$sname" ] && continue
-				if [ "$svc_first" -eq 1 ]; then
-					svc_first=0
-				else
-					svcs_json="$svcs_json, "
-				fi
-				svcs_json="$svcs_json\"$(_json_escape "$sname")\": $scount"
-			done <<< "$svc_pairs"
-			svcs_json="$svcs_json}"
-		fi
-
-		# First/last seen
-		local first_seen last_seen
-		first_seen=$(awk -v ip="$ip" '$2 == ip {print $1; exit}' "$events_file")
-		last_seen=$(awk -v ip="$ip" '$2 == ip {ts=$1} END {print ts+0}' "$events_file")
-		if [ -n "$first_seen" ] && [ "$first_seen" -gt 0 ] 2>/dev/null; then
-			first_fmt="\"$(date -d "@${first_seen}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_seen")\""
-		fi
-		if [ -n "$last_seen" ] && [ "$last_seen" -gt 0 ] 2>/dev/null; then
-			last_fmt="\"$(date -d "@${last_seen}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_seen")\""
-		fi
-	fi
-
-	# Pressure
-	local half_life trip _gp _gp_fmt
-	half_life="${PRESSURE_HALF_LIFE:-300}"
-	trip="${GLOB_PRESSURE_TRIP:-20}"
-	_gp=0
-	_gp_fmt="0.0"
-	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
-		_gp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now")
-		_gp_fmt=$(pressure_format "$_gp")
-	fi
-
-	# Attack pool
-	local pool_file="$install_path/stats/attack.pool"
-	local pool_count=0
-	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
-		pool_count=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
+	if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
+		last_fmt="\"$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")\""
 	fi
 
 	printf '{"ip": "%s", "status": "%s", "pressure": %s, "pressure_trip": %s, "ban_history_24h": %d, "ban_history_total": %d, "events_24h": %d, "services": %s, "first_seen": %s, "last_seen": %s, "attack_pool_triggers": %d}\n' \
 		"$(_json_escape "$ip")" "$(_json_escape "$status_str")" \
 		"$_gp_fmt" "$trip" \
-		"$hist_bans" "$hist_total" "$evt_count" "$svcs_json" \
+		"$hist_24h" "$hist_total" "$evt_count" "$svcs_json" \
 		"$first_fmt" "$last_fmt" "$pool_count"
 }
 
 # search_ip_csv install_path ip — CSV formatted unified IP report
 search_ip_csv() {
 	local install_path="$1" ip="$2"
-	local now
-	now=$(date +"%s")
 
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
+	local data
+	data=$(_search_ip_data "$install_path" "$ip") || return 1
 
 	echo "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers"
 
-	# Ban status
+	# parse D line
+	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count
+	d_line=$(echo "$data" | grep '^D|')
+	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count <<< "$d_line"
+
+	local now
+	now=$(date +"%s")
+
+	# Ban status (compact format)
 	local status_str="not banned"
-	local bans_file="$install_path/tmp/bans.active"
-	if [ -f "$bans_file" ] && [ -s "$bans_file" ]; then
-		local ban_line
-		ban_line=$(awk -v ip="$ip" '$3 == ip' "$bans_file" | head -1)
-		if [ -n "$ban_line" ]; then
-			local b_expiry
-			b_expiry=$(echo "$ban_line" | awk '{print $2}')
-			if [ "$b_expiry" = "0" ]; then
-				status_str="BANNED(perm)"
-			else
-				local remain=$(( (b_expiry - now) / 60 ))
-				[ "$remain" -lt 0 ] && remain=0
-				status_str="BANNED(${remain}m)"
-			fi
+	if [ -n "$ban_ts" ]; then
+		if [ "$ban_expiry" = "0" ]; then
+			status_str="BANNED(perm)"
+		else
+			local remain=$(( (ban_expiry - now) / 60 ))
+			[ "$remain" -lt 0 ] && remain=0
+			status_str="BANNED(${remain}m)"
 		fi
 	fi
 
-	# Ban history
-	local history_file="$install_path/tmp/bans.history"
-	local cutoff_24h=$((now - 86400))
-	local hist_bans=0 hist_total=0
-	if [ -f "$history_file" ] && [ -s "$history_file" ]; then
-		hist_bans=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" \
-			'$3 == ip && $1+0 >= cutoff && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
-			"$history_file")
-		hist_total=$(awk -v ip="$ip" \
-			'$3 == ip && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
-			"$history_file")
+	# First/last seen
+	local first_fmt="" last_fmt=""
+	if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
+		first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
+	fi
+	if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
+		last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
 	fi
 
-	# Events
-	local events_file="$install_path/tmp/events.dat"
-	local evt_count=0 first_fmt="" last_fmt=""
-	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
-		evt_count=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" \
-			'$1+0 >= cutoff && $2 == ip' "$events_file" | wc -l)
-		local first_seen last_seen
-		first_seen=$(awk -v ip="$ip" '$2 == ip {print $1; exit}' "$events_file")
-		last_seen=$(awk -v ip="$ip" '$2 == ip {ts=$1} END {print ts+0}' "$events_file")
-		if [ -n "$first_seen" ] && [ "$first_seen" -gt 0 ] 2>/dev/null; then
-			first_fmt=$(date -d "@${first_seen}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_seen")
-		fi
-		if [ -n "$last_seen" ] && [ "$last_seen" -gt 0 ] 2>/dev/null; then
-			last_fmt=$(date -d "@${last_seen}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_seen")
-		fi
-	fi
-
-	# Pressure
-	local half_life trip _gp _gp_fmt
-	half_life="${PRESSURE_HALF_LIFE:-300}"
-	trip="${GLOB_PRESSURE_TRIP:-20}"
-	_gp_fmt="0.0"
-	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
-		_gp=$(pressure_compute "$install_path" "$ip" "$half_life" "$now")
-		_gp_fmt=$(pressure_format "$_gp")
-	fi
-
-	# Attack pool
-	local pool_file="$install_path/stats/attack.pool"
-	local pool_count=0
-	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
-		pool_count=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
-	fi
-
-	echo "$ip,$status_str,$_gp_fmt,$trip,$hist_bans,$hist_total,$evt_count,$first_fmt,$last_fmt,$pool_count"
+	echo "$ip,$status_str,$_gp_fmt,$trip,$hist_24h,$hist_total,$evt_count,$first_fmt,$last_fmt,$pool_count"
 }

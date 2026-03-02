@@ -1,4 +1,51 @@
 2.0.1:
+[Change] tlog_lib.sh: update to canonical 2.0.2 — rotation refactored into
+      _tlog_handle_rotation() with pipe fallback for disk-full; journal flock
+      support; baserun/cursor validation hardening; CLI version cross-check;
+      67 new BATS tests (196 total)
+[Change] search_ip/json/csv: extract shared _search_ip_data() helper; all 5 state
+      files (bans.active, bans.history, events.dat, attack.pool) now read once
+      instead of 3x; per-service pressure reuses _events_ip_awk() single pass;
+      all three formats share one data source (F-004 5/5)
+[Change] events_ip/json/csv: extract shared _events_ip_awk() single-pass AWK and
+      _events_ip_data() helper; per-service AWK calls reduced from 4/service to 0
+      via single-pass pressure computation; all three formats now share one data
+      source (F-004 4/5)
+[Change] list_bans/json/csv: extract shared _list_bans_data() helper; bans.active
+      file read and date formatting now shared across all three formats;
+      state_bans_active_list() refactored as thin wrapper (F-004 3/5)
+[Change] apool_list/json/csv: extract shared _apool_prepare_weekly() helper;
+      weekly pool mktemp+find logic now in exactly one place (F-004 2/5)
+[Change] _apool_service_summary/json/csv: extract shared _apool_service_summary_awk()
+      helper; AWK aggregation logic now in exactly one place (F-004 1/5)
+[New] install.sh: show upgrade notice when watch mode is newly enabled on v1.5
+      upgrades; includes OS-appropriate revert instructions for systemd,
+      chkconfig, and update-rc.d; fresh installs unaffected (F-006)
+[Fix] events_cidr_json(): replace PID-based temp files ($$) with mktemp;
+      eliminates predictable filenames in $install_path/tmp/ (F-008)
+[Fix] _apool_awk(): use comma-delimited exact matching for rule dedup; previous
+      substring match via AWK index() falsely deduped vsftpd/vsftpd2 and
+      openvpn/openvpnas rule pairs (F-013)
+[Fix] _json_escape(): escape newline, tab, CR, backspace, and formfeed per
+      RFC 8259 §7; previously only backslash and double-quote were escaped,
+      producing invalid JSON when log data contained control characters (F-009)
+[Fix] corrected post-upgrade verification in bfd.1, README, and README.md:
+      replaced non-existent --health flag and mislabeled -c description (F-007/F-015)
+[Fix] importconf: restore custom rule files from backup on upgrade; user-added
+      rules not in the shipped set are copied back with 640 permissions (F-005)
+[Fix] importconf: preserve exclude.files customizations on upgrade
+[Change] Extract config_init() shared by startup and reload_watch(), eliminating
+      80+ lines of duplicated config loading logic (F-003)
+[Fix] reload_watch() re-derives ELOG_FORMAT, ELOG_LEVEL, and ELOG_SYSLOG_FILE
+      from conf.bfd on SIGHUP; log format changes now take effect without
+      restart (F-002)
+[Fix] reload_watch() unsets all conf.bfd and internals.conf variables before
+      re-sourcing, preventing stale values when settings are removed (F-010)
+[Fix] reload_watch() re-registers tlog journal filter mappings on SIGHUP (F-057)
+[New] config_init() pre-validates conf.bfd syntax and permissions before
+      unsetting variables on reload, preventing degraded daemon state
+[Fix] validate_config() uses return instead of exit, preventing daemon crash
+      when watch mode reload encounters a config validation error (F-014)
 [Fix] Packaging: add tlog_lib.sh and elog_lib.sh to RPM spec and DEB
       manifests — both libraries are sourced at startup but were missing
       from package file lists, rendering RPM/DEB installs non-functional

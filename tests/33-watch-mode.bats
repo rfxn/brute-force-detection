@@ -16,6 +16,7 @@ load 'helpers/bfd-common'
 # (already sourced via bfd_common_setup) and config variables.
 _load_watch_functions() {
 	local bfd_file="$PROJECT_ROOT/files/bfd"
+	eval "$(awk '/^config_init\(\) \{/,/^\}/' "$bfd_file")"
 	eval "$(awk '/^cleanup_watch\(\) \{/,/^\}/' "$bfd_file")"
 	eval "$(awk '/^reload_watch\(\) \{/,/^\}/' "$bfd_file")"
 }
@@ -31,7 +32,7 @@ _setup_watch_env() {
 	CNF="$INSTALL_PATH/conf.bfd"
 	INTCNF="$INSTALL_PATH/internals.conf"
 
-	cat > "$CNF" <<'CNFEOF'
+	cat > "$CNF" <<CNFEOF
 #!/bin/bash
 PRESSURE_TRIP="20"
 PRESSURE_HALF_LIFE="300"
@@ -39,12 +40,28 @@ PRESSURE_TRIP_GLOBAL="0"
 BAN_TTL="600"
 BAN_ESCALATE_AFTER="5"
 BAN_ESCALATE_WINDOW="86400"
+BAN_ESCALATION="none"
+BAN_ESCALATION_CAP="86400"
 EMAIL_ALERTS="0"
 EMAIL_ADDRESS="root"
+EMAIL_SUBJECT="BFD Alert"
+EMAIL_LOGLINES="50"
 FIREWALL="custom"
 BAN_COMMAND="/bin/true"
 UNBAN_COMMAND="/bin/true"
 WATCH_INTERVAL="10"
+SUBNET_TRIG="0"
+SUBNET_MASK="24"
+SUBNET_MASK_V6="48"
+OUTPUT_SYSLOG="0"
+BFD_LOG_PATH="$BFD_LOG_PATH"
+AUTH_LOG_PATH="/dev/null"
+KERNEL_LOG_PATH="/dev/null"
+MAIL_LOG_PATH="/dev/null"
+LOG_FORMAT="classic"
+LOG_LEVEL="1"
+SCAN_MAX_LINES="50000"
+SCAN_TIMEOUT="120"
 CNFEOF
 	chown root "$CNF"
 	chmod 640 "$CNF"
@@ -65,24 +82,17 @@ INTEOF
 	chown root "$INTCNF"
 	chmod 640 "$INTCNF"
 
-	# set globals needed by reload_watch
+	# set globals needed before config_init runs (cleanup_watch tests,
+	# reload_watch local IP refresh, initial LOCK_FILE for cleanup tests)
 	LOCK_FILE="$INSTALL_PATH/lock.utime"
-	TLOG_BASERUN="$INSTALL_PATH/tmp"
-	BAN_COMMAND_TEMPLATE="/bin/true"
-	UNBAN_COMMAND_TEMPLATE="/bin/true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	UNBAN_COMMAND_V6_TEMPLATE=""
-	_FW_BACKEND="custom"
-	BAN_RETRY_COUNT="0"
-	TLOG_PATH="$INSTALL_PATH/tlog"
-	RULES_PATH="$INSTALL_PATH/rules"
 	KERNEL_LOG_PATH="/dev/null"
 	IP_BIN=""
 	LO_HOSTS="$INSTALL_PATH/ignore.hosts.local"
 	touch "$LO_HOSTS"
 	touch "$INSTALL_PATH/exclude.files"
-	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
-	declare -gA _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
+
+	# run config_init for initial setup (sets all derived vars, pressure arrays, etc.)
+	config_init
 }
 
 setup() {
@@ -210,6 +220,65 @@ INTEOF
 	assert_success
 }
 
+@test "reload_watch: ELOG_FORMAT re-derived from LOG_FORMAT (F-002)" {
+	# change LOG_FORMAT in conf.bfd
+	sed -i 's/LOG_FORMAT="classic"/LOG_FORMAT="json"/' "$CNF"
+	reload_watch
+	[ "$ELOG_FORMAT" = "json" ]
+}
+
+@test "reload_watch: ELOG_LEVEL re-derived from LOG_LEVEL (F-002)" {
+	sed -i 's/LOG_LEVEL="1"/LOG_LEVEL="3"/' "$CNF"
+	reload_watch
+	[ "$ELOG_LEVEL" = "3" ]
+}
+
+@test "reload_watch: ELOG_SYSLOG_FILE re-derived from OUTPUT_SYSLOG (F-002)" {
+	# enable syslog output
+	sed -i 's/OUTPUT_SYSLOG="0"/OUTPUT_SYSLOG="1"/' "$CNF"
+	reload_watch
+	[ -n "$ELOG_SYSLOG_FILE" ]
+}
+
+@test "reload_watch: unsets BAN_ESCALATION on config change (F-010)" {
+	# initial value from conf.bfd
+	[ "$BAN_ESCALATION" = "none" ]
+	# change to linear
+	sed -i 's/BAN_ESCALATION="none"/BAN_ESCALATION="linear"/' "$CNF"
+	reload_watch
+	[ "$BAN_ESCALATION" = "linear" ]
+}
+
+@test "reload_watch: unsets EMAIL_ALERTS on config change (F-010)" {
+	[ "$EMAIL_ALERTS" = "0" ]
+	sed -i 's/EMAIL_ALERTS="0"/EMAIL_ALERTS="1"/' "$CNF"
+	reload_watch
+	[ "$EMAIL_ALERTS" = "1" ]
+}
+
+@test "reload_watch: re-registers journal filters (F-057)" {
+	reload_watch
+	# _bfd_journal_register_all registers 23 mappings
+	[ "${#_TLOG_JOURNAL_NAMES[@]}" -ge 23 ]
+}
+
+@test "reload_watch: config validation failure returns non-zero (F-014)" {
+	# set PRESSURE_TRIP to invalid value
+	sed -i 's/PRESSURE_TRIP="20"/PRESSURE_TRIP="abc"/' "$CNF"
+	run reload_watch
+	assert_failure
+}
+
+@test "reload_watch: syntax error in conf.bfd aborts before unset" {
+	local old_trip="$PRESSURE_TRIP"
+	# introduce syntax error
+	echo 'if [' >> "$CNF"
+	run reload_watch
+	assert_failure
+	# old value should be preserved (unset never ran)
+	[ "$PRESSURE_TRIP" = "$old_trip" ]
+}
+
 # ============================================================
 # Tier 2: Integration tests — bfd --watch process lifecycle
 # ============================================================
@@ -232,7 +301,7 @@ _start_watch() {
 	touch "$inst/exclude.files"
 	touch "$inst/alert.bfd"
 
-	cat > "$inst/conf.bfd" <<'CNFEOF'
+	cat > "$inst/conf.bfd" <<CNFEOF
 #!/bin/bash
 PRESSURE_TRIP="20"
 PRESSURE_HALF_LIFE="300"
@@ -240,16 +309,29 @@ PRESSURE_TRIP_GLOBAL="0"
 BAN_TTL="600"
 BAN_ESCALATE_AFTER="5"
 BAN_ESCALATE_WINDOW="86400"
+BAN_ESCALATION="none"
+BAN_ESCALATION_CAP="86400"
 EMAIL_ALERTS="0"
 EMAIL_ADDRESS="root"
+EMAIL_SUBJECT="BFD Alert"
+EMAIL_LOGLINES="50"
 FIREWALL="custom"
 BAN_COMMAND="/bin/true"
 UNBAN_COMMAND="/bin/true"
 WATCH_INTERVAL="1"
+SUBNET_TRIG="0"
+SUBNET_MASK="24"
+SUBNET_MASK_V6="48"
 OUTPUT_SYSLOG="0"
-BFD_LOG_PATH="__LOGPATH__"
+BFD_LOG_PATH="$inst/tmp/bfd.log"
+AUTH_LOG_PATH="/dev/null"
+KERNEL_LOG_PATH="/dev/null"
+MAIL_LOG_PATH="/dev/null"
+LOG_FORMAT="classic"
+LOG_LEVEL="1"
+SCAN_MAX_LINES="50000"
+SCAN_TIMEOUT="120"
 CNFEOF
-	sed -i "s|__LOGPATH__|$inst/tmp/bfd.log|" "$inst/conf.bfd"
 	chown root "$inst/conf.bfd"
 	chmod 640 "$inst/conf.bfd"
 

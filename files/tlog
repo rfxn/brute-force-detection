@@ -27,7 +27,7 @@
 PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin:/usr/local/sbin
 export PATH
 
-TLOG_VERSION="2.0.1"
+TLOG_VERSION="2.0.2"
 
 # BASERUN: cursor storage directory — sed-replaced at install time
 BASERUN="${BASERUN:-/tmp}"
@@ -103,7 +103,7 @@ _tlog_usage_long() {
 	  --status <name> [file]
 	      Display cursor state: path, mode, value, and age. If file is given,
 	      also shows current file size and pending delta. Read-only — does not
-	      modify any files.
+	      modify any files. Exits 0 even for corrupt or uninitialized cursors.
 
 	  --reset <name>
 	      Delete cursor, .jts (journal timestamp), .lock, and any orphaned
@@ -271,6 +271,12 @@ fi
 # shellcheck disable=SC1090,SC1091
 . "$_LIB"
 
+# Version cross-check: CLI wrapper and library must be from same release
+# shellcheck disable=SC2154
+if [[ "$TLOG_VERSION" != "$TLOG_LIB_VERSION" ]]; then
+	echo "tlog: warning: version mismatch (tlog=$TLOG_VERSION, lib=$TLOG_LIB_VERSION)" >&2
+fi
+
 ###########################################################################
 # Apply options to environment
 ###########################################################################
@@ -294,8 +300,18 @@ if [[ -n "$_OPT_FLOCK" ]]; then
 fi
 
 if [[ -n "$_OPT_FIRST_RUN" ]]; then
+	if [[ "$_OPT_FIRST_RUN" != "skip" ]] && [[ "$_OPT_FIRST_RUN" != "full" ]]; then
+		echo "tlog: invalid first-run mode '$_OPT_FIRST_RUN' (must be 'skip' or 'full')" >&2
+		exit 1
+	fi
 	TLOG_FIRST_RUN="$_OPT_FIRST_RUN"
 	export TLOG_FIRST_RUN
+fi
+
+# Warn when running as root with BASERUN=/tmp (cursor-using commands only)
+if [[ "$_CMD" != "full" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "$BASERUN" == "/tmp" ]]; then
+	echo "tlog: warning: BASERUN is /tmp; cursor files stored in world-writable directory" >&2
+	echo "tlog: warning: set -b/--baserun or BASERUN env to a secure path" >&2
 fi
 
 ###########################################################################
@@ -309,15 +325,8 @@ _tlog_require_baserun() {
 	fi
 }
 
-# Reject cursor names that could escape BASERUN via path traversal.
-# Names must be plain identifiers — no slashes, no . or .. components.
-_tlog_validate_name() {
-	local name="$1"
-	if [[ -z "$name" ]] || [[ "$name" == "." ]] || [[ "$name" == ".." ]] || [[ "$name" == *"/"* ]]; then
-		echo "tlog: invalid cursor name: '$name' (must not contain '/' or be '.'/'..') " >&2
-		exit 1
-	fi
-}
+# Name validation: delegate to library _tlog_validate_name() (return 1),
+# CLI call sites use || exit 1 to convert to fatal exit.
 
 ###########################################################################
 # Subcommand: --status <name> [file]
@@ -333,7 +342,7 @@ _tlog_cmd_status() {
 		exit 1
 	fi
 
-	_tlog_validate_name "$name"
+	_tlog_validate_name "$name" || exit 1
 	_tlog_require_baserun
 
 	local cursor_file="$BASERUN/$name"
@@ -344,16 +353,18 @@ _tlog_cmd_status() {
 	_tlog_parse_cursor "$name" "$BASERUN"
 	local parse_rc=$?
 
-	if [[ -z "$_tlog_cursor_value" ]]; then
+	if [[ $parse_rc -eq 2 ]]; then
+		# Corrupt cursor: show raw content for diagnosis
+		local raw_value=""
+		read -r raw_value < "$cursor_file" 2>/dev/null || true
+		printf 'raw:    %s\n' "$raw_value"
+		printf 'state:  corrupt (would auto-reset on next read)\n'
+	elif [[ -z "$_tlog_cursor_value" ]]; then
 		printf 'state:  not initialized\n'
 	else
 		printf 'mode:   %s\n' "$_tlog_cursor_mode"
 		printf 'value:  %s\n' "$_tlog_cursor_value"
-		if [[ $parse_rc -eq 2 ]]; then
-			printf 'state:  corrupt (would auto-reset on next read)\n'
-		else
-			printf 'state:  valid\n'
-		fi
+		printf 'state:  valid\n'
 
 		# Cursor age
 		if [[ -f "$cursor_file" ]]; then
@@ -422,7 +433,7 @@ _tlog_cmd_reset() {
 		exit 1
 	fi
 
-	_tlog_validate_name "$name"
+	_tlog_validate_name "$name" || exit 1
 	_tlog_require_baserun
 
 	local found=0
@@ -458,6 +469,15 @@ _tlog_cmd_reset() {
 		fi
 	done
 
+	# Orphaned JTS temp files (mktemp pattern: .NAME.jts.XXXXXX)
+	for tmpfile in "$BASERUN"/."${name}".jts.??????; do
+		if [[ -f "$tmpfile" ]]; then
+			rm -f "$tmpfile"
+			printf 'removed: %s\n' "$tmpfile"
+			found=1
+		fi
+	done
+
 	if [[ $found -eq 0 ]]; then
 		printf 'no cursor files found for: %s\n' "$name"
 	fi
@@ -477,7 +497,7 @@ case "$_CMD" in
 			exit 1
 		fi
 
-		_tlog_validate_name "${_ARGS[1]}"
+		_tlog_validate_name "${_ARGS[1]}" || exit 1
 		_tlog_require_baserun
 
 		# 3rd positional arg overrides -m flag (matches library priority)
@@ -519,7 +539,7 @@ case "$_CMD" in
 			exit 1
 		fi
 
-		_tlog_validate_name "${_ARGS[0]}"
+		_tlog_validate_name "${_ARGS[0]}" || exit 1
 		_tlog_require_baserun
 
 		tlog_adjust_cursor "${_ARGS[0]}" "$BASERUN" "${_ARGS[1]}"

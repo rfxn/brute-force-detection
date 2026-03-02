@@ -359,6 +359,31 @@ teardown() {
 	assert_output 'a\\b\"c'
 }
 
+@test "_json_escape: newline escaped" {
+	run _json_escape $'line1\nline2'
+	assert_output 'line1\nline2'
+}
+
+@test "_json_escape: tab escaped" {
+	run _json_escape $'col1\tcol2'
+	assert_output 'col1\tcol2'
+}
+
+@test "_json_escape: carriage return escaped" {
+	run _json_escape $'text\rmore'
+	assert_output 'text\rmore'
+}
+
+@test "_json_escape: backspace and formfeed escaped" {
+	run _json_escape $'\b\f'
+	assert_output '\b\f'
+}
+
+@test "_json_escape: mixed special chars and control chars" {
+	run _json_escape $'a\\b"c\nd\te'
+	assert_output 'a\\b\"c\nd\te'
+}
+
 # --- flush_bans: non-standard mode ---
 
 @test "flush_bans: non-standard mode acts as temp mode" {
