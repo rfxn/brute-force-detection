@@ -1,4 +1,8 @@
 2.0.1:
+[Change] events_ip/json/csv: extract shared _events_ip_awk() single-pass AWK and
+      _events_ip_data() helper; per-service AWK calls reduced from 4/service to 0
+      via single-pass pressure computation; all three formats now share one data
+      source (F-004 4/5)
 [Change] list_bans/json/csv: extract shared _list_bans_data() helper; bans.active
       file read and date formatting now shared across all three formats;
       state_bans_active_list() refactored as thin wrapper (F-004 3/5)
