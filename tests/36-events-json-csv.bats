@@ -16,6 +16,7 @@ bfd_load_function _apool_report_csv
 bfd_load_function _apool_service_summary_awk
 bfd_load_function _apool_service_summary_json
 bfd_load_function _apool_service_summary_csv
+bfd_load_function _apool_prepare_weekly
 bfd_load_function apool_list_json
 bfd_load_function apool_list_csv
 

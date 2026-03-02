@@ -582,12 +582,20 @@ _apool_service_summary() {
 	rm -f "$atmp"
 }
 
+# _apool_prepare_weekly — create temp file with 7-day aggregated pool data
+# Outputs temp file path via stdout; caller must rm -f after use.
+_apool_prepare_weekly() {
+	local wtmp
+	wtmp=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
+	find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$wtmp" 2>/dev/null
+	echo "$wtmp"
+}
+
 apool_list() {
 	local ahost="${1:-}"
 	if [ -n "$ahost" ]; then
 		local WAPOOL_LIST
-		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
-		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
+		WAPOOL_LIST=$(_apool_prepare_weekly)
 		_apool_report "$WAPOOL_LIST" "Events for search string \"$ahost\"" "$ahost"
 		rm -f "$WAPOOL_LIST"
 	elif [ -f "$APOOL_LIST" ]; then
@@ -596,8 +604,7 @@ apool_list() {
 		_apool_service_summary "$APOOL_LIST"
 		echo
 		local WAPOOL_LIST
-		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
-		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
+		WAPOOL_LIST=$(_apool_prepare_weekly)
 		_apool_report "$WAPOOL_LIST" "Top 25 brute force attackers this week"
 		rm -f "$WAPOOL_LIST"
 	fi
@@ -730,16 +737,14 @@ apool_list_json() {
 	local ahost="${1:-}"
 	if [ -n "$ahost" ]; then
 		local WAPOOL_LIST
-		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
-		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
+		WAPOOL_LIST=$(_apool_prepare_weekly)
 		printf '{"search": "%s", "results": ' "$(_json_escape "$ahost")"
 		_apool_report_json "$WAPOOL_LIST" "$ahost"
 		echo "}"
 		rm -f "$WAPOOL_LIST"
 	elif [ -f "$APOOL_LIST" ]; then
 		local WAPOOL_LIST
-		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
-		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
+		WAPOOL_LIST=$(_apool_prepare_weekly)
 		printf '{"today": '
 		_apool_report_json "$APOOL_LIST"
 		printf ', "services": '
@@ -758,15 +763,13 @@ apool_list_csv() {
 	local ahost="${1:-}"
 	if [ -n "$ahost" ]; then
 		local WAPOOL_LIST
-		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
-		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
+		WAPOOL_LIST=$(_apool_prepare_weekly)
 		echo "# search: $ahost"
 		_apool_report_csv "$WAPOOL_LIST" "$ahost"
 		rm -f "$WAPOOL_LIST"
 	elif [ -f "$APOOL_LIST" ]; then
 		local WAPOOL_LIST
-		WAPOOL_LIST=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
-		find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$WAPOOL_LIST" 2>/dev/null
+		WAPOOL_LIST=$(_apool_prepare_weekly)
 		echo "# today"
 		_apool_report_csv "$APOOL_LIST"
 		echo ""

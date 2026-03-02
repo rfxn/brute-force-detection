@@ -1,4 +1,6 @@
 2.0.1:
+[Change] apool_list/json/csv: extract shared _apool_prepare_weekly() helper;
+      weekly pool mktemp+find logic now in exactly one place (F-004 2/5)
 [Change] _apool_service_summary/json/csv: extract shared _apool_service_summary_awk()
       helper; AWK aggregation logic now in exactly one place (F-004 1/5)
 [New] install.sh: show upgrade notice when watch mode is newly enabled on v1.5
