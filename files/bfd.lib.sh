@@ -52,30 +52,35 @@ else
 fi
 unset _elog_lib_path _elog_lib_dir
 
-# Register BFD journal filter mappings
-tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
-tlog_journal_register "dropbear" "SYSLOG_IDENTIFIER=dropbear"
-tlog_journal_register "dovecot" "SYSLOG_IDENTIFIER=dovecot"
-tlog_journal_register "postfix" "SYSLOG_IDENTIFIER=postfix"
-tlog_journal_register "courier" "SYSLOG_IDENTIFIER=couriertcpd"
-tlog_journal_register "sendmail" "SYSLOG_IDENTIFIER=sm-mta"
-tlog_journal_register "vpopmail" "SYSLOG_IDENTIFIER=vpopmail"
-tlog_journal_register "cyrus" "SYSLOG_IDENTIFIER=cyrus"
-tlog_journal_register "pure-ftpd" "SYSLOG_IDENTIFIER=pure-ftpd"
-tlog_journal_register "proftpd" "SYSLOG_IDENTIFIER=proftpd"
-tlog_journal_register "vsftpd" "SYSLOG_IDENTIFIER=vsftpd"
-tlog_journal_register "webmin" "SYSLOG_IDENTIFIER=webmin"
-tlog_journal_register "wordpress" "SYSLOG_IDENTIFIER=wordpress"
-tlog_journal_register "rh_imapd" "SYSLOG_IDENTIFIER=imapd"
-tlog_journal_register "rh_ipop3" "SYSLOG_IDENTIFIER=ipop3d"
-tlog_journal_register "named" "SYSLOG_IDENTIFIER=named"
-tlog_journal_register "openvpn" "SYSLOG_IDENTIFIER=openvpn"
-tlog_journal_register "exim_authfail" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
-tlog_journal_register "exim_nxuser" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
-tlog_journal_register "xrdp" "SYSLOG_IDENTIFIER=xrdp-sesman"
-tlog_journal_register "asterisk" "SYSLOG_IDENTIFIER=asterisk"
-tlog_journal_register "asterisk.iax" "SYSLOG_IDENTIFIER=asterisk"
-tlog_journal_register "asterisk_nopeer" "SYSLOG_IDENTIFIER=asterisk"
+# _bfd_journal_register_all: populate journal filter mappings for all BFD rules
+# Wrapped in a function so reload_watch can re-register after clearing arrays
+_bfd_journal_register_all() {
+	tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+	tlog_journal_register "dropbear" "SYSLOG_IDENTIFIER=dropbear"
+	tlog_journal_register "dovecot" "SYSLOG_IDENTIFIER=dovecot"
+	tlog_journal_register "postfix" "SYSLOG_IDENTIFIER=postfix"
+	tlog_journal_register "courier" "SYSLOG_IDENTIFIER=couriertcpd"
+	tlog_journal_register "sendmail" "SYSLOG_IDENTIFIER=sm-mta"
+	tlog_journal_register "vpopmail" "SYSLOG_IDENTIFIER=vpopmail"
+	tlog_journal_register "cyrus" "SYSLOG_IDENTIFIER=cyrus"
+	tlog_journal_register "pure-ftpd" "SYSLOG_IDENTIFIER=pure-ftpd"
+	tlog_journal_register "proftpd" "SYSLOG_IDENTIFIER=proftpd"
+	tlog_journal_register "vsftpd" "SYSLOG_IDENTIFIER=vsftpd"
+	tlog_journal_register "webmin" "SYSLOG_IDENTIFIER=webmin"
+	tlog_journal_register "wordpress" "SYSLOG_IDENTIFIER=wordpress"
+	tlog_journal_register "rh_imapd" "SYSLOG_IDENTIFIER=imapd"
+	tlog_journal_register "rh_ipop3" "SYSLOG_IDENTIFIER=ipop3d"
+	tlog_journal_register "named" "SYSLOG_IDENTIFIER=named"
+	tlog_journal_register "openvpn" "SYSLOG_IDENTIFIER=openvpn"
+	tlog_journal_register "exim_authfail" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
+	tlog_journal_register "exim_nxuser" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
+	tlog_journal_register "xrdp" "SYSLOG_IDENTIFIER=xrdp-sesman"
+	tlog_journal_register "asterisk" "SYSLOG_IDENTIFIER=asterisk"
+	tlog_journal_register "asterisk.iax" "SYSLOG_IDENTIFIER=asterisk"
+	tlog_journal_register "asterisk_nopeer" "SYSLOG_IDENTIFIER=asterisk"
+}
+# Register at module load
+_bfd_journal_register_all
 
 # exit codes (used by bfd, exported for callers)
 # shellcheck disable=SC2034

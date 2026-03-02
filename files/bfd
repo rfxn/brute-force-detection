@@ -22,6 +22,7 @@
 #
 INSTALL_PATH="/usr/local/bfd"
 CNF="$INSTALL_PATH/conf.bfd"
+INTCNF="$INSTALL_PATH/internals.conf"
 V="2.0.1"
 # shellcheck disable=SC2034 # APPN used by importconf
 APPN="BFD"
@@ -44,6 +45,21 @@ DRY_RUN=0
 _COUNTRY_CACHE_FILE=""
 _IGNORE_CACHE_FILE=""
 
+# ELOG constants (BFD-specific, never change on reload)
+# shellcheck disable=SC2034
+ELOG_APP="bfd"
+# shellcheck disable=SC2034
+ELOG_TS_FORMAT="%b %e %H:%M:%S"
+# shellcheck disable=SC2034
+ELOG_STDOUT="always"
+# shellcheck disable=SC2034
+ELOG_STDOUT_PREFIX="full"
+
+# Associative arrays — must be at global scope (declare -A inside functions
+# creates locals in bash 4.1, breaking the pressure model)
+declare -A _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
+declare -A _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
+
 # shellcheck disable=SC2317 # called via trap
 cleanup() {
 	rm -rf "$LOCK_FILE.lk" 2>/dev/null
@@ -60,102 +76,161 @@ vhead() {
 	echo ""
 }
 
-if [ ! -f "$CNF" ]; then
-	vhead
-	echo "could not find \$CNF, aborting."
-	exit "$EXIT_CONFIG_ERROR"
-fi
-# validate config file safety before sourcing
-_cnf_owner=$(stat -L -c '%u' "$CNF")
-_cnf_perms=$(stat -L -c '%a' "$CNF")
-_cnf_world="${_cnf_perms: -1}"
-if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
-	vhead
-	echo "conf.bfd has unsafe ownership (uid=$_cnf_owner) or permissions ($_cnf_perms), aborting."
-	exit "$EXIT_CONFIG_ERROR"
-fi
-# shellcheck disable=SC1090
-. "$CNF"
-# source internal/derived variables (split from conf.bfd in 2.0.1)
-INTCNF="$INSTALL_PATH/internals.conf"
-if [ -f "$INTCNF" ]; then
-	_int_owner=$(stat -L -c '%u' "$INTCNF")
-	_int_perms=$(stat -L -c '%a' "$INTCNF")
-	_int_world="${_int_perms: -1}"
-	if [ "$_int_owner" = "0" ] && [ "$((_int_world & 2))" -eq 0 ]; then
-		# shellcheck disable=SC1090
-		. "$INTCNF"
-	else
-		echo "warning: internals.conf has unsafe ownership or permissions, using defaults." >&2
+# config_init [reload]
+# Source config files, derive variables, load pressure arrays, validate,
+# and set up firewall backend. When reload=1, unset all config variables
+# first so removed settings revert to defaults. Returns non-zero on failure.
+config_init() {
+	local _reload="${1:-0}"
+
+	# On reload: pre-validate syntax before unsetting anything
+	if [ "$_reload" = "1" ]; then
+		if ! bash -n "$CNF" 2>/dev/null; then
+			echo "error: conf.bfd has syntax errors, reload aborted." >&2
+			return "$EXIT_CONFIG_ERROR"
+		fi
+		if [ -f "$INTCNF" ] && ! bash -n "$INTCNF" 2>/dev/null; then
+			echo "error: internals.conf has syntax errors, reload aborted." >&2
+			return "$EXIT_CONFIG_ERROR"
+		fi
+		# Pre-check ownership/permissions before unsetting anything
+		local _pre_owner _pre_perms _pre_world
+		_pre_owner=$(stat -L -c '%u' "$CNF")
+		_pre_perms=$(stat -L -c '%a' "$CNF")
+		_pre_world="${_pre_perms: -1}"
+		if [ "$_pre_owner" != "0" ] || [ "$((_pre_world & 2))" -ne 0 ]; then
+			echo "error: conf.bfd has unsafe ownership (uid=$_pre_owner) or permissions ($_pre_perms), reload aborted." >&2
+			return "$EXIT_CONFIG_ERROR"
+		fi
+		# Unset ALL config variables for clean re-read (F-010)
+		# conf.bfd variables
+		unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL
+		unset BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW
+		unset BAN_ESCALATION BAN_ESCALATION_CAP
+		unset EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES
+		unset FIREWALL
+		unset BAN_COMMAND UNBAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND_V6
+		unset AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH
+		unset OUTPUT_SYSLOG LOG_FORMAT LOG_LEVEL
+		unset WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT
+		unset SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6
+		# legacy compat aliases
+		unset TRIG TRIG_WINDOW TRIG_GLOBAL
+		unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
+		# internals.conf variables
+		unset RULES_PATH TLOG_PATH TLOG_LIB TLOG_BASERUN
+		unset EMAIL_TEMPLATE IGNORE_HOST_FILES LOCK_FILE
+		unset PRESSURE_CONF THRESHOLDS_CONF TIME_ZONE
+		unset LOCK_FILE_TIMEOUT OUTPUT_SYSLOG_FILE BAN_RETRY_COUNT LOG_SOURCE
 	fi
-fi
-# fallbacks for internals.conf variables (backward compat with pre-split installs)
-RULES_PATH="${RULES_PATH:-$INSTALL_PATH/rules}"
-TLOG_PATH="${TLOG_PATH:-$INSTALL_PATH/tlog}"
-TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
-EMAIL_TEMPLATE="${EMAIL_TEMPLATE:-$INSTALL_PATH/alert.bfd}"
-IGNORE_HOST_FILES="${IGNORE_HOST_FILES:-$INSTALL_PATH/exclude.files}"
-LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
-TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
-LOCK_FILE_TIMEOUT="${LOCK_FILE_TIMEOUT:-300}"
-OUTPUT_SYSLOG_FILE="${OUTPUT_SYSLOG_FILE:-$KERNEL_LOG_PATH}"
-BAN_RETRY_COUNT="${BAN_RETRY_COUNT:-2}"
-LOG_SOURCE="${LOG_SOURCE:-auto}"
-export LOG_SOURCE
-# Configure elog_lib for BFD (consumed by sourced elog_lib.sh)
-# shellcheck disable=SC2034
-ELOG_APP="bfd"
-# shellcheck disable=SC2034
-ELOG_TS_FORMAT="%b %e %H:%M:%S"
-# shellcheck disable=SC2034
-ELOG_STDOUT="always"
-# shellcheck disable=SC2034
-ELOG_STDOUT_PREFIX="full"
-ELOG_LOG_FILE="$BFD_LOG_PATH"
-ELOG_SYSLOG_FILE=""
-[ "${OUTPUT_SYSLOG:-0}" = "1" ] && ELOG_SYSLOG_FILE="$OUTPUT_SYSLOG_FILE"
-# shellcheck disable=SC2034
-ELOG_FORMAT="${LOG_FORMAT:-classic}"
-# shellcheck disable=SC2034
-ELOG_LEVEL="${LOG_LEVEL:-1}"
-# backward compat: map old variable names to new pressure model names
-PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
-PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
-PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
-BAN_TTL="${BAN_TTL:-${BAN_DURATION:-600}}"
-BAN_ESCALATE_AFTER="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-5}}"
-BAN_ESCALATE_WINDOW="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
-GLOB_PRESSURE_TRIP="$PRESSURE_TRIP"
-# legacy aliases for code that still references old names
-TRIG="${TRIG:-$PRESSURE_TRIP}"
-TRIG_WINDOW="${TRIG_WINDOW:-$PRESSURE_HALF_LIFE}"
-TRIG_GLOBAL="${TRIG_GLOBAL:-$PRESSURE_TRIP_GLOBAL}"
-BAN_DURATION="${BAN_DURATION:-$BAN_TTL}"
-BAN_PERMANENT_AFTER="${BAN_PERMANENT_AFTER:-$BAN_ESCALATE_AFTER}"
-BAN_PERMANENT_WINDOW="${BAN_PERMANENT_WINDOW:-$BAN_ESCALATE_WINDOW}"
-GLOB_TRIG="$TRIG"
-# load per-rule pressure overrides (falls back to thresholds.conf if no pressure.conf)
-declare -A _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
-if [ -f "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}" ]; then
-	_load_pressure_conf "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}"
-elif [ -f "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}" ]; then
-	_load_pressure_conf "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
-fi
-# also load legacy arrays for backward compat callers
-declare -A _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
-_load_thresholds "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
-# extract BAN_COMMAND templates (only needed for custom backend)
-BAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND")
-UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
-BAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND_V6")
-UNBAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND_V6")
 
-validate_config || exit $EXIT_CONFIG_ERROR
-detect_log_paths
+	# Source conf.bfd (with safety checks)
+	if [ ! -f "$CNF" ]; then
+		echo "error: could not find $CNF." >&2
+		return "$EXIT_CONFIG_ERROR"
+	fi
+	local _cnf_owner _cnf_perms _cnf_world
+	_cnf_owner=$(stat -L -c '%u' "$CNF")
+	_cnf_perms=$(stat -L -c '%a' "$CNF")
+	_cnf_world="${_cnf_perms: -1}"
+	if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
+		echo "error: conf.bfd has unsafe ownership (uid=$_cnf_owner) or permissions ($_cnf_perms)." >&2
+		return "$EXIT_CONFIG_ERROR"
+	fi
+	# shellcheck disable=SC1090
+	. "$CNF"
 
-# resolve firewall backend and run setup
-fw_resolve_backend
-fw_setup
+	# Source internals.conf
+	if [ -f "$INTCNF" ]; then
+		local _int_owner _int_perms _int_world
+		_int_owner=$(stat -L -c '%u' "$INTCNF")
+		_int_perms=$(stat -L -c '%a' "$INTCNF")
+		_int_world="${_int_perms: -1}"
+		if [ "$_int_owner" = "0" ] && [ "$((_int_world & 2))" -eq 0 ]; then
+			# shellcheck disable=SC1090
+			. "$INTCNF"
+		else
+			echo "warning: internals.conf has unsafe ownership or permissions, using defaults." >&2
+		fi
+	fi
+
+	# Fallbacks for internals.conf variables
+	RULES_PATH="${RULES_PATH:-$INSTALL_PATH/rules}"
+	TLOG_PATH="${TLOG_PATH:-$INSTALL_PATH/tlog}"
+	TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
+	EMAIL_TEMPLATE="${EMAIL_TEMPLATE:-$INSTALL_PATH/alert.bfd}"
+	IGNORE_HOST_FILES="${IGNORE_HOST_FILES:-$INSTALL_PATH/exclude.files}"
+	LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
+	TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
+	LOCK_FILE_TIMEOUT="${LOCK_FILE_TIMEOUT:-300}"
+	OUTPUT_SYSLOG_FILE="${OUTPUT_SYSLOG_FILE:-$KERNEL_LOG_PATH}"
+	BAN_RETRY_COUNT="${BAN_RETRY_COUNT:-2}"
+	LOG_SOURCE="${LOG_SOURCE:-auto}"
+	export LOG_SOURCE
+
+	# ELOG config derived from conf.bfd values (F-002 fix)
+	ELOG_LOG_FILE="$BFD_LOG_PATH"
+	ELOG_SYSLOG_FILE=""
+	[ "${OUTPUT_SYSLOG:-0}" = "1" ] && ELOG_SYSLOG_FILE="$OUTPUT_SYSLOG_FILE"
+	# shellcheck disable=SC2034
+	ELOG_FORMAT="${LOG_FORMAT:-classic}"
+	# shellcheck disable=SC2034
+	ELOG_LEVEL="${LOG_LEVEL:-1}"
+
+	# Backward compat mapping (old v1.5 names -> new names)
+	PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
+	PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
+	PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
+	BAN_TTL="${BAN_TTL:-${BAN_DURATION:-600}}"
+	BAN_ESCALATE_AFTER="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-5}}"
+	BAN_ESCALATE_WINDOW="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
+	GLOB_PRESSURE_TRIP="$PRESSURE_TRIP"
+	TRIG="${TRIG:-$PRESSURE_TRIP}"
+	TRIG_WINDOW="${TRIG_WINDOW:-$PRESSURE_HALF_LIFE}"
+	TRIG_GLOBAL="${TRIG_GLOBAL:-$PRESSURE_TRIP_GLOBAL}"
+	BAN_DURATION="${BAN_DURATION:-$BAN_TTL}"
+	BAN_PERMANENT_AFTER="${BAN_PERMANENT_AFTER:-$BAN_ESCALATE_AFTER}"
+	BAN_PERMANENT_WINDOW="${BAN_PERMANENT_WINDOW:-$BAN_ESCALATE_WINDOW}"
+	GLOB_TRIG="$TRIG"
+
+	# Pressure arrays (clear + reload)
+	_PRESS_WEIGHT=()
+	_PRESS_TRIP=()
+	_PRESS_SKIP_ALERT=()
+	_PRESS_RULE_EMAIL=()
+	if [ -f "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}" ]; then
+		_load_pressure_conf "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}"
+	elif [ -f "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}" ]; then
+		_load_pressure_conf "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
+	fi
+	_THRESH_TRIG=()
+	_THRESH_SKIP_ALERT=()
+	_THRESH_RULE_EMAIL=()
+	_load_thresholds "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
+
+	# BAN_COMMAND templates
+	BAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND")
+	UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
+	BAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND_V6")
+	UNBAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND_V6")
+
+	# Validate and set up
+	validate_config || return $?
+	detect_log_paths
+	fw_resolve_backend
+	fw_setup
+
+	# Re-register journal filters on reload (F-057)
+	if [ "$_reload" = "1" ]; then
+		_TLOG_JOURNAL_NAMES=()
+		_TLOG_JOURNAL_FILTERS=()
+		_bfd_journal_register_all
+	fi
+
+	return 0
+}
+
+config_init || { vhead; exit "$EXIT_CONFIG_ERROR"; }
 
 # warn if BAN_COMMAND binary not found (custom mode only)
 if [ "$_FW_BACKEND" = "custom" ]; then
@@ -728,84 +803,11 @@ cleanup_watch() {
 # shellcheck disable=SC2317 # called via trap
 reload_watch() {
 	eout "watch mode reloading configuration (SIGHUP)" le
-	# re-source config with same safety checks as startup
-	local _cnf_owner _cnf_perms _cnf_world
-	_cnf_owner=$(stat -L -c '%u' "$CNF")
-	_cnf_perms=$(stat -L -c '%a' "$CNF")
-	_cnf_world="${_cnf_perms: -1}"
-	if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
-		elog error "reload aborted: conf.bfd has unsafe ownership or permissions"
+	if ! config_init 1; then
+		elog error "reload aborted: configuration error, continuing with previous config"
 		return 1
 	fi
-	# clear config vars BEFORE re-sourcing so conf.bfd values take effect cleanly
-	# (if unset happens after sourcing, it destroys the freshly-sourced values)
-	unset PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL
-	unset BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW
-	unset TRIG TRIG_WINDOW TRIG_GLOBAL
-	unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
-	# shellcheck disable=SC1090
-	. "$CNF"
-	if [ -f "$INTCNF" ]; then
-		local _int_owner _int_perms _int_world
-		_int_owner=$(stat -L -c '%u' "$INTCNF")
-		_int_perms=$(stat -L -c '%a' "$INTCNF")
-		_int_world="${_int_perms: -1}"
-		if [ "$_int_owner" = "0" ] && [ "$((_int_world & 2))" -eq 0 ]; then
-			# shellcheck disable=SC1090
-			. "$INTCNF"
-		fi
-	fi
-	# fallbacks for internals.conf variables (same as startup lines 90-100)
-	RULES_PATH="${RULES_PATH:-$INSTALL_PATH/rules}"
-	TLOG_PATH="${TLOG_PATH:-$INSTALL_PATH/tlog}"
-	TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
-	EMAIL_TEMPLATE="${EMAIL_TEMPLATE:-$INSTALL_PATH/alert.bfd}"
-	IGNORE_HOST_FILES="${IGNORE_HOST_FILES:-$INSTALL_PATH/exclude.files}"
-	LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
-	TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
-	LOCK_FILE_TIMEOUT="${LOCK_FILE_TIMEOUT:-300}"
-	OUTPUT_SYSLOG_FILE="${OUTPUT_SYSLOG_FILE:-$KERNEL_LOG_PATH}"
-	BAN_RETRY_COUNT="${BAN_RETRY_COUNT:-2}"
-	LOG_SOURCE="${LOG_SOURCE:-auto}"
-	# re-derive pressure model variables (same fallback chain as startup)
-	PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
-	PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
-	PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-0}}"
-	BAN_TTL="${BAN_TTL:-${BAN_DURATION:-600}}"
-	BAN_ESCALATE_AFTER="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-5}}"
-	BAN_ESCALATE_WINDOW="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
-	GLOB_PRESSURE_TRIP="$PRESSURE_TRIP"
-	TRIG="${TRIG:-$PRESSURE_TRIP}"
-	TRIG_WINDOW="${TRIG_WINDOW:-$PRESSURE_HALF_LIFE}"
-	TRIG_GLOBAL="${TRIG_GLOBAL:-$PRESSURE_TRIP_GLOBAL}"
-	BAN_DURATION="${BAN_DURATION:-$BAN_TTL}"
-	BAN_PERMANENT_AFTER="${BAN_PERMANENT_AFTER:-$BAN_ESCALATE_AFTER}"
-	BAN_PERMANENT_WINDOW="${BAN_PERMANENT_WINDOW:-$BAN_ESCALATE_WINDOW}"
-	GLOB_TRIG="$TRIG"
-	# clear pressure arrays before reload (if file is missing, arrays must be empty)
-	_PRESS_WEIGHT=()
-	_PRESS_TRIP=()
-	_PRESS_SKIP_ALERT=()
-	_PRESS_RULE_EMAIL=()
-	if [ -f "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}" ]; then
-		_load_pressure_conf "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}"
-	elif [ -f "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}" ]; then
-		_load_pressure_conf "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
-	fi
-	_load_thresholds "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
-	# shellcheck disable=SC2034  # templates used by _fw_custom_ban/unban
-	BAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND")
-	UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
-	BAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND_V6")
-	UNBAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND_V6")
-	if ! validate_config; then
-		elog error "reload aborted: config validation failed"
-		return 1
-	fi
-	detect_log_paths
-	fw_resolve_backend
-	fw_setup
-	# refresh local IPs
+	# refresh local IPs (runtime state, not config)
 	if [ -n "$IP_BIN" ]; then
 		"$IP_BIN" addr list | grep -E 'inet6? ' | tr '/' ' ' | awk '{print$2}' > "$LO_HOSTS"
 	else

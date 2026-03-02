@@ -1,4 +1,14 @@
 2.0.1:
+[Change] Extract config_init() shared by startup and reload_watch(), eliminating
+      80+ lines of duplicated config loading logic (F-003)
+[Fix] reload_watch() re-derives ELOG_FORMAT, ELOG_LEVEL, and ELOG_SYSLOG_FILE
+      from conf.bfd on SIGHUP; log format changes now take effect without
+      restart (F-002)
+[Fix] reload_watch() unsets all conf.bfd and internals.conf variables before
+      re-sourcing, preventing stale values when settings are removed (F-010)
+[Fix] reload_watch() re-registers tlog journal filter mappings on SIGHUP (F-057)
+[New] config_init() pre-validates conf.bfd syntax and permissions before
+      unsetting variables on reload, preventing degraded daemon state
 [Fix] validate_config() uses return instead of exit, preventing daemon crash
       when watch mode reload encounters a config validation error (F-014)
 [Fix] Packaging: add tlog_lib.sh and elog_lib.sh to RPM spec and DEB
