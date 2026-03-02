@@ -544,10 +544,9 @@ EOF
 # Source check() function from bfd (defined there, not in bfd.lib.sh)
 bfd_load_function check
 
-# Helper to run check() with controlled rules dir and capture output
-_run_check_with_stats() {
+# _setup_check_env: set up minimal environment for check()
+_setup_check_env() {
 	local rules_dir="$1"
-	# set up minimal environment for check()
 	RULES_PATH="$rules_dir"
 	GLOB_PRESSURE_TRIP="5"
 	GLOB_TRIG="5"
@@ -569,6 +568,13 @@ _run_check_with_stats() {
 	BAN_ESCALATE_WINDOW="86400"
 	BAN_PERMANENT_WINDOW="86400"
 	SKIP_ALERT=""
+	EMAIL_ALERTS="0"
+	SUBNET_TRIG="0"
+}
+
+# Helper to run check() with controlled rules dir and capture output
+_run_check_with_stats() {
+	_setup_check_env "$1"
 	check
 }
 
@@ -762,28 +768,7 @@ MATCHED_HOSTS=""
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
-	# run check and verify IGNOREREGEX is empty after rule2
-	RULES_PATH="$rules_dir"
-	GLOB_PRESSURE_TRIP="5"
-	GLOB_TRIG="5"
-	PRESSURE_HALF_LIFE="300"
-	TRIG_WINDOW="300"
-	PRESSURE_TRIP_GLOBAL="0"
-	TRIG_GLOBAL="0"
-	UTIME="1000"
-	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
-	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
-	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
-	BAN_COMMAND_TEMPLATE="true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	DRY_RUN="1"
-	BAN_TTL="0"
-	BAN_DURATION="0"
-	BAN_ESCALATE_AFTER="0"
-	BAN_PERMANENT_AFTER="0"
-	BAN_ESCALATE_WINDOW="86400"
-	BAN_PERMANENT_WINDOW="86400"
-	SKIP_ALERT=""
+	_setup_check_env "$rules_dir"
 	# After processing rule2, IGNOREREGEX should be empty
 	check
 	[ -z "$IGNOREREGEX" ]
@@ -813,27 +798,7 @@ MATCHED_HOSTS=""
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
-	RULES_PATH="$rules_dir"
-	GLOB_PRESSURE_TRIP="5"
-	GLOB_TRIG="5"
-	PRESSURE_HALF_LIFE="300"
-	TRIG_WINDOW="300"
-	PRESSURE_TRIP_GLOBAL="0"
-	TRIG_GLOBAL="0"
-	UTIME="1000"
-	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
-	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
-	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
-	BAN_COMMAND_TEMPLATE="true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	DRY_RUN="1"
-	BAN_TTL="0"
-	BAN_DURATION="0"
-	BAN_ESCALATE_AFTER="0"
-	BAN_PERMANENT_AFTER="0"
-	BAN_ESCALATE_WINDOW="86400"
-	BAN_PERMANENT_WINDOW="86400"
-	SKIP_ALERT=""
+	_setup_check_env "$rules_dir"
 	check
 	[ -z "$PORTS" ]
 }
@@ -876,27 +841,7 @@ MATCHED_HOSTS=""
 EOF
 	chmod 644 "$rules_dir/testrule"
 	chown root "$rules_dir/testrule"
-	RULES_PATH="$rules_dir"
-	GLOB_PRESSURE_TRIP="5"
-	GLOB_TRIG="5"
-	PRESSURE_HALF_LIFE="300"
-	TRIG_WINDOW="300"
-	PRESSURE_TRIP_GLOBAL="0"
-	TRIG_GLOBAL="0"
-	UTIME="1000"
-	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
-	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
-	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
-	BAN_COMMAND_TEMPLATE="true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	DRY_RUN="1"
-	BAN_TTL="0"
-	BAN_DURATION="0"
-	BAN_ESCALATE_AFTER="0"
-	BAN_PERMANENT_AFTER="0"
-	BAN_ESCALATE_WINDOW="86400"
-	BAN_PERMANENT_WINDOW="86400"
-	SKIP_ALERT=""
+	_setup_check_env "$rules_dir"
 	check
 	# PORTS should be empty (reset by check before sourcing rule)
 	[ -z "$PORTS" ]
@@ -955,30 +900,10 @@ MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
-	RULES_PATH="$rules_dir"
-	GLOB_PRESSURE_TRIP="5"
-	GLOB_TRIG="5"
-	PRESSURE_HALF_LIFE="300"
-	TRIG_WINDOW="300"
-	PRESSURE_TRIP_GLOBAL="0"
-	TRIG_GLOBAL="0"
-	UTIME="1000"
-	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
-	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
-	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	_setup_check_env "$rules_dir"
 	BAN_COMMAND_TEMPLATE="/bin/true"
-	BAN_COMMAND_V6_TEMPLATE=""
 	DRY_RUN="0"
-	BAN_TTL="0"
-	BAN_DURATION="0"
-	BAN_ESCALATE_AFTER="0"
-	BAN_PERMANENT_AFTER="0"
-	BAN_ESCALATE_WINDOW="86400"
-	BAN_PERMANENT_WINDOW="86400"
-	SKIP_ALERT=""
-	EMAIL_ALERTS="0"
-	SUBNET_TRIG="0"
-	run _run_check_with_stats "$rules_dir"
+	run check
 	assert_success
 	# only 1 ban executed, not 2 (state_bans_active_check dedup)
 	assert_output --partial "1 bans executed"
@@ -1010,31 +935,9 @@ MATCHED_HOSTS="127.0.0.1 127.0.0.1 127.0.0.1"
 EOF
 	chmod 644 "$rules_dir/rule1" "$rules_dir/rule2"
 	chown root "$rules_dir/rule1" "$rules_dir/rule2"
-	# create lo_hosts with 127.0.0.1 so filter_host returns 2
-	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	_setup_check_env "$rules_dir"
+	# override lo_hosts with 127.0.0.1 so filter_host returns 2
 	echo "127.0.0.1" > "$LO_HOSTS"
-	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
-	touch "$IGNORE_HOST_FILES"
-	RULES_PATH="$rules_dir"
-	GLOB_PRESSURE_TRIP="5"
-	GLOB_TRIG="5"
-	PRESSURE_HALF_LIFE="300"
-	TRIG_WINDOW="300"
-	PRESSURE_TRIP_GLOBAL="0"
-	TRIG_GLOBAL="0"
-	UTIME="1000"
-	BAN_COMMAND_TEMPLATE="/bin/true"
-	BAN_COMMAND_V6_TEMPLATE=""
-	DRY_RUN="1"
-	BAN_TTL="0"
-	BAN_DURATION="0"
-	BAN_ESCALATE_AFTER="0"
-	BAN_PERMANENT_AFTER="0"
-	BAN_ESCALATE_WINDOW="86400"
-	BAN_PERMANENT_WINDOW="86400"
-	SKIP_ALERT=""
-	EMAIL_ALERTS="0"
-	SUBNET_TRIG="0"
 	check
 	# pool entries from both rules should exist
 	local pool_count

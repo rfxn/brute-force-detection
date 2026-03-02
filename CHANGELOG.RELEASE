@@ -1,4 +1,6 @@
 2.0.1:
+[Change] Test helpers: extract _setup_check_env() in 17-check-pipeline.bats,
+      replace 6 repeated ~20-line variable blocks with helper + overrides
 [Change] Test helpers: add bfd_load_function() to bfd-common.bash, replace 18
       inline eval+awk function extraction calls across 7 test files
 [Change] Test suite cleanup: remove 13 duplicate/vacuous tests across 5 files
