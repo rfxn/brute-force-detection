@@ -1,4 +1,6 @@
 2.0.1:
+[Change] Test helpers: extract _setup_mock_mail_silent() and _setup_mock_mail_log()
+      in 22-alert-format.bats, replace 6 inline mock mail patterns
 [Change] Test helpers: extract _setup_check_env() in 17-check-pipeline.bats,
       replace 6 repeated ~20-line variable blocks with helper + overrides
 [Change] Test helpers: add bfd_load_function() to bfd-common.bash, replace 18
