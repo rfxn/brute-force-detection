@@ -1,4 +1,7 @@
 2.0.1:
+[New] install.sh: show upgrade notice when watch mode is newly enabled on v1.5
+      upgrades; includes OS-appropriate revert instructions for systemd,
+      chkconfig, and update-rc.d; fresh installs unaffected (F-006)
 [Fix] events_cidr_json(): replace PID-based temp files ($$) with mktemp;
       eliminates predictable filenames in $install_path/tmp/ (F-008)
 [Fix] _apool_awk(): use comma-delimited exact matching for rule dedup; previous
