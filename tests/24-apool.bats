@@ -219,6 +219,39 @@ teardown() {
 	assert_output --partial "sshd"
 }
 
+# --- _apool_awk substring dedup ---
+
+@test "_apool_awk: substring rules not falsely deduped (vsftpd vs vsftpd2)" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	echo "1000 192.0.2.1 vsftpd" >> "$pool"
+	echo "1001 192.0.2.1 vsftpd2" >> "$pool"
+	run _apool_awk "$pool"
+	assert_success
+	assert_output --partial "vsftpd,vsftpd2"
+}
+
+@test "_apool_awk: substring rules not falsely deduped (openvpn vs openvpnas)" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	echo "1000 192.0.2.1 openvpn" >> "$pool"
+	echo "1001 192.0.2.1 openvpnas" >> "$pool"
+	run _apool_awk "$pool"
+	assert_success
+	assert_output --partial "openvpn,openvpnas"
+}
+
+@test "_apool_awk: exact duplicate rules still deduped" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	echo "1000 192.0.2.1 sshd" >> "$pool"
+	echo "1001 192.0.2.1 sshd" >> "$pool"
+	echo "1002 192.0.2.1 dovecot" >> "$pool"
+	run _apool_awk "$pool"
+	assert_success
+	# sshd should appear only once in the rules list
+	local rules_field
+	rules_field=$(echo "$output" | awk -F'|' '{print $5}')
+	[ "$(echo "$rules_field" | grep -o 'sshd' | wc -l)" -eq 1 ]
+}
+
 @test "apool_list: cleans up temp file after execution" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
 	echo "1000 192.0.2.1 sshd" >> "$APOOL_LIST"

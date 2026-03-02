@@ -612,7 +612,7 @@ _apool_awk() {
 		if (!(ip in first) || ts < first[ip]) first[ip] = ts
 		if (!(ip in last) || ts > last[ip]) last[ip] = ts
 		if (rules[ip] == "") rules[ip] = rule
-		else if (index(rules[ip], rule) == 0) rules[ip] = rules[ip] "," rule
+		else if (index("," rules[ip] ",", "," rule ",") == 0) rules[ip] = rules[ip] "," rule
 	}
 	END {
 		for (ip in count)
