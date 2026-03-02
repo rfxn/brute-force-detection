@@ -17,49 +17,6 @@ teardown() {
 	bfd_teardown
 }
 
-# --- count_failures (windowed replacement) ---
-
-@test "count_failures: counts host in windowed mode" {
-	local hosts_parsed
-	hosts_parsed=$(printf "192.0.2.1\n192.0.2.2\n192.0.2.1\n")
-	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
-	assert_success
-	assert_output "2"
-}
-
-@test "count_failures: accumulates within window" {
-	local hosts_parsed
-	hosts_parsed=$(printf "192.0.2.1\n192.0.2.1\n192.0.2.1\n")
-	# first run at t=900
-	count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "900" "sshd" >/dev/null
-	# second run at t=1000 (within window)
-	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
-	assert_success
-	assert_output "6"
-}
-
-@test "count_failures: old events expire outside window" {
-	# seed old events at t=100
-	state_events_append "$INSTALL_PATH" "100" "192.0.2.1" "sshd" "5"
-	local hosts_parsed
-	hosts_parsed=$(printf "192.0.2.1\n192.0.2.1\n")
-	# now=1000, window=300, cutoff=700 => old events at t=100 excluded
-	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
-	assert_success
-	assert_output "2"
-}
-
-@test "count_failures: per-service isolation in windowed mode" {
-	# seed dovecot events in window
-	state_events_append "$INSTALL_PATH" "900" "192.0.2.1" "dovecot" "10"
-	local hosts_parsed
-	hosts_parsed=$(printf "192.0.2.1\n192.0.2.1\n")
-	# count sshd only
-	run count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
-	assert_success
-	assert_output "2"
-}
-
 # --- PRESSURE_TRIP_GLOBAL ---
 
 @test "pipeline: PRESSURE_TRIP_GLOBAL triggers ban across services" {
@@ -70,20 +27,6 @@ teardown() {
 	local global_count
 	global_count=$(state_events_count "$INSTALL_PATH" "192.0.2.1" "300" "1000")
 	[ "$global_count" -ge 5 ]
-}
-
-@test "pipeline: PRESSURE_TRIP_GLOBAL=0 disables cross-service check" {
-	# With PRESSURE_TRIP_GLOBAL=0, should not trigger
-	local trig_global=0
-	local should_ban=0
-	local attack_count=2
-	local trig=5
-	if [ "$attack_count" -ge "$trig" ]; then
-		should_ban=1
-	elif [ "$trig_global" -gt 0 ]; then
-		should_ban=1
-	fi
-	[ "$should_ban" -eq 0 ]
 }
 
 # --- execute_ban ---

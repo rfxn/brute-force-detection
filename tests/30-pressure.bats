@@ -242,14 +242,6 @@ teardown() {
 # _load_pressure_conf()
 # ============================================================
 
-@test "_load_pressure_conf: parses weight and trip" {
-	local pconf="$TEST_TMPDIR/pressure.conf"
-	echo "sshd:PRESSURE_WEIGHT=3:PRESSURE_TRIP=15" > "$pconf"
-	_load_pressure_conf "$pconf"
-	[ "${_PRESS_WEIGHT[sshd]}" = "3" ]
-	[ "${_PRESS_TRIP[sshd]}" = "15" ]
-}
-
 @test "_load_pressure_conf: parses SKIP_ALERT and RULE_EMAIL" {
 	local pconf="$TEST_TMPDIR/pressure.conf"
 	echo "dovecot:PRESSURE_WEIGHT=2:SKIP_ALERT=1:RULE_EMAIL=ops@test.com" > "$pconf"
@@ -429,30 +421,8 @@ teardown() {
 }
 
 # ============================================================
-# state_events_append() — weight parameter
+# state_events_append() — weight parameter (count+weight combo)
 # ============================================================
-
-@test "state_events_append: default weight=1 in 4-field format" {
-	local now; now=$(date +%s)
-	state_events_append "$INSTALL_PATH" "$now" "192.0.2.1" "sshd" "1"
-	local line
-	line=$(head -1 "$INSTALL_PATH/tmp/events.dat")
-	# format: timestamp IP mod weight
-	local fields
-	fields=$(echo "$line" | awk '{print NF}')
-	[ "$fields" -eq 4 ]
-	local weight
-	weight=$(echo "$line" | awk '{print $4}')
-	[ "$weight" = "1" ]
-}
-
-@test "state_events_append: explicit weight=3 recorded" {
-	local now; now=$(date +%s)
-	state_events_append "$INSTALL_PATH" "$now" "192.0.2.1" "sshd" "1" "3"
-	local weight
-	weight=$(awk '{print $4}' "$INSTALL_PATH/tmp/events.dat" | head -1)
-	[ "$weight" = "3" ]
-}
 
 @test "state_events_append: count=2 creates 2 lines with weight" {
 	local now; now=$(date +%s)

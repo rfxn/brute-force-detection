@@ -1,4 +1,8 @@
 2.0.1:
+[Change] Test suite cleanup: remove 13 duplicate/vacuous tests across 5 files
+      (17, 20, 21, 30, 32); 4 count_failures dupes, 3 show_status label-only
+      checks, 2 state_events_append dupes, 1 _load_pressure_conf dupe,
+      1 rule-test subset, 1 vacuous shell-only test, 1 always-true assertion
 [Fix] Test suite: replace assert_line --index -1 with bash 4.1-compatible
       last-line check in 19-subnet-detection.bats (3 check_distributed tests)
 [Fix] Test suite: CentOS 6 (bash 4.1) compatibility — conditional declare -gA

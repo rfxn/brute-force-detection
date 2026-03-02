@@ -55,12 +55,6 @@ teardown() {
 	assert_output --partial "5 matches, 2 unique IPs"
 }
 
-@test "test_rule: correct unique IP count" {
-	run test_rule "$INSTALL_PATH" "test-sshd" "$SAMPLE_LOG"
-	assert_success
-	assert_output --partial "2 unique IPs"
-}
-
 @test "test_rule: shows top IPs" {
 	run test_rule "$INSTALL_PATH" "test-sshd" "$SAMPLE_LOG"
 	assert_success

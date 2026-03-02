@@ -400,16 +400,6 @@ EOF
 	[ "$sz" = "10" ]
 }
 
-@test "scan: cursors NOT advanced in dry-run (simulated)" {
-	# In the actual CLI flow, dry-run skips calling tlog_advance_cursors.
-	# Here we verify the flag check pattern works.
-	local logfile="$TEST_TMPDIR/dryrun_cursor.log"
-	printf "hello" > "$logfile"
-	DRY_RUN="1"
-	# Simulate: dry-run does NOT call tlog_advance_cursors
-	[ ! -f "$TLOG_BASERUN/dryrun_tag" ]
-}
-
 @test "scan: next normal tlog_read starts from advanced cursor" {
 	local logfile="$TEST_TMPDIR/handoff.log"
 	printf "existing content\n" > "$logfile"
