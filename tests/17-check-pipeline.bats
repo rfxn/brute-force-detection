@@ -502,28 +502,6 @@ EOF
 	[ ! -f "$marker_v6" ]
 }
 
-# --- IPv6 local address detection ---
-
-@test "filter_host: IPv6 local address detected" {
-	local ignore_files="$TEST_TMPDIR/exclude.files"
-	local lo_hosts="$TEST_TMPDIR/lo_hosts"
-	touch "$ignore_files"
-	echo "2001:db8::1" > "$lo_hosts"
-	local filter_rc=0
-	filter_host "2001:db8::1" "$ignore_files" "$lo_hosts" || filter_rc=$?
-	[ "$filter_rc" -eq 2 ]
-}
-
-@test "filter_host: IPv6 loopback detected" {
-	local ignore_files="$TEST_TMPDIR/exclude.files"
-	local lo_hosts="$TEST_TMPDIR/lo_hosts"
-	touch "$ignore_files"
-	echo "::1" > "$lo_hosts"
-	local filter_rc=0
-	filter_host "::1" "$ignore_files" "$lo_hosts" || filter_rc=$?
-	[ "$filter_rc" -eq 2 ]
-}
-
 # --- IPv6 manual ban/unban ---
 
 @test "manual_ban: accepts IPv6 address" {
@@ -699,21 +677,6 @@ EOF
 	local count
 	count=$(grep -c "2001:db8::1" "$INSTALL_PATH/tmp/bans.active")
 	[ "$count" -eq 1 ]
-}
-
-@test "filter_host: IPv6 does not false-match prefix in ignore list" {
-	local ignore_files="$TEST_TMPDIR/exclude.files"
-	local hosts_file="$TEST_TMPDIR/ignore.hosts"
-	echo "$hosts_file" > "$ignore_files"
-	echo "2001:db8::1" > "$hosts_file"
-	local lo_hosts="$TEST_TMPDIR/lo_hosts"
-	touch "$lo_hosts"
-	# 2001:db8::10 should NOT be ignored
-	run filter_host "2001:db8::10" "$ignore_files" "$lo_hosts"
-	assert_success
-	# 2001:db8::1 should be ignored
-	run filter_host "2001:db8::1" "$ignore_files" "$lo_hosts"
-	assert_failure
 }
 
 @test "check_recidivism: works with IPv6 addresses" {

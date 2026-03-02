@@ -1,4 +1,6 @@
 2.0.1:
+[Change] Test suite: relocate 3 filter_host IPv6 unit tests from
+      17-check-pipeline.bats to 11-filter-host.bats (canonical home)
 [Change] Test suite: rewrite 4 vacuous APF/CSF ban/unban tests in
       18-firewall-backend.bats to use mock binaries instead of inline stubs
 [Change] Test helpers: extract _setup_mock_mail_silent() and _setup_mock_mail_log()
