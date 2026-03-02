@@ -1,6 +1,8 @@
 # Symlink farm at /usr/local/bfd for backward compatibility
 # Library files
 usr/lib/bfd/bfd.lib.sh          usr/local/bfd/bfd.lib.sh
+usr/lib/bfd/tlog_lib.sh         usr/local/bfd/tlog_lib.sh
+usr/lib/bfd/elog_lib.sh         usr/local/bfd/elog_lib.sh
 usr/lib/bfd/tlog                usr/local/bfd/tlog
 usr/lib/bfd/alert.bfd           usr/local/bfd/alert.bfd
 usr/lib/bfd/update-ipcountry.sh usr/local/bfd/update-ipcountry.sh

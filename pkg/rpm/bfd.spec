@@ -82,6 +82,8 @@ install -D -m 755 files/bfd %{buildroot}/usr/sbin/bfd
 
 # Library files
 install -D -m 644 files/bfd.lib.sh %{buildroot}/usr/lib/bfd/bfd.lib.sh
+install -D -m 644 files/tlog_lib.sh %{buildroot}/usr/lib/bfd/tlog_lib.sh
+install -D -m 644 files/elog_lib.sh %{buildroot}/usr/lib/bfd/elog_lib.sh
 install -D -m 755 files/tlog %{buildroot}/usr/lib/bfd/tlog
 install -D -m 644 files/alert.bfd %{buildroot}/usr/lib/bfd/alert.bfd
 install -D -m 755 files/update-ipcountry.sh %{buildroot}/usr/lib/bfd/update-ipcountry.sh
@@ -137,6 +139,8 @@ install -D -m 644 CHANGELOG %{buildroot}/usr/share/doc/bfd/CHANGELOG
 # Symlink farm at /usr/local/bfd for backward compatibility
 install -d -m 755 %{buildroot}%{legacy_path}
 ln -s /usr/lib/bfd/bfd.lib.sh %{buildroot}%{legacy_path}/bfd.lib.sh
+ln -s /usr/lib/bfd/tlog_lib.sh %{buildroot}%{legacy_path}/tlog_lib.sh
+ln -s /usr/lib/bfd/elog_lib.sh %{buildroot}%{legacy_path}/elog_lib.sh
 ln -s /usr/lib/bfd/tlog %{buildroot}%{legacy_path}/tlog
 ln -s /usr/lib/bfd/alert.bfd %{buildroot}%{legacy_path}/alert.bfd
 ln -s /usr/lib/bfd/update-ipcountry.sh %{buildroot}%{legacy_path}/update-ipcountry.sh
@@ -214,6 +218,8 @@ fi
 %license COPYING.GPL
 /usr/sbin/bfd
 /usr/lib/bfd/bfd.lib.sh
+/usr/lib/bfd/tlog_lib.sh
+/usr/lib/bfd/elog_lib.sh
 /usr/lib/bfd/tlog
 /usr/lib/bfd/alert.bfd
 /usr/lib/bfd/update-ipcountry.sh
@@ -243,6 +249,8 @@ fi
 %dir %attr(750,root,root) /var/lib/bfd/stats
 # Symlink farm
 %{legacy_path}/bfd.lib.sh
+%{legacy_path}/tlog_lib.sh
+%{legacy_path}/elog_lib.sh
 %{legacy_path}/tlog
 %{legacy_path}/alert.bfd
 %{legacy_path}/update-ipcountry.sh
