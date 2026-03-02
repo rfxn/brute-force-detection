@@ -1,4 +1,6 @@
 2.0.1:
+[Fix] Test suite: replace assert_line --index -1 with bash 4.1-compatible
+      last-line check in 19-subnet-detection.bats (3 check_distributed tests)
 [Fix] Test suite: CentOS 6 (bash 4.1) compatibility — conditional declare -gA
       fallback in bfd_standard_setup(), bfd_require_bash42() skip guard for
       tests needing string-keyed associative arrays (739 failures → 0)
