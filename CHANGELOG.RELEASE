@@ -1,4 +1,6 @@
 2.0.1:
+[Fix] validate_config() uses return instead of exit, preventing daemon crash
+      when watch mode reload encounters a config validation error (F-014)
 [Fix] Packaging: add tlog_lib.sh and elog_lib.sh to RPM spec and DEB
       manifests — both libraries are sourced at startup but were missing
       from package file lists, rendering RPM/DEB installs non-functional

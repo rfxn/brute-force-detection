@@ -150,7 +150,7 @@ UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
 BAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND_V6")
 UNBAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND_V6")
 
-validate_config
+validate_config || exit $EXIT_CONFIG_ERROR
 detect_log_paths
 
 # resolve firewall backend and run setup
@@ -798,7 +798,10 @@ reload_watch() {
 	UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
 	BAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND_V6")
 	UNBAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND_V6")
-	validate_config
+	if ! validate_config; then
+		elog error "reload aborted: config validation failed"
+		return 1
+	fi
 	detect_log_paths
 	fw_resolve_backend
 	fw_setup
