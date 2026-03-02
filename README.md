@@ -210,9 +210,8 @@ When upgrading from a previous BFD installation (including v1.5-2), `install.sh`
 **Post-upgrade verification:**
 
 ```bash
-bfd -c                    # dry-run detection cycle
+bfd -c                    # health check and diagnostics
 bfd --status              # show current ban/event summary
-bfd --health              # system health check
 ```
 
 **Rollback:**
