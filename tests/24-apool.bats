@@ -13,6 +13,7 @@ load 'helpers/bfd-common'
 bfd_load_function _apool_awk
 bfd_load_function _apool_report
 bfd_load_function _apool_ban_status
+bfd_load_function _apool_service_summary_awk
 bfd_load_function _apool_service_summary
 bfd_load_function apool_list
 
