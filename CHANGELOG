@@ -1,6 +1,9 @@
 2.0.1:
 [Fix] corrected post-upgrade verification in bfd.1, README, and README.md:
       replaced non-existent --health flag and mislabeled -c description (F-007/F-015)
+[Fix] importconf: restore custom rule files from backup on upgrade; user-added
+      rules not in the shipped set are copied back with 640 permissions (F-005)
+[Fix] importconf: preserve exclude.files customizations on upgrade
 [Change] Extract config_init() shared by startup and reload_watch(), eliminating
       80+ lines of duplicated config loading logic (F-003)
 [Fix] reload_watch() re-derives ELOG_FORMAT, ELOG_LEVEL, and ELOG_SYSLOG_FILE

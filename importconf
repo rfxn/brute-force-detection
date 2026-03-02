@@ -251,4 +251,26 @@ if [ -f "$INSTALL_PATH.bk.last/alert.bfd" ]; then
 	cp -f "$INSTALL_PATH.bk.last/alert.bfd" "$INSTALL_PATH/alert.bfd"
 fi
 
+# preserve custom rule files from backup (user-added rules not in shipped set)
+if [ -d "$INSTALL_PATH.bk.last/rules" ]; then
+	_custom_rules=0
+	for _old_rule in "$INSTALL_PATH.bk.last/rules"/*; do
+		[ -f "$_old_rule" ] || continue
+		_rule_name="${_old_rule##*/}"
+		# skip rules that exist in the new install (shipped rules — use new version)
+		[ -f "$INSTALL_PATH/rules/$_rule_name" ] && continue
+		cp -f "$_old_rule" "$INSTALL_PATH/rules/$_rule_name"
+		chmod 640 "$INSTALL_PATH/rules/$_rule_name"
+		_custom_rules=$((_custom_rules + 1))
+	done
+	if [ "$_custom_rules" -gt 0 ]; then
+		echo "  Restored $_custom_rules custom rule(s) from previous install."
+	fi
+fi
+
+# preserve user's custom exclude.files entries
+if [ -f "$INSTALL_PATH.bk.last/exclude.files" ]; then
+	cp -f "$INSTALL_PATH.bk.last/exclude.files" "$INSTALL_PATH/exclude.files"
+fi
+
 echo "  Imported config and state from BFD $OV to $NV."

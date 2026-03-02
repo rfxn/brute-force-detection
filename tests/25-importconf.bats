@@ -720,6 +720,140 @@ NEWEOF
 	assert_output "CUSTOM ALERT TEMPLATE"
 }
 
+# --- custom rules preservation (F-005) ---
+
+@test "importconf: custom rule files restored on upgrade" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/rules" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# shipped rules in both old and new
+	echo "NEW SSHD CONTENT" > "$inst/rules/sshd"
+	echo "NEW DOVECOT CONTENT" > "$inst/rules/dovecot"
+	echo "OLD SSHD CONTENT" > "$inst.bk.last/rules/sshd"
+	echo "OLD DOVECOT CONTENT" > "$inst.bk.last/rules/dovecot"
+	# custom rule only in old backup
+	echo "CUSTOM APP RULE" > "$inst.bk.last/rules/custom_app"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Restored 1 custom rule(s)"
+
+	# custom rule restored
+	[ -f "$inst/rules/custom_app" ]
+	run cat "$inst/rules/custom_app"
+	assert_output "CUSTOM APP RULE"
+	# permissions should be 640
+	run stat -c '%a' "$inst/rules/custom_app"
+	assert_output "640"
+	# shipped rules NOT overwritten (new version kept)
+	run cat "$inst/rules/sshd"
+	assert_output "NEW SSHD CONTENT"
+}
+
+@test "importconf: shipped rules not overwritten by backup versions" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/rules" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	echo "NEW SSHD CONTENT" > "$inst/rules/sshd"
+	echo "OLD SSHD CONTENT" > "$inst.bk.last/rules/sshd"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# shipped rule keeps new version
+	run cat "$inst/rules/sshd"
+	assert_output "NEW SSHD CONTENT"
+}
+
+@test "importconf: no custom rules produces no restoration output" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/rules" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# only shipped rules in both
+	echo "sshd content" > "$inst/rules/sshd"
+	echo "sshd content" > "$inst.bk.last/rules/sshd"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	refute_output --partial "custom rule"
+}
+
+@test "importconf: exclude.files preserved on upgrade" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# user's custom exclude.files in backup
+	printf '/var/log/custom.log\n/var/log/other.log\n' > "$inst.bk.last/exclude.files"
+	# default exclude.files in new install
+	printf '/var/log/default.log\n' > "$inst/exclude.files"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# user's exclude.files should be preserved
+	run cat "$inst/exclude.files"
+	assert_line --index 0 "/var/log/custom.log"
+	assert_line --index 1 "/var/log/other.log"
+	# default content should be gone (overwritten by user's version)
+	refute_output --partial "/var/log/default.log"
+}
+
 @test "importconf: missing alert.bfd in backup keeps new default" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
