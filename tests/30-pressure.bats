@@ -285,6 +285,7 @@ teardown() {
 }
 
 @test "_load_pressure_conf: multiple rules parsed" {
+	bfd_require_bash42
 	local pconf="$TEST_TMPDIR/pressure.conf"
 	{
 		echo "sshd:PRESSURE_WEIGHT=3:PRESSURE_TRIP=15"

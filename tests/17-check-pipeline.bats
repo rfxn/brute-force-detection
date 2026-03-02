@@ -1198,6 +1198,7 @@ EOF
 # --- pressure.conf / thresholds.conf precedence integration ---
 
 @test "check: pressure.conf PRESSURE_TRIP used when rule TRIG commented out" {
+	bfd_require_bash42
 	local rules_dir="$TEST_TMPDIR/rules"
 	mkdir -p "$rules_dir"
 	local logfile="$TEST_TMPDIR/test.log"
@@ -1256,6 +1257,7 @@ EOF
 }
 
 @test "check: rule file TRIG overrides pressure.conf PRESSURE_TRIP" {
+	bfd_require_bash42
 	local rules_dir="$TEST_TMPDIR/rules"
 	mkdir -p "$rules_dir"
 	local logfile="$TEST_TMPDIR/test.log"
@@ -1410,6 +1412,7 @@ EOF
 }
 
 @test "check: PRESSURE_WEIGHT from pressure.conf affects ban decision" {
+	bfd_require_bash42
 	# Scenario: 2 events with weight=5 (from pressure.conf)
 	# Pressure: 2 * 5.0 = 10.0 >= trip 8 → BAN
 	# Without weight override: 2 * 1.0 = 2.0 < 8 → NO BAN

@@ -26,6 +26,21 @@ source "$(dirname "${BASH_SOURCE[0]}")/assert-bfd.bash"
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/bfd-mock.bash"
 
+# --- Compatibility ---
+
+# bfd_require_bash42: skip test on bash <4.2 (centos6).
+# BATS test helpers need declare -gA for global associative arrays from
+# inside functions. Production code uses declare -A at script scope, so
+# BFD itself runs fine on bash 4.1; this is purely a test infrastructure
+# limitation. Call from setup() in files that use bfd_standard_setup or
+# associative arrays directly.
+bfd_require_bash42() {
+	if [[ "${BASH_VERSINFO[0]}" -lt 4 ]] ||
+	   [[ "${BASH_VERSINFO[0]}" -eq 4 && "${BASH_VERSINFO[1]}" -lt 2 ]]; then
+		skip "requires bash 4.2+ (declare -gA)"
+	fi
+}
+
 # --- Setup helpers ---
 
 # bfd_common_setup: minimal test environment (tmpdir + logging)
@@ -61,9 +76,19 @@ bfd_standard_setup() {
 	PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-300}"
 	PRESSURE_TRIP_GLOBAL="${PRESSURE_TRIP_GLOBAL:-0}"
 	GLOB_PRESSURE_TRIP="$PRESSURE_TRIP"
-	# declare associative arrays for pressure.conf lookups (must be -gA to
-	# survive outside setup scope; bash 4.2+ — safe on all test targets)
-	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
+	# declare + clear pressure arrays; -gA requires bash 4.2+ (declare -g
+	# is the only way to create global associative arrays from inside BATS
+	# setup functions). On bash 4.1 (centos6), fall back to indexed arrays —
+	# tests that need string-keyed access must call bfd_require_bash42.
+	if [[ "${BASH_VERSINFO[0]}" -ge 5 ]] ||
+	   [[ "${BASH_VERSINFO[0]}" -eq 4 && "${BASH_VERSINFO[1]}" -ge 2 ]]; then
+		declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
+	else
+		_PRESS_WEIGHT=()
+		_PRESS_TRIP=()
+		_PRESS_SKIP_ALERT=()
+		_PRESS_RULE_EMAIL=()
+	fi
 	BAN_TTL="${BAN_TTL:-600}"
 	BAN_ESCALATE_AFTER="${BAN_ESCALATE_AFTER:-5}"
 	BAN_ESCALATE_WINDOW="${BAN_ESCALATE_WINDOW:-86400}"

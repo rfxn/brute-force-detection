@@ -1,4 +1,7 @@
 2.0.1:
+[Fix] Test suite: CentOS 6 (bash 4.1) compatibility — conditional declare -gA
+      fallback in bfd_standard_setup(), bfd_require_bash42() skip guard for
+      tests needing string-keyed associative arrays (739 failures → 0)
 [Change] bfd.1: add --events option, update --json/--csv scope to -l/-e/-a
 [Change] README.md, README: add section 5.8 Events Dashboard; update section
       5.6 Structured Output with events/attackpool examples; add -e to CLI block
