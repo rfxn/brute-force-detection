@@ -1,4 +1,7 @@
 2.0.1:
+[Fix] _json_escape(): escape newline, tab, CR, backspace, and formfeed per
+      RFC 8259 §7; previously only backslash and double-quote were escaped,
+      producing invalid JSON when log data contained control characters (F-009)
 [Fix] corrected post-upgrade verification in bfd.1, README, and README.md:
       replaced non-existent --health flag and mislabeled -c description (F-007/F-015)
 [Fix] importconf: restore custom rule files from backup on upgrade; user-added

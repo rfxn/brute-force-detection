@@ -3139,11 +3139,16 @@ test_pattern() {
 
 # --- Structured output formatters ---
 
-# _json_escape str — escape string for JSON output
+# _json_escape str — escape string for JSON output (RFC 8259 §7)
 _json_escape() {
 	local s="$1"
 	s="${s//\\/\\\\}"
 	s="${s//\"/\\\"}"
+	s="${s//$'\n'/\\n}"
+	s="${s//$'\t'/\\t}"
+	s="${s//$'\r'/\\r}"
+	s="${s//$'\b'/\\b}"
+	s="${s//$'\f'/\\f}"
 	echo "$s"
 }
 
