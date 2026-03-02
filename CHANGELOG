@@ -1,4 +1,6 @@
 2.0.1:
+[Change] Test suite: rewrite 4 vacuous APF/CSF ban/unban tests in
+      18-firewall-backend.bats to use mock binaries instead of inline stubs
 [Change] Test helpers: extract _setup_mock_mail_silent() and _setup_mock_mail_log()
       in 22-alert-format.bats, replace 6 inline mock mail patterns
 [Change] Test helpers: extract _setup_check_env() in 17-check-pipeline.bats,

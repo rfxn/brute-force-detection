@@ -185,26 +185,31 @@ SCRIPT
 # ============================================================
 
 @test "_fw_apf_ban: calls apf -d with host and comment" {
-	local log="$TEST_TMPDIR/apf.log"
-	# shadow /etc/apf/apf with a function
-	_fw_apf_ban() {
-		local host="$1" mod="${2:-}"
-		echo "apf -d $host {bfd.$mod}" >> "$log"
-	}
-	_fw_apf_ban "192.0.2.1" "sshd"
+	local log="$MOCK_DIR/apf.log"
+	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/apf"
+	chmod +x "$MOCK_DIR/apf"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		_FW_APF_BIN='$MOCK_DIR/apf'
+		_fw_apf_ban '192.0.2.1' 'sshd'
+	"
+	assert_success
 	run cat "$log"
-	assert_output "apf -d 192.0.2.1 {bfd.sshd}"
+	assert_output "-d 192.0.2.1 {bfd.sshd}"
 }
 
 @test "_fw_apf_unban: calls apf -u with host" {
-	local log="$TEST_TMPDIR/apf.log"
-	_fw_apf_unban() {
-		local host="$1"
-		echo "apf -u $host" >> "$log"
-	}
-	_fw_apf_unban "192.0.2.1"
+	local log="$MOCK_DIR/apf.log"
+	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/apf"
+	chmod +x "$MOCK_DIR/apf"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		_FW_APF_BIN='$MOCK_DIR/apf'
+		_fw_apf_unban '192.0.2.1'
+	"
+	assert_success
 	run cat "$log"
-	assert_output "apf -u 192.0.2.1"
+	assert_output "-u 192.0.2.1"
 }
 
 @test "_fw_apf_status: returns apf description" {
@@ -218,25 +223,31 @@ SCRIPT
 # ============================================================
 
 @test "_fw_csf_ban: calls csf -d with host and comment" {
-	local log="$TEST_TMPDIR/csf.log"
-	_fw_csf_ban() {
-		local host="$1" mod="${2:-}"
-		echo "csf -d $host bfd.$mod" >> "$log"
-	}
-	_fw_csf_ban "192.0.2.1" "sshd"
+	local log="$MOCK_DIR/csf.log"
+	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/csf"
+	chmod +x "$MOCK_DIR/csf"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		_FW_CSF_BIN='$MOCK_DIR/csf'
+		_fw_csf_ban '192.0.2.1' 'sshd'
+	"
+	assert_success
 	run cat "$log"
-	assert_output "csf -d 192.0.2.1 bfd.sshd"
+	assert_output "-d 192.0.2.1 bfd.sshd"
 }
 
 @test "_fw_csf_unban: calls csf -dr with host" {
-	local log="$TEST_TMPDIR/csf.log"
-	_fw_csf_unban() {
-		local host="$1"
-		echo "csf -dr $host" >> "$log"
-	}
-	_fw_csf_unban "192.0.2.1"
+	local log="$MOCK_DIR/csf.log"
+	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/csf"
+	chmod +x "$MOCK_DIR/csf"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		_FW_CSF_BIN='$MOCK_DIR/csf'
+		_fw_csf_unban '192.0.2.1'
+	"
+	assert_success
 	run cat "$log"
-	assert_output "csf -dr 192.0.2.1"
+	assert_output "-dr 192.0.2.1"
 }
 
 @test "_fw_csf_status: returns csf description" {
