@@ -3691,6 +3691,10 @@ events_cidr_json() {
 
 	local match_count=0 total_events=0 banned_count=0
 	local first=1
+	local _cidr_summary _cidr_ips
+	_cidr_summary=$(mktemp "$install_path/tmp/.cidr_json_summary.XXXXXX")
+	_cidr_ips=$(mktemp "$install_path/tmp/.cidr_json_ips.XXXXXX")
+
 	_events_cidr_awk "$events_file" "$now" "$half_life" "$trip" "$target_addr" "$target_mask" | \
 	while IFS='|' read -r _ ip pw pf _trip cnt svcs first_ts last_ts; do
 		local first_fmt last_fmt ban_status
@@ -3709,22 +3713,21 @@ events_cidr_json() {
 			"$(_json_escape "$ban_status")"
 		# summary counters to fd 3
 		echo "$cnt|${ban_status}" >&3
-	done 3>"$install_path/tmp/.cidr_json_summary.$$" > "$install_path/tmp/.cidr_json_ips.$$"
+	done 3>"$_cidr_summary" > "$_cidr_ips"
 
 	# compute summary
-	local summary_file="$install_path/tmp/.cidr_json_summary.$$"
-	if [ -f "$summary_file" ] && [ -s "$summary_file" ]; then
-		match_count=$(wc -l < "$summary_file")
-		total_events=$(awk -F'|' '{s+=$1} END {print s+0}' "$summary_file")
-		banned_count=$(awk -F'|' '$2 != "not banned" && $2 != "" {c++} END {print c+0}' "$summary_file")
+	if [ -f "$_cidr_summary" ] && [ -s "$_cidr_summary" ]; then
+		match_count=$(wc -l < "$_cidr_summary")
+		total_events=$(awk -F'|' '{s+=$1} END {print s+0}' "$_cidr_summary")
+		banned_count=$(awk -F'|' '$2 != "not banned" && $2 != "" {c++} END {print c+0}' "$_cidr_summary")
 	fi
 
 	printf '{"cidr": "%s", "summary": {"match_count": %d, "total_events": %d, "banned_count": %d}, "ips": [\n' \
 		"$(_json_escape "$cidr")" "$match_count" "$total_events" "$banned_count"
-	cat "$install_path/tmp/.cidr_json_ips.$$" 2>/dev/null
+	cat "$_cidr_ips" 2>/dev/null
 	echo ""
 	echo "]}"
-	rm -f "$install_path/tmp/.cidr_json_summary.$$" "$install_path/tmp/.cidr_json_ips.$$"
+	rm -f "$_cidr_summary" "$_cidr_ips"
 }
 
 # events_cidr_csv install_path cidr — CSV formatted CIDR pressure report

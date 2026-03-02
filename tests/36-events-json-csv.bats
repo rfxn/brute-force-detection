@@ -395,3 +395,16 @@ teardown() {
 	assert_output --partial "# services"
 	assert_output --partial "# this_week"
 }
+
+# --- events_cidr_json: temp file cleanup ---
+
+@test "events_cidr_json: no PID temp files left after call" {
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	events_cidr_json "$INSTALL_PATH" "192.0.2.0/24" >/dev/null 2>&1
+	# verify no .cidr_json_summary.$$ or .cidr_json_ips.$$ files remain
+	local leftover
+	leftover=$(find "$INSTALL_PATH/tmp" -name '.cidr_json_summary.*' -o -name '.cidr_json_ips.*' 2>/dev/null | wc -l)
+	[ "$leftover" -eq 0 ]
+}
