@@ -1,4 +1,8 @@
 2.0.1:
+[Change] search_ip/json/csv: extract shared _search_ip_data() helper; all 5 state
+      files (bans.active, bans.history, events.dat, attack.pool) now read once
+      instead of 3x; per-service pressure reuses _events_ip_awk() single pass;
+      all three formats share one data source (F-004 5/5)
 [Change] events_ip/json/csv: extract shared _events_ip_awk() single-pass AWK and
       _events_ip_data() helper; per-service AWK calls reduced from 4/service to 0
       via single-pass pressure computation; all three formats now share one data
