@@ -1,4 +1,9 @@
 2.0.1:
+[Change] Extract _check_file_safety() helper for ownership/permissions
+      validation; replaces 5 inline stat-check patterns in config_init(),
+      _load_thresholds(), _load_pressure_conf(), and send_alerts();
+      safe_source() refactored to use it; pre-library check at bfd:32
+      retained inline with comment (REGR R-013)
 [Change] Extract _execute_fw_with_retry() shared helper from execute_ban()
       and execute_unban(); eliminates duplicated retry loop with exponential
       backoff (REGR R-004)
