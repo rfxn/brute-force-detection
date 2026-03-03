@@ -826,7 +826,7 @@ extract_hosts() {
 		local ign_rc=0
 		grep -E "$IGNOREREGEX" /dev/null >/dev/null 2>&1 || ign_rc=$?
 		if [ "$ign_rc" -eq 2 ]; then
-			elog warn "invalid IGNOREREGEX pattern '$IGNOREREGEX', ignoring"
+			elog warn "invalid IGNOREREGEX pattern '$IGNOREREGEX', ignoring" >&2
 			IGNOREREGEX=""
 		else
 			tlog_input=$(echo "$tlog_input" | grep -Ev "$IGNOREREGEX")
