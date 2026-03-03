@@ -94,42 +94,42 @@ _pressure_migrated=0
 if grep -q '^TRIG=' "$old_conf" 2>/dev/null && ! grep -q '^PRESSURE_TRIP=' "$old_conf" 2>/dev/null; then
 	# map old → new variable names in the merged conf.bfd
 	_old_val=$(awk -F= '/^TRIG=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
-	if [ -n "$_old_val" ]; then
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
 		sed -i "s|^PRESSURE_TRIP=.*|PRESSURE_TRIP=\"${_old_val}\"|" "$new_conf"
 		_pressure_migrated=1
 	fi
 fi
 if grep -q '^TRIG_WINDOW=' "$old_conf" 2>/dev/null && ! grep -q '^PRESSURE_HALF_LIFE=' "$old_conf" 2>/dev/null; then
 	_old_val=$(awk -F= '/^TRIG_WINDOW=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
-	if [ -n "$_old_val" ]; then
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
 		sed -i "s|^PRESSURE_HALF_LIFE=.*|PRESSURE_HALF_LIFE=\"${_old_val}\"|" "$new_conf"
 		_pressure_migrated=1
 	fi
 fi
 if grep -q '^TRIG_GLOBAL=' "$old_conf" 2>/dev/null && ! grep -q '^PRESSURE_TRIP_GLOBAL=' "$old_conf" 2>/dev/null; then
 	_old_val=$(awk -F= '/^TRIG_GLOBAL=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
-	if [ -n "$_old_val" ]; then
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
 		sed -i "s|^PRESSURE_TRIP_GLOBAL=.*|PRESSURE_TRIP_GLOBAL=\"${_old_val}\"|" "$new_conf"
 		_pressure_migrated=1
 	fi
 fi
 if grep -q '^BAN_DURATION=' "$old_conf" 2>/dev/null && ! grep -q '^BAN_TTL=' "$old_conf" 2>/dev/null; then
 	_old_val=$(awk -F= '/^BAN_DURATION=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
-	if [ -n "$_old_val" ]; then
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
 		sed -i "s|^BAN_TTL=.*|BAN_TTL=\"${_old_val}\"|" "$new_conf"
 		_pressure_migrated=1
 	fi
 fi
 if grep -q '^BAN_PERMANENT_AFTER=' "$old_conf" 2>/dev/null && ! grep -q '^BAN_ESCALATE_AFTER=' "$old_conf" 2>/dev/null; then
 	_old_val=$(awk -F= '/^BAN_PERMANENT_AFTER=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
-	if [ -n "$_old_val" ]; then
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
 		sed -i "s|^BAN_ESCALATE_AFTER=.*|BAN_ESCALATE_AFTER=\"${_old_val}\"|" "$new_conf"
 		_pressure_migrated=1
 	fi
 fi
 if grep -q '^BAN_PERMANENT_WINDOW=' "$old_conf" 2>/dev/null && ! grep -q '^BAN_ESCALATE_WINDOW=' "$old_conf" 2>/dev/null; then
 	_old_val=$(awk -F= '/^BAN_PERMANENT_WINDOW=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
-	if [ -n "$_old_val" ]; then
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
 		sed -i "s|^BAN_ESCALATE_WINDOW=.*|BAN_ESCALATE_WINDOW=\"${_old_val}\"|" "$new_conf"
 		_pressure_migrated=1
 	fi
@@ -160,6 +160,7 @@ elif [ -f "$INSTALL_PATH.bk.last/thresholds.conf" ]; then
 		case "$_rule_name" in \#*) continue ;; esac
 		# extract TRIG value
 		_old_trig=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^TRIG=/){sub(/^TRIG=/,"",$i); print $i; exit}}}')
+		[[ "$_old_trig" =~ ^[0-9]+$ ]] || _old_trig=""
 		if [ -n "$_old_trig" ] && [ -f "$new_press" ]; then
 			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
 				# update existing entry — replace or add PRESSURE_TRIP
@@ -175,6 +176,7 @@ elif [ -f "$INSTALL_PATH.bk.last/thresholds.conf" ]; then
 		fi
 		# extract SKIP_ALERT value
 		_skip=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^SKIP_ALERT=/){sub(/^SKIP_ALERT=/,"",$i); print $i; exit}}}')
+		[[ "$_skip" =~ ^[01]$ ]] || _skip=""
 		if [ -n "$_skip" ] && [ -f "$new_press" ]; then
 			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null && \
 			   ! grep -q "^${_rule_name}:.*SKIP_ALERT=" "$new_press" 2>/dev/null; then
@@ -183,6 +185,7 @@ elif [ -f "$INSTALL_PATH.bk.last/thresholds.conf" ]; then
 		fi
 		# extract RULE_EMAIL value
 		_email=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^RULE_EMAIL=/){sub(/^RULE_EMAIL=/,"",$i); print $i; exit}}}')
+		[[ "$_email" =~ ^[a-zA-Z0-9@._+,-]+$ ]] || _email=""
 		if [ -n "$_email" ] && [ -f "$new_press" ]; then
 			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null && \
 			   ! grep -q "^${_rule_name}:.*RULE_EMAIL=" "$new_press" 2>/dev/null; then
@@ -203,6 +206,7 @@ elif [ -f "$new_press" ] && [ -d "$INSTALL_PATH.bk.last/rules" ]; then
 		if [ -n "$_old_trig" ]; then
 			_old_trig="${_old_trig#TRIG=\"}"
 			_old_trig="${_old_trig%\"}"
+			[[ "$_old_trig" =~ ^[0-9]+$ ]] || continue
 			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
 				# replace or add PRESSURE_TRIP from old rule TRIG
 				if grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then
