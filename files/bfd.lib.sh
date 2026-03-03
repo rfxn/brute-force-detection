@@ -504,15 +504,16 @@ vout() {
 	elog debug "$*"
 }
 
-# _check_file_safety file — validate root ownership and non-world-writable perms
+# _check_file_safety file — validate root ownership and non-group/world-writable perms
 # Returns 0 (safe) or 1 (unsafe). Sets _CSAF_UID and _CSAF_PERMS for caller
 # error messages. Does NOT check file existence — caller must verify first.
 _check_file_safety() {
 	local file="$1"
 	_CSAF_UID=$(stat -L -c '%u' "$file")
 	_CSAF_PERMS=$(stat -L -c '%a' "$file")
+	local group_digit="${_CSAF_PERMS:1:1}"
 	local world_digit="${_CSAF_PERMS: -1}"
-	if [ "$_CSAF_UID" != "0" ] || [ "$((world_digit & 2))" -ne 0 ]; then
+	if [ "$_CSAF_UID" != "0" ] || [ "$((group_digit & 2))" -ne 0 ] || [ "$((world_digit & 2))" -ne 0 ]; then
 		return 1
 	fi
 	return 0
@@ -530,7 +531,7 @@ safe_source() {
 		if [ "$_CSAF_UID" != "0" ]; then
 			elog error "safe_source: $label is not owned by root (uid=$_CSAF_UID)."
 		else
-			elog error "safe_source: $label is world-writable (perms=$_CSAF_PERMS)."
+			elog error "safe_source: $label is group- or world-writable (perms=$_CSAF_PERMS)."
 		fi
 		return 1
 	fi
