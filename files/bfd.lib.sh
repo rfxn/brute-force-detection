@@ -698,7 +698,7 @@ validate_config() {
 	fi
 	local _esc="${BAN_ESCALATION:-none}"
 	if [ "$_esc" != "none" ] && [ "$_esc" != "linear" ] && [ "$_esc" != "double" ] && [ "$_esc" != "exponential" ]; then
-		echo "error: BAN_ESCALATION must be none, linear, or double (got '$_esc')." >&2
+		echo "error: BAN_ESCALATION must be none, linear, or double (got '$_esc'; 'exponential' is accepted as deprecated alias for 'double')." >&2
 		return $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_ESCALATION_CAP:-0}" =~ $int_pattern ]]; then

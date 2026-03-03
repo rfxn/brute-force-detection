@@ -1,4 +1,8 @@
 2.0.1:
+[Fix] validate_config(): error message for BAN_ESCALATION now mentions
+      "exponential" as accepted deprecated alias for "double" (REGR R-024)
+[Change] Extract _cleanup_common() shared helper from cleanup() and
+      cleanup_watch(); eliminates duplicated lock/cache teardown (REGR R-003)
 [Change] REGR.md: document verified dispositions for all 24 structural
       regression findings — 4 false positives, 5 intentional backward-compat,
       2 infeasible, 2 documented, 1 deferred, 4 resolved prior (F-004),
