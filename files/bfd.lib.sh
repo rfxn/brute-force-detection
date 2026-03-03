@@ -1028,7 +1028,9 @@ _fw_ufw_setup() { :; }
 
 _fw_ufw_ban() {
 	local host="$1"
-	ufw insert 1 deny from "$host" >/dev/null 2>&1
+	# try with comment marker for identification; fall back for old UFW (<0.35)
+	ufw insert 1 deny from "$host" comment "bfd" >/dev/null 2>&1 \
+		|| ufw insert 1 deny from "$host" >/dev/null 2>&1
 }
 
 _fw_ufw_unban() {
@@ -1037,7 +1039,13 @@ _fw_ufw_unban() {
 }
 
 _fw_ufw_status() {
-	echo "ufw (Uncomplicated Firewall)"
+	local count=0
+	# count BFD-commented rules; fall back to all deny rules if no comments found
+	count=$(ufw status 2>/dev/null | grep -c "# bfd") || count=0
+	if [ "$count" -eq 0 ]; then
+		count=$(ufw status 2>/dev/null | grep -c "DENY") || count=0
+	fi
+	echo "ufw ($count deny rules)"
 }
 
 # --- nftables backend (dedicated inet bfd table with IP sets) ---
@@ -1070,10 +1078,26 @@ _fw_nftables_unban() {
 	fi
 }
 
+# _fw_nftables_count_elements set_name — count elements in an nft set
+# Parses "elements = { ip1, ip2, ... }" from nft output; handles multiline.
+_fw_nftables_count_elements() {
+	local set_name="$1"
+	nft list set inet bfd "$set_name" 2>/dev/null | awk '
+		/elements/ { found = 1 }
+		found {
+			for (i = 1; i <= length($0); i++)
+				if (substr($0, i, 1) == ",") commas++
+			if (/\}/) exit
+		}
+		END { print found ? commas + 1 : 0 }
+	' || echo "0"
+}
+
 _fw_nftables_status() {
 	local v4_count=0 v6_count=0
-	v4_count=$(nft list set inet bfd blocked4 2>/dev/null | grep -c "elements") || v4_count=0
-	v6_count=$(nft list set inet bfd blocked6 2>/dev/null | grep -c "elements") || v6_count=0
+	# count actual set elements (comma-delimited), not lines containing "elements"
+	v4_count=$(_fw_nftables_count_elements "blocked4")
+	v6_count=$(_fw_nftables_count_elements "blocked6")
 	echo "nftables (inet bfd table, $v4_count v4 + $v6_count v6 blocked)"
 }
 

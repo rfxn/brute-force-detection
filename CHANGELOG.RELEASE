@@ -1,4 +1,14 @@
 2.0.1:
+[Change] Remove dead TLOG_LIB variable from internals.conf; never referenced
+      by any BFD code (F-045)
+[Fix] _fw_nftables_status(): count actual set elements instead of lines
+      containing "elements" keyword; previously reported 1 regardless of
+      element count (F-052)
+[Fix] cron.daily: use dedicated .cron.daily.lock file for flock instead of
+      lock.utime; avoids write contention with bfd timestamp updates (F-053)
+[Change] UFW backend: add "bfd" comment marker to deny rules for
+      identification; graceful fallback for UFW <0.35 without comment
+      support; _fw_ufw_status() now reports deny rule count (F-055)
 [New] Extract _fmt_ts() and _fmt_ts_iso() timestamp formatting helpers;
       replace 30 inline date -d + fallback patterns across bfd.lib.sh and
       bfd with single-call helpers (F-039, F-043)
