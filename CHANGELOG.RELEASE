@@ -1,4 +1,7 @@
 2.0.1:
+[Fix] uninstall.sh: clean up custom BFD_LOG_PATH on uninstall; previously
+      only the default /var/log/bfd_log was removed, orphaning custom log
+      files; uses grep+sed (no eval/source) for safe extraction (F-072)
 [Fix] bfd: log file creation now uses chmod 640 (was 600) to match project
       convention and logrotate create directive (F-069)
 [Change] install.sh: explicit chmod 750 on install directory after mkdir;
