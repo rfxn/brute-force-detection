@@ -1749,6 +1749,30 @@ pressure_format() {
 	echo "${whole}.${frac}"
 }
 
+# _pressure_aggregate_all events_file now half_life
+# Single-pass AWK over events.dat: computes decayed pressure for ALL IPs.
+# Outputs "scaled_pressure ip" lines sorted descending, filtered to >0.
+# Used by show_status() for top-N pressure display.
+_pressure_aggregate_all() {
+	local events_file="$1" now="$2" half_life="$3"
+	local cutoff=$((now - half_life * 10))
+	awk -v now="$now" -v hl="$half_life" -v cutoff="$cutoff" \
+		'BEGIN { ln2 = 0.693147180559945 }
+		$1+0 >= cutoff {
+			w = ($4+0 > 0) ? $4+0 : 1
+			age = now - ($1+0)
+			ip = $2
+			p[ip] += w * exp(-ln2 * age / hl)
+		}
+		END {
+			for (ip in p) {
+				scaled = int(p[ip] * 1000)
+				if (scaled > 0)
+					printf "%d %s\n", scaled, ip
+			}
+		}' "$events_file" | sort -rn
+}
+
 # record_and_score host hosts_parsed install_path half_life now mod weight [count]
 # Replacement for count_failures() using pressure scoring:
 #   1. Count host occurrences in hosts_parsed (grep -cxF), or use pre-computed count
@@ -2635,24 +2659,9 @@ show_status() {
 
 	# Top-5 IPs by current pressure
 	local half_life="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
-	local prune_cutoff=$((now - half_life * 10))
 	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
 		local top_pressure
-		top_pressure=$(awk -v now="$now" -v hl="$half_life" -v cutoff="$prune_cutoff" \
-			'BEGIN { ln2 = 0.693147180559945 }
-			$1+0 >= cutoff {
-				w = ($4+0 > 0) ? $4+0 : 1
-				age = now - ($1+0)
-				ip = $2
-				p[ip] += w * exp(-ln2 * age / hl)
-			}
-			END {
-				for (ip in p) {
-					scaled = int(p[ip] * 1000)
-					if (scaled > 0)
-						printf "%d %s\n", scaled, ip
-				}
-			}' "$events_file" | sort -rn | head -5)
+		top_pressure=$(_pressure_aggregate_all "$events_file" "$now" "$half_life" | head -5)
 		if [ -n "$top_pressure" ]; then
 			echo ""
 			echo "  Top pressure:"
@@ -3328,18 +3337,53 @@ list_bans_csv() {
 
 # --- Events CLI functions ---
 
-# _events_dashboard_awk events_file now half_life trip
-# Shared awk helper: single-pass pressure computation over events.dat,
-# outputs pipe-delimited raw data sorted by pressure descending:
+# _events_pressure_awk events_file now half_life trip [target_addr target_mask]
+# Unified single-pass pressure computation over events.dat.
+# Dashboard mode (no target_addr/target_mask): all IPs.
+# CIDR mode (target_addr + target_mask set): IPv4 subnet filter.
+# Outputs pipe-delimited raw data sorted by pressure descending:
 # pv|ip|pw|pf|trip|cnt|svcs_csv|first_ts|last_ts
-_events_dashboard_awk() {
+_events_pressure_awk() {
 	local events_file="$1" now="$2" half_life="$3" trip="$4"
+	local target_addr="${5:-}" target_mask="${6:-}"
 	local cutoff=$((now - half_life * 10))
+	local cidr_mode=0
+	[ -n "$target_addr" ] && [ -n "$target_mask" ] && cidr_mode=1
 	awk -v cutoff="$cutoff" -v now="$now" -v hl="$half_life" \
-		-v trip="$trip" '
-	BEGIN { ln2 = 0.693147180559945 }
+		-v trip="$trip" -v cidr_mode="$cidr_mode" \
+		-v tmask="$target_mask" -v taddr="$target_addr" '
+	function pow2(n,    r, i) {
+		r = 1; for (i = 0; i < n; i++) r = r * 2; return r
+	}
+	function ipv4_subnet(ip, m,    parts, n, o1, o2, o3, o4, sh, divisor) {
+		n = split(ip, parts, ".")
+		if (n != 4) return ""
+		o1 = parts[1]+0; o2 = parts[2]+0; o3 = parts[3]+0; o4 = parts[4]+0
+		if (m >= 24) {
+			sh = 32 - m; divisor = pow2(sh)
+			o4 = int(o4 / divisor) * divisor
+			return o1 "." o2 "." o3 "." o4
+		} else if (m >= 16) {
+			sh = 24 - m; divisor = pow2(sh)
+			o3 = int(o3 / divisor) * divisor
+			return o1 "." o2 "." o3 ".0"
+		} else if (m >= 8) {
+			sh = 16 - m; divisor = pow2(sh)
+			o2 = int(o2 / divisor) * divisor
+			return o1 "." o2 ".0.0"
+		}
+		return ""
+	}
+	BEGIN {
+		ln2 = 0.693147180559945
+		if (cidr_mode) target_net = ipv4_subnet(taddr, tmask)
+	}
 	$1+0 >= cutoff {
 		ip = $2; mod = $3; ts = $1+0
+		if (cidr_mode) {
+			if (index(ip, ":") > 0) next
+			if (ipv4_subnet(ip, tmask) != target_net) next
+		}
 		w = ($4+0 > 0) ? $4+0 : 1
 		age = now - ts
 		p[ip] += w * exp(-ln2 * age / hl)
@@ -3357,6 +3401,12 @@ _events_dashboard_awk() {
 			printf "%d|%s|%d|%d|%d|%d|%s|%d|%d\n", pv, ip, pw, pf, trip, cnt[ip], svcs[ip], first[ip], last[ip]
 		}
 	}' "$events_file" | sort -t'|' -k1 -nr
+}
+
+# _events_dashboard_awk events_file now half_life trip
+# Thin wrapper: dashboard mode (all IPs) — delegates to _events_pressure_awk.
+_events_dashboard_awk() {
+	_events_pressure_awk "$@"
 }
 
 # events_dashboard install_path — show all IPs with active pressure
@@ -3528,60 +3578,9 @@ events_ip() {
 }
 
 # _events_cidr_awk events_file now half_life trip target_addr target_mask
-# Shared awk helper: CIDR-filtered pressure computation over events.dat,
-# outputs pipe-delimited raw data sorted by pressure descending:
-# pv|ip|pw|pf|trip|cnt|svcs_csv|first_ts|last_ts
+# Thin wrapper: CIDR mode (subnet filter) — delegates to _events_pressure_awk.
 _events_cidr_awk() {
-	local events_file="$1" now="$2" half_life="$3" trip="$4"
-	local target_addr="$5" target_mask="$6"
-	local cutoff=$((now - half_life * 10))
-	awk -v cutoff="$cutoff" -v now="$now" -v hl="$half_life" \
-		-v trip="$trip" -v tmask="$target_mask" -v taddr="$target_addr" '
-	function pow2(n,    r, i) {
-		r = 1; for (i = 0; i < n; i++) r = r * 2; return r
-	}
-	function ipv4_subnet(ip, m,    parts, n, o1, o2, o3, o4, sh, divisor) {
-		n = split(ip, parts, ".")
-		if (n != 4) return ""
-		o1 = parts[1]+0; o2 = parts[2]+0; o3 = parts[3]+0; o4 = parts[4]+0
-		if (m >= 24) {
-			sh = 32 - m; divisor = pow2(sh)
-			o4 = int(o4 / divisor) * divisor
-			return o1 "." o2 "." o3 "." o4
-		} else if (m >= 16) {
-			sh = 24 - m; divisor = pow2(sh)
-			o3 = int(o3 / divisor) * divisor
-			return o1 "." o2 "." o3 ".0"
-		} else if (m >= 8) {
-			sh = 16 - m; divisor = pow2(sh)
-			o2 = int(o2 / divisor) * divisor
-			return o1 "." o2 ".0.0"
-		}
-		return ""
-	}
-	BEGIN { ln2 = 0.693147180559945; target_net = ipv4_subnet(taddr, tmask) }
-	$1+0 >= cutoff {
-		ip = $2; mod = $3; ts = $1+0
-		# skip IPv6
-		if (index(ip, ":") > 0) next
-		if (ipv4_subnet(ip, tmask) != target_net) next
-		w = ($4+0 > 0) ? $4+0 : 1
-		age = now - ts
-		p[ip] += w * exp(-ln2 * age / hl)
-		cnt[ip]++
-		if (!(ip SUBSEP mod in sm)) { sm[ip SUBSEP mod] = 1; svcs[ip] = (svcs[ip] == "" ? mod : svcs[ip] "," mod) }
-		if (!(ip in first) || ts < first[ip]) first[ip] = ts
-		if (ts > last[ip]) last[ip] = ts
-	}
-	END {
-		for (ip in p) {
-			pv = int(p[ip] * 1000)
-			pw = int(pv / 1000)
-			pf = int((pv % 1000 + 50) / 100)
-			if (pf >= 10) { pw++; pf = 0 }
-			printf "%d|%s|%d|%d|%d|%d|%s|%d|%d\n", pv, ip, pw, pf, trip, cnt[ip], svcs[ip], first[ip], last[ip]
-		}
-	}' "$events_file" | sort -t'|' -k1 -nr
+	_events_pressure_awk "$@"
 }
 
 # events_cidr install_path cidr — subnet-scoped pressure report

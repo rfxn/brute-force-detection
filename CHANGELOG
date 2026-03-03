@@ -1,4 +1,9 @@
 2.0.1:
+[Change] Extract _pressure_aggregate_all() from show_status() inline AWK;
+      reusable single-pass all-IPs pressure aggregation (REGR R-015)
+[Change] Consolidate _events_dashboard_awk() and _events_cidr_awk() into
+      _events_pressure_awk() with mode parameter; dashboard and CIDR
+      wrappers now delegate to shared AWK program (REGR R-010)
 [Change] Extract _check_file_safety() helper for ownership/permissions
       validation; replaces 5 inline stat-check patterns in config_init(),
       _load_thresholds(), _load_pressure_conf(), and send_alerts();
