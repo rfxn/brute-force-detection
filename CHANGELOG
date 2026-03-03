@@ -2,6 +2,9 @@
 [Fix] _check_file_safety(): reject group-writable files in addition to
       world-writable; inline pre-lib check in bfd updated to match;
       safe_source() error message updated (F-036)
+[Fix] format_alert_body(): sanitize credential patterns in log excerpts
+      included in alert emails; password/passwd/passphrase values and
+      Authorization headers redacted to <REDACTED> (F-037)
 [Change] Remove dead TLOG_LIB variable from internals.conf; never referenced
       by any BFD code (F-045)
 [Fix] _fw_nftables_status(): count actual set elements instead of lines

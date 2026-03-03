@@ -2391,7 +2391,10 @@ format_alert_body() {
 		else
 			echo "  Source logs from '$mod':"
 		fi
-		tail -n 5000 "$lp" | grep -Fw "$host" | tail -n "$loglines" | sed 's/^/  /'
+		tail -n 5000 "$lp" | grep -Fw "$host" | tail -n "$loglines" | \
+			sed -e 's/\([Pp]ass[a-z]*\)[=: ][^ ]*/\1=<REDACTED>/g' \
+			    -e 's/\([Aa]uthorization:[[:space:]]*\).*/\1<REDACTED>/' \
+			    -e 's/^/  /'
 		echo ""
 	done < "$alerts_file"
 }

@@ -335,6 +335,44 @@ teardown() {
 	assert_output --partial "Source logs from 'dovecot' [192.0.2.2]:"
 }
 
+@test "format_alert_body: redacts password values in log lines" {
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "Feb 22 14:29:58 host sshd[1234]: password=secret123 for root from 192.0.2.1" > "$logfile"
+	echo "Feb 22 14:29:59 host sshd[1235]: passwd: badpass from 192.0.2.1" >> "$logfile"
+	echo "Feb 22 14:30:00 host sshd[1236]: Passphrase=mysecret from 192.0.2.1" >> "$logfile"
+	local af="$TEST_TMPDIR/alerts_redact"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|$logfile|root|5|300|3" > "$af"
+	run format_alert_body "$af" "50"
+	assert_success
+	assert_output --partial "password=<REDACTED>"
+	assert_output --partial "passwd=<REDACTED>"
+	assert_output --partial "Passphrase=<REDACTED>"
+	refute_output --partial "secret123"
+	refute_output --partial "badpass"
+	refute_output --partial "mysecret"
+}
+
+@test "format_alert_body: redacts Authorization headers in log lines" {
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "Feb 22 14:29:58 host nginx: Authorization: Basic dXNlcjpwYXNz from 192.0.2.1" > "$logfile"
+	local af="$TEST_TMPDIR/alerts_auth"
+	echo "192.0.2.1|nginx|80|5000|0|ban|0|$logfile|root|5|300|3" > "$af"
+	run format_alert_body "$af" "50"
+	assert_success
+	assert_output --partial "Authorization: <REDACTED>"
+	refute_output --partial "dXNlcjpwYXNz"
+}
+
+@test "format_alert_body: preserves normal auth failure lines" {
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "Feb 22 14:29:58 host sshd[1234]: Failed password for root from 192.0.2.1 port 22 ssh2" > "$logfile"
+	local af="$TEST_TMPDIR/alerts_normal"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|$logfile|root|5|300|3" > "$af"
+	run format_alert_body "$af" "50"
+	assert_success
+	assert_output --partial "Failed password for root from 192.0.2.1"
+}
+
 @test "format_alert_body: missing weight field defaults to 1" {
 	local af="$TEST_TMPDIR/alerts_no_weight"
 	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300" > "$af"
