@@ -31,6 +31,8 @@ run_validate() {
 		BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
 		FIREWALL="custom"
 		INSTALL_PATH="$TEST_TMPDIR"
+		LOG_FORMAT="classic"
+		LOG_LEVEL="1"
 		eval "$1"
 		validate_config
 	) >/dev/null 2>&1
@@ -52,6 +54,8 @@ run_validate_output() {
 		BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
 		FIREWALL="custom"
 		INSTALL_PATH="$TEST_TMPDIR"
+		LOG_FORMAT="classic"
+		LOG_LEVEL="1"
 		eval "$1"
 		validate_config
 	) 2>&1
@@ -469,6 +473,76 @@ run_validate_output() {
 @test "validate_config: EMAIL_LOGLINES= uses default (passes)" {
 	run run_validate 'EMAIL_LOGLINES=""'
 	assert_success
+}
+
+# --- LOG_FORMAT ---
+
+@test "validate_config: LOG_FORMAT=classic passes" {
+	run run_validate 'LOG_FORMAT="classic"'
+	assert_success
+}
+
+@test "validate_config: LOG_FORMAT=json passes" {
+	run run_validate 'LOG_FORMAT="json"'
+	assert_success
+}
+
+@test "validate_config: LOG_FORMAT=xml rejects" {
+	run run_validate 'LOG_FORMAT="xml"'
+	assert_failure
+}
+
+@test "validate_config: LOG_FORMAT= uses default (passes)" {
+	run run_validate 'LOG_FORMAT=""'
+	assert_success
+}
+
+# --- LOG_LEVEL ---
+
+@test "validate_config: LOG_LEVEL=0 passes" {
+	run run_validate 'LOG_LEVEL="0"'
+	assert_success
+}
+
+@test "validate_config: LOG_LEVEL=1 passes" {
+	run run_validate 'LOG_LEVEL="1"'
+	assert_success
+}
+
+@test "validate_config: LOG_LEVEL=3 passes" {
+	run run_validate 'LOG_LEVEL="3"'
+	assert_success
+}
+
+@test "validate_config: LOG_LEVEL=4 rejects" {
+	run run_validate 'LOG_LEVEL="4"'
+	assert_failure
+}
+
+@test "validate_config: LOG_LEVEL=abc rejects" {
+	run run_validate 'LOG_LEVEL="abc"'
+	assert_failure
+}
+
+@test "validate_config: LOG_LEVEL= uses default (passes)" {
+	run run_validate 'LOG_LEVEL=""'
+	assert_success
+}
+
+# --- show_config LOG_FORMAT/LOG_LEVEL ---
+
+@test "show_config: LOG_FORMAT returns active value" {
+	LOG_FORMAT="json"
+	run show_config "LOG_FORMAT"
+	assert_success
+	assert_output "json"
+}
+
+@test "show_config: LOG_LEVEL returns active value" {
+	LOG_LEVEL="2"
+	run show_config "LOG_LEVEL"
+	assert_success
+	assert_output "2"
 }
 
 # --- show_config injection tests (Phase 26) ---

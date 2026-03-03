@@ -1,4 +1,8 @@
 2.0.1:
+[Fix] validate_config(): add LOG_FORMAT (classic/json) and LOG_LEVEL (0-3)
+      validation; invalid values now rejected at startup/reload instead of
+      silently falling through to elog defaults (F-017)
+[Change] show_config(): add LOG_FORMAT and LOG_LEVEL to config whitelist
 [Change] Rewrite usage() with semantic section grouping (Run Modes, Ban
       Management, Reporting, System, Rule Testing, Scan Mode, Output Modifiers,
       General) mirroring the man page structure
