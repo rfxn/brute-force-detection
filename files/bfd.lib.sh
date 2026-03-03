@@ -822,8 +822,16 @@ extract_hosts() {
 
 	# apply IGNOREREGEX exclusion if set by rule
 	if [ -n "${IGNOREREGEX:-}" ]; then
-		tlog_input=$(echo "$tlog_input" | grep -Ev "$IGNOREREGEX")
-		[ -z "$tlog_input" ] && return 0
+		# validate regex: grep -E returns 2 for invalid patterns
+		local ign_rc=0
+		grep -E "$IGNOREREGEX" /dev/null >/dev/null 2>&1 || ign_rc=$?
+		if [ "$ign_rc" -eq 2 ]; then
+			elog warn "invalid IGNOREREGEX pattern '$IGNOREREGEX', ignoring"
+			IGNOREREGEX=""
+		else
+			tlog_input=$(echo "$tlog_input" | grep -Ev "$IGNOREREGEX")
+			[ -z "$tlog_input" ] && return 0
+		fi
 	fi
 
 	local pattern sed_pat

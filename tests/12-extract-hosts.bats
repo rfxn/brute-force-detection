@@ -137,6 +137,27 @@ teardown() {
 	[ -z "$result" ]
 }
 
+@test "extract_hosts: invalid IGNOREREGEX is cleared with warning" {
+	IGNOREREGEX="[invalid(regex"
+	local input="Feb 22 myhost sshd[1]: Failed password for root from 192.0.2.1 port 22 ssh2"
+	local result
+	result=$(echo "$input" | extract_hosts "sshd.*Failed password for .* from <HOST>" 2>/dev/null)
+	[ "$result" = "192.0.2.1" ]
+}
+
+@test "extract_hosts: invalid IGNOREREGEX still allows extraction" {
+	IGNOREREGEX="*bad+"
+	local input
+	input=$(printf '%s\n' \
+		"Feb 22 myhost sshd[1]: Failed password for root from 192.0.2.1 port 22 ssh2" \
+		"Feb 22 myhost sshd[2]: Failed password for admin from 192.0.2.2 port 22 ssh2")
+	local result
+	result=$(echo "$input" | extract_hosts "sshd.*Failed password for .* from <HOST>" 2>/dev/null)
+	local count
+	count=$(echo "$result" | wc -l)
+	[ "$count" -eq 2 ]
+}
+
 @test "extract_hosts: pattern with special regex chars in context" {
 	local input="2024-01-21 23:09:19 ERR [panel] [Action Log] Failed login attempt with login 'admin' from IP 203.0.113.10"
 	local result

@@ -5,6 +5,9 @@
 [Fix] format_alert_body(): sanitize credential patterns in log excerpts
       included in alert emails; password/passwd/passphrase values and
       Authorization headers redacted to <REDACTED> (F-037)
+[Fix] extract_hosts(): validate IGNOREREGEX pattern before use in grep -Ev;
+      invalid regex now logged as warning and cleared instead of silently
+      failing the exclusion pipeline (F-077)
 [Change] Remove dead TLOG_LIB variable from internals.conf; never referenced
       by any BFD code (F-045)
 [Fix] _fw_nftables_status(): count actual set elements instead of lines
