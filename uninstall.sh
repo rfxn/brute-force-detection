@@ -61,6 +61,15 @@ if [ -d "$INSPATH" ]; then
 	fi
 	rm -f /usr/share/man/man1/bfd.1
 	rm -f /etc/bash_completion.d/bfd
+	# Remove custom log path if configured (grep+sed, no eval/source)
+	local _custom_log=""
+	if [ -f "$INSPATH/conf.bfd" ]; then
+		_custom_log=$(grep -E '^BFD_LOG_PATH=' "$INSPATH/conf.bfd" 2>/dev/null \
+			| tail -1 | sed 's/^BFD_LOG_PATH=//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//') || true
+	fi
+	if [ -n "$_custom_log" ] && [ "$_custom_log" != "/var/log/bfd_log" ]; then
+		rm -f "$_custom_log"
+	fi
 	rm -rf "$INSPATH".bk.* "$INSPATH" "$BINPATH" /etc/cron.d/bfd /etc/cron.daily/bfd /etc/logrotate.d/bfd /var/log/bfd_log
 	echo "$APPN has been uninstalled."
 else

@@ -488,17 +488,24 @@ teardown() {
 # --- detect_run_mode ---
 
 @test "detect_run_mode: returns cron when /etc/cron.d/bfd exists" {
-	# /etc/cron.d/bfd is typically present in the test container
+	local _created=0
 	if [ ! -f /etc/cron.d/bfd ]; then
 		mkdir -p /etc/cron.d
 		echo "# test" > /etc/cron.d/bfd
+		_created=1
 	fi
 	run detect_run_mode
+	# clean up if we created the file
+	[ "$_created" -eq 1 ] && rm -f /etc/cron.d/bfd
 	assert_success
 	assert_output "cron"
 }
 
 @test "detect_run_mode: returns unknown when no scheduler found" {
+	# restore from any previous failed run
+	if [ -f /etc/cron.d/bfd.test_backup ] && [ ! -f /etc/cron.d/bfd ]; then
+		mv /etc/cron.d/bfd.test_backup /etc/cron.d/bfd
+	fi
 	# temporarily hide the cron file
 	local had_cron=0
 	if [ -f /etc/cron.d/bfd ]; then

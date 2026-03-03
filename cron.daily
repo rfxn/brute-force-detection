@@ -32,6 +32,8 @@ if [ -d "$LOCK_FILE.lk" ]; then
 fi
 
 # acquire flock for self-contention (multiple cron.daily invocations)
+# uses a dedicated lock file to avoid contention with bfd's lock.utime writes
+CRON_LOCK="$INSTALL_PATH/tmp/.cron.daily.lock"
 (
 flock -x -w 30 200 || exit 0
 # rotate attack pool
@@ -48,7 +50,7 @@ if [ -f "$INSTALL_PATH/tmp/bans.history" ]; then
 	cp "$INSTALL_PATH/tmp/bans.history" "$INSTALL_PATH/tmp/bans.history.$(date +%m%d%y)"
 	: > "$INSTALL_PATH/tmp/bans.history"
 fi
-) 200>"$LOCK_FILE"
+) 200>"$CRON_LOCK"
 
 # purge rotated files older than 30 days (outside lock — no race)
 find "$INSTALL_PATH/tmp" -maxdepth 1 -name 'bans.history.*' -type f -mtime +30 -delete 2>/dev/null

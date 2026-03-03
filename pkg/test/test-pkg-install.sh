@@ -218,6 +218,19 @@ else
 fi
 echo ""
 
+# --- Test 9b: SysVinit init script (DEB) ---
+if [ "$PKG_TYPE" = "deb" ]; then
+	echo "--- Test 9b: SysVinit init script ---"
+	check_file /etc/init.d/bfd-watch "Init script: bfd-watch"
+	check_perms /etc/init.d/bfd-watch 755 "Init script perms"
+	if grep -q '/usr/sbin/bfd' /etc/init.d/bfd-watch; then
+		pass "Init script uses /usr/sbin/bfd"
+	else
+		fail "Init script does not use /usr/sbin/bfd"
+	fi
+	echo ""
+fi
+
 # --- Test 10: bfd --version via symlink farm ---
 echo "--- Test 10: bfd execution ---"
 ver_out=$(/usr/local/sbin/bfd --version 2>&1 || true)

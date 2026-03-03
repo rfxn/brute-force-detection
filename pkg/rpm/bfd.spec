@@ -178,7 +178,18 @@ if [ -f "%{legacy_path}/bfd" ] && [ ! -L "%{legacy_path}/bfd.lib.sh" ]; then
         mkdir -p /var/lib/bfd/stats
         cp -a "%{legacy_path}"/stats/* /var/lib/bfd/stats/ 2>/dev/null || true
     fi
-    # Stop services before removing old install
+    # Stop SysVinit services if present
+    for _initdir in /etc/rc.d/init.d /etc/init.d; do
+        if [ -f "$_initdir/bfd-watch" ]; then
+            "$_initdir/bfd-watch" stop 2>/dev/null || true
+            if command -v chkconfig >/dev/null 2>&1; then
+                chkconfig --del bfd-watch 2>/dev/null || true
+            elif command -v update-rc.d >/dev/null 2>&1; then
+                update-rc.d -f bfd-watch remove 2>/dev/null || true
+            fi
+        fi
+    done
+    # Stop systemd services before removing old install
     if command -v systemctl >/dev/null 2>&1; then
         systemctl stop bfd-watch.service 2>/dev/null || true
         systemctl stop bfd.timer 2>/dev/null || true
@@ -194,16 +205,32 @@ if [ -d "%{legacy_path}.bk.last" ]; then
         INSTALL_PATH="%{legacy_path}" /usr/lib/bfd/importconf || true
     fi
 fi
-# Reload systemd
-systemctl daemon-reload 2>/dev/null || true
+# Reload systemd if available
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload 2>/dev/null || true
+fi
 
 %preun
 # On full removal (not upgrade), stop services
 if [ "$1" = "0" ]; then
-    systemctl stop bfd-watch.service 2>/dev/null || true
-    systemctl stop bfd.timer 2>/dev/null || true
-    systemctl disable bfd-watch.service 2>/dev/null || true
-    systemctl disable bfd.timer 2>/dev/null || true
+    # Stop SysVinit services if present
+    for _initdir in /etc/rc.d/init.d /etc/init.d; do
+        if [ -f "$_initdir/bfd-watch" ]; then
+            "$_initdir/bfd-watch" stop 2>/dev/null || true
+            if command -v chkconfig >/dev/null 2>&1; then
+                chkconfig --del bfd-watch 2>/dev/null || true
+            elif command -v update-rc.d >/dev/null 2>&1; then
+                update-rc.d -f bfd-watch remove 2>/dev/null || true
+            fi
+        fi
+    done
+    # Stop systemd services
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl stop bfd-watch.service 2>/dev/null || true
+        systemctl stop bfd.timer 2>/dev/null || true
+        systemctl disable bfd-watch.service 2>/dev/null || true
+        systemctl disable bfd.timer 2>/dev/null || true
+    fi
 fi
 
 %postun
@@ -211,7 +238,9 @@ fi
 if [ "$1" = "0" ]; then
     rm -rf %{legacy_path} 2>/dev/null || true
     rm -f /usr/local/sbin/bfd 2>/dev/null || true
-    systemctl daemon-reload 2>/dev/null || true
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl daemon-reload 2>/dev/null || true
+    fi
 fi
 
 %files

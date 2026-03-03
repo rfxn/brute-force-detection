@@ -1,591 +1,283 @@
 2.0.1:
-[Change] Rewrite usage() with semantic section grouping (Run Modes, Ban
-      Management, Reporting, System, Rule Testing, Scan Mode, Output Modifiers,
-      General) mirroring the man page structure
-[New] Add usage_short() showing common commands when bfd is run with no
-      arguments; full help available via bfd -h
-[New] Add Examples section to full help output showing common workflows
-[Change] Update bfd.1 man page -h description for short/full help
-[Fix] Fix missing tab indentation on -e usage line
-[Change] Extract _pressure_aggregate_all() from show_status() inline AWK;
-      reusable single-pass all-IPs pressure aggregation (REGR R-015)
-[Change] Consolidate _events_dashboard_awk() and _events_cidr_awk() into
-      _events_pressure_awk() with mode parameter; dashboard and CIDR
-      wrappers now delegate to shared AWK program (REGR R-010)
-[Change] Extract _check_file_safety() helper for ownership/permissions
-      validation; replaces 5 inline stat-check patterns in config_init(),
-      _load_thresholds(), _load_pressure_conf(), and send_alerts();
-      safe_source() refactored to use it; pre-library check at bfd:32
-      retained inline with comment (REGR R-013)
-[Change] Extract _execute_fw_with_retry() shared helper from execute_ban()
-      and execute_unban(); eliminates duplicated retry loop with exponential
-      backoff (REGR R-004)
-[Fix] validate_config(): error message for BAN_ESCALATION now mentions
-      "exponential" as accepted deprecated alias for "double" (REGR R-024)
-[Change] Extract _cleanup_common() shared helper from cleanup() and
-      cleanup_watch(); eliminates duplicated lock/cache teardown (REGR R-003)
-[Change] REGR.md: document verified dispositions for all 24 structural
-      regression findings — 4 false positives, 5 intentional backward-compat,
-      2 infeasible, 2 documented, 1 deferred, 4 resolved prior (F-004),
-      6 actionable (Phases 1-4)
-[Change] tlog_lib.sh: update to canonical 2.0.2 — rotation refactored into
-      _tlog_handle_rotation() with pipe fallback for disk-full; journal flock
-      support; baserun/cursor validation hardening; CLI version cross-check;
-      67 new BATS tests (196 total)
-[Change] search_ip/json/csv: extract shared _search_ip_data() helper; all 5 state
-      files (bans.active, bans.history, events.dat, attack.pool) now read once
-      instead of 3x; per-service pressure reuses _events_ip_awk() single pass;
-      all three formats share one data source (F-004 5/5)
-[Change] events_ip/json/csv: extract shared _events_ip_awk() single-pass AWK and
-      _events_ip_data() helper; per-service AWK calls reduced from 4/service to 0
-      via single-pass pressure computation; all three formats now share one data
-      source (F-004 4/5)
-[Change] list_bans/json/csv: extract shared _list_bans_data() helper; bans.active
-      file read and date formatting now shared across all three formats;
-      state_bans_active_list() refactored as thin wrapper (F-004 3/5)
-[Change] apool_list/json/csv: extract shared _apool_prepare_weekly() helper;
-      weekly pool mktemp+find logic now in exactly one place (F-004 2/5)
-[Change] _apool_service_summary/json/csv: extract shared _apool_service_summary_awk()
-      helper; AWK aggregation logic now in exactly one place (F-004 1/5)
-[New] install.sh: show upgrade notice when watch mode is newly enabled on v1.5
-      upgrades; includes OS-appropriate revert instructions for systemd,
-      chkconfig, and update-rc.d; fresh installs unaffected (F-006)
-[Fix] events_cidr_json(): replace PID-based temp files ($$) with mktemp;
-      eliminates predictable filenames in $install_path/tmp/ (F-008)
-[Fix] _apool_awk(): use comma-delimited exact matching for rule dedup; previous
-      substring match via AWK index() falsely deduped vsftpd/vsftpd2 and
-      openvpn/openvpnas rule pairs (F-013)
-[Fix] _json_escape(): escape newline, tab, CR, backspace, and formfeed per
-      RFC 8259 §7; previously only backslash and double-quote were escaped,
-      producing invalid JSON when log data contained control characters (F-009)
-[Fix] corrected post-upgrade verification in bfd.1, README, and README.md:
-      replaced non-existent --health flag and mislabeled -c description (F-007/F-015)
-[Fix] importconf: restore custom rule files from backup on upgrade; user-added
-      rules not in the shipped set are copied back with 640 permissions (F-005)
-[Fix] importconf: preserve exclude.files customizations on upgrade
-[Change] Extract config_init() shared by startup and reload_watch(), eliminating
-      80+ lines of duplicated config loading logic (F-003)
-[Fix] reload_watch() re-derives ELOG_FORMAT, ELOG_LEVEL, and ELOG_SYSLOG_FILE
-      from conf.bfd on SIGHUP; log format changes now take effect without
-      restart (F-002)
-[Fix] reload_watch() unsets all conf.bfd and internals.conf variables before
-      re-sourcing, preventing stale values when settings are removed (F-010)
-[Fix] reload_watch() re-registers tlog journal filter mappings on SIGHUP (F-057)
-[New] config_init() pre-validates conf.bfd syntax and permissions before
-      unsetting variables on reload, preventing degraded daemon state
-[Fix] validate_config() uses return instead of exit, preventing daemon crash
-      when watch mode reload encounters a config validation error (F-014)
-[Fix] Packaging: add tlog_lib.sh and elog_lib.sh to RPM spec and DEB
-      manifests — both libraries are sourced at startup but were missing
-      from package file lists, rendering RPM/DEB installs non-functional
-[Change] Test suite: relocate 3 filter_host IPv6 unit tests from
-      17-check-pipeline.bats to 11-filter-host.bats (canonical home)
-[Change] Test suite: rewrite 4 vacuous APF/CSF ban/unban tests in
-      18-firewall-backend.bats to use mock binaries instead of inline stubs
-[Change] Test helpers: extract _setup_mock_mail_silent() and _setup_mock_mail_log()
-      in 22-alert-format.bats, replace 6 inline mock mail patterns
-[Change] Test helpers: extract _setup_check_env() in 17-check-pipeline.bats,
-      replace 6 repeated ~20-line variable blocks with helper + overrides
-[Change] Test helpers: add bfd_load_function() to bfd-common.bash, replace 18
-      inline eval+awk function extraction calls across 7 test files
-[Change] Test suite cleanup: remove 13 duplicate/vacuous tests across 5 files
-      (17, 20, 21, 30, 32); 4 count_failures dupes, 3 show_status label-only
-      checks, 2 state_events_append dupes, 1 _load_pressure_conf dupe,
-      1 rule-test subset, 1 vacuous shell-only test, 1 always-true assertion
-[Fix] Test suite: replace assert_line --index -1 with bash 4.1-compatible
-      last-line check in 19-subnet-detection.bats (3 check_distributed tests)
-[Fix] Test suite: CentOS 6 (bash 4.1) compatibility — conditional declare -gA
-      fallback in bfd_standard_setup(), bfd_require_bash42() skip guard for
-      tests needing string-keyed associative arrays (739 failures → 0)
-[Change] bfd.1: add --events option, update --json/--csv scope to -l/-e/-a
-[Change] README.md, README: add section 5.8 Events Dashboard; update section
-      5.6 Structured Output with events/attackpool examples; add -e to CLI block
-[New] search_ip(): live pressure score and per-service pressure breakdown
-      shown in unified IP report (text, JSON, CSV)
-[New] _apool_report(): PRESSURE column with live per-IP pressure scores
-      for attack pool top-25 reports (text, JSON, CSV)
-[New] --json/--csv for --events: structured output for events dashboard,
-      per-IP detail, and CIDR subnet reports
-[New] --json/--csv for -a: structured output for attack pool reports,
-      per-service breakdown, and search_ip unified IP reports
-[New] _json_array_from_csv(): helper converts comma-separated service lists
-      to JSON arrays for structured output
-[Change] events_dashboard()/events_cidr() refactored: shared awk helpers
-      (_events_dashboard_awk, _events_cidr_awk) for reuse by JSON/CSV variants
-[Change] _apool_report() refactored: shared _apool_awk() pipeline for reuse
-      by JSON/CSV variants
-[Change] usage(): --json/--csv scope expanded from -l to -l, -e, -a
-[New] --events: active pressure dashboard showing all tracked IPs with
-      pressure scores, event counts, services, and ban proximity
-[New] --events IP: per-IP pressure detail with per-service breakdown,
-      weights, event counts, and scoring context
-[New] --events CIDR: subnet-scoped pressure report for IPv4 (mask 8-32)
-      using mawk-compatible CIDR math
-[New] validate_cidr(): validates IPv4 CIDR notation (mask 8-32)
-[New] verbose pressure: -V shows per-IP pressure score, trip threshold, and
-      effective weight during detection cycles; country multiplier arrow when
-      weight differs; global pressure ban line when cross-service triggers
-[Fix] Dockerfile path alignment: project files now at /opt/ (not /opt/bfd/)
-      matching /opt/tests/ test path for correct PROJECT_ROOT resolution
-[Change] Standardize container test path from /opt/bfd/tests to /opt/tests —
-      aligns with batsman default, eliminates need for test-path CI override
-[New] validate_email(): email format validation function rejects shell-unsafe
-      characters (semicolons, pipes, backticks, spaces) in addresses (F-022)
-[Change] validate_config(): warns on malformed EMAIL_ADDRESS values (advisory,
-      non-blocking for backward compatibility)
-[Change] _load_pressure_conf()/_load_thresholds(): RULE_EMAIL values validated
-      via validate_email(), invalid entries skipped with warning
-[Fix] tests/32-scan.bats: SCAN_TIMEOUT validation test was tautological —
-      rewritten to mirror actual rejection logic (F-054)
-[Change] tests/32-scan.bats: CLI validation tests annotated with rationale;
-      SCAN_MAX_LINES rejection test simplified to mirror dispatch code (F-055)
-[Fix] help text, README, README.md: standardize -a argument label from
-      IP|STR to IP|STRING matching man page (F-088)
-[Change] ci.yml: test job now depends on lint job via needs: lint (F-095)
-[Fix] README.md: add missing --scan, --max-lines, --scan-timeout flags to
-      CLI usage block (F-036)
-[Fix] README, README.md: add database rules to weight tier description —
-      mysqld-auth, postgresql, mongodb are weight=3 (F-090)
-[Fix] README: add update-ipcountry.sh mention to country weighting section,
-      matching README.md (F-091)
-[Change] ci.yml: add bfd-watch.init to bash -n and shellcheck lint targets
-      (F-047)
-[Fix] README.md: add missing scan mode (5.7) entry to table of contents
-[Change] ci.yml: add bash -n syntax check step before shellcheck; add
-      files/update-ipcountry.sh to lint targets
-[Fix] shellcheck: add SC2034 directives for ELOG_* variables consumed by
-      sourced elog_lib.sh; add SC1090 to dynamic source directive (fixes
-      CI lint job failure)
-[Change] bfd.1: add missing FILES entries — elog_lib.sh, tlog_lib.sh,
-      update-ipcountry.sh, logrotate, systemd units, SysVinit init script,
-      bash completion (19 → 28 entries)
-[Fix] tests/31-country.bats: replace private IPs (10.0.0.1, 172.16.0.1)
-      with RFC 5737 documentation-range IPs for project compliance
-[New] tests: 4 apool_list() tests covering empty pool, full report output,
-      search filter mode, and temp file cleanup
-[New] conf.bfd: LOG_SOURCE, LOCK_FILE_TIMEOUT, and BAN_RETRY_COUNT now
-      documented as commented entries for user discoverability
-[Change] Error and warning messages now write to stderr per UNIX convention;
-      affects validate_config(), CLI dispatcher, manual_ban/unban, show_config,
-      search_ip, list_rules, show_rule, test_rule, and test_pattern
-[Fix] state_bans_active_remove/state_events_prune: restore 600 permissions on
-      state files after awk rewrite (temp file inherits umask, not original perms)
-[New] elog_lib.sh: shared structured logging library (v1.0.0) with severity
-      levels (debug/info/warn/error/critical), classic syslog-style and JSON
-      (JSONL) output formats, configurable via ELOG_* variables
-[New] conf.bfd: LOG_FORMAT (classic/json) and LOG_LEVEL (0-4) variables for
-      structured logging control
-[Change] eout()/vout(): rewritten as thin wrappers delegating to elog library;
-      format-identical output preserves full backward compatibility
-[Change] ~29 log calls in bfd.lib.sh and bfd assigned explicit severity levels
-      (error for failures, warn for degraded/skipped, info for normal operations)
-[Change] update-ipcountry.sh: download timeout (120s default, DL_TIMEOUT var),
-      TLS fallback with warning for legacy CA bundles, temp files in
-      INSTALL_PATH/tmp instead of /tmp, INSTALL_PATH uses ${:-} default
-[Fix] install.sh: update-ipcountry.sh now chmod 750 (was 640 from blanket) and
-      included in custom INSTALL_PATH sed replacement list
-[Change] check(): per-cycle caching for ip_to_country (eliminates repeated awk
-      scans of 190K-line ipcountry.dat), pre-built ignore list cache (single
-      grep vs per-IP file re-reads), pre-computed IP occurrence counts via
-      uniq -c (O(n log n) vs O(n^2) grep in record_and_score)
-[New] _build_ignore_cache(): merges all ignore files into single comment-stripped
-      file for O(1) per-IP lookup during detection cycles
-[Note] F-066 (pressure_compute per-IP awk) deferred — events.dat is 10-100x
-      smaller than country DB; batching requires loop restructuring
-[Note] F-067 (state_bans_active_check per-IP) — false positive in practice;
-      bans.active is small and only checked for threshold-tripping IPs
-[Fix] filter_host: inline comments after IPs in ignore files now handled
-      correctly; grep -v "#" replaced with sed comment-strip pipeline
-[Fix] ip_to_subnet: added defensive guard for subnet masks below /8
-[Fix] _load_pressure_conf: PRESSURE_WEIGHT and PRESSURE_TRIP values now
-      type-validated; non-numeric or zero values logged and skipped
-[Note] F-018 (pam_generic/sshd overlap) verified as intentional design
-[Note] F-033 (-b SERVICE validation) verified as correct — freeform label
-[Fix] CI: shellcheck lint step now uses -S warning to filter info/style
-      noise; inline shellcheck directives added for 8 known false positives
-      in bfd.lib.sh (template vars consumed by sourced alert.bfd, read
-      placeholders, mkdir -m with -p where parent always exists)
-[Fix] CI: added files/tlog_lib.sh to shellcheck lint targets
-[Fix] tests/28-install-paths.bats: updated for tlog rewrite — files/tlog no
-      longer contains /usr/local/bfd (uses relative path to tlog_lib.sh);
-      removed tlog from INSPATH sed replacement tests to match install.sh
-[Fix] bfd.lib.sh: removed unused local variable 'expired_line' from
-      process_unbans()
-[Change] tlog functions extracted to shared tlog_lib.sh library; tlog_read(),
-      tlog_journal_filter(), tlog_journal_read() and 4 internal helpers replaced
-      by canonical tlog_lib.sh (sourced at bfd.lib.sh load time)
-[New] tlog_journal_register(): 23 BFD service-to-journalctl filter mappings
-      migrated from hardcoded case statement to dynamic registry
-[New] atomic cursor writes (mktemp+mv) for all tlog operations; replaces
-      non-atomic echo-redirect pattern
-[New] optional flock-based cursor locking enabled in watch mode (TLOG_FLOCK=1);
-      prevents concurrent access between watch daemon and cron.daily
-[New] cursor validation with auto-reset on corruption (exit code 2)
-[New] multi-mode tracking support (bytes default, lines selectable per call)
-[New] stale cursor protection: mtime updated on every tlog_read call
-[New] configurable first-run behavior (TLOG_FIRST_RUN=skip|full)
-[New] tlog_adjust_cursor() for mode-aware in-place log trim support
-[Change] files/tlog replaced with tlog_lib standalone wrapper (sources
-      tlog_lib.sh instead of reimplementing tracking logic)
-[Fix] tlog BASERUN: install.sh replaces default /tmp with $INSPATH/tmp at
-      install time; prevents cursor files from defaulting to world-writable
-      /tmp; source tree keeps canonical /tmp for cross-project hash parity
-[Change] tlog_lib.sh: update to canonical 2.0.1 with multi-format compressed
-      rotation (.xz, .bz2, .zst, .lz4), copytruncate rotation handling, mode
-      validation in tlog_read(), and generic decompression dispatch
-[Change] tlog: update to canonical 2.0.1 CLI with option parsing (-m/--mode,
-      -b/--baserun, -f/--flock, --first-run), subcommands (--full, --status,
-      --reset, --adjust), help system (-v/-h/--help), path traversal rejection,
-      and library security validation; backward-compatible positional interface
-[New] tests/03-validate-rule.bats: 8 _compat_rule_vars() unit tests covering
-      all 4 legacy→canonical mappings, preservation semantics when new names
-      already set, empty old names, and mixed old/new resolution
-[Fix] show_status(): add missing _compat_rule_vars() call after sourcing rule
-      files; old-style rules using REQ instead of PREREQ were incorrectly
-      counted as inactive in status output
-[Fix] show_rule(), test_rule(): reorder _compat_rule_vars() before
-      _apply_pressure() for consistency with check() and _hc_rules() call
-      order; no functional change (variable sets are non-overlapping)
-[Change] tests: relocate 10 misplaced tests to logical home files —
-      extract_command_template (4 tests) from 09-state-io to 22-alert-format;
-      _hc_config (1 test) from 04-config-validation to 23-health-check;
-      _save/_restore/_clear_rule_vars and _rule_is_active (5 tests) from
-      04-config-validation to 03-validate-rule
-[New] README, README.md, bfd.1: upgrade documentation section covering
-      importconf migration, config variable renames, state preservation,
-      post-upgrade verification, and rollback procedure
-[Fix] state_init(): enforce 750 permissions on tmp/ and stats/ directories
-      (mkdir -m 750); previously relied on pre() to set permissions, leaving an
-      unprotected window if state_init() was called independently
-[Fix] validate_config(): reject SCAN_TIMEOUT=0; GNU timeout 0 means "no timeout"
-      which could cause journalctl to hang indefinitely during scan mode
-[Fix] watch(): SIGTERM/SIGINT now properly exit the daemon; previous trap
-      pattern ran cleanup_watch but let the while-true loop continue; changed
-      to EXIT-only cleanup with separate TERM/INT traps that call exit
-[Fix] reload_watch(): unset config vars BEFORE re-sourcing conf.bfd, not
-      after; previous ordering destroyed freshly-sourced values so config
-      changes (e.g., PRESSURE_TRIP) never took effect on SIGHUP reload
-[New] tests/33-watch-mode.bats: 15 tests for watch mode daemon lifecycle;
-      10 unit tests (cleanup_watch lock removal/logging, reload_watch config
-      re-sourcing/safety-rejection/pressure-array-clearing/fallback-derivation);
-      5 integration tests (lock creation, PID file, start logging, SIGTERM
-      graceful shutdown, SIGHUP config reload)
-[Fix] reload_watch(): clear pressure arrays (_PRESS_WEIGHT/_TRIP/_SKIP_ALERT/
-      _RULE_EMAIL) before reload; if pressure.conf is deleted while daemon
-      runs, stale arrays no longer persist from previous load
-[Fix] reload_watch(): add full fallback variable block matching startup
-      lines 90-100 (RULES_PATH, TLOG_PATH, EMAIL_TEMPLATE, etc.); defends
-      against config-sourcing failures leaving variables unset
-[Fix] importconf: preserve tlog byte-offset state files on upgrade; loop
-      copies bare-name files (sshd, dovecot, postfix, etc.) from old tmp/,
-      skipping dotfiles and extension files already handled by other cp's
-[Fix] importconf: preserve user's custom alert.bfd template on upgrade;
-      install.sh unconditionally overwrites with new default, importconf
-      now restores from backup if present
-[Fix] show_config(): replace eval-based variable indirection with ${!var}
-      indirect expansion; eliminates eval from display path while preserving
-      whitelist validation and BAN_COMMAND case mapping
-[Fix] quiet mode (-q): remove stderr redirect so genuine errors from tlog
-      functions reach cron's mail handler; stdout suppression sufficient for
-      cron silence since eout() writes to log file regardless
-[New] tests: direct test coverage for sanitize_ports() (12 cases) and
-      expand_command_template() (7 cases) — security-critical input validation
-      and safe template expansion functions
-[Fix] cron.daily: check mkdir-based lock (lock.utime.lk) before rotating state
-      files; prevents racing with running bfd process that uses directory-based
-      locking; flock retained for self-contention between cron.daily invocations
-[Fix] _fw_iptables_ban/_fw_iptables_unban: guard against empty $_FW_IP6T_BIN
-      when ip6tables is not installed; IPv6 bans now log a warning and return 1
-      instead of executing an empty command; _fw_iptables_setup logs one-time
-      warning when ip6tables is missing
-[Fix] README: corrected watch mode lock description from "flock" to "atomic
-      directory creation" to match actual mkdir-based implementation
-[New] GitHub Actions release workflow (.github/workflows/release.yml): builds
-      RPM (el7, el8, el9, el10) and DEB packages in parallel Docker containers
-      on v* tag push; creates GitHub Release with all packages as assets
-[New] RPM packaging (pkg/rpm/bfd.spec): FHS-compliant layout with files at
-      /usr/sbin, /usr/lib/bfd, /etc/bfd, /usr/share/bfd, /var/lib/bfd;
-      symlink farm at /usr/local/bfd for backward compatibility; sed transforms
-      at build time for internals.conf, cron, systemd units; %config(noreplace)
-      for all user-editable config; install.sh migration in %pre/%post;
-      single spec covers el7/el8/el9/el10
-[New] DEB packaging (pkg/deb/debian/): FHS layout with dh_link-based symlink
-      farm; debhelper-compat 13; conffile protection; preinst/postinst handle
-      install.sh-to-package migration; single .deb covers Debian 12 and
-      Ubuntu 18/20/22/24
-[New] Package build infrastructure (pkg/Makefile): source tarball via git
-      archive; native rpm/deb targets; Docker build containers for el7
-      (CentOS 7), el9 (Rocky 9, covers el8/el9/el10), and Debian 12;
-      test-rpm-rocky9 and test-deb-debian12 targets for install verification
-[New] Package verification test suite (pkg/test/test-pkg-install.sh): 10 test
-      categories covering FHS paths, symlink farm, internals.conf transforms,
-      lock coordination, cron paths, permissions, rule files, exclude.files,
-      systemd units, and bfd execution via both /usr/sbin and /usr/local/sbin
-[Fix] stat -c calls in bfd, bfd.lib.sh, tlog: add -L flag to dereference
-      symlinks before checking ownership/permissions; required for package
-      installs where /usr/local/bfd/ files are symlinks to FHS locations;
-      backward-compatible (no-op on regular files for install.sh installs)
-[New] README (plain text): section 5.7 Scan Mode with use cases, CLI examples,
-      safety limits, and lock behavior; --scan/--max-lines=/--scan-timeout= in
-      CLI usage block; SCAN_MAX_LINES/SCAN_TIMEOUT in 3.7 Advanced config;
-      TOC entry for section 5.7
-[Change] install.sh: contextual progress output for every blocking stage;
-      plain-English verbs with no prefix sigils; echo-n/done on stop/start
-      so systemctl calls are never a silent pause; stage markers (header,
-      backing up, installing, importing); summary block with 2-space indent
-[Fix] install.sh: stop watch mode before upgrade to avoid 15s restart delay
-      and stray output from dying process; new _stop_services() called before
-      backup(); _enable_services() uses start instead of restart
-[New] 32-scan.bats: 48 tests covering _tlog_read_full, _tlog_journal_read_full,
-      _tlog_advance_scan_cursors, _rule_tlog scan branch, check() scan mode
-      integration, cursor advancement, CLI argument parsing, validate_config,
-      and show_config for scan variables (974 total tests, 0 failures)
-[New] bfd.1: Scan Mode subsection with --scan, --max-lines=, --scan-timeout=;
-      SCAN_MAX_LINES and SCAN_TIMEOUT in Advanced config section
-[New] README: section 5.7 Scan Mode with usage, use cases, safety limits,
-      and lock behavior; SCAN_MAX_LINES/SCAN_TIMEOUT in 3.7 Advanced table
-[Change] bfd.bash-completion: --scan, --max-lines=, --scan-timeout= in long
-      flags; --scan context completes rule names; config_vars updated
-[New] --scan CLI option: scan full logs for all rules or a specific rule;
-      supports -d/--dryrun, --max-lines=N, --scan-timeout=N; acquires lock,
-      runs check() in scan mode, advances cursors after non-dry-run scan
-[New] SCAN_MAX_LINES and SCAN_TIMEOUT config variables in conf.bfd Advanced
-      section with validate_config() and show_config() support
-[New] scan mode core: _tlog_read_full(), _tlog_journal_read_full(), and
-      _tlog_advance_scan_cursors() for full-log processing without cursor tracking;
-      _rule_tlog() scan branch; check() rule filter and cursor pair collection;
-      summary label distinguishes "scan complete" from "run complete"
-[Change] weights.country renamed to pressure-country.conf; PRESSURE_COUNTRY
-      toggle removed — country weighting is now auto-enabled when
-      pressure-country.conf has uncommented entries; removes config variable
-      from conf.bfd, validate_config(), show_config(), and bash completion
-[Fix] tlog_journal_read: unquote $jfilter so multi-filter entries (exim OR
-      syntax) are word-split into separate journalctl arguments; single-filter
-      entries unaffected; shellcheck SC2086 suppressed with safety comment
-[Change] dovecot rule: AUTH_LOG_PATH fallback when MAIL_LOG_PATH missing
-      (Debian/Ubuntu systems where dovecot logs to auth.log)
-[Change] exim_authfail/exim_nxuser rules: Debian support — /usr/sbin/exim4
-      binary fallback, /var/log/exim4/mainlog log path fallback
-[Change] asterisk_badauth/asterisk_iax/asterisk_nopeer rules: /var/log/
-      asterisk/messages fallback when /var/log/asterisk/full missing
-[Change] http_401 rule: conservative defaults enabled (PRESSURE_WEIGHT=1,
-      PRESSURE_TRIP=60) to prevent false positives from legitimate 401s
-[Change] pam_generic rule: conservative defaults enabled (PRESSURE_WEIGHT=1,
-      PRESSURE_TRIP=40) with overlap documentation comment
-[Change] validate_rule() rewritten to distinguish inactive rules (silent skip)
-      from genuine misconfigurations (logged); PREREQ-missing and file-detection
-      with no match are now silent; MATCHED_HOSTS check moved to caller
-[Change] check() output: "processing rule file" messages now verbose-only;
-      new summary format "N active rules, M with events, P events parsed,
-      K bans executed"; active_count tracks rules passing validate_rule
-[New] tlog_journal_filter() expanded from 16 to 23 entries: openvpn,
-      exim_authfail, exim_nxuser, xrdp, asterisk, asterisk.iax, asterisk_nopeer
-[Change] rule variables renamed for clarity: REQ→PREREQ, LP→LOG_FILE,
-      TLOG_TF→LOG_TAG, ARG_VAL→MATCHED_HOSTS; all 42 rule files, library
-      functions, and diagnostics updated; _compat_rule_vars() shim provides
-      full backward compatibility for custom rules using old names
-[New] install.sh: auto-enable watch mode on fresh install (systemd + SysVinit);
-      upgrades respect existing timer/watch choice
-[Change] install.sh: cleaner post-install output reflecting active scheduling mode
-[Change] README: sections 2, 2.1, Quick Start updated for auto-enabled watch mode
-[Change] bfd.1: DESCRIPTION updated to reflect watch mode as default on install
-[New] proxmox rule: pvedaemon/pveproxy authentication failure via PAM
-[New] lighttpd rule: mod_auth password mismatch with dynamic log detection
-[New] mongodb rule: authentication failed from client
-[New] xrdp rule: AUTHFAIL and pam_authenticate failed
-[New] openvpn rule: TLS Auth Error, VERIFY ERROR, TLS handshake failed
-      (community edition; separate from openvpnas Access Server rule)
-[New] phpmyadmin rule: mysql-denied and user denied via syslog
-      (requires AuthLog='syslog' in phpMyAdmin config)
-[New] gitlab rule: Failed Login from application.log
-[New] grafana rule: invalid username or password with remote_addr
-[Change] sshd rule expanded from 3 to 8 patterns: keyboard-interactive, ident
-      string, refused connect, max auth attempts, PAM failure (LFD/fail2ban)
-[Change] dovecot rule expanded from 2 to 5 patterns: Disconnected pop3/imap,
-      submission-login auth failed
-[Change] proftpd rule expanded from 1 to 4 patterns: incorrect password,
-      SECURITY VIOLATION, maximum login attempts
-[Change] exim_authfail rule expanded from 1 to 3 patterns: dovecot_*
-      authenticator, SMTP protocol synchronization error
-[Change] asterisk_badauth rule expanded from 1 to 2 patterns: SecurityEvent
-      FailedACL (Asterisk 12+ security framework)
-[Change] postfix PORTS updated from 25,26 to 25,26,587,465 (submission/SMTPS)
-[Change] sendmail rule expanded from 1 to 2 patterns: AUTH failure
-[New] tests/regex_samples.txt: data-driven test corpus covering all 42 rules
-      with positive and negative test cases; RFC 5737 IP compliant; data-driven
-      BATS tests in 13-regex-samples.bats validate all samples automatically
-[Change] conf.bfd restructured into workflow-oriented sections (Pressure Model,
-      Email Alerts, Banning, Custom Firewall Commands, Log Paths, Advanced);
-      comments rewritten with worked examples (bot vs human scenarios);
-      repeat-offender pipeline (BAN_ESCALATION/CAP + BAN_ESCALATE_AFTER/WINDOW)
-      grouped with scenario examples; BAN_ESCALATION value "exponential" renamed
-      to "double" (old value still accepted); 4 internal-only variables
-      (LOCK_FILE_TIMEOUT, OUTPUT_SYSLOG_FILE, BAN_RETRY_COUNT, LOG_SOURCE)
-      moved to internals.conf with backward-compatible defaults
-[New] bfd.lib.sh: 120-function library extracted from bfd for testability
-[New] extract_hosts() declarative rule engine with fail2ban-compatible <HOST>
-      patterns, dual IPv4/IPv6 boundary-aware regex, and IGNOREREGEX per-rule
-      exclusion; all 34 rules converted from ad-hoc grep/sed/awk pipelines
+
+-- New Features --
+
+[New] Pressure-to-response scoring model: exponential-decay scoring replaces
+      fixed count thresholds; events add weighted pressure per rule, pressure
+      decays via configurable half-life, bans fire when accumulated pressure
+      exceeds trip point; cross-service aggregate trip; all math in native awk
+      floats; old TRIG/TRIG_WINDOW configs auto-migrate
+[New] Country pressure multipliers: auto-enabled when pressure-country.conf has
+      entries; IP-to-country lookup via ipcountry.dat binary search;
+      pressure-country.conf maps country codes to multipliers
+[New] Per-rule pressure configuration via pressure.conf: PRESSURE_WEIGHT,
+      PRESSURE_TRIP, SKIP_ALERT, RULE_EMAIL with three-tier precedence
+      (rule file > pressure.conf > conf.bfd)
+[New] Watch mode (-w/--watch): continuous daemon with configurable interval;
+      SIGHUP config reload; systemd unit and SysVinit init script; dead-PID
+      lock recovery for cron fallback
+[New] Scan mode (--scan): full-log processing for all rules or a specific rule;
+      supports dry-run, --max-lines=N, --scan-timeout=N; SCAN_MAX_LINES and
+      SCAN_TIMEOUT config variables with startup validation
+[New] Events CLI (--events): active pressure dashboard showing all tracked IPs
+      with pressure scores, event counts, services, and ban proximity;
+      per-IP detail with per-service breakdown; CIDR subnet reports;
+      --json/--csv structured output for all modes
+[New] Structured output (--json/--csv) for ban list (-l), events dashboard
+      (-e), and attack pool reports (-a) including per-service breakdowns
+      and unified IP reports
+[New] FIREWALL="auto" with 8 backends: APF, CSF, firewalld, UFW, nftables,
+      iptables, route, custom; auto-detection in priority order; nftables
+      sets, iptables chain, firewalld rich rules, route blackhole
+[New] Full IPv6 support: dual-stack detection, banning, and local address
+      exclusion; BAN_COMMAND_V6/UNBAN_COMMAND_V6 for firewalls requiring
+      separate commands
+[New] Temporary bans with auto-expiry (BAN_TTL); recidivism escalation
+      (BAN_ESCALATE_AFTER/BAN_ESCALATE_WINDOW); escalation modes
+      (none/linear/double with configurable cap); retry with exponential
+      backoff; old names (BAN_DURATION, BAN_PERMANENT_AFTER/WINDOW) accepted
+[New] Distributed attack detection: SUBNET_TRIG unique IPs from same subnet
+      triggers subnet ban; configurable IPv4/IPv6 masks
+[New] Batched email alerts: single email per recipient per check cycle with
+      enriched content (ban type, duration, recidivism, log excerpts);
+      per-rule routing and suppression via RULE_EMAIL/SKIP_ALERT; atomic
+      state file appends via flock; port-specific blocking via $PORTS
+[New] Declarative rule engine with fail2ban-compatible <HOST> patterns,
+      dual IPv4/IPv6 boundary-aware regex, and IGNOREREGEX per-rule exclusion;
+      all rules converted from ad-hoc grep/sed/awk pipelines
 [New] 22 new service rules (42 total): apache-auth, nginx-http-auth,
       mysqld-auth, wordpress, webmin, directadmin, cyrus-imap, roundcube,
       plesk, dropbear, http_401, pam_generic, named, postgresql,
       openvpn, phpmyadmin, gitlab, grafana, proxmox, lighttpd, mongodb, xrdp
-[New] pressure.conf: centralized per-rule pressure configuration
-      (PRESSURE_WEIGHT, PRESSURE_TRIP, SKIP_ALERT, RULE_EMAIL); three-tier
-      precedence: rule file > pressure.conf > conf.bfd; replaces thresholds.conf
-[New] _rule_tlog() in-process tlog wrapper replaces $TLOG_PATH subprocess in
-      all 34 rules; eliminates 34 fork+exec pairs per detection cycle
-[New] pressure-to-response model: exponential-decay scoring replaces fixed
-      count thresholds; events add weighted pressure (PRESSURE_WEIGHT per rule),
-      pressure decays via half-life (PRESSURE_HALF_LIFE, default 300s), bans
-      fire when accumulated pressure exceeds trip point (PRESSURE_TRIP, default
-      20); PRESSURE_TRIP_GLOBAL cross-service aggregate trip (0=off);
-      all math in native awk floats with scaled-integer bash comparison;
-      backward compat: old TRIG/TRIG_WINDOW configs auto-migrate
-[New] country pressure multipliers: auto-enabled when pressure-country.conf
-      has entries; IP-to-country lookup via ipcountry.dat (binary-search on
-      sorted integer ranges); pressure-country.conf maps country codes to
-      multipliers (20=2.0x, 10=1.0x); pressure_effective_weight() scales
-      per-rule weight by country factor
-[New] distributed attack detection: SUBNET_TRIG unique IPs from same subnet
-      triggers subnet ban; ip_to_subnet() with configurable IPv4/IPv6 masks
-[New] FIREWALL="auto" with 8 backends (APF, CSF, firewalld, UFW, nftables,
-      iptables, route, custom); auto-detection in priority order;
-      fw_ban/fw_unban/fw_setup/fw_status dispatch layer; nftables sets,
-      iptables chain, firewalld rich rules, route blackhole
-[New] full IPv6 support: dual-stack detection, banning, and local address
-      exclusion; BAN_COMMAND_V6/UNBAN_COMMAND_V6 for firewalls requiring
-      separate commands; validate_ip6() with zone ID stripping
-[New] temporary bans with auto-expiry (BAN_TTL, default 600s); recidivism
-      escalation (BAN_ESCALATE_AFTER/BAN_ESCALATE_WINDOW); ban escalation modes
-      (BAN_ESCALATION: none/linear/double, BAN_ESCALATION_CAP);
-      execute_ban/execute_unban with retry and exponential backoff; old names
-      (BAN_DURATION, BAN_PERMANENT_AFTER/WINDOW) accepted via silent fallback
-[New] bans.active and bans.history state files with atomic flock -x appends;
-      $PORTS substitution for port-specific blocking
-[New] batched email alerts: single email per recipient per check cycle with
-      enriched content (ban type, duration, recidivism, log excerpts);
-      RULE_EMAIL per-rule routing; SKIP_ALERT per-rule suppression
+[New] In-process tlog wrapper replaces external subprocess calls in all rules;
+      eliminates fork+exec pairs per detection cycle
+[New] Systemd journal reader with transparent fallback (16 of 34 rules);
+      LOG_SOURCE config (auto/file/journal); cursor-based journal tracking;
+      23 service-to-journalctl filter mappings via dynamic registry
+[New] tlog_lib.sh shared incremental log reader: atomic cursor writes, optional
+      flock-based locking, cursor validation with auto-reset, stale cursor
+      protection, configurable first-run behavior, multi-format compressed
+      rotation support, copytruncate handling, and generic decompression
+[New] elog_lib.sh structured logging library with severity levels, classic
+      syslog-style and JSON output formats, configurable via LOG_FORMAT and
+      LOG_LEVEL
 [New] CLI expanded from 4 to 21 flags: -S/--status, -C/--config, -R/--rules,
       -T/--test, --test-pattern, -l/--list, -u/--unban, -b/--ban, -c/--check,
       -d/--dryrun, -w/--watch, -V/--verbose, -v/--version, -h/--help,
       --flush-temp, --flush-all, --json, --csv
-[New] -w/--watch continuous daemon mode (WATCH_INTERVAL, default 10s); SIGHUP
-      config reload; bfd-watch.service (systemd) and bfd-watch.init (SysVinit
-      for CentOS 6 / Ubuntu 14.04); dead-PID lock recovery for cron fallback
-[New] -V/--verbose flag with vout() instrumentation across check, unbans,
-      status, and health check
-[New] -c/--check health check: validates config, log paths, firewall binaries,
-      rule status, state directories, tlog, and active bans
-[New] detect_run_mode() for structured run-mode identification (watch/systemd,
-      watch/init, watch/manual, timer/systemd, cron, unknown)
-[New] systemd journal reader with transparent fallback (16 of 34 rules);
-      LOG_SOURCE config (auto/file/journal); cursor-based journal tracking
-[New] conf.bfd reorganized into 6 sections; internals.conf split out;
-      validate_config() checks 24 variables at startup with clear error
-      messages and meaningful exit codes
-[New] bfd.1 nroff man page (OPTIONS, CONFIGURATION, PRESSURE MODEL, FIREWALL,
-      RULES, FILES, SIGNALS, EXIT CODES); installed via install.sh
+[New] Health check (-c/--check): validates config, log paths, firewall
+      binaries, rule status, state directories, tlog, and active bans
+[New] Run mode detection: structured identification (watch/systemd, watch/init,
+      watch/manual, timer/systemd, cron, unknown)
+[New] Verbose mode (-V/--verbose): per-IP pressure score, trip threshold,
+      effective weight, and country multiplier shown during detection cycles
+[New] Short and full help output: common commands shown with no arguments,
+      full help via -h with semantic section grouping and examples
+[New] bfd.1 nroff man page: OPTIONS, CONFIGURATION, PRESSURE MODEL, FIREWALL,
+      RULES, FILES, SIGNALS, EXIT CODES; scan mode, events, structured output,
+      upgrade guide
 [New] bfd.bash-completion: context-sensitive tab completion for all CLI flags,
       IPs, rule names, config variables, and file paths
 [New] importconf rewritten: awk-based config merge preserving user values;
-      TRIG→PRESSURE_TRIP migration in conf.bfd; thresholds.conf→pressure.conf
-      per-rule translation; pre-2.0.1 backward compat (FIREWALL="custom");
-      temp file cleanup trap
-[New] install.sh: custom paths (INSTALL_PATH/BIN_PATH env vars); man page,
-      bash completion, and SysVinit init script installation; post-install
-      watch mode recommendation; stats/ mkdir
+      TRIG to PRESSURE_TRIP migration; thresholds.conf to pressure.conf
+      per-rule translation; pre-2.0.1 backward compat; temp file cleanup trap
+[New] install.sh: custom paths via INSTALL_PATH/BIN_PATH env vars; man page,
+      bash completion, and SysVinit init script installation; auto-enable
+      watch mode on fresh install; upgrade notice for watch mode on v1.5
+      upgrades
 [New] uninstall.sh: root check; service stop ordering; man page, completion,
-      init script, and backup directory cleanup
-[New] safe_source() validates root ownership and non-world-writable permissions
-      before sourcing; expand_command_template() and sanitize_ports() for safe
-      template expansion without eval
-[New] validate_ip()/validate_ip6()/validate_ip_any() strict IP validation;
-      sanitize_mod() restricts rule names to safe characters
-[New] record_ban(), _save/_restore/_clear_rule_vars(), _rule_is_active()
-      helpers consolidating duplicated logic across callers
-[New] bfd.service, bfd.timer, bfd-watch.service systemd units with
+      init script, backup directory, and custom log path cleanup
+[New] Security functions: safe_source() validates ownership and permissions
+      before sourcing; safe template expansion without eval; strict IP and
+      email validation; rule name sanitization
+[New] Per-cycle caching: ignore file merge for fast per-IP lookup; country
+      lookup cache; pre-computed IP occurrence counts; timestamp formatting
+      helpers replacing 30 inline date fallback patterns
+[New] systemd units: bfd.service, bfd.timer, bfd-watch.service with
       SyslogIdentifier
-[New] .shellcheckrc and full shellcheck compliance across all scripts
-[New] .github/workflows/ci.yml with 8-OS Docker matrix and Buildx caching
-[New] BATS test suite: 929 tests across 31 .bats files; shared helpers
-      (assert-bfd.bash, bfd-mock.bash, bfd-common.bash); parallel runner;
-      9 Dockerfiles; RFC 5737 test IPs throughout; dedicated pressure model
-      and country multiplier test suites
-[Change] check() rewritten: pressure-based scoring via record_and_score()
-         replaces count_failures(); per-rule weight/trip/half-life; optional
-         country multipliers; global cross-service pressure trip; per-run
-         statistics; duplicate-ban prevention via state_bans_active_check()
-[Change] tlog modernized: cat subprocesses → read builtin; getsize() pre-
-         create block eliminated (prevents double-read race); growth condition
-         simplified; convergence with tlog_read() documented
-[Change] shell modernization across all files: backticks → $(), $[expr] →
-         $(( )), egrep → grep -E, for-cat → while-read, systematic variable
-         quoting, hardcoded paths → command -v discovery
-[Change] -a/--attackpool extended with search_ip() report, per-service
-         breakdown, and ban status integration
-[Change] logrotate.d.bfd rewritten: copytruncate, weekly, compress, create 0640
-[Change] cron.daily: flock-wrapped state rotation; copy-and-truncate preserves
-         inodes; INSTALL_PATH variable; cursor files preserved; GPL header added
-[Change] README wholesale rewrite: quick start, config reference, rule catalog,
-         ban lifecycle, firewall backends, IPv6, CLI flags, troubleshooting
-[Change] default cron interval reduced from 3 to 2 minutes
-[Change] version 1.6-1 → 2.0.1; copyright years updated to 2026
-[Fix] security: alert eval echo injection replaced with expand_command_
-      template(); show_config() eval injection guarded by whitelist;
-      BAN_COMMAND template extracted raw preventing premature expansion;
-      custom backend PORTS validated via sanitize_ports()
-[Fix] security: safe_source() applied to all sourced files (bfd.lib.sh,
-      conf.bfd, alert.bfd, rules, tlog); state file operations wrapped in
-      flock -x; mktemp replaces PID-based temp files; state files created 600;
-      tlog gunzip/gzip race replaced with zcat
-[Fix] global lock: FD-based flock replaced with mkdir-based lock eliminating
-      eval "exec $LOCK_FD" and fd-0-close risk; PID liveness check clears dead
-      holder immediately for cron recovery
-[Fix] install.sh: daemon-reload after sed; BINPATH parent dir creation; CWD
-      portability; chmod 640 for sourced files via find -type f; stats/ mkdir
-      with chmod 750; no-op sed target removed
-[Fix] validate_config(): added OUTPUT_SYSLOG, EMAIL_ADDRESS, BFD_LOG_PATH,
-      BAN_RETRY_COUNT, EMAIL_LOGLINES validation; header comment updated
-[Fix] show_config(): BAN_COMMAND vars added to whitelist with _TEMPLATE mapping
-[Fix] rule variable leakage: IGNOREREGEX/PORTS/SKIP_ALERT/RULE_EMAIL now
-      properly reset between rules via _clear/_save/_restore helpers
-[Fix] CLI exit codes: all dispatch branches validate args and propagate via
-      || exit "$?"; unknown flags exit non-zero
-[Fix] firewall backends: hardcoded paths replaced with command -v discovery
-      for apf, csf, iptables, ip6tables, ip (route backend); CIDR addresses
-      pass through without extra /32 or /128 suffix
-[Fix] tlog: log rotation duplicate output; source safety validation;
-      indentation normalized; idioms and version string updated
-[Fix] rule fixes: postgresql impossible path test; vsftpd2 TLOG_TF collision;
-      modsec FILE→LP rename; missing SKIP_ALERT in postfix/proftpd;
-      ignore.hosts missing ::1 loopback
-[Fix] IPv6: grep -Fw false-match replaced with awk/grep -Fx exact matching
-[Fix] journal: tlog_journal_filter rh_ipop3d key mismatch; dispatch bypassed
-      existing log files
-[Fix] miscellaneous: POSIX == → = in [ ] tests; $EXIT_* quoting; _hc_config()
-      eval → case; _apool_report() date -d fallback; -q subprocess → exec;
-      attack pool regex → grep -F; local address grep -Ew fix; WATCH_INTERVAL
-      ${-} → ${:-}; sed -r → sed -E; $! quoting; UNBAN_COMMAND warning gated
-      on FIREWALL="custom"; firewalld examples removed --permanent flag
-[Fix] pressure alerts: format_alert_body read 11 fields from 12-field alert
-      file; weight field absorbed into half-life, corrupting email display;
-      check_distributed normalized to 12-field format for consistency
-[Fix] tab completion: bfd.bash-completion config_vars used old variable names
-      (TRIG, BAN_DURATION, THRESHOLDS_CONF); updated to match show_config()
-      whitelist (PRESSURE_TRIP, BAN_TTL, PRESSURE_CONF)
-[Fix] display fallback: 5 display functions used hardcoded trip default of 15
-      instead of documented default 20 (unreachable in practice)
-[Fix] show_status rounding: awk int(p*1000+0.5) rounding inconsistent with
-      pressure_compute printf truncation; normalized to truncation
-[Fix] reload_watch: SIGHUP config reload did not clear derived pressure vars
-      before re-sourcing, causing stale values when users edit legacy names
-[Fix] ATTACK_COUNT backward compat: send_alerts set to raw pressure_scaled
-      (e.g., 18400); now uses pressure/1000 for sensible old-template display
-[Change] test infrastructure: adopt batsman shared BATS framework via submodule
-      at tests/infra (pinned to 1.0.1); 9 Dockerfiles reduced from full OS+BATS
-      install to single-package delta over batsman base images; run-tests.sh
-      replaced with 21-line batsman wrapper; Makefile replaced with 8-line
-      parameterized include; CI test job uses batsman reusable workflow
-[Change] remove legacy run_tests.sh pre-BATS test runner
+[New] RPM packaging: FHS-compliant layout (/usr/sbin, /usr/lib/bfd, /etc/bfd,
+      /usr/share/bfd, /var/lib/bfd); symlink farm at /usr/local/bfd for
+      backward compat; sed transforms at build time; config(noreplace) for
+      user-editable config; SysVinit service handling in scriptlets; single
+      spec covers el7/el8/el9/el10
+[New] DEB packaging: FHS layout with dh_link-based symlink farm;
+      debhelper-compat 13; conffile protection; SysVinit init script included;
+      install.sh-to-package migration; single .deb covers Debian 12 and
+      Ubuntu 18/20/22/24
+[New] Package build infrastructure: source tarball via git archive; native
+      rpm/deb targets; Docker build containers for el7, el9, and Debian 12;
+      10-category verification test suite covering FHS paths, symlink farm,
+      config transforms, permissions, rule files, systemd units, and execution
+[New] GitHub Actions release workflow: builds RPM (el7/el8/el9/el10) and DEB
+      packages in parallel on tag push; creates GitHub Release with assets
+[New] GitHub Actions CI pipeline: 10-OS Docker matrix with Buildx caching,
+      bash -n syntax checks, and shellcheck static analysis
+[New] BATS test suite: 1175 tests across 36 files; shared helpers; parallel
+      runner; 10 Dockerfiles; RFC 5737 test IPs; dedicated pressure model,
+      country multiplier, watch mode, and scan mode test suites
 
+-- Bug Fixes --
+
+[Fix] Security: alert eval echo injection replaced with safe template
+      expansion; show_config() eval injection guarded by whitelist;
+      BAN_COMMAND template extracted raw preventing premature expansion;
+      custom backend PORTS validated
+[Fix] Security: safe_source() applied to all sourced files; state file
+      operations wrapped in flock; mktemp replaces PID-based temp files;
+      tlog gunzip/gzip race replaced with zcat
+[Fix] Security: reject group-writable files in addition to world-writable
+      in file safety checks; sanitize credential patterns in alert email
+      log excerpts; validate IGNOREREGEX patterns before use
+[Fix] Global lock: FD-based flock replaced with mkdir-based lock eliminating
+      eval and fd-0-close risk; PID liveness check clears dead holder
+      immediately for cron recovery
+[Fix] Watch mode: SIGTERM/SIGINT now properly exit the daemon; previous trap
+      pattern let the while-true loop continue after cleanup
+[Fix] Watch mode reload: unset config vars BEFORE re-sourcing to prevent
+      stale values; clear pressure arrays; re-register journal filters on
+      SIGHUP; re-derive log format variables; add fallback variable block
+      for config-sourcing failures; pre-validate syntax and permissions
+      before unsetting to prevent degraded daemon state
+[Fix] Watch mode reload: config validation uses return instead of exit,
+      preventing daemon crash on validation errors
+[Fix] Upgrade path: importconf preserves pressure-country.conf, custom rule
+      files, exclude.files, custom alert.bfd template, tlog cursor state
+      files, and user-customized cron schedule on upgrade
+[Fix] Upgrade path: health check validates UNBAN_COMMAND and UNBAN_COMMAND_V6
+      binary existence
+[Fix] install.sh: stop watch mode before upgrade to avoid restart delay;
+      daemon-reload after sed; BINPATH parent dir creation; CWD portability;
+      set sourced libraries to 640 permissions; chmod 750 on install directory;
+      update-ipcountry.sh set executable and added to path replacement list
+[Fix] nftables status: count actual set elements instead of reporting 1
+      regardless of element count
+[Fix] cron.daily: use dedicated lock file for flock to avoid write contention;
+      check mkdir-based lock before rotating state files to prevent racing
+      with running bfd process
+[Fix] JSON escape: newline, tab, CR, backspace, and formfeed per RFC 8259;
+      previously only backslash and double-quote were escaped
+[Fix] Attack pool dedup: exact matching for rule names; previous substring
+      match falsely deduped vsftpd/vsftpd2 and openvpn/openvpnas pairs
+[Fix] Config validation: added OUTPUT_SYSLOG, EMAIL_ADDRESS, BFD_LOG_PATH,
+      BAN_RETRY_COUNT, EMAIL_LOGLINES, LOG_FORMAT, LOG_LEVEL, and
+      SCAN_TIMEOUT=0 validation; BAN_ESCALATION error mentions "exponential"
+      as accepted deprecated alias
+[Fix] show_config(): replace eval-based variable indirection with indirect
+      expansion; BAN_COMMAND vars added to whitelist
+[Fix] Rule variable leakage: IGNOREREGEX/PORTS/SKIP_ALERT/RULE_EMAIL now
+      properly reset between rules via save/restore/clear helpers
+[Fix] CLI exit codes: all dispatch branches validate args and propagate
+      correctly; unknown flags exit non-zero
+[Fix] Firewall backends: hardcoded paths replaced with command -v discovery;
+      CIDR addresses pass through without extra suffix; guard against empty
+      ip6tables binary with warning
+[Fix] Symlink handling: stat -c calls add -L flag to dereference symlinks
+      for package installs where files are symlinks to FHS locations
+[Fix] Quiet mode (-q): remove stderr redirect so genuine errors reach cron's
+      mail handler; stdout suppression sufficient for cron silence
+[Fix] tlog: log rotation duplicate output; source safety validation; BASERUN
+      install-time path replacement prevents cursor files in /tmp; unquote
+      journal filter for multi-filter entries
+[Fix] State files: restore 600 permissions after awk rewrite temp file;
+      enforce 750 permissions on tmp/ and stats/ directories; log file
+      creation uses chmod 640 to match logrotate directive
+[Fix] Pressure alerts: format_alert_body read 11 fields from 12-field alert
+      file corrupting email display; ATTACK_COUNT backward compat now uses
+      pressure/1000 for sensible old-template display
+[Fix] Display: status rounding normalized to match pressure computation;
+      5 display functions used hardcoded trip default of 15 instead of 20
+[Fix] Rule status: backward-compat variable mapping now called after sourcing
+      rule files so old-style rules are counted correctly
+[Fix] Ignore files: inline comments after IPs now handled correctly
+[Fix] Subnet detection: defensive guard for masks below /8
+[Fix] Pressure config: PRESSURE_WEIGHT and PRESSURE_TRIP values type-validated;
+      non-numeric or zero values logged and skipped
+[Fix] Rule fixes: postgresql impossible path test; vsftpd2 tag collision;
+      modsec variable rename; missing SKIP_ALERT in postfix/proftpd;
+      ignore.hosts missing ::1 loopback
+[Fix] IPv6: grep false-match replaced with exact matching
+[Fix] Journal: filter key mismatch for rh_ipop3d; dispatch bypassed existing
+      log files
+[Fix] Tab completion: config_vars updated from old variable names to match
+      current config whitelist
+[Fix] Packaging: add tlog_lib.sh and elog_lib.sh to RPM spec and DEB
+      manifests; add SysVinit service stop and deregister to all scriptlets
+[Fix] Miscellaneous: POSIX == to = in test brackets; exit code quoting;
+      attack pool regex to fixed-string grep; local address grep fix;
+      WATCH_INTERVAL default syntax; sed -r to sed -E; UNBAN_COMMAND warning
+      gated on FIREWALL="custom"; firewalld examples removed --permanent flag
+
+-- Changes --
+
+[Change] conf.bfd restructured into workflow-oriented sections (Pressure Model,
+      Email Alerts, Banning, Custom Firewall Commands, Log Paths, Advanced);
+      comments rewritten with worked examples; BAN_ESCALATION "exponential"
+      renamed to "double" (old value still accepted); 4 internal-only
+      variables moved to internals.conf; new variables documented as
+      commented entries for discoverability
+[Change] check() rewritten: pressure-based scoring replaces count-based
+      thresholds; per-rule weight/trip/half-life; optional country multipliers;
+      global cross-service pressure trip; per-run statistics;
+      duplicate-ban prevention; per-cycle caching for country lookups and
+      ignore lists; pre-computed IP occurrence counts
+[Change] Rule variables renamed for clarity: REQ to PREREQ, LP to LOG_FILE,
+      TLOG_TF to LOG_TAG, ARG_VAL to MATCHED_HOSTS; backward-compat shim
+      for custom rules using old names
+[Change] Rule validation rewritten to distinguish inactive rules from genuine
+      misconfigurations; detection output now verbose-only with summary format
+[Change] weights.country renamed to pressure-country.conf; PRESSURE_COUNTRY
+      toggle removed in favor of auto-detection
+[Change] Extract shared config_init() for startup and reload, eliminating
+      duplicated config loading logic
+[Change] Extract shared helpers: cleanup teardown, firewall retry with
+      exponential backoff, file safety validation, pressure aggregation,
+      events AWK processing
+[Change] Structured output refactor: shared data helpers for ban list, attack
+      pool, events, and IP search; each format (text/JSON/CSV) shares a
+      single data source instead of reading state files multiple times
+[Change] Logging: eout()/vout() rewritten as thin wrappers delegating to elog
+      library; log calls assigned explicit severity levels; error and warning
+      messages now write to stderr per UNIX convention
+[Change] Email validation for addresses in config and per-rule RULE_EMAIL
+[Change] importconf: defense-in-depth integer validation on legacy variable
+      migrations and per-rule config values
+[Change] tlog CLI rewritten with option parsing, subcommands, help system,
+      path traversal rejection, and library security validation;
+      backward-compatible positional interface preserved
+[Change] tlog_lib.sh updated to canonical 2.0.2: rotation refactored with
+      pipe fallback for disk-full; journal flock support; cursor validation
+      hardening; CLI version cross-check
+[Change] Shell modernization across all files: backticks to $(), $[expr] to
+      $(( )), egrep to grep -E, for-cat to while-read, systematic variable
+      quoting, hardcoded paths to command -v discovery
+[Change] Remove dead deprecated functions and unused variables
+[Change] sshd rule expanded from 3 to 8 patterns: keyboard-interactive, ident
+      string, refused connect, max auth attempts, PAM failure
+[Change] dovecot rule expanded from 2 to 5 patterns: Disconnected pop3/imap,
+      submission-login auth failed; AUTH_LOG_PATH fallback for Debian/Ubuntu
+[Change] proftpd rule expanded from 1 to 4 patterns: incorrect password,
+      SECURITY VIOLATION, maximum login attempts
+[Change] exim rules: expanded patterns, Debian support with exim4 binary and
+      log path fallbacks
+[Change] asterisk rules: SecurityEvent FailedACL pattern added; log path
+      fallback for /var/log/asterisk/messages
+[Change] postfix PORTS updated from 25,26 to 25,26,587,465 (submission/SMTPS)
+[Change] sendmail rule expanded from 1 to 2 patterns: AUTH failure
+[Change] http_401 and pam_generic rules: conservative defaults to prevent
+      false positives
+[Change] Attack pool (-a) extended with IP search report, per-service
+      breakdown, ban status integration, and pressure column in top-25 reports
+[Change] update-ipcountry.sh: download timeout, TLS fallback for legacy CA
+      bundles, temp files in install path
+[Change] install.sh: contextual progress output for every blocking stage;
+      stage markers and summary block
+[Change] UFW backend: comment marker on deny rules for identification;
+      graceful fallback for older versions; status reports deny rule count
+[Change] logrotate rewritten: copytruncate, weekly, compress, create 0640
+[Change] cron.daily: flock-wrapped state rotation; copy-and-truncate preserves
+      inodes; cursor files preserved; GPL header added
+[Change] Default cron interval reduced from 3 to 2 minutes
+[Change] README wholesale rewrite: quick start, config reference, rule catalog,
+      ban lifecycle, firewall backends, IPv6, CLI flags, scan mode, events
+      dashboard, structured output, upgrade guide, troubleshooting
+[Change] Version 1.6-1 to 2.0.1; copyright years updated to 2026

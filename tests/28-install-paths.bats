@@ -241,6 +241,61 @@ teardown() {
 
 # --- Upgrade notice ---
 
+# --- Cron schedule preservation (F-078) ---
+
+@test "install-paths: install.sh has cron schedule preservation block" {
+	run grep -c '_old_cron_sched' "$PROJECT_ROOT/install.sh"
+	assert_success
+	[ "$output" -ge 2 ]
+}
+
+@test "install-paths: awk extracts standard cron interval" {
+	local cronfile="$SEDDIR/cron"
+	printf '*/3 * * * * root /usr/local/sbin/bfd -q\n' > "$cronfile"
+	local sched
+	sched=$(awk '/^[^#]/ && NF>=6 {print $1,$2,$3,$4,$5; exit}' "$cronfile")
+	[ "$sched" = "*/3 * * * *" ]
+}
+
+@test "install-paths: awk extracts complex cron schedule" {
+	local cronfile="$SEDDIR/cron"
+	printf '0,30 */6 * * 1-5 root /usr/local/sbin/bfd -q\n' > "$cronfile"
+	local sched
+	sched=$(awk '/^[^#]/ && NF>=6 {print $1,$2,$3,$4,$5; exit}' "$cronfile")
+	[ "$sched" = "0,30 */6 * * 1-5" ]
+}
+
+@test "install-paths: awk skips comment lines in cron file" {
+	local cronfile="$SEDDIR/cron"
+	printf '# run bfd every 5 minutes\n*/5 * * * * root /usr/local/sbin/bfd -q\n' > "$cronfile"
+	local sched
+	sched=$(awk '/^[^#]/ && NF>=6 {print $1,$2,$3,$4,$5; exit}' "$cronfile")
+	[ "$sched" = "*/5 * * * *" ]
+}
+
+@test "install-paths: awk returns empty for empty cron file" {
+	local cronfile="$SEDDIR/cron"
+	printf '' > "$cronfile"
+	local sched
+	sched=$(awk '/^[^#]/ && NF>=6 {print $1,$2,$3,$4,$5; exit}' "$cronfile")
+	[ -z "$sched" ]
+}
+
+@test "install-paths: sed preserves command while changing schedule" {
+	local cronfile="$SEDDIR/cron"
+	printf '*/2 * * * * root /usr/local/sbin/bfd -q\n' > "$cronfile"
+	local old_sched="*/5 * * * *"
+	local new_sched sed_safe
+	new_sched=$(awk '/^[^#]/ && NF>=6 {print $1,$2,$3,$4,$5; exit}' "$cronfile")
+	sed_safe=$(printf '%s\n' "$new_sched" | sed 's/\*/\\*/g')
+	sed -i "s|^${sed_safe}|${old_sched}|" "$cronfile"
+	# verify schedule changed but command preserved
+	run cat "$cronfile"
+	assert_output "*/5 * * * * root /usr/local/sbin/bfd -q"
+}
+
+# --- Upgrade notice ---
+
 @test "install-paths: upgrade notice references _IS_UPGRADE" {
 	run grep -c '_IS_UPGRADE' "$PROJECT_ROOT/install.sh"
 	assert_success

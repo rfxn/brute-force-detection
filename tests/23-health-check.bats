@@ -276,6 +276,30 @@ EOF
 
 # --- _hc_config ---
 
+# --- UNBAN_COMMAND binary validation (F-048) ---
+
+@test "health_check: UNBAN_COMMAND binary found shows PASS (F-048)" {
+	UNBAN_COMMAND_TEMPLATE="/bin/true -d \$ATTACK_HOST"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[PASS] UNBAN_COMMAND binary: /bin/true (found)"
+}
+
+@test "health_check: UNBAN_COMMAND binary not found shows WARN (F-048)" {
+	UNBAN_COMMAND_TEMPLATE="/nonexistent/unbanbin -d \$ATTACK_HOST"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[WARN] UNBAN_COMMAND binary: /nonexistent/unbanbin (not found)"
+}
+
+@test "health_check: UNBAN_COMMAND_V6 binary not found shows WARN (F-048)" {
+	UNBAN_COMMAND_TEMPLATE="/bin/true -d \$ATTACK_HOST"
+	UNBAN_COMMAND_V6_TEMPLATE="/nonexistent/v6unban -d \$ATTACK_HOST"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[WARN] UNBAN_COMMAND_V6 binary: /nonexistent/v6unban (not found)"
+}
+
 @test "_hc_config: validates log paths with case statement" {
 	AUTH_LOG_PATH="/var/log/auth.log"
 	KERNEL_LOG_PATH=""

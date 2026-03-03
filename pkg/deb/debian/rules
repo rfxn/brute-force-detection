@@ -25,6 +25,8 @@ override_dh_auto_build:
 	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd.service.pkg
 	cp bfd-watch.service bfd-watch.service.pkg
 	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.service.pkg
+	cp bfd-watch.init bfd-watch.init.pkg
+	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.init.pkg
 
 override_dh_auto_install:
 	# Executable
@@ -57,6 +59,8 @@ override_dh_auto_install:
 	install -D -m 644 bfd.service.pkg $(CURDIR)/debian/bfd/lib/systemd/system/bfd.service
 	install -D -m 644 bfd.timer $(CURDIR)/debian/bfd/lib/systemd/system/bfd.timer
 	install -D -m 644 bfd-watch.service.pkg $(CURDIR)/debian/bfd/lib/systemd/system/bfd-watch.service
+	# SysVinit script (Ubuntu 14.04 and other non-systemd targets)
+	install -D -m 755 bfd-watch.init.pkg $(CURDIR)/debian/bfd/etc/init.d/bfd-watch
 	# Cron
 	install -D -m 644 cron.pkg $(CURDIR)/debian/bfd/etc/cron.d/bfd
 	install -D -m 755 cron.daily.pkg $(CURDIR)/debian/bfd/etc/cron.daily/bfd
@@ -76,4 +80,4 @@ override_dh_auto_test:
 
 override_dh_auto_clean:
 	rm -f files/internals.conf.pkg files/exclude.files.pkg
-	rm -f cron.pkg cron.daily.pkg bfd.service.pkg bfd-watch.service.pkg
+	rm -f cron.pkg cron.daily.pkg bfd.service.pkg bfd-watch.service.pkg bfd-watch.init.pkg

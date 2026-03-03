@@ -31,9 +31,10 @@ UTIME=$(date +"%s")
 # inline: _check_file_safety unavailable before bfd.lib.sh is sourced
 _lib_owner=$(stat -L -c '%u' "$INSTALL_PATH/bfd.lib.sh")
 _lib_perms=$(stat -L -c '%a' "$INSTALL_PATH/bfd.lib.sh")
+_lib_group="${_lib_perms:1:1}"
 _lib_world="${_lib_perms: -1}"
-if [ "$_lib_owner" != "0" ] || [ "$((_lib_world & 2))" -ne 0 ]; then
-	echo "bfd.lib.sh has unsafe ownership (uid=$_lib_owner) or permissions ($_lib_perms), aborting."
+if [ "$_lib_owner" != "0" ] || [ "$((_lib_group & 2))" -ne 0 ] || [ "$((_lib_world & 2))" -ne 0 ]; then
+	echo "bfd.lib.sh has unsafe ownership (uid=$_lib_owner) or group/world-writable permissions ($_lib_perms), aborting."
 	exit 1
 fi
 # shellcheck source=files/bfd.lib.sh
@@ -118,7 +119,7 @@ config_init() {
 		unset TRIG TRIG_WINDOW TRIG_GLOBAL
 		unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
 		# internals.conf variables
-		unset RULES_PATH TLOG_PATH TLOG_LIB TLOG_BASERUN
+		unset RULES_PATH TLOG_PATH TLOG_BASERUN
 		unset EMAIL_TEMPLATE IGNORE_HOST_FILES LOCK_FILE
 		unset PRESSURE_CONF THRESHOLDS_CONF TIME_ZONE
 		unset LOCK_FILE_TIMEOUT OUTPUT_SYSLOG_FILE BAN_RETRY_COUNT LOG_SOURCE
@@ -258,7 +259,7 @@ if [ ! -d "$TLOG_BASERUN" ]; then
 fi
 if [ ! -f "$BFD_LOG_PATH" ]; then
 	touch "$BFD_LOG_PATH"
-	chmod 600 "$BFD_LOG_PATH"
+	chmod 640 "$BFD_LOG_PATH"
 fi
 
 if [ ! -d "$INSTALL_PATH/stats" ]; then
@@ -504,8 +505,8 @@ _apool_report() {
 	local cnt aip first_ts last_ts mods first_fmt last_fmt ban_status _gp _gp_fmt
 	while IFS='|' read -r cnt aip first_ts last_ts mods; do
 		[ -z "$cnt" ] && continue
-		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$first_ts")
-		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$last_ts")
+		first_fmt=$(_fmt_ts "$first_ts")
+		last_fmt=$(_fmt_ts "$last_ts")
 		ban_status=$(_apool_ban_status "$aip")
 		_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
 		_gp_fmt=$(pressure_format "$_gp")
@@ -643,8 +644,8 @@ _apool_report_json() {
 		while IFS='|' read -r cnt aip first_ts last_ts mods; do
 			[ -z "$cnt" ] && continue
 			local first_fmt last_fmt ban_status _gp _gp_fmt
-			first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
-			last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
+			first_fmt=$(_fmt_ts_iso "$first_ts")
+			last_fmt=$(_fmt_ts_iso "$last_ts")
 			ban_status=$(_apool_ban_status "$aip")
 			[ -z "$ban_status" ] && ban_status="not banned"
 			_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
@@ -678,8 +679,8 @@ _apool_report_csv() {
 		while IFS='|' read -r cnt aip first_ts last_ts mods; do
 			[ -z "$cnt" ] && continue
 			local first_fmt last_fmt ban_status _gp _gp_fmt
-			first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
-			last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
+			first_fmt=$(_fmt_ts_iso "$first_ts")
+			last_fmt=$(_fmt_ts_iso "$last_ts")
 			ban_status=$(_apool_ban_status "$aip")
 			[ -z "$ban_status" ] && ban_status="not banned"
 			_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")

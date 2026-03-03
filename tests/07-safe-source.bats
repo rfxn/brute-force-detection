@@ -118,6 +118,43 @@ teardown() {
 	[ "$_CSAF_PERMS" = "640" ]
 }
 
+@test "_check_file_safety: group-writable 660 returns failure" {
+	echo 'test' > "$TEST_TMPDIR/gw660.conf"
+	chmod 660 "$TEST_TMPDIR/gw660.conf"
+	run _check_file_safety "$TEST_TMPDIR/gw660.conf"
+	assert_failure
+}
+
+@test "_check_file_safety: group-writable 670 returns failure" {
+	echo 'test' > "$TEST_TMPDIR/gw670.conf"
+	chmod 670 "$TEST_TMPDIR/gw670.conf"
+	run _check_file_safety "$TEST_TMPDIR/gw670.conf"
+	assert_failure
+}
+
+@test "safe_source: group-writable file returns 1" {
+	echo 'SAFE_SOURCE_TEST_VAR="bad"' > "$TEST_TMPDIR/group_writable.conf"
+	chmod 660 "$TEST_TMPDIR/group_writable.conf"
+	run safe_source "$TEST_TMPDIR/group_writable.conf" "test:gw"
+	assert_failure
+}
+
+@test "safe_source: group-writable file does not set variable" {
+	echo 'SAFE_SOURCE_TEST_VAR="bad"' > "$TEST_TMPDIR/group_writable.conf"
+	chmod 660 "$TEST_TMPDIR/group_writable.conf"
+	SAFE_SOURCE_TEST_VAR=""
+	safe_source "$TEST_TMPDIR/group_writable.conf" "test:gw" >/dev/null 2>&1 || true
+	[ "$SAFE_SOURCE_TEST_VAR" = "" ]
+}
+
+@test "safe_source: group-writable error message mentions group" {
+	echo 'SAFE_SOURCE_TEST_VAR="bad"' > "$TEST_TMPDIR/group_writable.conf"
+	chmod 660 "$TEST_TMPDIR/group_writable.conf"
+	run safe_source "$TEST_TMPDIR/group_writable.conf" "test:gw"
+	assert_failure
+	assert_output --partial "group- or world-writable"
+}
+
 # --- Alert template safety tests (Phase 26) ---
 
 @test "send_alerts: world-writable template skips alerts" {

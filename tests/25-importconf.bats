@@ -882,3 +882,96 @@ NEWEOF
 	run cat "$inst/alert.bfd"
 	assert_output "DEFAULT ALERT TEMPLATE"
 }
+
+# --- pressure-country.conf preservation (F-046) ---
+
+@test "importconf: pressure-country.conf preserved on upgrade (F-046)" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# user-customized country multipliers in old install
+	printf 'CN 20\nRU 15\n' > "$inst.bk.last/pressure-country.conf"
+	# new default in fresh install
+	printf '# country multiplier config\n' > "$inst/pressure-country.conf"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "Preserved pressure-country.conf"
+
+	# verify user customizations were preserved
+	run cat "$inst/pressure-country.conf"
+	assert_line --index 0 "CN 20"
+	assert_line --index 1 "RU 15"
+}
+
+@test "importconf: missing pressure-country.conf in backup keeps new default (F-046)" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# no pressure-country.conf in backup; new default exists
+	printf '# default country config\n' > "$inst/pressure-country.conf"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	refute_output --partial "Preserved pressure-country.conf"
+
+	# default should be unchanged
+	run cat "$inst/pressure-country.conf"
+	assert_output "# default country config"
+}
+
+# --- legacy migration message (F-047) ---
+
+@test "importconf: legacy migration message recommends bfd -c (F-047)" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+TRIG="10"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+PRESSURE_TRIP="15"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "bfd -c"
+	refute_output --partial "equivalent behavior"
+}
