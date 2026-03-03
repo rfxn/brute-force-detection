@@ -135,14 +135,14 @@ if grep -q '^BAN_PERMANENT_WINDOW=' "$old_conf" 2>/dev/null && ! grep -q '^BAN_E
 	fi
 fi
 if [ "$_pressure_migrated" -eq 1 ]; then
-	echo "  Migrated legacy config (TRIG/BAN_DURATION) to pressure model (weights=1, equivalent behavior)."
+	echo "  Migrated legacy config (TRIG/BAN_DURATION) to pressure model (weights=1). Run 'bfd -c' to verify."
 fi
 
 # Phase 25: if upgrading from pre-firewall-backend config, set custom mode
 # to preserve existing BAN_COMMAND behavior
 if ! grep -q '^FIREWALL=' "$old_conf" 2>/dev/null; then
 	sed -i 's/^FIREWALL="auto"/FIREWALL="custom"/' "$new_conf"
-	echo "  Note: FIREWALL set to 'custom' (preserves existing BAN_COMMAND behavior)."
+	echo "  Note: FIREWALL set to 'custom' (preserves existing BAN_COMMAND/UNBAN_COMMAND). Run 'bfd -c' to verify."
 fi
 
 # migrate per-rule overrides to pressure.conf
@@ -223,6 +223,12 @@ elif [ -f "$new_press" ] && [ -d "$INSTALL_PATH.bk.last/rules" ]; then
 	if [ "$_migrated" -gt 0 ]; then
 		echo "  Migrated $_migrated per-rule thresholds to pressure.conf."
 	fi
+fi
+
+# preserve user's country pressure multiplier customizations
+if [ -f "$INSTALL_PATH.bk.last/pressure-country.conf" ]; then
+	cp -f "$INSTALL_PATH.bk.last/pressure-country.conf" "$INSTALL_PATH/pressure-country.conf"
+	echo "  Preserved pressure-country.conf from previous install."
 fi
 
 # preserve user's ignore lists

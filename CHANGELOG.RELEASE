@@ -1,4 +1,13 @@
 2.0.1:
+[Fix] importconf: preserve pressure-country.conf on upgrade; user-customized
+      country pressure multipliers were silently overwritten (F-046)
+[Change] importconf: legacy variable migration notice now recommends 'bfd -c'
+      instead of claiming "equivalent behavior" (F-047)
+[Fix] health_check: validate UNBAN_COMMAND and UNBAN_COMMAND_V6 binary
+      existence; previously only warned when empty, not when pointing to a
+      missing binary (F-048)
+[Change] importconf: FIREWALL="custom" notice now mentions UNBAN_COMMAND and
+      recommends 'bfd -c' verification (F-048)
 [Fix] _check_file_safety(): reject group-writable files in addition to
       world-writable; inline pre-lib check in bfd updated to match;
       safe_source() error message updated (F-036)

@@ -2056,7 +2056,17 @@ _hc_binaries() {
 			_hc_warn=$((_hc_warn + 1))
 		fi
 
-		if [ "${BAN_TTL:-${BAN_DURATION:-0}}" -gt 0 ] && [ -z "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
+		if [ -n "${UNBAN_COMMAND_TEMPLATE:-}" ]; then
+			local unban_bin
+			unban_bin=$(echo "$UNBAN_COMMAND_TEMPLATE" | awk '{print $1}')
+			if [ -x "$unban_bin" ]; then
+				echo "[PASS] UNBAN_COMMAND binary: $unban_bin (found)"
+				_hc_pass=$((_hc_pass + 1))
+			else
+				echo "[WARN] UNBAN_COMMAND binary: $unban_bin (not found)"
+				_hc_warn=$((_hc_warn + 1))
+			fi
+		elif [ "${BAN_TTL:-${BAN_DURATION:-0}}" -gt 0 ]; then
 			echo "[WARN] UNBAN_COMMAND is empty; temp bans won't auto-unban firewall rules"
 			_hc_warn=$((_hc_warn + 1))
 		fi
@@ -2074,6 +2084,18 @@ _hc_binaries() {
 		else
 			echo "[PASS] BAN_COMMAND_V6: not configured (will use BAN_COMMAND for IPv6)"
 			_hc_pass=$((_hc_pass + 1))
+		fi
+
+		if [ -n "${UNBAN_COMMAND_V6_TEMPLATE:-}" ]; then
+			local unban_v6_bin
+			unban_v6_bin=$(echo "$UNBAN_COMMAND_V6_TEMPLATE" | awk '{print $1}')
+			if [ -x "$unban_v6_bin" ]; then
+				echo "[PASS] UNBAN_COMMAND_V6 binary: $unban_v6_bin (found)"
+				_hc_pass=$((_hc_pass + 1))
+			else
+				echo "[WARN] UNBAN_COMMAND_V6 binary: $unban_v6_bin (not found)"
+				_hc_warn=$((_hc_warn + 1))
+			fi
 		fi
 	fi
 
