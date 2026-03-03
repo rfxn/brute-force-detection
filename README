@@ -461,31 +461,47 @@ commands for IPv6 (leave empty for tools that handle both):
 The /usr/local/sbin/bfd command provides the following options:
 
 usage: bfd [OPTION]
--s|--standard .............. run standard with output
--q|--quiet ................. run quiet with output hidden
--d|--dryrun ................ run detection without banning
--w|--watch ................. run in continuous watch mode (foreground)
--a|--attackpool [IP|STRING] . attack pool; valid IP shows full report
--e|--events [IP|CIDR] ...... active events; pressure dashboard, IP or subnet detail
--c|--check ................. health check and diagnostics
--l|--list .................. list active bans
--u|--unban IP .............. unban an IP address
--b|--ban IP [SERVICE] ...... manually ban an IP (permanent)
--S|--status [SERVICE] ...... system or per-service status
--C|--config [VAR] .......... show config values
--R|--rules [RULE] .......... list rules (weight/trip) or show rule details
--T|--test RULE [FILE|-] .... test rule patterns against log or stdin
-   --test-pattern PAT [FILE|-] test a raw <HOST> pattern against log or stdin
-   --flush-temp ............ unban all temporary bans
-   --flush-all ............. unban all bans
-   --json .................. output in JSON format (with -l, -e, -a)
-   --csv ................... output in CSV format (with -l, -e, -a)
-   --scan [RULE] [-d] .... scan full log (all rules or specific rule)
-   --max-lines=N ......... max lines per log during scan (default 50000)
-   --scan-timeout=N ...... journal timeout per rule during scan (default 120)
--V|--verbose ............... show detailed output
--v|--version ............... display version
--h|--help .................. display this help
+
+Run Modes:
+  -s, --standard              run detection cycle with output
+  -q, --quiet                 run detection cycle silently
+  -d, --dryrun                run detection without banning
+  -w, --watch                 run continuous watch mode (foreground)
+
+Ban Management:
+  -b, --ban IP [SERVICE]      manually ban an IP (permanent)
+  -u, --unban IP              unban an IP address
+  --flush-temp                remove all temporary bans
+  --flush-all                 remove all bans
+
+Reporting:                                      Supports: --json --csv
+  -l, --list                  list active bans
+  -a, --attackpool [IP|STR]   attack pool and IP investigation
+  -e, --events [IP|CIDR]      pressure dashboard, IP or subnet detail
+
+System:
+  -S, --status [SERVICE]      operational status overview
+  -C, --config [VAR]          show active configuration
+  -R, --rules [RULE]          list rules or show rule detail
+  -c, --check                 health check diagnostics
+
+Rule Testing:
+  -T, --test RULE [FILE|-]    test rule patterns against log or stdin
+  --test-pattern PAT [FILE|-] test raw <HOST> pattern against log or stdin
+
+Scan Mode:
+  --scan [RULE] [-d]          full-log scan (all rules or specific rule)
+  --max-lines=N               max lines per log during scan (default 50000)
+  --scan-timeout=N            journal timeout per rule during scan (default 120)
+
+Output Modifiers:
+  --json                      JSON output (with -l, -e, -a)
+  --csv                       CSV output (with -l, -e, -a)
+  -V, --verbose               detailed output (with -s, -d, -c, -S, --scan)
+
+General:
+  -v, --version               display version
+  -h, --help                  display full help (short summary shown with no args)
 
 The -s|--standard and -q|--quiet options run the full detection and banning
 cycle. Standard mode prints output; quiet mode suppresses it (used by cron).
