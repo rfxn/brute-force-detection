@@ -1,4 +1,5 @@
 2.0.1:
+[New] ci.yml: add Rocky 10 to CI test matrix (9 OS targets) (F-049)
 [Change] importconf: defense-in-depth integer validation on all 6 legacy
       variable migrations and per-rule thresholds.conf values; SKIP_ALERT
       constrained to 0/1, RULE_EMAIL to safe characters (F-034)
