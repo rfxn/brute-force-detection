@@ -21,7 +21,7 @@
 _TLOG_LIB_LOADED=1
 
 # shellcheck disable=SC2034
-TLOG_LIB_VERSION="2.0.1"
+TLOG_LIB_VERSION="2.0.2"
 
 # Journal filter registry — consuming projects populate via tlog_journal_register()
 # Uses parallel indexed arrays instead of declare -A to avoid scope issues
@@ -30,19 +30,50 @@ TLOG_LIB_VERSION="2.0.1"
 _TLOG_JOURNAL_NAMES=()
 _TLOG_JOURNAL_FILTERS=()
 
+# Numeric validation pattern — shared across cursor, size, and timestamp checks
+_TLOG_NUMERIC_PAT='^[0-9]+$'
+
 ###########################################################################
 # Internal helpers
 ###########################################################################
 
+# _tlog_validate_name(tlog_name)
+# Reject names that could escape baserun via path traversal.
+# Names must be plain identifiers — no slashes, no . or .. components.
+# Returns 1 on invalid (library context — never exit).
+_tlog_validate_name() {
+	local name="$1"
+	if [[ -z "$name" ]] || [[ "$name" == "." ]] || [[ "$name" == ".." ]] || [[ "$name" == *"/"* ]]; then
+		echo "tlog: invalid tlog_name: '$name'" >&2
+		return 1
+	fi
+	return 0
+}
+
+# _tlog_check_baserun_perms(baserun)
+# Advisory warning if baserun directory is world-writable.
+# Always returns 0 — never fatal.
+_tlog_check_baserun_perms() {
+	local baserun="$1"
+	local perms world_bits
+	perms=$(stat -c '%a' "$baserun" 2>/dev/null) || return 0
+	world_bits="${perms: -1}"
+	if [[ $((world_bits & 2)) -ne 0 ]]; then
+		echo "tlog: warning: baserun directory '$baserun' is world-writable" >&2
+	fi
+	return 0
+}
+
 # _tlog_parse_cursor(tlog_name, baserun)
-# Read and validate cursor file. Sets _tlog_cursor_value and
-# _tlog_cursor_mode for the caller. Returns 0 on success/first-run,
-# 2 on corrupt cursor (auto-reset).
+# Read and validate cursor file.
+# Out-parameters (set in caller scope before return):
+#   _tlog_cursor_value  Numeric cursor position, or "" on first-run/corrupt.
+#   _tlog_cursor_mode   "bytes" or "lines", or "" on first-run/corrupt.
+# Returns 0 on success/first-run, 2 on corrupt cursor (auto-reset).
 _tlog_parse_cursor() {
 	local tlog_name="$1" baserun="$2"
 	local cursor_file="$baserun/$tlog_name"
 	local raw_value=""
-	local numeric_pat='^[0-9]+$'
 
 	# shellcheck disable=SC2034
 	_tlog_cursor_value=""
@@ -75,7 +106,7 @@ _tlog_parse_cursor() {
 	fi
 
 	# Validate numeric
-	if [[ ! "$_tlog_cursor_value" =~ $numeric_pat ]]; then
+	if [[ ! "$_tlog_cursor_value" =~ $_TLOG_NUMERIC_PAT ]]; then
 		echo "tlog: corrupt cursor $cursor_file: '$raw_value'" >&2
 		# shellcheck disable=SC2034
 		_tlog_cursor_value=""
@@ -96,15 +127,23 @@ _tlog_write_cursor() {
 	local tmp_file formatted
 
 	case "$mode" in
+		bytes) formatted="$value" ;;
 		lines) formatted="L:${value}" ;;
 		raw)   formatted="$value" ;;
-		*)     formatted="$value" ;;
+		*)
+			echo "tlog: warning: _tlog_write_cursor: invalid mode '$mode' for $tlog_name" >&2
+			return 1
+			;;
 	esac
 
-	tmp_file=$(mktemp "$baserun/.${tlog_name}.XXXXXX") || return 1
+	tmp_file=$(mktemp "$baserun/.${tlog_name}.XXXXXX") || {
+		echo "tlog: warning: cursor write failed for $tlog_name (mktemp)" >&2
+		return 1
+	}
 	printf '%s\n' "$formatted" > "$tmp_file"
 
 	if ! mv -f "$tmp_file" "$cursor_file"; then
+		echo "tlog: warning: cursor write failed for $tlog_name (rename)" >&2
 		rm -f "$tmp_file"
 		return 1
 	fi
@@ -125,8 +164,8 @@ _tlog_get_size() {
 			size="${size## }"
 			;;
 		*)
-			size=$(stat -c %s "$file" 2>/dev/null) || size=$(wc -c < "$file")
-			size="${size## }"
+			tlog_get_file_size "$file"
+			return $?
 			;;
 	esac
 
@@ -209,6 +248,75 @@ _tlog_find_rotated() {
 	return 1
 }
 
+# _tlog_rotation_via_pipe(rtfile, cursor_size, mode)
+# Pipe-based fallback for compressed rotation: decompress twice (size + content)
+# without requiring disk space. Used when temp-file approach fails (low disk,
+# quota, permissions, corrupt archive).
+_tlog_rotation_via_pipe() {
+	local rtfile="$1" cursor_size="$2" mode="$3"
+	local rtsize rt_delta
+
+	if [[ "$mode" == "lines" ]]; then
+		rtsize=$(_tlog_cat_file "$rtfile" | wc -l)
+	else
+		rtsize=$(_tlog_cat_file "$rtfile" | wc -c)
+	fi
+	rtsize="${rtsize## }"
+
+	if [[ "$rtsize" -ge "$cursor_size" ]]; then
+		rt_delta=$((rtsize - cursor_size))
+		if [[ "$rt_delta" -gt 0 ]]; then
+			if [[ "$mode" == "lines" ]]; then
+				_tlog_cat_file "$rtfile" | tail -n "$rt_delta"
+			else
+				_tlog_cat_file "$rtfile" | tail -c "$rt_delta"
+			fi
+		fi
+	fi
+}
+
+# _tlog_handle_rotation(rtfile, cursor_size, mode, tlog_name, baserun)
+# Output tail content from a rotated log file newer than cursor_size.
+# Compressed files: try temp-file approach (single decompress, faster);
+# on any failure (mktemp, write, corrupt), fall back to pipe-based
+# decompression via _tlog_rotation_via_pipe() to preserve data.
+# Uncompressed files: read directly via _tlog_output_content().
+_tlog_handle_rotation() {
+	local rtfile="$1" cursor_size="$2" mode="$3"
+	local tlog_name="$4" baserun="$5"
+	local rtsize rt_delta tmp_decomp=""
+
+	if _tlog_is_compressed "$rtfile"; then
+		# Try temp-file path: mktemp + decompress + read from temp
+		tmp_decomp=$(mktemp "$baserun/.${tlog_name}.XXXXXX" 2>/dev/null) || tmp_decomp=""
+		if [[ -n "$tmp_decomp" ]] && _tlog_cat_file "$rtfile" > "$tmp_decomp"; then
+			rtsize=$(_tlog_get_size "$tmp_decomp" "$mode")
+		else
+			# Temp approach failed — clean up and fall back to pipe
+			[[ -n "$tmp_decomp" ]] && rm -f "$tmp_decomp"
+			echo "tlog: warning: rotation temp file failed for $tlog_name, using pipe fallback" >&2
+			_tlog_rotation_via_pipe "$rtfile" "$cursor_size" "$mode"
+			return 0
+		fi
+	else
+		rtsize=$(_tlog_get_size "$rtfile" "$mode")
+	fi
+
+	if [[ "$rtsize" -ge "$cursor_size" ]]; then
+		rt_delta=$((rtsize - cursor_size))
+		if [[ "$rt_delta" -gt 0 ]]; then
+			if [[ -n "$tmp_decomp" ]]; then
+				_tlog_output_content "$tmp_decomp" "$rt_delta" "$mode"
+			else
+				_tlog_output_content "$rtfile" "$rt_delta" "$mode"
+			fi
+		fi
+	fi
+
+	[[ -n "$tmp_decomp" ]] && rm -f "$tmp_decomp"
+	return 0
+}
+
 ###########################################################################
 # Public utility functions
 ###########################################################################
@@ -253,15 +361,25 @@ tlog_get_line_count() {
 tlog_read() {
 	local file="$1" tlog_name="$2" baserun="$3"
 	local mode="${4:-${TLOG_MODE:-bytes}}"
-	local newsize delta size rtfile rtsize _tlog_fd
+	local newsize delta size rtfile _tlog_fd
 	local cursor_corrupt=0 rc=0
-	local stored_mode parse_rc rt_delta
+	local stored_mode parse_rc
 
 	# Mode validation — reject typos before any I/O
 	if [[ "$mode" != "bytes" ]] && [[ "$mode" != "lines" ]]; then
 		echo "tlog: invalid mode '$mode' (must be 'bytes' or 'lines')" >&2
 		return 1
 	fi
+
+	# Name validation — reject path traversal before any file I/O
+	_tlog_validate_name "$tlog_name" || return 1
+
+	# Baserun validation — check BEFORE journal dispatch (F-010)
+	if [[ ! -d "$baserun" ]]; then
+		echo "tlog: baserun directory not found: $baserun" >&2
+		return 1
+	fi
+	_tlog_check_baserun_perms "$baserun"
 
 	# Journal dispatch: file missing and journal not disabled
 	if [[ ! -f "$file" ]] && [[ "${LOG_SOURCE}" != "file" ]]; then
@@ -272,11 +390,6 @@ tlog_read() {
 	# Validation
 	if [[ ! -f "$file" ]]; then
 		echo "tlog: file not found: $file" >&2
-		return 1
-	fi
-
-	if [[ ! -d "$baserun" ]]; then
-		echo "tlog: baserun directory not found: $baserun" >&2
 		return 1
 	fi
 
@@ -331,33 +444,7 @@ tlog_read() {
 	elif [[ "$newsize" -lt "$size" ]]; then
 		rtfile=$(_tlog_find_rotated "$file") || true
 		if [[ -n "$rtfile" ]]; then
-			# Get rotated file size in correct mode
-			if _tlog_is_compressed "$rtfile"; then
-				if [[ "$mode" == "lines" ]]; then
-					rtsize=$(_tlog_cat_file "$rtfile" | wc -l)
-				else
-					rtsize=$(_tlog_cat_file "$rtfile" | wc -c)
-				fi
-				rtsize="${rtsize## }"
-			else
-				rtsize=$(_tlog_get_size "$rtfile" "$mode")
-			fi
-
-			# Bounds check: only output if rotated file covers our cursor
-			if [[ "$rtsize" -ge "$size" ]]; then
-				rt_delta=$((rtsize - size))
-				if [[ "$rt_delta" -gt 0 ]]; then
-					if _tlog_is_compressed "$rtfile"; then
-						if [[ "$mode" == "lines" ]]; then
-							_tlog_cat_file "$rtfile" | tail -n "$rt_delta"
-						else
-							_tlog_cat_file "$rtfile" | tail -c "$rt_delta"
-						fi
-					else
-						_tlog_output_content "$rtfile" "$rt_delta" "$mode"
-					fi
-				fi
-			fi
+			_tlog_handle_rotation "$rtfile" "$size" "$mode" "$tlog_name" "$baserun"
 		fi
 
 		# Output current file content if any
@@ -390,6 +477,12 @@ tlog_read_full() {
 		return 1
 	fi
 
+	# Validate max_lines is numeric — non-numeric defaults to 0 (full output)
+	if [[ -n "$max_lines" ]] && [[ ! "$max_lines" =~ $_TLOG_NUMERIC_PAT ]]; then
+		echo "tlog: tlog_read_full: invalid max_lines: '$max_lines'" >&2
+		max_lines="0"
+	fi
+
 	if [[ "$max_lines" -gt 0 ]]; then
 		tail -n "$max_lines" "$file"
 	else
@@ -404,11 +497,13 @@ tlog_read_full() {
 # Detects mode from stored cursor. Clamps to 0.
 tlog_adjust_cursor() {
 	local tlog_name="$1" baserun="$2" delta_removed="$3"
-	local numeric_pat='^[0-9]+$'
 	local new_value mode
 
+	# Name validation — reject path traversal
+	_tlog_validate_name "$tlog_name" || return 1
+
 	# Validate delta is numeric
-	if [[ ! "$delta_removed" =~ $numeric_pat ]]; then
+	if [[ ! "$delta_removed" =~ $_TLOG_NUMERIC_PAT ]]; then
 		echo "tlog: invalid delta: $delta_removed" >&2
 		return 1
 	fi
@@ -436,19 +531,38 @@ tlog_adjust_cursor() {
 # For journal-capable tags, captures journal cursor position.
 tlog_advance_cursors() {
 	local baserun="$1" log_pairs="$2"
-	local file tag newsize cursor_line
+	local file tag newsize cursor_line jfilter
 	local mode="${TLOG_MODE:-bytes}"
+
+	# Mode validation — reject invalid before any I/O
+	if [[ "$mode" != "bytes" ]] && [[ "$mode" != "lines" ]]; then
+		echo "tlog: tlog_advance_cursors: invalid mode '$mode' (must be 'bytes' or 'lines')" >&2
+		return 1
+	fi
+
+	# Baserun validation (F-010)
+	if [[ ! -d "$baserun" ]]; then
+		echo "tlog: tlog_advance_cursors: baserun directory not found: $baserun" >&2
+		return 1
+	fi
+	_tlog_check_baserun_perms "$baserun"
+
+	# Check journalctl availability once, outside the loop
+	local have_journalctl=0
+	command -v journalctl >/dev/null 2>&1 && have_journalctl=1
 
 	while IFS='|' read -r file tag; do
 		[[ -z "$tag" ]] && continue
+		_tlog_validate_name "$tag" || continue
 
 		if [[ -f "$file" ]]; then
 			# File cursor: record current size
 			newsize=$(_tlog_get_size "$file" "$mode")
 			_tlog_write_cursor "$tag" "$baserun" "$newsize" "$mode"
-		elif command -v journalctl >/dev/null 2>&1 && tlog_journal_filter "$tag" >/dev/null 2>&1; then
-			# Journal cursor: capture current position
-			cursor_line=$(journalctl -n 0 --show-cursor 2>/dev/null | grep -E '^-- cursor:' | sed 's/^-- cursor: //')
+		elif [[ "$have_journalctl" -eq 1 ]]; then
+			jfilter=$(tlog_journal_filter "$tag") || continue
+			# Journal cursor: capture current per-service position
+			cursor_line=$(_tlog_journal_get_cursor "$jfilter")
 			if [[ -n "$cursor_line" ]]; then
 				_tlog_write_cursor "$tag" "$baserun" "$cursor_line" "raw"
 				_tlog_write_cursor "${tag}.jts" "$baserun" "$(date +%s)" "raw"
@@ -462,6 +576,17 @@ tlog_advance_cursors() {
 ###########################################################################
 # Journal functions
 ###########################################################################
+
+# _tlog_journal_get_cursor(jfilter)
+# Capture current journal cursor position for the given filter.
+# Outputs cursor string on stdout, or nothing if unavailable.
+# $jfilter intentionally unquoted: multi-token filters require word-splitting.
+_tlog_journal_get_cursor() {
+	local jfilter="$1"
+	# shellcheck disable=SC2086
+	journalctl $jfilter -n 0 --show-cursor 2>/dev/null \
+		| grep -E '^-- cursor:' | sed 's/^-- cursor: //'
+}
 
 # tlog_journal_register(tlog_name, jfilter)
 # Register a service-to-journalctl filter mapping. Consuming projects
@@ -489,13 +614,24 @@ tlog_journal_filter() {
 # tlog_journal_read(tlog_name, baserun)
 # Cursor-based journal reader with timestamp fallback.
 # First run: capture cursor, output nothing.
-# Returns: 0=success, 1=unknown service, 3=journal unavailable.
+# Returns: 0=success, 1=unknown service/path error, 3=journal unavailable,
+#          4=lock acquisition failed (TLOG_FLOCK=1 only).
 tlog_journal_read() {
 	local tlog_name="$1" baserun="$2"
 	local cursor_file="$baserun/$tlog_name"
 	local jts_file="$baserun/${tlog_name}.jts"
 	local jfilter stored_cursor stored_jts new_cursor new_jts
-	local output_data
+	local output_data _tlog_fd
+
+	# Name validation — reject path traversal
+	_tlog_validate_name "$tlog_name" || return 1
+
+	# Baserun validation (F-010) — defense in depth for direct callers
+	if [[ ! -d "$baserun" ]]; then
+		echo "tlog: baserun directory not found: $baserun" >&2
+		return 1
+	fi
+	_tlog_check_baserun_perms "$baserun"
 
 	# Check journalctl available
 	if ! command -v journalctl >/dev/null 2>&1; then
@@ -505,10 +641,27 @@ tlog_journal_read() {
 	# Get filter for this service
 	jfilter=$(tlog_journal_filter "$tlog_name") || return 1
 
+	# Optional flock — protect journal cursor operations (F-008)
+	if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
+		exec {_tlog_fd}>"$baserun/${tlog_name}.lock"
+		if ! flock -x -w 5 "$_tlog_fd"; then
+			exec {_tlog_fd}>&-
+			return 4
+		fi
+	fi
+
 	# Read stored cursor
 	stored_cursor=""
 	if [[ -f "$cursor_file" ]]; then
 		read -r stored_cursor < "$cursor_file" 2>/dev/null || true
+	fi
+
+	# Validate cursor format — allowlist covers real systemd cursor tokens
+	# (s=<hex>;i=<hex>;...) and rejects shell metacharacters
+	local _jcursor_pat='^[a-zA-Z0-9=;_:-]+$'
+	if [[ -n "$stored_cursor" ]] && [[ ! "$stored_cursor" =~ $_jcursor_pat ]]; then
+		echo "tlog: corrupt journal cursor for $tlog_name, resetting" >&2
+		stored_cursor=""
 	fi
 
 	# Read stored journal timestamp
@@ -517,10 +670,15 @@ tlog_journal_read() {
 		read -r stored_jts < "$jts_file" 2>/dev/null || true
 	fi
 
+	# Validate timestamp is numeric
+	if [[ -n "$stored_jts" ]] && [[ ! "$stored_jts" =~ $_TLOG_NUMERIC_PAT ]]; then
+		echo "tlog: corrupt journal timestamp for $tlog_name, resetting" >&2
+		stored_jts=""
+	fi
+
 	# First run: capture position, output nothing
 	if [[ -z "$stored_cursor" ]] && [[ -z "$stored_jts" ]]; then
-		# shellcheck disable=SC2086
-		new_cursor=$(journalctl $jfilter -n 0 --show-cursor 2>/dev/null | grep -E '^-- cursor:' | sed 's/^-- cursor: //')
+		new_cursor=$(_tlog_journal_get_cursor "$jfilter")
 		new_jts=$(date +%s)
 
 		if [[ -n "$new_cursor" ]]; then
@@ -529,19 +687,26 @@ tlog_journal_read() {
 		_tlog_write_cursor "${tlog_name}.jts" "$baserun" "$new_jts" "raw"
 
 		touch "$baserun/$tlog_name"
+		# Release lock
+		if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
+			exec {_tlog_fd}>&-
+		fi
 		return 0
 	fi
 
 	# Subsequent run: try cursor first, fallback to timestamp
 	if [[ -n "$stored_cursor" ]]; then
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
 		if ! output_data=$(journalctl $jfilter --after-cursor="$stored_cursor" --no-pager 2>/dev/null); then
 			if [[ -n "$stored_jts" ]]; then
+				# $jfilter intentionally unquoted: multi-token filters require word-splitting
 				# shellcheck disable=SC2086
 				output_data=$(journalctl $jfilter --since="@${stored_jts}" --no-pager 2>/dev/null) || true
 			fi
 		fi
 	elif [[ -n "$stored_jts" ]]; then
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
 		output_data=$(journalctl $jfilter --since="@${stored_jts}" --no-pager 2>/dev/null) || true
 	fi
@@ -552,8 +717,7 @@ tlog_journal_read() {
 	fi
 
 	# Capture new cursor + timestamp
-	# shellcheck disable=SC2086
-	new_cursor=$(journalctl $jfilter -n 0 --show-cursor 2>/dev/null | grep -E '^-- cursor:' | sed 's/^-- cursor: //')
+	new_cursor=$(_tlog_journal_get_cursor "$jfilter")
 	new_jts=$(date +%s)
 
 	if [[ -n "$new_cursor" ]]; then
@@ -563,6 +727,11 @@ tlog_journal_read() {
 
 	# Stale protection
 	touch "$baserun/$tlog_name"
+
+	# Release lock
+	if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
+		exec {_tlog_fd}>&-
+	fi
 
 	return 0
 }
@@ -576,6 +745,21 @@ tlog_journal_read_full() {
 	local max_lines="${3:-${SCAN_MAX_LINES:-0}}"
 	local jfilter
 	local cmd_args=()
+
+	# Name validation — reject path traversal
+	_tlog_validate_name "$tlog_name" || return 1
+
+	# Validate scan_timeout is numeric — non-numeric defaults to 0 (no timeout)
+	if [[ -n "$scan_timeout" ]] && [[ ! "$scan_timeout" =~ $_TLOG_NUMERIC_PAT ]]; then
+		echo "tlog: tlog_journal_read_full: invalid scan_timeout: '$scan_timeout'" >&2
+		scan_timeout="0"
+	fi
+
+	# Validate max_lines is numeric — non-numeric defaults to 0 (no limit)
+	if [[ -n "$max_lines" ]] && [[ ! "$max_lines" =~ $_TLOG_NUMERIC_PAT ]]; then
+		echo "tlog: tlog_journal_read_full: invalid max_lines: '$max_lines'" >&2
+		max_lines="0"
+	fi
 
 	# Check journalctl available
 	if ! command -v journalctl >/dev/null 2>&1; then
@@ -591,9 +775,11 @@ tlog_journal_read_full() {
 	cmd_args+=(--no-pager)
 
 	if [[ "$scan_timeout" -gt 0 ]] && command -v timeout >/dev/null 2>&1; then
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
 		timeout "$scan_timeout" journalctl $jfilter "${cmd_args[@]}" 2>/dev/null
 	else
+		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
 		journalctl $jfilter "${cmd_args[@]}" 2>/dev/null
 	fi

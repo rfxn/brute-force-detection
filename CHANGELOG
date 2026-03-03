@@ -1,4 +1,8 @@
 2.0.1:
+[Change] tlog_lib.sh: update to canonical 2.0.2 — rotation refactored into
+      _tlog_handle_rotation() with pipe fallback for disk-full; journal flock
+      support; baserun/cursor validation hardening; CLI version cross-check;
+      67 new BATS tests (196 total)
 [Change] search_ip/json/csv: extract shared _search_ip_data() helper; all 5 state
       files (bans.active, bans.history, events.dat, attack.pool) now read once
       instead of 3x; per-service pressure reuses _events_ip_awk() single pass;
