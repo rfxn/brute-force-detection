@@ -1,4 +1,7 @@
 2.0.1:
+[Change] Extract _execute_fw_with_retry() shared helper from execute_ban()
+      and execute_unban(); eliminates duplicated retry loop with exponential
+      backoff (REGR R-004)
 [Fix] validate_config(): error message for BAN_ESCALATION now mentions
       "exponential" as accepted deprecated alias for "double" (REGR R-024)
 [Change] Extract _cleanup_common() shared helper from cleanup() and

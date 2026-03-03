@@ -1248,6 +1248,31 @@ fw_status() {
 	esac
 }
 
+# _execute_fw_with_retry action host mod ports
+# Shared retry loop for fw_ban/fw_unban with exponential backoff.
+# action: "ban" or "unban" — dispatches to fw_ban() or fw_unban().
+# Retries up to BAN_RETRY_COUNT (default 2) on failure.
+# Returns 0 on success, fw command exit code on failure.
+_execute_fw_with_retry() {
+	local action="$1" host="$2" mod="$3" ports="$4"
+	local max_retries="${BAN_RETRY_COUNT:-2}"
+	local retry_delay=1 attempt=0 rc=1
+	while [ "$attempt" -le "$max_retries" ] && [ "$rc" -ne 0 ]; do
+		"fw_${action}" "$host" "$mod" "$ports"
+		rc=$?
+		if [ "$rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
+			elog error "{$mod} $action for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s."
+			sleep "$retry_delay"
+			retry_delay=$((retry_delay * 2))
+		fi
+		attempt=$((attempt + 1))
+	done
+	if [ "$rc" -ne 0 ]; then
+		elog error "{$mod} $action for $host failed after $attempt attempt(s) via $_FW_BACKEND."
+	fi
+	return $rc
+}
+
 # execute_ban host mod dry_run [ports]
 # execute or log ban command via firewall backend
 # retries on failure with exponential backoff (BAN_RETRY_COUNT, default 2)
@@ -1271,22 +1296,7 @@ execute_ban() {
 		return 0
 	fi
 	eout "{$mod} $host exceeded login failures; banning via $_FW_BACKEND." le
-	local max_retries="${BAN_RETRY_COUNT:-2}"
-	local retry_delay=1 attempt=0 ban_rc=1
-	while [ "$attempt" -le "$max_retries" ] && [ "$ban_rc" -ne 0 ]; do
-		fw_ban "$host" "$mod" "$ports"
-		ban_rc=$?
-		if [ "$ban_rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
-			elog error "{$mod} ban for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s."
-			sleep "$retry_delay"
-			retry_delay=$((retry_delay * 2))
-		fi
-		attempt=$((attempt + 1))
-	done
-	if [ "$ban_rc" -ne 0 ]; then
-		elog error "{$mod} ban for $host failed after $attempt attempt(s) via $_FW_BACKEND."
-	fi
-	return $ban_rc
+	_execute_fw_with_retry "ban" "$host" "$mod" "$ports"
 }
 
 # execute_unban host mod [ports]
@@ -1299,22 +1309,7 @@ execute_unban() {
 	MOD="$mod"
 	PORTS="$ports"
 	eout "{$mod} $host ban expired; executing unban via $_FW_BACKEND." le
-	local max_retries="${BAN_RETRY_COUNT:-2}"
-	local retry_delay=1 attempt=0 unban_rc=1
-	while [ "$attempt" -le "$max_retries" ] && [ "$unban_rc" -ne 0 ]; do
-		fw_unban "$host" "$mod" "$ports"
-		unban_rc=$?
-		if [ "$unban_rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
-			elog error "{$mod} unban for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s."
-			sleep "$retry_delay"
-			retry_delay=$((retry_delay * 2))
-		fi
-		attempt=$((attempt + 1))
-	done
-	if [ "$unban_rc" -ne 0 ]; then
-		elog error "{$mod} unban for $host failed after $attempt attempt(s) via $_FW_BACKEND."
-	fi
-	return $unban_rc
+	_execute_fw_with_retry "unban" "$host" "$mod" "$ports"
 }
 
 # process_unbans install_path now — expire and unban via firewall backend
