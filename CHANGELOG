@@ -1,4 +1,7 @@
 2.0.1:
+[Fix] install.sh: set tlog_lib.sh and elog_lib.sh to 640 (was 750); sourced
+      libraries should not have execute permission; consistent with bfd.lib.sh
+      and RPM/DEB packaging (F-032)
 [Fix] validate_config(): add LOG_FORMAT (classic/json) and LOG_LEVEL (0-3)
       validation; invalid values now rejected at startup/reload instead of
       silently falling through to elog defaults (F-017)
