@@ -46,6 +46,7 @@ fi
 install(){
         rm -rf "$INSPATH"
         mkdir "$INSPATH"
+        chmod 750 "$INSPATH"
         mkdir -p "$INSPATH/tmp"
         mkdir -p "$INSPATH/stats"
 	cp logrotate.d.bfd /etc/logrotate.d/bfd

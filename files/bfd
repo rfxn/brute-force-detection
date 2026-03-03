@@ -258,7 +258,7 @@ if [ ! -d "$TLOG_BASERUN" ]; then
 fi
 if [ ! -f "$BFD_LOG_PATH" ]; then
 	touch "$BFD_LOG_PATH"
-	chmod 600 "$BFD_LOG_PATH"
+	chmod 640 "$BFD_LOG_PATH"
 fi
 
 if [ ! -d "$INSTALL_PATH/stats" ]; then

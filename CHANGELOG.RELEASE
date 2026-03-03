@@ -1,4 +1,8 @@
 2.0.1:
+[Fix] bfd: log file creation now uses chmod 640 (was 600) to match project
+      convention and logrotate create directive (F-069)
+[Change] install.sh: explicit chmod 750 on install directory after mkdir;
+      defense-in-depth against permissive umask (F-070)
 [Fix] RPM/DEB: add SysVinit service stop and deregister to all package
       scriptlets (%pre, %preun, preinst, prerm); previously only systemd
       was handled, leaving SysVinit services running on CentOS 7 and
