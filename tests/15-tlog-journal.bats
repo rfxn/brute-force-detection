@@ -217,9 +217,10 @@ MOCK
 	assert_failure
 }
 
-@test "tlog_journal_read: missing baserun does not error" {
+@test "tlog_journal_read: missing baserun returns error" {
 	run tlog_journal_read "sshd" "$TEST_TMPDIR/nonexistent"
-	assert_success
+	assert_failure
+	assert_output --partial "baserun directory not found"
 }
 
 # --- tlog_read() journal dispatch tests ---

@@ -94,6 +94,30 @@ teardown() {
 	assert_success
 }
 
+# --- _check_file_safety tests ---
+
+@test "_check_file_safety: root-owned 640 returns success" {
+	echo 'test' > "$TEST_TMPDIR/safe640.conf"
+	chmod 640 "$TEST_TMPDIR/safe640.conf"
+	run _check_file_safety "$TEST_TMPDIR/safe640.conf"
+	assert_success
+}
+
+@test "_check_file_safety: world-writable returns failure" {
+	echo 'test' > "$TEST_TMPDIR/writable.conf"
+	chmod 666 "$TEST_TMPDIR/writable.conf"
+	run _check_file_safety "$TEST_TMPDIR/writable.conf"
+	assert_failure
+}
+
+@test "_check_file_safety: sets _CSAF_UID and _CSAF_PERMS" {
+	echo 'test' > "$TEST_TMPDIR/check_vars.conf"
+	chmod 640 "$TEST_TMPDIR/check_vars.conf"
+	_check_file_safety "$TEST_TMPDIR/check_vars.conf"
+	[ "$_CSAF_UID" = "0" ]
+	[ "$_CSAF_PERMS" = "640" ]
+}
+
 # --- Alert template safety tests (Phase 26) ---
 
 @test "send_alerts: world-writable template skips alerts" {

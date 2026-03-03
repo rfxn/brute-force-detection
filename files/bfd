@@ -28,7 +28,7 @@ V="2.0.1"
 APPN="BFD"
 UTIME=$(date +"%s")
 
-# validate library safety before sourcing
+# inline: _check_file_safety unavailable before bfd.lib.sh is sourced
 _lib_owner=$(stat -L -c '%u' "$INSTALL_PATH/bfd.lib.sh")
 _lib_perms=$(stat -L -c '%a' "$INSTALL_PATH/bfd.lib.sh")
 _lib_world="${_lib_perms: -1}"
@@ -60,11 +60,15 @@ ELOG_STDOUT_PREFIX="full"
 declare -A _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
 declare -A _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
 
-# shellcheck disable=SC2317 # called via trap
-cleanup() {
+_cleanup_common() {
 	rm -rf "$LOCK_FILE.lk" 2>/dev/null
 	rm -f "$LOCK_FILE" 2>/dev/null
 	rm -f "${_COUNTRY_CACHE_FILE:-}" "${_IGNORE_CACHE_FILE:-}" 2>/dev/null
+}
+
+# shellcheck disable=SC2317 # called via trap
+cleanup() {
+	_cleanup_common
 }
 trap cleanup EXIT INT TERM
 
@@ -94,12 +98,8 @@ config_init() {
 			return "$EXIT_CONFIG_ERROR"
 		fi
 		# Pre-check ownership/permissions before unsetting anything
-		local _pre_owner _pre_perms _pre_world
-		_pre_owner=$(stat -L -c '%u' "$CNF")
-		_pre_perms=$(stat -L -c '%a' "$CNF")
-		_pre_world="${_pre_perms: -1}"
-		if [ "$_pre_owner" != "0" ] || [ "$((_pre_world & 2))" -ne 0 ]; then
-			echo "error: conf.bfd has unsafe ownership (uid=$_pre_owner) or permissions ($_pre_perms), reload aborted." >&2
+		if ! _check_file_safety "$CNF"; then
+			echo "error: conf.bfd has unsafe ownership (uid=$_CSAF_UID) or permissions ($_CSAF_PERMS), reload aborted." >&2
 			return "$EXIT_CONFIG_ERROR"
 		fi
 		# Unset ALL config variables for clean re-read (F-010)
@@ -129,12 +129,8 @@ config_init() {
 		echo "error: could not find $CNF." >&2
 		return "$EXIT_CONFIG_ERROR"
 	fi
-	local _cnf_owner _cnf_perms _cnf_world
-	_cnf_owner=$(stat -L -c '%u' "$CNF")
-	_cnf_perms=$(stat -L -c '%a' "$CNF")
-	_cnf_world="${_cnf_perms: -1}"
-	if [ "$_cnf_owner" != "0" ] || [ "$((_cnf_world & 2))" -ne 0 ]; then
-		echo "error: conf.bfd has unsafe ownership (uid=$_cnf_owner) or permissions ($_cnf_perms)." >&2
+	if ! _check_file_safety "$CNF"; then
+		echo "error: conf.bfd has unsafe ownership (uid=$_CSAF_UID) or permissions ($_CSAF_PERMS)." >&2
 		return "$EXIT_CONFIG_ERROR"
 	fi
 	# shellcheck disable=SC1090
@@ -142,11 +138,7 @@ config_init() {
 
 	# Source internals.conf
 	if [ -f "$INTCNF" ]; then
-		local _int_owner _int_perms _int_world
-		_int_owner=$(stat -L -c '%u' "$INTCNF")
-		_int_perms=$(stat -L -c '%a' "$INTCNF")
-		_int_world="${_int_perms: -1}"
-		if [ "$_int_owner" = "0" ] && [ "$((_int_world & 2))" -eq 0 ]; then
+		if _check_file_safety "$INTCNF"; then
 			# shellcheck disable=SC1090
 			. "$INTCNF"
 		else
@@ -792,9 +784,7 @@ run() {
 # shellcheck disable=SC2317 # called via trap
 cleanup_watch() {
 	eout "watch mode shutting down (pid=$$)" le
-	rm -rf "$LOCK_FILE.lk" 2>/dev/null
-	rm -f "$LOCK_FILE" 2>/dev/null
-	rm -f "${_COUNTRY_CACHE_FILE:-}" "${_IGNORE_CACHE_FILE:-}" 2>/dev/null
+	_cleanup_common
 }
 
 # shellcheck disable=SC2317 # called via trap

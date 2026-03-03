@@ -1,4 +1,20 @@
 2.0.1:
+[Change] Extract _check_file_safety() helper for ownership/permissions
+      validation; replaces 5 inline stat-check patterns in config_init(),
+      _load_thresholds(), _load_pressure_conf(), and send_alerts();
+      safe_source() refactored to use it; pre-library check at bfd:32
+      retained inline with comment (REGR R-013)
+[Change] Extract _execute_fw_with_retry() shared helper from execute_ban()
+      and execute_unban(); eliminates duplicated retry loop with exponential
+      backoff (REGR R-004)
+[Fix] validate_config(): error message for BAN_ESCALATION now mentions
+      "exponential" as accepted deprecated alias for "double" (REGR R-024)
+[Change] Extract _cleanup_common() shared helper from cleanup() and
+      cleanup_watch(); eliminates duplicated lock/cache teardown (REGR R-003)
+[Change] REGR.md: document verified dispositions for all 24 structural
+      regression findings — 4 false positives, 5 intentional backward-compat,
+      2 infeasible, 2 documented, 1 deferred, 4 resolved prior (F-004),
+      6 actionable (Phases 1-4)
 [Change] tlog_lib.sh: update to canonical 2.0.2 — rotation refactored into
       _tlog_handle_rotation() with pipe fallback for disk-full; journal flock
       support; baserun/cursor validation hardening; CLI version cross-check;

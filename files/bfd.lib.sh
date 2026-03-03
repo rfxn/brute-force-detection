@@ -304,13 +304,9 @@ _load_thresholds() {
 	[ -z "$conf_file" ] && return 0
 	[ ! -f "$conf_file" ] && return 0
 
-	# validate ownership and permissions (same checks as safe_source)
-	local _tc_owner _tc_perms _tc_world
-	_tc_owner=$(stat -L -c '%u' "$conf_file")
-	_tc_perms=$(stat -L -c '%a' "$conf_file")
-	_tc_world="${_tc_perms: -1}"
-	if [ "$_tc_owner" != "0" ] || [ "$((_tc_world & 2))" -ne 0 ]; then
-		elog warn "thresholds.conf has unsafe ownership (uid=$_tc_owner) or permissions ($_tc_perms), skipping"
+	# validate ownership and permissions
+	if ! _check_file_safety "$conf_file"; then
+		elog warn "thresholds.conf has unsafe ownership (uid=$_CSAF_UID) or permissions ($_CSAF_PERMS), skipping"
 		return 0
 	fi
 
@@ -383,13 +379,9 @@ _load_pressure_conf() {
 	[ -z "$conf_file" ] && return 0
 	[ ! -f "$conf_file" ] && return 0
 
-	# validate ownership and permissions (same checks as safe_source)
-	local _pc_owner _pc_perms _pc_world
-	_pc_owner=$(stat -L -c '%u' "$conf_file")
-	_pc_perms=$(stat -L -c '%a' "$conf_file")
-	_pc_world="${_pc_perms: -1}"
-	if [ "$_pc_owner" != "0" ] || [ "$((_pc_world & 2))" -ne 0 ]; then
-		elog warn "pressure.conf has unsafe ownership (uid=$_pc_owner) or permissions ($_pc_perms), skipping"
+	# validate ownership and permissions
+	if ! _check_file_safety "$conf_file"; then
+		elog warn "pressure.conf has unsafe ownership (uid=$_CSAF_UID) or permissions ($_CSAF_PERMS), skipping"
 		return 0
 	fi
 
@@ -512,6 +504,20 @@ vout() {
 	elog debug "$*"
 }
 
+# _check_file_safety file — validate root ownership and non-world-writable perms
+# Returns 0 (safe) or 1 (unsafe). Sets _CSAF_UID and _CSAF_PERMS for caller
+# error messages. Does NOT check file existence — caller must verify first.
+_check_file_safety() {
+	local file="$1"
+	_CSAF_UID=$(stat -L -c '%u' "$file")
+	_CSAF_PERMS=$(stat -L -c '%a' "$file")
+	local world_digit="${_CSAF_PERMS: -1}"
+	if [ "$_CSAF_UID" != "0" ] || [ "$((world_digit & 2))" -ne 0 ]; then
+		return 1
+	fi
+	return 0
+}
+
 # safe_source requires: eout() to be functional
 safe_source() {
 	local file="$1"
@@ -520,18 +526,12 @@ safe_source() {
 		elog error "safe_source: $label does not exist."
 		return 1
 	fi
-	local fowner
-	fowner=$(stat -L -c '%u' "$file")
-	if [ "$fowner" != "0" ]; then
-		elog error "safe_source: $label is not owned by root (uid=$fowner)."
-		return 1
-	fi
-	local fperms
-	fperms=$(stat -L -c '%a' "$file")
-	# check world-writable: last digit has write bit (2, 3, 6, 7)
-	local world_digit="${fperms: -1}"
-	if [ "$((world_digit & 2))" -ne 0 ]; then
-		elog error "safe_source: $label is world-writable (perms=$fperms)."
+	if ! _check_file_safety "$file"; then
+		if [ "$_CSAF_UID" != "0" ]; then
+			elog error "safe_source: $label is not owned by root (uid=$_CSAF_UID)."
+		else
+			elog error "safe_source: $label is world-writable (perms=$_CSAF_PERMS)."
+		fi
 		return 1
 	fi
 	# shellcheck disable=SC1090
@@ -698,7 +698,7 @@ validate_config() {
 	fi
 	local _esc="${BAN_ESCALATION:-none}"
 	if [ "$_esc" != "none" ] && [ "$_esc" != "linear" ] && [ "$_esc" != "double" ] && [ "$_esc" != "exponential" ]; then
-		echo "error: BAN_ESCALATION must be none, linear, or double (got '$_esc')." >&2
+		echo "error: BAN_ESCALATION must be none, linear, or double (got '$_esc'; 'exponential' is accepted as deprecated alias for 'double')." >&2
 		return $EXIT_CONFIG_ERROR
 	fi
 	if ! [[ "${BAN_ESCALATION_CAP:-0}" =~ $int_pattern ]]; then
@@ -1248,6 +1248,31 @@ fw_status() {
 	esac
 }
 
+# _execute_fw_with_retry action host mod ports
+# Shared retry loop for fw_ban/fw_unban with exponential backoff.
+# action: "ban" or "unban" — dispatches to fw_ban() or fw_unban().
+# Retries up to BAN_RETRY_COUNT (default 2) on failure.
+# Returns 0 on success, fw command exit code on failure.
+_execute_fw_with_retry() {
+	local action="$1" host="$2" mod="$3" ports="$4"
+	local max_retries="${BAN_RETRY_COUNT:-2}"
+	local retry_delay=1 attempt=0 rc=1
+	while [ "$attempt" -le "$max_retries" ] && [ "$rc" -ne 0 ]; do
+		"fw_${action}" "$host" "$mod" "$ports"
+		rc=$?
+		if [ "$rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
+			elog error "{$mod} $action for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s."
+			sleep "$retry_delay"
+			retry_delay=$((retry_delay * 2))
+		fi
+		attempt=$((attempt + 1))
+	done
+	if [ "$rc" -ne 0 ]; then
+		elog error "{$mod} $action for $host failed after $attempt attempt(s) via $_FW_BACKEND."
+	fi
+	return $rc
+}
+
 # execute_ban host mod dry_run [ports]
 # execute or log ban command via firewall backend
 # retries on failure with exponential backoff (BAN_RETRY_COUNT, default 2)
@@ -1271,22 +1296,7 @@ execute_ban() {
 		return 0
 	fi
 	eout "{$mod} $host exceeded login failures; banning via $_FW_BACKEND." le
-	local max_retries="${BAN_RETRY_COUNT:-2}"
-	local retry_delay=1 attempt=0 ban_rc=1
-	while [ "$attempt" -le "$max_retries" ] && [ "$ban_rc" -ne 0 ]; do
-		fw_ban "$host" "$mod" "$ports"
-		ban_rc=$?
-		if [ "$ban_rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
-			elog error "{$mod} ban for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s."
-			sleep "$retry_delay"
-			retry_delay=$((retry_delay * 2))
-		fi
-		attempt=$((attempt + 1))
-	done
-	if [ "$ban_rc" -ne 0 ]; then
-		elog error "{$mod} ban for $host failed after $attempt attempt(s) via $_FW_BACKEND."
-	fi
-	return $ban_rc
+	_execute_fw_with_retry "ban" "$host" "$mod" "$ports"
 }
 
 # execute_unban host mod [ports]
@@ -1299,22 +1309,7 @@ execute_unban() {
 	MOD="$mod"
 	PORTS="$ports"
 	eout "{$mod} $host ban expired; executing unban via $_FW_BACKEND." le
-	local max_retries="${BAN_RETRY_COUNT:-2}"
-	local retry_delay=1 attempt=0 unban_rc=1
-	while [ "$attempt" -le "$max_retries" ] && [ "$unban_rc" -ne 0 ]; do
-		fw_unban "$host" "$mod" "$ports"
-		unban_rc=$?
-		if [ "$unban_rc" -ne 0 ] && [ "$attempt" -lt "$max_retries" ]; then
-			elog error "{$mod} unban for $host failed (attempt $((attempt + 1))), retrying in ${retry_delay}s."
-			sleep "$retry_delay"
-			retry_delay=$((retry_delay * 2))
-		fi
-		attempt=$((attempt + 1))
-	done
-	if [ "$unban_rc" -ne 0 ]; then
-		elog error "{$mod} unban for $host failed after $attempt attempt(s) via $_FW_BACKEND."
-	fi
-	return $unban_rc
+	_execute_fw_with_retry "unban" "$host" "$mod" "$ports"
 }
 
 # process_unbans install_path now — expire and unban via firewall backend
@@ -2404,11 +2399,7 @@ send_alerts() {
 		rm -f "$alerts_file"
 		return 1
 	fi
-	local _tmpl_owner _tmpl_perms _tmpl_world
-	_tmpl_owner=$(stat -L -c '%u' "$template")
-	_tmpl_perms=$(stat -L -c '%a' "$template")
-	_tmpl_world="${_tmpl_perms: -1}"
-	if [ "$_tmpl_owner" != "0" ] || [ "$((_tmpl_world & 2))" -ne 0 ]; then
+	if ! _check_file_safety "$template"; then
 		elog warn "alert template has unsafe ownership or permissions, skipping alerts."
 		rm -f "$alerts_file"
 		return 1
