@@ -1,4 +1,7 @@
 2.0.1:
+[Fix] README.md: update install section to reflect auto-enabled watch mode;
+      section 2.1 now documents installer auto-enable behavior with manual
+      management commands for re-enabling after disable (F-018)
 [Fix] install.sh: set tlog_lib.sh and elog_lib.sh to 640 (was 750); sourced
       libraries should not have execute permission; consistent with bfd.lib.sh
       and RPM/DEB packaging (F-032)

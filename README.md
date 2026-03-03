@@ -151,9 +151,9 @@ The included `install.sh` script handles all installation tasks:
 This will:
 - Install BFD to `/usr/local/bfd`
 - Place the `bfd` command at `/usr/local/sbin/bfd`
-- Install a 2-minute cronjob in `/etc/cron.d/bfd`
-- On systemd systems, install `bfd.service` and `bfd.timer` (not enabled by default)
-- If upgrading, run `importconf` to import settings from the previous installation
+- Auto-enable watch mode for ~10s detection latency (systemd or SysVinit)
+- Install a 2-minute cronjob as fallback (skipped while watch runs)
+- If upgrading, import settings from the previous installation and restart watch mode
 
 Previous installations are backed up before overwriting.
 
@@ -171,6 +171,12 @@ INSTALL_PATH=/opt/bfd BIN_PATH=/usr/sbin/bfd ./install.sh
 **Watch mode (recommended):**
 
 BFD's watch mode runs as a persistent daemon, polling for new log data every `WATCH_INTERVAL` seconds (default 10). Detection latency is ~10 seconds, comparable to fail2ban and other daemon-based tools.
+
+The installer automatically enables and starts watch mode on fresh installs.
+On upgrades, the existing scheduling choice is preserved — if watch mode was
+running it is restarted; if `bfd.timer` was enabled it is left active.
+
+To manually manage watch mode:
 
 ```bash
 # systemd (Rocky 8+, Debian 12, Ubuntu 20+)
