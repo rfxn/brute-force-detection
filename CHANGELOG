@@ -1,4 +1,12 @@
 2.0.1:
+[Change] Rewrite usage() with semantic section grouping (Run Modes, Ban
+      Management, Reporting, System, Rule Testing, Scan Mode, Output Modifiers,
+      General) mirroring the man page structure
+[New] Add usage_short() showing common commands when bfd is run with no
+      arguments; full help available via bfd -h
+[New] Add Examples section to full help output showing common workflows
+[Change] Update bfd.1 man page -h description for short/full help
+[Fix] Fix missing tab indentation on -e usage line
 [Change] Extract _pressure_aggregate_all() from show_status() inline AWK;
       reusable single-pass all-IPs pressure aggregation (REGR R-015)
 [Change] Consolidate _events_dashboard_awk() and _events_cidr_awk() into
