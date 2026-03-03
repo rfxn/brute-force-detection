@@ -758,6 +758,18 @@ format_table() {
 	fi
 }
 
+# _fmt_ts epoch — format epoch as short human-readable timestamp for text tables
+# Returns "mm/dd/yy HH:MM:SS" or the raw epoch on failure.
+_fmt_ts() {
+	date -d "@$1" +"%D %H:%M:%S" 2>/dev/null || echo "$1"
+}
+
+# _fmt_ts_iso epoch — format epoch as ISO 8601 timestamp for JSON/CSV output
+# Returns "YYYY-MM-DDTHH:MM:SS" or the raw epoch on failure.
+_fmt_ts_iso() {
+	date -d "@$1" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$1"
+}
+
 # _rule_tlog log_file log_tag — in-process tlog for rule execution.
 # Replaces the subprocess call: $("$TLOG_PATH" "$LOG_FILE" "$LOG_TAG")
 # When _TLOG_PASSTHROUGH is set, outputs the entire file instead of a delta
@@ -1444,11 +1456,11 @@ list_bans() {
 	echo "IP|SERVICE|PORTS|BANNED|EXPIRES" > "$atmp"
 	local ts expiry host mod ports banned_fmt expiry_fmt
 	while IFS='|' read -r ts expiry host mod ports; do
-		banned_fmt=$(date -d "@${ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$ts")
+		banned_fmt=$(_fmt_ts "$ts")
 		if [ "$expiry" = "0" ]; then
 			expiry_fmt="permanent"
 		else
-			expiry_fmt=$(date -d "@${expiry}" +"%D %H:%M:%S" 2>/dev/null || echo "$expiry")
+			expiry_fmt=$(_fmt_ts "$expiry")
 		fi
 		echo "$host|$mod|$ports|$banned_fmt|$expiry_fmt"
 	done <<< "$raw" >> "$atmp"
@@ -3247,11 +3259,11 @@ list_bans_json() {
 		local ts expiry host mod ports
 		while IFS='|' read -r ts expiry host mod ports; do
 			local banned_fmt expiry_fmt
-			banned_fmt=$(date -d "@${ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$ts")
+			banned_fmt=$(_fmt_ts_iso "$ts")
 			if [ "$expiry" = "0" ]; then
 				expiry_fmt="permanent"
 			else
-				expiry_fmt=$(date -d "@${expiry}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$expiry")
+				expiry_fmt=$(_fmt_ts_iso "$expiry")
 			fi
 			if [ "$first" -eq 1 ]; then
 				first=0
@@ -3276,11 +3288,11 @@ list_bans_csv() {
 		local ts expiry host mod ports
 		while IFS='|' read -r ts expiry host mod ports; do
 			local banned_fmt expiry_fmt
-			banned_fmt=$(date -d "@${ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$ts")
+			banned_fmt=$(_fmt_ts_iso "$ts")
 			if [ "$expiry" = "0" ]; then
 				expiry_fmt="permanent"
 			else
-				expiry_fmt=$(date -d "@${expiry}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$expiry")
+				expiry_fmt=$(_fmt_ts_iso "$expiry")
 			fi
 			echo "$host,$mod,$ports,$banned_fmt,$expiry_fmt"
 		done <<< "$raw"
@@ -3383,8 +3395,8 @@ events_dashboard() {
 	_events_dashboard_awk "$events_file" "$now" "$half_life" "$trip" | \
 	while IFS='|' read -r _sort_key ip pw pf _trip cnt svcs first_ts last_ts; do
 		local first_fmt last_fmt ban_status
-		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$first_ts")
-		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$last_ts")
+		first_fmt=$(_fmt_ts "$first_ts")
+		last_fmt=$(_fmt_ts "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
 		echo "$ip|${pw}.${pf}/${_trip}|$cnt|$svcs|$first_fmt|$last_fmt|$ban_status"
 	done >> "$atmp"
@@ -3562,8 +3574,8 @@ events_cidr() {
 	_events_cidr_awk "$events_file" "$now" "$half_life" "$trip" "$target_addr" "$target_mask" | \
 	while IFS='|' read -r _sort_key ip pw pf _trip cnt svcs first_ts last_ts; do
 		local first_fmt last_fmt ban_status
-		first_fmt=$(date -d "@${first_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$first_ts")
-		last_fmt=$(date -d "@${last_ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$last_ts")
+		first_fmt=$(_fmt_ts "$first_ts")
+		last_fmt=$(_fmt_ts "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
 		echo "$ip|${pw}.${pf}/${_trip}|$cnt|$svcs|$first_fmt|$last_fmt|$ban_status"
 		# counters for summary (write to fd 3)
@@ -3608,8 +3620,8 @@ events_dashboard_json() {
 	_events_dashboard_awk "$events_file" "$now" "$half_life" "$trip" | \
 	while IFS='|' read -r _ ip pw pf _trip cnt svcs first_ts last_ts; do
 		local first_fmt last_fmt ban_status
-		first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
-		last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
+		first_fmt=$(_fmt_ts_iso "$first_ts")
+		last_fmt=$(_fmt_ts_iso "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
 		if [ "$first" -eq 1 ]; then
@@ -3643,8 +3655,8 @@ events_dashboard_csv() {
 	_events_dashboard_awk "$events_file" "$now" "$half_life" "$trip" | \
 	while IFS='|' read -r _ ip pw pf _trip cnt svcs first_ts last_ts; do
 		local first_fmt last_fmt ban_status
-		first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
-		last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
+		first_fmt=$(_fmt_ts_iso "$first_ts")
+		last_fmt=$(_fmt_ts_iso "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
 		echo "$ip,${pw}.${pf},$_trip,$cnt,$svcs,$first_fmt,$last_fmt,$ban_status"
@@ -3693,10 +3705,10 @@ events_ip_json() {
 	# first/last seen
 	local first_fmt="null" last_fmt="null"
 	if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
-		first_fmt="\"$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")\""
+		first_fmt="\"$(_fmt_ts_iso "$first_ts")\""
 	fi
 	if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
-		last_fmt="\"$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")\""
+		last_fmt="\"$(_fmt_ts_iso "$last_ts")\""
 	fi
 
 	printf '{"ip": "%s", "pressure": %s, "pressure_trip": %s, "half_life": %s, "services": %s, "first_seen": %s, "last_seen": %s, "status": "%s"}\n' \
@@ -3730,10 +3742,10 @@ events_ip_csv() {
 	# first/last seen
 	local first_fmt="" last_fmt=""
 	if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
-		first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
+		first_fmt=$(_fmt_ts_iso "$first_ts")
 	fi
 	if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
-		last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
+		last_fmt=$(_fmt_ts_iso "$last_ts")
 	fi
 
 	# per-service rows
@@ -3773,8 +3785,8 @@ events_cidr_json() {
 	_events_cidr_awk "$events_file" "$now" "$half_life" "$trip" "$target_addr" "$target_mask" | \
 	while IFS='|' read -r _ ip pw pf _trip cnt svcs first_ts last_ts; do
 		local first_fmt last_fmt ban_status
-		first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
-		last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
+		first_fmt=$(_fmt_ts_iso "$first_ts")
+		last_fmt=$(_fmt_ts_iso "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
 		if [ "$first" -eq 1 ]; then
@@ -3827,8 +3839,8 @@ events_cidr_csv() {
 	_events_cidr_awk "$events_file" "$now" "$half_life" "$trip" "$target_addr" "$target_mask" | \
 	while IFS='|' read -r _ ip pw pf _trip cnt svcs first_ts last_ts; do
 		local first_fmt last_fmt ban_status
-		first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
-		last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
+		first_fmt=$(_fmt_ts_iso "$first_ts")
+		last_fmt=$(_fmt_ts_iso "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
 		echo "$ip,${pw}.${pf},$_trip,$cnt,$svcs,$first_fmt,$last_fmt,$ban_status"
@@ -3885,10 +3897,10 @@ search_ip_json() {
 	# First/last seen
 	local first_fmt="null" last_fmt="null"
 	if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
-		first_fmt="\"$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")\""
+		first_fmt="\"$(_fmt_ts_iso "$first_ts")\""
 	fi
 	if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
-		last_fmt="\"$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")\""
+		last_fmt="\"$(_fmt_ts_iso "$last_ts")\""
 	fi
 
 	printf '{"ip": "%s", "status": "%s", "pressure": %s, "pressure_trip": %s, "ban_history_24h": %d, "ban_history_total": %d, "events_24h": %d, "services": %s, "first_seen": %s, "last_seen": %s, "attack_pool_triggers": %d}\n' \
@@ -3930,10 +3942,10 @@ search_ip_csv() {
 	# First/last seen
 	local first_fmt="" last_fmt=""
 	if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
-		first_fmt=$(date -d "@${first_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$first_ts")
+		first_fmt=$(_fmt_ts_iso "$first_ts")
 	fi
 	if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
-		last_fmt=$(date -d "@${last_ts}" +"%Y-%m-%dT%H:%M:%S" 2>/dev/null || echo "$last_ts")
+		last_fmt=$(_fmt_ts_iso "$last_ts")
 	fi
 
 	echo "$ip,$status_str,$_gp_fmt,$trip,$hist_24h,$hist_total,$evt_count,$first_fmt,$last_fmt,$pool_count"

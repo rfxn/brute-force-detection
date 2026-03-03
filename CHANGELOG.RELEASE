@@ -1,4 +1,7 @@
 2.0.1:
+[New] Extract _fmt_ts() and _fmt_ts_iso() timestamp formatting helpers;
+      replace 30 inline date -d + fallback patterns across bfd.lib.sh and
+      bfd with single-call helpers (F-039, F-043)
 [Change] Remove dead deprecated functions state_bans_active_list(),
       state_events_count(), and count_failures(); all superseded by
       list_bans(), pressure_compute(), and record_and_score() respectively;
