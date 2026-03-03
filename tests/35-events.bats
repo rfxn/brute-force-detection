@@ -286,3 +286,48 @@ teardown() {
 	assert_failure
 	assert_output --partial "error:"
 }
+
+# --- _pressure_aggregate_all ---
+
+@test "_pressure_aggregate_all: returns scaled pressure for all IPs" {
+	local now
+	now=$(date +"%s")
+	local events_file="$INSTALL_PATH/tmp/events.dat"
+	# 3 events for one IP, 1 event for another
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "2"
+	state_events_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "dovecot" "1" "1"
+	run _pressure_aggregate_all "$events_file" "$now" "300"
+	assert_success
+	# first line should be the higher-pressure IP (192.0.2.10 with weight=2, count=3)
+	assert_line --index 0 --regexp '^[0-9]+ 192\.0\.2\.10$'
+	# second line should be the lower-pressure IP
+	assert_line --index 1 --regexp '^[0-9]+ 198\.51\.100\.5$'
+}
+
+# --- _events_pressure_awk ---
+
+@test "_events_pressure_awk: dashboard mode returns all IPs" {
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_events_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "dovecot" "1" "1"
+	local events_file="$INSTALL_PATH/tmp/events.dat"
+	run _events_pressure_awk "$events_file" "$now" "300" "20"
+	assert_success
+	# should contain both IPs
+	assert_output --partial "192.0.2.10"
+	assert_output --partial "198.51.100.5"
+}
+
+@test "_events_pressure_awk: CIDR mode filters by subnet" {
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_events_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "dovecot" "1" "1"
+	local events_file="$INSTALL_PATH/tmp/events.dat"
+	run _events_pressure_awk "$events_file" "$now" "300" "20" "192.0.2.0" "24"
+	assert_success
+	# should contain only the subnet-matching IP
+	assert_output --partial "192.0.2.10"
+	refute_output --partial "198.51.100.5"
+}

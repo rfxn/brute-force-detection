@@ -17,6 +17,7 @@ load 'helpers/bfd-common'
 _load_watch_functions() {
 	local bfd_file="$PROJECT_ROOT/files/bfd"
 	eval "$(awk '/^config_init\(\) \{/,/^\}/' "$bfd_file")"
+	eval "$(awk '/^_cleanup_common\(\) \{/,/^\}/' "$bfd_file")"
 	eval "$(awk '/^cleanup_watch\(\) \{/,/^\}/' "$bfd_file")"
 	eval "$(awk '/^reload_watch\(\) \{/,/^\}/' "$bfd_file")"
 }
