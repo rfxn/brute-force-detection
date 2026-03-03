@@ -93,30 +93,6 @@ teardown() {
 	assert_failure
 }
 
-# --- state_bans_active_list ---
-
-@test "state_bans_active_list: formats output with pipe delimiters" {
-	state_bans_active_append "$INSTALL_PATH" "1708560000" "1708560300" "203.0.113.100" "sshd" "22"
-	run state_bans_active_list "$INSTALL_PATH"
-	assert_success
-	assert_output --partial "203.0.113.100"
-	assert_output --partial "sshd"
-	assert_output --partial "22"
-}
-
-@test "state_bans_active_list: permanent ban shows permanent" {
-	state_bans_active_append "$INSTALL_PATH" "1708560000" "0" "192.0.2.5" "dovecot" "110,995"
-	run state_bans_active_list "$INSTALL_PATH"
-	assert_success
-	assert_output --partial "permanent"
-}
-
-@test "state_bans_active_list: empty file produces no output" {
-	run state_bans_active_list "$INSTALL_PATH"
-	assert_success
-	assert_output ""
-}
-
 # --- state_bans_active_expired ---
 
 @test "state_bans_active_expired: returns expired entries" {

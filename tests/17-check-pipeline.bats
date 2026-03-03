@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # Integration tests for the check() pipeline:
-# count_failures, execute_ban, and end-to-end flow
+# execute_ban, record_ban, and end-to-end flow
 #
 
 load '/usr/local/lib/bats/bats-support/load'
@@ -20,13 +20,13 @@ teardown() {
 # --- PRESSURE_TRIP_GLOBAL ---
 
 @test "pipeline: PRESSURE_TRIP_GLOBAL triggers ban across services" {
-	# seed dovecot events (3) and sshd events (3) in window, total = 6
-	state_events_append "$INSTALL_PATH" "900" "192.0.2.1" "dovecot" "3"
-	state_events_append "$INSTALL_PATH" "900" "192.0.2.1" "sshd" "3"
-	# PRESSURE_TRIP_GLOBAL=5: cross-service total of 6 >= 5
-	local global_count
-	global_count=$(state_events_count "$INSTALL_PATH" "192.0.2.1" "300" "1000")
-	[ "$global_count" -ge 5 ]
+	# seed dovecot events (3) and sshd events (3) at now, total = 6
+	state_events_append "$INSTALL_PATH" "1000" "192.0.2.1" "dovecot" "3"
+	state_events_append "$INSTALL_PATH" "1000" "192.0.2.1" "sshd" "3"
+	# PRESSURE_TRIP_GLOBAL=5000 (scaled): cross-service pressure >= 5
+	local global_pressure
+	global_pressure=$(pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "1000")
+	[ "$global_pressure" -ge 5000 ]
 }
 
 # --- execute_ban ---
@@ -134,37 +134,6 @@ EOF
 }
 
 # --- end-to-end pipeline ---
-
-@test "pipeline: filter_host + count_failures + ban state" {
-	# setup ignore infrastructure
-	local ignore_files="$TEST_TMPDIR/exclude.files"
-	local lo_hosts="$TEST_TMPDIR/lo_hosts"
-	touch "$ignore_files" "$lo_hosts"
-
-	local host="192.0.2.1"
-	local hosts_parsed
-	hosts_parsed=$(printf "192.0.2.1\n192.0.2.1\n192.0.2.1\n192.0.2.1\n192.0.2.1\n")
-
-	# host passes filter
-	filter_host "$host" "$ignore_files" "$lo_hosts"
-	local filter_rc=$?
-	[ "$filter_rc" -eq 0 ]
-
-	# count failures (windowed)
-	local count
-	count=$(count_failures "$host" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
-	[ "$count" -ge 5 ]
-
-	# ban and record
-	state_pool_append "$INSTALL_PATH" "1700000000" "$host" "sshd"
-	state_bans_active_append "$INSTALL_PATH" "1000" "0" "$host" "sshd" "22"
-
-	# verify state
-	run state_bans_active_check "$INSTALL_PATH" "$host"
-	assert_success
-	run cat "$INSTALL_PATH/stats/attack.pool"
-	assert_output --partial "192.0.2.1"
-}
 
 @test "pipeline: ignored host skips ban entirely" {
 	local ignore_list="$TEST_TMPDIR/ignore.hosts"
@@ -393,24 +362,7 @@ EOF
 
 # --- IPv6 pipeline tests ---
 
-@test "count_failures: counts IPv6 host with grep -cxF" {
-	local hosts_parsed
-	hosts_parsed=$(printf "2001:db8::1\n192.0.2.1\n2001:db8::1\n")
-	run count_failures "2001:db8::1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
-	assert_success
-	assert_output "2"
-}
-
-@test "count_failures: IPv6 no false positive on prefix match" {
-	local hosts_parsed
-	hosts_parsed=$(printf "2001:db8::1\n2001:db8::1:0\n2001:db8::10\n")
-	# grep -cxF ensures exact line match — only "2001:db8::1" matches
-	run count_failures "2001:db8::1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd"
-	assert_success
-	assert_output "1"
-}
-
-@test "pipeline: IPv6 host flows through filter + count + ban" {
+@test "pipeline: IPv6 host flows through filter + score + ban" {
 	local ignore_files="$TEST_TMPDIR/exclude.files"
 	local lo_hosts="$TEST_TMPDIR/lo_hosts"
 	touch "$ignore_files" "$lo_hosts"
@@ -424,10 +376,10 @@ EOF
 	local filter_rc=$?
 	[ "$filter_rc" -eq 0 ]
 
-	# count failures
-	local count
-	count=$(count_failures "$host" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
-	[ "$count" -ge 5 ]
+	# record events and compute pressure (5 events * weight 1 at now = 5000)
+	local pressure
+	pressure=$(record_and_score "$host" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
+	[ "$pressure" -ge 5000 ]
 
 	# ban and record
 	state_pool_append "$INSTALL_PATH" "1700000000" "$host" "sshd"
@@ -440,15 +392,17 @@ EOF
 	assert_output --partial "2001:db8::1"
 }
 
-@test "pipeline: mixed IPv4+IPv6 counted independently" {
+@test "pipeline: mixed IPv4+IPv6 scored independently" {
 	local hosts_parsed
 	hosts_parsed=$(printf "192.0.2.1\n2001:db8::1\n192.0.2.1\n2001:db8::1\n192.0.2.1\n")
-	local v4_count
-	v4_count=$(count_failures "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
-	[ "$v4_count" -eq 3 ]
-	local v6_count
-	v6_count=$(count_failures "2001:db8::1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
-	[ "$v6_count" -eq 2 ]
+	# record_and_score: 3 v4 events at now → pressure 3000
+	local v4_pressure
+	v4_pressure=$(record_and_score "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
+	[ "$v4_pressure" -eq 3000 ]
+	# record_and_score: 2 v6 events at now → pressure 2000
+	local v6_pressure
+	v6_pressure=$(record_and_score "2001:db8::1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
+	[ "$v6_pressure" -eq 2000 ]
 }
 
 # --- IPv6 ban command selection ---

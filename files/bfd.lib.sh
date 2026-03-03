@@ -1575,24 +1575,6 @@ state_bans_active_check() {
 	return 1
 }
 
-# state_bans_active_list install_path — output formatted active ban lines
-# Thin wrapper over _list_bans_data() — preserves backward compat for callers.
-state_bans_active_list() {
-	local install_path="$1"
-	local raw
-	raw=$(_list_bans_data "$install_path") || return 0
-	local ts expiry host mod ports banned_fmt expiry_fmt
-	while IFS='|' read -r ts expiry host mod ports; do
-		banned_fmt=$(date -d "@${ts}" +"%D %H:%M:%S" 2>/dev/null || echo "$ts")
-		if [ "$expiry" = "0" ]; then
-			expiry_fmt="permanent"
-		else
-			expiry_fmt=$(date -d "@${expiry}" +"%D %H:%M:%S" 2>/dev/null || echo "$expiry")
-		fi
-		echo "$host|$mod|$ports|$banned_fmt|$expiry_fmt"
-	done <<< "$raw"
-}
-
 # state_bans_active_expired install_path now — output entries where EXPIRY>0 and EXPIRY<=now
 state_bans_active_expired() {
 	local install_path="$1" now="$2"
@@ -1649,30 +1631,6 @@ state_events_append() {
 	) 200>>"$events_file"
 }
 
-# DEPRECATED: use pressure_compute() — retained for backward compat callers.
-# state_events_count install_path host window now [mod] — count events in window
-# Counts events for host within window seconds of now.
-# If mod specified, counts only that service. Outputs count to stdout.
-state_events_count() {
-	local install_path="$1" host="$2" window="$3" now="$4"
-	local mod="${5:-}"
-	local events_file="$install_path/tmp/events.dat"
-	local cutoff=$((now - window))
-	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
-		echo "0"
-		return 0
-	fi
-	if [ -n "$mod" ]; then
-		awk -v cutoff="$cutoff" -v host="$host" -v mod="$mod" \
-			'$1+0 >= cutoff && $2 == host && $3 == mod { c++ } END { print c+0 }' \
-			"$events_file"
-	else
-		awk -v cutoff="$cutoff" -v host="$host" \
-			'$1+0 >= cutoff && $2 == host { c++ } END { print c+0 }' \
-			"$events_file"
-	fi
-}
-
 # state_events_prune install_path window now [max_lines] — remove old events
 # Removes events older than window. Safety cap at max_lines (default 5000).
 state_events_prune() {
@@ -1690,24 +1648,6 @@ state_events_prune() {
 		mv "$events_file.new" "$events_file"
 		chmod 600 "$events_file"
 	) 200>>"$events_file"
-}
-
-# count_failures host hosts_parsed install_path window now mod — count windowed failures
-# Replacement for count_attacks():
-# DEPRECATED: use record_and_score() — retained for backward compat callers.
-#   1. Count host occurrences in hosts_parsed (grep -cxF)
-#   2. Append that many timestamped events
-#   3. Count per-service events within window
-#   4. Return the windowed count
-count_failures() {
-	local host="$1" hosts_parsed="$2" install_path="$3"
-	local window="$4" now="$5" mod="$6"
-	local count
-	count=$(echo "$hosts_parsed" | grep -cxF "$host")
-	if [ "$count" -gt 0 ]; then
-		state_events_append "$install_path" "$now" "$host" "$mod" "$count"
-	fi
-	state_events_count "$install_path" "$host" "$window" "$now" "$mod"
 }
 
 # --- Pressure scoring functions ---

@@ -1,4 +1,8 @@
 2.0.1:
+[Change] Remove dead deprecated functions state_bans_active_list(),
+      state_events_count(), and count_failures(); all superseded by
+      list_bans(), pressure_compute(), and record_and_score() respectively;
+      20 dead-code tests removed, 3 rewritten to use current APIs (F-041)
 [Fix] uninstall.sh: clean up custom BFD_LOG_PATH on uninstall; previously
       only the default /var/log/bfd_log was removed, orphaning custom log
       files; uses grep+sed (no eval/source) for safe extraction (F-072)
