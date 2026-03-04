@@ -52,6 +52,20 @@ else
 fi
 unset _elog_lib_path _elog_lib_dir
 
+# Source alert library (template engine, formatting, delivery)
+_alert_lib_path="${INSTALL_PATH:-/usr/local/bfd}/alert_lib.sh"
+if [ -f "$_alert_lib_path" ]; then
+	# shellcheck disable=SC1090,SC1091
+	. "$_alert_lib_path"
+else
+	_alert_lib_dir="${BASH_SOURCE[0]%/*}"
+	if [ -f "$_alert_lib_dir/alert_lib.sh" ]; then
+		# shellcheck disable=SC1091
+		. "$_alert_lib_dir/alert_lib.sh"
+	fi
+fi
+unset _alert_lib_path _alert_lib_dir
+
 # _bfd_journal_register_all: populate journal filter mappings for all BFD rules
 # Wrapped in a function so reload_watch can re-register after clearing arrays
 _bfd_journal_register_all() {

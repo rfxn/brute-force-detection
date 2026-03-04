@@ -2,6 +2,12 @@
 
 -- New Features --
 
+[New] Alert engine library (alert_lib.sh): safe {{VAR}} template renderer via
+      awk ENVIRON substitution (no shell sourcing), HTML entity escaping,
+      credential-redacting log sanitizer, IP reputation link builder
+      (AbuseIPDB, Shodan, VirusTotal, IPinfo, GreyNoise), ASCII pressure bar
+      visualization, color helpers for ban severity and pressure level,
+      Unicode country flag emoji from 2-letter codes
 [New] Pressure-to-response scoring model: exponential-decay scoring replaces
       fixed count thresholds; events add weighted pressure per rule, pressure
       decays via configurable half-life, bans fire when accumulated pressure
