@@ -60,12 +60,14 @@ install(){
         chmod 640 "$INSPATH/tlog_lib.sh"
         chmod 750 "$INSPATH/bfd"
 	chmod 640 "$INSPATH/elog_lib.sh"
+	chmod 640 "$INSPATH/alert_lib.sh"
 	chmod 750 "$INSPATH/update-ipcountry.sh"
 	chmod 750 "$INSPATH/rules"
 	chmod 640 "$INSPATH"/rules/*
 	chmod 750 "$INSPATH/tmp"
 	chmod 750 "$INSPATH/stats"
-	chmod 640 "$INSPATH/alert.bfd"
+	chmod 750 "$INSPATH/alert"
+	chmod 640 "$INSPATH"/alert/*
 	mkdir -p "$(dirname "$BINPATH")"
         ln -fs "$INSPATH/bfd" "$BINPATH"
 	if [ -f "uninstall.sh" ]; then

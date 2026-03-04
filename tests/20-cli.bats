@@ -220,7 +220,7 @@ teardown() {
 	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
 	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
-	assert_output --partial "2 failures"
+	assert_output --partial "Failures (24h): 2"
 }
 
 @test "search_ip: shows attack pool triggers" {
@@ -228,7 +228,7 @@ teardown() {
 	echo "1700000001 192.0.2.1 sshd" >> "$INSTALL_PATH/stats/attack.pool"
 	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
-	assert_output --partial "2 total triggers"
+	assert_output --partial "2 failures across 2 bans"
 }
 
 @test "search_ip: shows pressure score" {

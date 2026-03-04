@@ -49,7 +49,7 @@ sed -i \
     -e 's|\$INSTALL_PATH/rules|/usr/share/bfd/rules|' \
     -e 's|\$INSTALL_PATH/tlog|/usr/lib/bfd/tlog|' \
     -e 's|\$INSTALL_PATH/tmp|/var/lib/bfd/tmp|' \
-    -e 's|\$INSTALL_PATH/alert\.bfd|/usr/lib/bfd/alert.bfd|' \
+    -e 's|\$INSTALL_PATH/alert"|/usr/lib/bfd/alert"|' \
     -e 's|\$INSTALL_PATH/exclude\.files|/etc/bfd/exclude.files|' \
     -e 's|\$INSTALL_PATH/lock\.utime|/var/lib/bfd/lock.utime|' \
     -e 's|\$INSTALL_PATH/pressure\.conf|/etc/bfd/pressure.conf|' \
@@ -85,7 +85,11 @@ install -D -m 644 files/bfd.lib.sh %{buildroot}/usr/lib/bfd/bfd.lib.sh
 install -D -m 644 files/tlog_lib.sh %{buildroot}/usr/lib/bfd/tlog_lib.sh
 install -D -m 644 files/elog_lib.sh %{buildroot}/usr/lib/bfd/elog_lib.sh
 install -D -m 755 files/tlog %{buildroot}/usr/lib/bfd/tlog
-install -D -m 644 files/alert.bfd %{buildroot}/usr/lib/bfd/alert.bfd
+install -D -m 644 files/alert_lib.sh %{buildroot}/usr/lib/bfd/alert_lib.sh
+install -d -m 755 %{buildroot}/usr/lib/bfd/alert
+for tpl in files/alert/*.tpl; do
+    install -m 644 "$tpl" %{buildroot}/usr/lib/bfd/alert/
+done
 install -D -m 755 files/update-ipcountry.sh %{buildroot}/usr/lib/bfd/update-ipcountry.sh
 install -D -m 755 importconf %{buildroot}/usr/lib/bfd/importconf
 
@@ -142,7 +146,8 @@ ln -s /usr/lib/bfd/bfd.lib.sh %{buildroot}%{legacy_path}/bfd.lib.sh
 ln -s /usr/lib/bfd/tlog_lib.sh %{buildroot}%{legacy_path}/tlog_lib.sh
 ln -s /usr/lib/bfd/elog_lib.sh %{buildroot}%{legacy_path}/elog_lib.sh
 ln -s /usr/lib/bfd/tlog %{buildroot}%{legacy_path}/tlog
-ln -s /usr/lib/bfd/alert.bfd %{buildroot}%{legacy_path}/alert.bfd
+ln -s /usr/lib/bfd/alert_lib.sh %{buildroot}%{legacy_path}/alert_lib.sh
+ln -s /usr/lib/bfd/alert %{buildroot}%{legacy_path}/alert
 ln -s /usr/lib/bfd/update-ipcountry.sh %{buildroot}%{legacy_path}/update-ipcountry.sh
 ln -s /usr/lib/bfd/importconf %{buildroot}%{legacy_path}/importconf
 ln -s /etc/bfd/conf.bfd %{buildroot}%{legacy_path}/conf.bfd
@@ -250,7 +255,8 @@ fi
 /usr/lib/bfd/tlog_lib.sh
 /usr/lib/bfd/elog_lib.sh
 /usr/lib/bfd/tlog
-/usr/lib/bfd/alert.bfd
+/usr/lib/bfd/alert_lib.sh
+/usr/lib/bfd/alert/
 /usr/lib/bfd/update-ipcountry.sh
 /usr/lib/bfd/importconf
 %config(noreplace) /etc/bfd/conf.bfd
@@ -281,7 +287,8 @@ fi
 %{legacy_path}/tlog_lib.sh
 %{legacy_path}/elog_lib.sh
 %{legacy_path}/tlog
-%{legacy_path}/alert.bfd
+%{legacy_path}/alert_lib.sh
+%{legacy_path}/alert
 %{legacy_path}/update-ipcountry.sh
 %{legacy_path}/importconf
 %{legacy_path}/conf.bfd

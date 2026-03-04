@@ -48,6 +48,29 @@ EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
 # log lines from the offending service included in each alert; must be > 0
 EMAIL_LOGLINES="50"
 
+# email body format [text = plain text, html = HTML only, both = multipart text+HTML]
+# text uses 'mail' command; html/both require 'sendmail' (falls back to text if missing)
+EMAIL_FORMAT="text"
+
+# email digest mode [cycle = one email per run, timed = accumulate and send on interval]
+EMAIL_DIGEST="cycle"
+
+# digest flush interval in seconds (only used when EMAIL_DIGEST="timed")
+EMAIL_DIGEST_INTERVAL="900"
+
+# IP reputation lookup links included in alerts (comma-separated)
+# available: abuseipdb, shodan, virustotal, ipinfo, greynoise
+EMAIL_REPUTATION_LINKS=""
+
+# --- SMTP Relay (optional — leave empty to use local MTA) ---
+# SMTP relay server URL (e.g., smtps://smtp.gmail.com:465, smtp://relay.example.com:587)
+SMTP_RELAY=""
+# sender address for relay mode (required when SMTP_RELAY is set)
+SMTP_FROM=""
+# SMTP authentication credentials (required when SMTP_RELAY is set)
+SMTP_USER=""
+SMTP_PASS=""
+
 # =============================================
 # Banning
 # =============================================
@@ -183,3 +206,15 @@ LOG_LEVEL="1"
 # ban/unban command retry count with exponential backoff (default 2)
 # set to 0 to disable retries (useful for testing)
 #BAN_RETRY_COUNT="2"
+
+# =============================================
+# Attack Pool (Long-term History)
+# =============================================
+
+# how long to retain attack pool entries in days (default 1 year)
+# entries older than this are pruned daily; 0 = no age limit (size cap still applies)
+APOOL_RETENTION_DAYS="365"
+
+# maximum attack pool entries (safety cap for high-volume servers)
+# oldest entries are dropped when this limit is reached; 0 = no limit
+APOOL_MAX_LINES="500000"

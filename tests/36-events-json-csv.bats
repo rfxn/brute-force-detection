@@ -16,7 +16,6 @@ bfd_load_function _apool_report_csv
 bfd_load_function _apool_service_summary_awk
 bfd_load_function _apool_service_summary_json
 bfd_load_function _apool_service_summary_csv
-bfd_load_function _apool_prepare_weekly
 bfd_load_function apool_list_json
 bfd_load_function apool_list_csv
 
@@ -69,7 +68,7 @@ teardown() {
 	assert_output --partial '"ip": "192.0.2.10"'
 	assert_output --partial '"pressure":'
 	assert_output --partial '"pressure_trip": 20'
-	assert_output --partial '"events": 5'
+	assert_output --partial '"count": 5'
 	assert_output --partial '"services": ["sshd"]'
 	assert_output --partial '"first_seen":'
 	assert_output --partial '"last_seen":'
@@ -112,7 +111,7 @@ teardown() {
 @test "events_dashboard_csv: header present" {
 	run events_dashboard_csv "$INSTALL_PATH"
 	assert_success
-	assert_output --partial "ip,pressure,pressure_trip,events,services,first_seen,last_seen,status"
+	assert_output --partial "ip,pressure,pressure_trip,count,services,first_seen,last_seen,status"
 }
 
 @test "events_dashboard_csv: empty returns header only" {
@@ -176,7 +175,7 @@ teardown() {
 @test "events_ip_csv: header present" {
 	run events_ip_csv "$INSTALL_PATH" "192.0.2.10"
 	assert_success
-	assert_output --partial "ip,pressure,pressure_trip,half_life,service,weight,events,service_pressure,first_seen,last_seen,status"
+	assert_output --partial "ip,pressure,pressure_trip,half_life,service,weight,count,service_pressure,first_seen,last_seen,status"
 }
 
 @test "events_ip_csv: one row per service" {
@@ -224,7 +223,7 @@ teardown() {
 	run events_cidr_json "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
 	assert_output --partial '"match_count": 2'
-	assert_output --partial '"total_events": 5'
+	assert_output --partial '"total_count": 5'
 }
 
 @test "events_cidr_json: invalid CIDR returns error" {
@@ -238,7 +237,7 @@ teardown() {
 @test "events_cidr_csv: header present" {
 	run events_cidr_csv "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
-	assert_output --partial "ip,pressure,pressure_trip,events,services,first_seen,last_seen,status"
+	assert_output --partial "ip,pressure,pressure_trip,count,services,first_seen,last_seen,status"
 }
 
 @test "events_cidr_csv: data rows present" {
@@ -265,9 +264,10 @@ teardown() {
 	assert_output --partial '"pressure_trip":'
 	assert_output --partial '"ban_history_24h":'
 	assert_output --partial '"ban_history_total":'
-	assert_output --partial '"events_24h":'
+	assert_output --partial '"count_24h":'
 	assert_output --partial '"services":'
 	assert_output --partial '"attack_pool_triggers":'
+	assert_output --partial '"attack_pool_failures":'
 }
 
 @test "search_ip_json: invalid IP returns error" {
@@ -290,23 +290,24 @@ teardown() {
 @test "search_ip_csv: header and single row" {
 	run search_ip_csv "$INSTALL_PATH" "192.0.2.10"
 	assert_success
-	assert_output --partial "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers"
+	assert_output --partial "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,count_24h,first_seen,last_seen,attack_pool_triggers,attack_pool_failures"
 	[ "$(echo "$output" | wc -l)" -eq 2 ]
 }
 
 # --- _apool_report_json ---
 
-@test "_apool_report_json: formats entries as JSON array with pressure" {
+@test "_apool_report_json: formats entries as JSON array with pressure and country" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
 	echo "1000 192.0.2.1 sshd" >> "$pool"
 	echo "1001 192.0.2.1 sshd" >> "$pool"
 	run _apool_report_json "$pool"
 	assert_success
-	assert_output --partial '"events": 2'
+	assert_output --partial '"count": 2'
 	assert_output --partial '"ip": "192.0.2.1"'
 	assert_output --partial '"rules": ["sshd"]'
 	assert_output --partial '"pressure":'
 	assert_output --partial '"pressure_trip":'
+	assert_output --partial '"country":'
 }
 
 @test "_apool_report_json: empty pool returns empty array" {
@@ -326,7 +327,7 @@ teardown() {
 	echo "1000 192.0.2.1 sshd" >> "$pool"
 	run _apool_report_csv "$pool"
 	assert_success
-	assert_output --partial "events,ip,pressure,pressure_trip,first_seen,last_seen,rules,status"
+	assert_output --partial "count,ip,pressure,pressure_trip,country,first_seen,last_seen,rules,status"
 	assert_output --partial "192.0.2.1"
 }
 
@@ -340,7 +341,7 @@ teardown() {
 	run _apool_service_summary_json "$pool"
 	assert_success
 	assert_output --partial '"service": "sshd"'
-	assert_output --partial '"events": 2'
+	assert_output --partial '"count": 2'
 	assert_output --partial '"unique_ips": 2'
 }
 
@@ -351,7 +352,7 @@ teardown() {
 	echo "1000 192.0.2.1 sshd" >> "$pool"
 	run _apool_service_summary_csv "$pool"
 	assert_success
-	assert_output --partial "service,events,unique_ips"
+	assert_output --partial "service,count,unique_ips"
 	assert_output --partial "sshd,1,1"
 }
 
@@ -363,18 +364,20 @@ teardown() {
 	run apool_list_json
 	assert_success
 	# pool file exists but empty: still outputs full JSON structure
-	assert_output --partial '"today":'
+	assert_output --partial '"last_24h":'
 	assert_output --partial '"services":'
 }
 
-@test "apool_list_json: has today, services, this_week sections" {
+@test "apool_list_json: has last_24h, services, last_7d sections" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 sshd" >> "$APOOL_LIST"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
 	run apool_list_json
 	assert_success
-	assert_output --partial '"today":'
+	assert_output --partial '"last_24h":'
 	assert_output --partial '"services":'
-	assert_output --partial '"this_week":'
+	assert_output --partial '"last_7d":'
 }
 
 @test "apool_list_json: search mode has search and results" {
@@ -390,12 +393,14 @@ teardown() {
 
 @test "apool_list_csv: sections labeled" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 sshd" >> "$APOOL_LIST"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
 	run apool_list_csv
 	assert_success
-	assert_output --partial "# today"
+	assert_output --partial "# last_24h"
 	assert_output --partial "# services"
-	assert_output --partial "# this_week"
+	assert_output --partial "# last_7d"
 }
 
 # --- events_cidr_json: temp file cleanup ---

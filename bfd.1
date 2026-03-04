@@ -240,7 +240,7 @@ is run with no arguments, a short summary of common commands is shown instead.
 .SH CONFIGURATION
 Configuration is in
 .BR conf.bfd ,
-organized into six sections.
+organized into eight sections.
 The file is sourced as bash; all values are shell variables.
 Additional tuning variables with sensible defaults
 .RB ( LOG_SOURCE ", " LOCK_FILE_TIMEOUT ", " BAN_RETRY_COUNT ", " OUTPUT_SYSLOG_FILE )
@@ -276,6 +276,70 @@ Alert subject line; $HOSTNAME expands at runtime.
 .TP
 .B EMAIL_LOGLINES
 Log lines from the offending service included in each alert (default: 50).
+.TP
+.B EMAIL_FORMAT
+Email body format:
+.B text
+(plain text via
+.BR mail ),
+.B html
+(HTML only via
+.BR sendmail ),
+or
+.B both
+(multipart text+HTML via
+.BR sendmail ).
+Falls back to text-only if
+.B sendmail
+is not available (default: text).
+.TP
+.B EMAIL_DIGEST
+Email digest mode:
+.B cycle
+(one email per detection run) or
+.B timed
+(accumulate across runs and send on interval).
+Timed mode reduces email volume on active servers (default: cycle).
+.TP
+.B EMAIL_DIGEST_INTERVAL
+Digest flush interval in seconds when
+.BR EMAIL_DIGEST = timed
+(default: 900 = 15 minutes).
+.TP
+.B EMAIL_REPUTATION_LINKS
+IP reputation lookup links included in alerts, comma-separated.
+Available providers:
+.BR abuseipdb ", " shodan ", " virustotal ", " ipinfo ", " greynoise .
+Leave empty to disable (default: empty).
+.SS SMTP Relay
+Optional authenticated SMTP relay for outbound email delivery.
+Leave
+.B SMTP_RELAY
+empty to use the local MTA (default).
+.TP
+.B SMTP_RELAY
+SMTP relay server URL.
+Examples:
+.B smtps://smtp.gmail.com:465
+(implicit TLS),
+.B smtp://relay.example.com:587
+(STARTTLS),
+.B smtp://relay.internal:25
+(plain, internal relays).
+.TP
+.B SMTP_FROM
+Sender address for relay mode (required when
+.B SMTP_RELAY
+is set).
+.TP
+.B SMTP_USER
+SMTP authentication username.
+.TP
+.B SMTP_PASS
+SMTP authentication password.
+Stored in
+.B conf.bfd
+(permissions 640, root-owned).
 .SS Banning
 .TP
 .B FIREWALL
@@ -384,6 +448,54 @@ Debug messages are stdout\-only and controlled by
 .B \-\-verbose
 rather than
 .BR LOG_LEVEL .
+.SH EMAIL TEMPLATES
+Alert emails are rendered from customizable template partials in the
+.B alert/
+directory under the BFD install path.
+Templates use
+.B {{VAR}}
+mustache-style placeholders replaced at render time via a safe
+awk-based engine (no shell code execution).
+.PP
+Eight partials are provided (4 plain text + 4 HTML):
+.RS 4
+.nf
+text.header.tpl   \(em banner, hostname, timestamp
+text.entry.tpl    \(em per-ban detail block
+text.summary.tpl  \(em digest summary statistics
+text.footer.tpl   \(em version, project link
+html.header.tpl   \(em HTML banner and hostname bar
+html.entry.tpl    \(em per-ban card with pressure bar
+html.summary.tpl  \(em aggregate statistics table
+html.footer.tpl   \(em HTML footer and closing tags
+.fi
+.RE
+.PP
+The entry template is rendered once per ban.
+The summary template is included only when multiple bans are batched
+in one email.
+Users can edit any partial without bash expertise; only
+.B {{VAR}}
+substitution is supported, not arbitrary code.
+.PP
+To customize templates, edit the files directly.
+On upgrade,
+.B importconf
+preserves user-modified partials by comparing against shipped defaults.
+.PP
+Available template variables include:
+.B {{HOSTNAME}}\fR,
+.B {{TIMESTAMP}}\fR,
+.B {{HOST}}\fR,
+.B {{SERVICE}}\fR,
+.B {{PRESSURE}}\fR,
+.B {{BAN_TYPE}}\fR,
+.B {{BAN_DURATION}}\fR,
+.B {{COUNTRY_CODE}}\fR,
+.B {{SOURCE_LOGS}}\fR,
+.B {{REPUTATION_LINKS_TEXT}}\fR,
+and others.
+See the shipped template files for the full set.
 .SH PRESSURE MODEL
 BFD uses a three-tier pressure precedence system:
 .IP 1. 3
@@ -491,8 +603,11 @@ Track log \(em byte-offset log reader CLI wrapper.
 .I /usr/local/bfd/update-ipcountry.sh
 Script to download and update the IP-to-country database.
 .TP
-.I /usr/local/bfd/alert.bfd
-Email alert template.
+.I /usr/local/bfd/alert_lib.sh
+Email alert library (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/alert/
+Email template partials directory (8 files: text.*.tpl, html.*.tpl).
 .TP
 .I /usr/local/bfd/rules/
 Service rule files (42 rules).
@@ -557,8 +672,8 @@ migrates: user configuration (conf.bfd values), legacy variable name
 translations (TRIG \(-> PRESSURE_TRIP, BAN_DURATION \(-> BAN_TTL, etc.),
 per\-rule overrides (thresholds.conf \(-> pressure.conf), firewall backend
 detection, ban state (bans.active, bans.history, events.dat), log tracking
-state (tlog byte\-offsets, journal cursors), custom alert templates, and
-ignore lists.
+state (tlog byte\-offsets, journal cursors), user\-customized alert template
+partials, and ignore lists.
 .PP
 Post\-upgrade verification:
 .RS 4

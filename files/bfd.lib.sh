@@ -52,6 +52,20 @@ else
 fi
 unset _elog_lib_path _elog_lib_dir
 
+# Source alert library (template engine, formatting, delivery)
+_alert_lib_path="${INSTALL_PATH:-/usr/local/bfd}/alert_lib.sh"
+if [ -f "$_alert_lib_path" ]; then
+	# shellcheck disable=SC1090,SC1091
+	. "$_alert_lib_path"
+else
+	_alert_lib_dir="${BASH_SOURCE[0]%/*}"
+	if [ -f "$_alert_lib_dir/alert_lib.sh" ]; then
+		# shellcheck disable=SC1091
+		. "$_alert_lib_dir/alert_lib.sh"
+	fi
+fi
+unset _alert_lib_path _alert_lib_dir
+
 # _bfd_journal_register_all: populate journal filter mappings for all BFD rules
 # Wrapped in a function so reload_watch can re-register after clearing arrays
 _bfd_journal_register_all() {
@@ -714,6 +728,71 @@ validate_config() {
 		echo "error: EMAIL_LOGLINES must be a positive integer (got '${EMAIL_LOGLINES:-}')." >&2
 		return $EXIT_CONFIG_ERROR
 	fi
+	# EMAIL_FORMAT: must be "text", "html", or "both"
+	local _ef="${EMAIL_FORMAT:-text}"
+	if [ "$_ef" != "text" ] && [ "$_ef" != "html" ] && [ "$_ef" != "both" ]; then
+		echo "error: EMAIL_FORMAT must be text, html, or both (got '${EMAIL_FORMAT:-}')." >&2
+		return $EXIT_CONFIG_ERROR
+	fi
+	# EMAIL_DIGEST: must be "cycle" or "timed"
+	local _ed="${EMAIL_DIGEST:-cycle}"
+	if [ "$_ed" != "cycle" ] && [ "$_ed" != "timed" ]; then
+		echo "error: EMAIL_DIGEST must be cycle or timed (got '${EMAIL_DIGEST:-}')." >&2
+		return $EXIT_CONFIG_ERROR
+	fi
+	# EMAIL_DIGEST_INTERVAL: positive integer when EMAIL_DIGEST=timed
+	if [ "$_ed" = "timed" ]; then
+		if ! [[ "${EMAIL_DIGEST_INTERVAL:-900}" =~ $int_pattern ]] || [ "${EMAIL_DIGEST_INTERVAL:-900}" -eq 0 ]; then
+			echo "error: EMAIL_DIGEST_INTERVAL must be a positive integer (got '${EMAIL_DIGEST_INTERVAL:-}')." >&2
+			return $EXIT_CONFIG_ERROR
+		fi
+	fi
+	# EMAIL_REPUTATION_LINKS: comma-separated keys from known set (warning only)
+	if [ -n "${EMAIL_REPUTATION_LINKS:-}" ]; then
+		local _rl _rl_ifs_save="$IFS" _rl_known="abuseipdb shodan virustotal ipinfo greynoise"
+		IFS=','
+		for _rl in $EMAIL_REPUTATION_LINKS; do
+			IFS="$_rl_ifs_save"
+			_rl="${_rl## }"
+			_rl="${_rl%% }"
+			if [ -n "$_rl" ]; then
+				local _rl_valid=0 _rl_k
+				for _rl_k in $_rl_known; do
+					if [ "$_rl" = "$_rl_k" ]; then
+						_rl_valid=1
+						break
+					fi
+				done
+				if [ "$_rl_valid" -eq 0 ]; then
+					echo "warning: EMAIL_REPUTATION_LINKS contains unknown provider '$_rl'." >&2
+				fi
+			fi
+		done
+		IFS="$_rl_ifs_save"
+	fi
+	# SMTP_RELAY: must contain "://" when set
+	if [ -n "${SMTP_RELAY:-}" ]; then
+		case "$SMTP_RELAY" in
+			*"://"*) ;;
+			*)
+				echo "error: SMTP_RELAY must be a URL with protocol (got '$SMTP_RELAY')." >&2
+				return $EXIT_CONFIG_ERROR
+				;;
+		esac
+		# SMTP_FROM: required when SMTP_RELAY is set
+		if [ -z "${SMTP_FROM:-}" ]; then
+			echo "error: SMTP_FROM must be set when SMTP_RELAY is configured." >&2
+			return $EXIT_CONFIG_ERROR
+		fi
+		if ! validate_email "$SMTP_FROM"; then
+			echo "error: SMTP_FROM is not a valid email address (got '$SMTP_FROM')." >&2
+			return $EXIT_CONFIG_ERROR
+		fi
+		# SMTP_USER/SMTP_PASS: warn if not set (some relays are auth-free)
+		if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
+			echo "warning: SMTP_USER/SMTP_PASS not set; relay may fail if authentication is required." >&2
+		fi
+	fi
 	# LOG_FORMAT: must be "classic" or "json"
 	local _lf="${LOG_FORMAT:-classic}"
 	if [ "$_lf" != "classic" ] && [ "$_lf" != "json" ]; then
@@ -1336,7 +1415,7 @@ _execute_fw_with_retry() {
 # returns 0 on success, ban command exit code on failure
 execute_ban() {
 	local host="$1" mod="$2" dry_run="$3" ports="${4:-all}"
-	# set globals needed by alert.bfd template and custom backend
+	# set globals needed by alert templates and custom backend
 	ATTACK_HOST="$host"
 	MOD="$mod"
 	PORTS="$ports"
@@ -1539,7 +1618,9 @@ manual_ban() {
 
 # --- State file I/O functions ---
 # State file formats:
-#   attack.pool:  "UTIME IP MOD" — persistent attack history
+#   attack.pool:  "UTIME IP MOD COUNT CC ACTION DURATION PORTS PRESSURE TRIP_TYPE"
+#     10-field enriched format — backward compatible (old 3-field entries read as:
+#     COUNT=1, CC=--, ACTION=ban, DURATION=0, PORTS=all, PRESSURE=0, TRIP_TYPE=service)
 
 # state_init install_path — ensure state dirs/files exist with correct perms
 state_init() {
@@ -1566,13 +1647,16 @@ state_init() {
 	fi
 }
 
-# state_pool_append install_path utime host mod — append to attack.pool
+# state_pool_append install_path utime host mod [count cc action duration ports pressure trip_type]
 state_pool_append() {
 	local install_path="$1" utime="$2" host="$3" mod="$4"
+	local count="${5:-1}" cc="${6:---}" action="${7:-ban}"
+	local duration="${8:-0}" ports="${9:-all}" pressure="${10:-0}"
+	local trip_type="${11:-service}"
 	local pool_file="$install_path/stats/attack.pool"
 	(
 		flock -x 200
-		echo "$utime $host $mod" >> "$pool_file"
+		echo "$utime $host $mod $count $cc $action $duration $ports $pressure $trip_type" >> "$pool_file"
 	) 200>>"$pool_file"
 }
 
@@ -1693,6 +1777,30 @@ state_events_prune() {
 		mv "$events_file.new" "$events_file"
 		chmod 600 "$events_file"
 	) 200>>"$events_file"
+}
+
+# state_pool_prune install_path [retention_days] [max_lines] — age-based pool pruning
+# Removes entries older than retention_days. Safety cap at max_lines.
+# Preserves file inode via cat-overwrite (important for flock handles).
+state_pool_prune() {
+	local install_path="$1" retention_days="${2:-365}" max_lines="${3:-500000}"
+	local pool_file="$install_path/stats/attack.pool"
+	[ ! -f "$pool_file" ] || [ ! -s "$pool_file" ] && return 0
+	local cutoff=0
+	if [ "$retention_days" -gt 0 ] 2>/dev/null; then
+		cutoff=$(( $(date +%s) - (retention_days * 86400) ))
+	fi
+	(
+		flock -x 200
+		if [ "$cutoff" -gt 0 ]; then
+			awk -v cutoff="$cutoff" '$1+0 >= cutoff' "$pool_file" \
+				| tail -n "$max_lines" > "$pool_file.new"
+		else
+			tail -n "$max_lines" "$pool_file" > "$pool_file.new"
+		fi
+		cat "$pool_file.new" > "$pool_file"   # preserves inode for flock
+		rm -f "$pool_file.new"
+	) 200>>"$pool_file"
 }
 
 # --- Pressure scoring functions ---
@@ -1988,7 +2096,15 @@ check_distributed() {
 			ban_result=$(record_ban "$install_path" "$now" "$subnet" "$mod" "all" "subnet")
 			local ban_expiry ban_action recent_bans
 			IFS='|' read -r ban_expiry ban_action recent_bans <<< "$ban_result"
-			state_pool_append "$install_path" "$now" "$subnet" "$mod"
+			local _dist_duration="-1"
+			if [ "$ban_expiry" = "0" ]; then
+				_dist_duration="0"
+			else
+				_dist_duration=$((ban_expiry - now))
+			fi
+			state_pool_append "$install_path" "$now" "$subnet" "$mod" \
+				"$unique_count" "--" "$ban_action" "$_dist_duration" "all" \
+				"0" "subnet"
 			if [ "$EMAIL_ALERTS" = "1" ] && [ "$DRY_RUN" != "1" ]; then
 				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}||${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}|1" >> "$alerts_file"
 			fi
@@ -2232,17 +2348,72 @@ _hc_state() {
 
 # _hc_alerts — validate email alert configuration
 _hc_alerts() {
-	if [ "$EMAIL_ALERTS" = "1" ]; then
-		if command -v mail >/dev/null 2>&1; then
-			echo "[PASS] Email alerts: enabled (mail command found)"
-			_hc_pass=$((_hc_pass + 1))
-		else
-			echo "[WARN] Email alerts: enabled but 'mail' command not found"
-			_hc_warn=$((_hc_warn + 1))
-		fi
-	else
+	if [ "$EMAIL_ALERTS" != "1" ]; then
 		echo "[PASS] Email alerts: disabled"
 		_hc_pass=$((_hc_pass + 1))
+		return
+	fi
+	# mail command (local MTA)
+	if command -v mail >/dev/null 2>&1; then
+		echo "[PASS] Email alerts: enabled (mail command found)"
+		_hc_pass=$((_hc_pass + 1))
+	else
+		echo "[WARN] Email alerts: enabled but 'mail' command not found"
+		_hc_warn=$((_hc_warn + 1))
+	fi
+	# sendmail required for html/both formats
+	local _ef="${EMAIL_FORMAT:-text}"
+	if [ "$_ef" = "html" ] || [ "$_ef" = "both" ]; then
+		if command -v sendmail >/dev/null 2>&1; then
+			echo "[PASS] sendmail: found (required for EMAIL_FORMAT=$_ef)"
+			_hc_pass=$((_hc_pass + 1))
+		else
+			echo "[WARN] sendmail: not found (EMAIL_FORMAT=$_ef will fall back to text)"
+			_hc_warn=$((_hc_warn + 1))
+		fi
+	fi
+	# SMTP relay checks
+	if [ -n "${SMTP_RELAY:-}" ]; then
+		if command -v curl >/dev/null 2>&1; then
+			echo "[PASS] curl: found (required for SMTP relay)"
+			_hc_pass=$((_hc_pass + 1))
+		else
+			echo "[WARN] curl: not found (SMTP relay delivery will fail)"
+			_hc_warn=$((_hc_warn + 1))
+		fi
+		if [ -z "${SMTP_FROM:-}" ]; then
+			echo "[WARN] SMTP_FROM: not set (required for SMTP relay)"
+			_hc_warn=$((_hc_warn + 1))
+		fi
+		if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
+			echo "[WARN] SMTP credentials: SMTP_USER/SMTP_PASS not set"
+			_hc_warn=$((_hc_warn + 1))
+		fi
+	fi
+	# Alert template directory
+	local _atd="${ALERT_TEMPLATE_DIR:-}"
+	if [ -n "$_atd" ]; then
+		if [ -d "$_atd" ]; then
+			echo "[PASS] Alert templates: $_atd (exists)"
+			_hc_pass=$((_hc_pass + 1))
+			# check for all 8 template partials
+			local _tpl _tpl_missing=0
+			for _tpl in text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl \
+			            html.header.tpl html.entry.tpl html.summary.tpl html.footer.tpl; do
+				if [ ! -f "$_atd/$_tpl" ]; then
+					echo "[WARN] Alert template missing: $_tpl"
+					_hc_warn=$((_hc_warn + 1))
+					_tpl_missing=1
+				fi
+			done
+			if [ "$_tpl_missing" -eq 0 ]; then
+				echo "[PASS] Alert templates: all 8 partials present"
+				_hc_pass=$((_hc_pass + 1))
+			fi
+		else
+			echo "[WARN] Alert templates: $_atd (not found)"
+			_hc_warn=$((_hc_warn + 1))
+		fi
 	fi
 }
 
@@ -2300,156 +2471,24 @@ format_duration() {
 	echo "$result"
 }
 
-# format_alert_entry n total host mod ports pressure_scaled expiry action recent trip half_life weight
-# Format a single ban's detail block for email alerts.
-# Sets ATTACK_HOST, MOD, PORTS globals so $BAN_COMMAND_TEMPLATE expands correctly.
-format_alert_entry() {
-	local n="$1" total="$2" host="$3" mod="$4" ports="$5"
-	local pressure_scaled="$6" expiry="$7" action="$8" recent="$9"
-	shift 9
-	local trip="$1" half_life="$2" weight="${3:-1}"
-
-	if [ "$total" -gt 1 ]; then
-		echo "--- Ban $n of $total ---"
-		echo ""
-	fi
-
-	# set globals for BAN_COMMAND_TEMPLATE expansion
-	ATTACK_HOST="$host"
-	MOD="$mod"
-	PORTS="$ports"
-
-	local ban_type ban_detail=""
-	if [ "$action" = "escalate" ]; then
-		ban_type="Permanent (escalated from repeat offenses)"
-	elif [ "$expiry" = "0" ]; then
-		ban_type="Permanent"
-	else
-		local duration=$((expiry - UTIME))
-		if [ "$duration" -lt 0 ]; then
-			duration=0
-		fi
-		local base_duration="${BAN_TTL:-${BAN_DURATION:-0}}"
-		if [ "${BAN_ESCALATION:-none}" != "none" ] && [ "$recent" -gt 0 ] && [ "$duration" -gt "$base_duration" ]; then
-			ban_type="Temporary ($(format_duration "$duration"), escalated from $(format_duration "$base_duration"))"
-		else
-			ban_type="Temporary ($(format_duration "$duration"))"
-		fi
-		ban_detail=$(date -d "@${expiry}" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || echo "$expiry")
-	fi
-
-	local port_display="$ports"
-	if [ "$port_display" = "all" ]; then
-		port_display="all ports"
-	else
-		port_display="port $port_display"
-	fi
-
-	local pressure_display trip_display
-	pressure_display=$(pressure_format "$pressure_scaled")
-	trip_display=$(pressure_format $((trip * 1000)))
-
-	echo "  Host:       $host"
-	echo "  Service:    $mod ($port_display)"
-	echo "  Pressure:   ${pressure_display}/${trip_display} (weight $weight, half-life ${half_life}s)"
-	if [ -n "$ban_detail" ]; then
-		echo "  Ban:        $ban_type, expires $ban_detail"
-	else
-		echo "  Ban:        $ban_type"
-	fi
-	local esc_after="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}"
-	local esc_window="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
-	if [ "$esc_after" -gt 0 ]; then
-		echo "  History:    $recent previous ban(s) in ${esc_window}s (permanent at ${esc_after})"
-	fi
-	# reconstruct ban command display
-	local display_cmd
-	if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
-		display_cmd=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
-	else
-		display_cmd="fw_ban $host ($_FW_BACKEND)"
-	fi
-	echo "  Command:    $display_cmd"
-	echo ""
-}
-
-# format_alert_body alerts_file loglines — full email body content
-# Reads alerts_file, formats entries and log excerpts.
-# Output goes to stdout.
-format_alert_body() {
-	local alerts_file="$1" loglines="${2:-50}"
-	local entry_count=0
-
-	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
-		return 0
-	fi
-
-	entry_count=$(wc -l < "$alerts_file")
-
-	if [ "$entry_count" -gt 1 ]; then
-		echo "$entry_count hosts banned in this check cycle."
-	fi
-	echo ""
-
-	# format each entry
-	local n=0
-	local host mod ports count expiry action recent lp recipient trig trig_window weight
-	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window weight; do
-		[ -z "$host" ] && continue
-		n=$((n + 1))
-		format_alert_entry "$n" "$entry_count" "$host" "$mod" "$ports" \
-			"$count" "$expiry" "$action" "$recent" "$trig" "$trig_window" "${weight:-1}"
-	done < "$alerts_file"
-
-	# log section
-	local has_logs=0
-	n=0
-	# shellcheck disable=SC2034  # recipient: positional placeholder in read
-	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window weight; do
-		[ -z "$host" ] && continue
-		n=$((n + 1))
-		if [ -z "$lp" ] || [ ! -f "$lp" ]; then
-			if [ "$has_logs" -eq 0 ]; then
-				echo "  Source logs: not available (logs via systemd journal)"
-				has_logs=1
-			fi
-			continue
-		fi
-		has_logs=1
-		if [ "$entry_count" -gt 1 ]; then
-			echo "  Source logs from '$mod' [$host]:"
-		else
-			echo "  Source logs from '$mod':"
-		fi
-		tail -n 5000 "$lp" | grep -Fw "$host" | tail -n "$loglines" | \
-			sed -e 's/\([Pp]ass[a-z]*\)[=:][[:space:]]*[^ ]*/\1=<REDACTED>/g' \
-			    -e 's/\([Aa]uthorization:[[:space:]]*\).*/\1<REDACTED>/' \
-			    -e 's/^/  /'
-		echo ""
-	done < "$alerts_file"
-}
-
-# send_alerts alerts_file subject template loglines — orchestrate batched alert emails
-# Groups entries by RECIPIENT field, calls format_alert_body per recipient,
-# sources template and pipes to mail.
+# send_alerts alerts_file subject loglines — orchestrate batched alert emails
+# Groups entries by RECIPIENT field, renders text/HTML via alert_lib.sh pipeline,
+# delivers via local MTA or SMTP relay.
 send_alerts() {
-	local alerts_file="$1" subject="$2" template="$3" loglines="${4:-50}"
+	local alerts_file="$1" subject="$2" loglines="${3:-50}"
 
 	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
 		return 0
 	fi
 
-	# validate template safety before sourcing
-	if [ ! -f "$template" ]; then
-		elog warn "alert template '$template' not found, skipping alerts."
-		rm -f "$alerts_file"
+	# resolve template directory
+	local tpl_dir="${ALERT_TEMPLATE_DIR:-$INSTALL_PATH/alert}"
+	if [ ! -d "$tpl_dir" ] || [ ! -f "$tpl_dir/text.header.tpl" ]; then
+		elog warn "alert template directory '$tpl_dir' invalid, skipping alerts."
 		return 1
 	fi
-	if ! _check_file_safety "$template"; then
-		elog warn "alert template has unsafe ownership or permissions, skipping alerts."
-		rm -f "$alerts_file"
-		return 1
-	fi
+
+	local format="${EMAIL_FORMAT:-text}"
 
 	# get unique recipients (field 9)
 	local recipients
@@ -2466,46 +2505,68 @@ send_alerts() {
 		local alert_count
 		alert_count=$(wc -l < "$recip_file")
 
-		# set ALERT_COUNT and ALERT_ENTRIES for template (consumed by sourced alert.bfd)
-		# shellcheck disable=SC2034
-		ALERT_COUNT="$alert_count"
-		# shellcheck disable=SC2034
-		ALERT_ENTRIES=$(format_alert_body "$recip_file" "$loglines")
-
-		# set backward-compat globals for single-ban case
-		if [ "$alert_count" -eq 1 ]; then
-			local _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt
-			IFS='|' read -r _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt < "$recip_file"
-			ATTACK_HOST="$_host"
-			MOD="$_mod"
-			# backward compat: _count is pressure_scaled (e.g., 18400);
-			# old templates expect a count, so use whole pressure units
-			ATTACK_COUNT="$(( _count / 1000 ))"
-			if [ "$ATTACK_COUNT" -lt 1 ]; then ATTACK_COUNT=1; fi
-			LOG_FILE="$_lp"
-			LP="$_lp"  # backward compat for custom alert templates
-			PORTS="$_ports"
-			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
-				BAN_COMMAND=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
-			else
-				# shellcheck disable=SC2034  # consumed by sourced alert.bfd
-				BAN_COMMAND="fw_ban $_host ($_FW_BACKEND)"
-			fi
-		fi
-
 		# augment subject for multi-ban
 		local mail_subject="$subject"
 		if [ "$alert_count" -gt 1 ]; then
 			mail_subject="$subject ($alert_count bans)"
 		fi
 
-		# source template and pipe to mail
-		# shellcheck disable=SC1090  # template path is runtime-configured
-		if ! (. "$template") | mail -s "$mail_subject" "$recip" 2>/dev/null; then
-			elog error "alert email to $recip failed (mail command returned non-zero)."
+		# render text body
+		local text_file=""
+		if [ "$format" = "text" ] || [ "$format" = "both" ]; then
+			text_file=$(mktemp "${alerts_file}.text.XXXXXX")
+			_alert_render_text "$recip_file" "$tpl_dir" "$loglines" > "$text_file"
 		fi
 
-		rm -f "$recip_file"
+		# render HTML body
+		local html_file=""
+		if [ "$format" = "html" ] || [ "$format" = "both" ]; then
+			html_file=$(mktemp "${alerts_file}.html.XXXXXX")
+			_alert_render_html "$recip_file" "$tpl_dir" "$loglines" > "$html_file"
+		fi
+
+		# for text-only: html_file needed by relay path, render it too
+		if [ "$format" = "text" ] && [ -n "${SMTP_RELAY:-}" ]; then
+			html_file=$(mktemp "${alerts_file}.html.XXXXXX")
+			_alert_render_html "$recip_file" "$tpl_dir" "$loglines" > "$html_file"
+		fi
+		# for html-only: text_file needed as sendmail fallback
+		if [ "$format" = "html" ] && [ -z "$text_file" ]; then
+			text_file=$(mktemp "${alerts_file}.text.XXXXXX")
+			_alert_render_text "$recip_file" "$tpl_dir" "$loglines" > "$text_file"
+		fi
+
+		if _alert_send "$recip" "$mail_subject" "$text_file" "$html_file" "$format"; then
+			elog info "alert email sent to $recip ($alert_count ban(s), format=$format)."
+		else
+			elog error "alert email to $recip failed."
+		fi
+
+		# set backward-compat globals for single-ban case
+		# (needed by custom hooks or external integrations that read these after send_alerts)
+		if [ "$alert_count" -eq 1 ]; then
+			local _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt
+			IFS='|' read -r _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt < "$recip_file"
+			ATTACK_HOST="$_host"
+			MOD="$_mod"
+			# backward compat: _count is pressure_scaled (e.g., 18400);
+			# custom hooks expect a count, so use whole pressure units
+			ATTACK_COUNT="$(( _count / 1000 ))"
+			if [ "$ATTACK_COUNT" -lt 1 ]; then ATTACK_COUNT=1; fi
+			LOG_FILE="$_lp"
+			LP="$_lp"
+			PORTS="$_ports"
+			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
+				BAN_COMMAND=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
+			else
+				# shellcheck disable=SC2034  # consumed by custom hooks
+				BAN_COMMAND="fw_ban $_host ($_FW_BACKEND)"
+			fi
+		fi
+		# shellcheck disable=SC2034  # consumed by custom hooks
+		ALERT_COUNT="$alert_count"
+
+		rm -f "$recip_file" "$text_file" "$html_file"
 	done <<< "$recipients"
 }
 
@@ -2788,7 +2849,7 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
-	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_FORMAT LOG_LEVEL LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT PRESSURE_CONF"
+	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES EMAIL_FORMAT EMAIL_DIGEST EMAIL_DIGEST_INTERVAL EMAIL_REPUTATION_LINKS SMTP_RELAY SMTP_FROM ALERT_TEMPLATE_DIR LOG_FORMAT LOG_LEVEL LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT APOOL_RETENTION_DAYS APOOL_MAX_LINES PRESSURE_CONF"
 	if [ -n "$var" ]; then
 		# validate against whitelist
 		local _found=0 _v
@@ -2950,15 +3011,16 @@ _search_ip_data() {
 		fi
 	fi
 
-	# Attack pool
+	# Attack pool — sum failures (COUNT field) and count ban events (lines)
 	local pool_file="$install_path/stats/attack.pool"
-	local pool_count=0
+	local pool_triggers=0 pool_failures=0
 	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
-		pool_count=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
+		pool_triggers=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
+		pool_failures=$(awk -v ip="$ip" '$2 == ip { c += ($4+0 > 0 ? $4+0 : 1) } END {print c+0}' "$pool_file")
 	fi
 
 	# Output: D line (core data)
-	echo "D|$ban_ts|$ban_expiry|$hist_24h|$hist_total|$evt_count|$first_ts|$last_ts|$_gp_fmt|$trip|$half_life|$pool_count"
+	echo "D|$ban_ts|$ban_expiry|$hist_24h|$hist_total|$evt_count|$first_ts|$last_ts|$_gp_fmt|$trip|$half_life|$pool_triggers|$pool_failures"
 
 	# Output: E lines (per-service 24h event counts)
 	if [ -n "${evt_raw:-}" ]; then
@@ -2985,9 +3047,9 @@ search_ip() {
 	data=$(_search_ip_data "$install_path" "$ip") || return 1
 
 	# parse D line
-	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count
+	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures
 	d_line=$(echo "$data" | grep '^D|')
-	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count <<< "$d_line"
+	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures <<< "$d_line"
 
 	local now
 	now=$(date +"%s")
@@ -3026,7 +3088,7 @@ search_ip() {
 			[ "$_type" != "E" ] && continue
 			evt_svcs="${evt_svcs}${_svc}(${_cnt}) "
 		done <<< "$data"
-		echo "  Events (24h):   $evt_count failures across $evt_svcs"
+		echo "  Failures (24h): $evt_count across $evt_svcs"
 
 		# First/last seen
 		if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
@@ -3045,12 +3107,12 @@ search_ip() {
 			echo "                  ${_psvc}: ${_pfmt}/${trip}"
 		done <<< "$data"
 	else
-		echo "  Events (24h):   0"
+		echo "  Failures (24h): 0"
 	fi
 
 	# Attack pool
-	if [ "$pool_count" -gt 0 ] 2>/dev/null; then
-		echo "  Attack pool:    $pool_count total triggers"
+	if [ "$pool_triggers" -gt 0 ] 2>/dev/null; then
+		echo "  Attack pool:    $pool_failures failures across $pool_triggers bans"
 	fi
 }
 
@@ -3449,7 +3511,7 @@ events_dashboard() {
 
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.events.XXXXXX")
-	echo "#IP|PRESSURE|EVENTS|SERVICES|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
+	echo "#IP|PRESSURE|COUNT|SERVICES|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
 	_events_dashboard_awk "$events_file" "$now" "$half_life" "$trip" | \
 	while IFS='|' read -r _sort_key ip pw pf _trip cnt svcs first_ts last_ts; do
 		local first_fmt last_fmt ban_status
@@ -3492,6 +3554,57 @@ _events_ip_awk() {
 		}
 		printf "H|%d|%d|%d\n", int(gp * 1000), gfirst, glast
 	}' "$events_file"
+}
+
+# _events_rule_log_file rule — extract LOG_FILE from a rule without detection
+# Sources the rule in a subshell with _rule_tlog() no-op'd, so the detection
+# pipeline does not execute. Outputs the LOG_FILE value if set.
+# Returns 1 if the rule file does not exist or LOG_FILE is empty.
+_events_rule_log_file() {
+	local rule="$1"
+	local rule_file="${RULES_PATH:-}/rules/$rule"
+	# if RULES_PATH already includes the project root, try both forms
+	if [ ! -f "$rule_file" ]; then
+		rule_file="${RULES_PATH:-}/$rule"
+	fi
+	[ ! -f "$rule_file" ] && return 1
+	(
+		# no-op the tlog function so sourcing the rule doesn't run detection
+		_rule_tlog() { :; }
+		extract_hosts() { :; }
+		# shellcheck disable=SC1090,SC1091
+		. "$rule_file" 2>/dev/null
+		[ -n "${LOG_FILE:-}" ] && echo "$LOG_FILE"
+	)
+}
+
+# _events_rule_patterns rule — extract detection patterns from a rule file
+# Sources the rule in a subshell with a custom extract_hosts() that prints the
+# pattern arguments (one per line) instead of processing log data.
+# Returns 1 if the rule file does not exist or no patterns are found.
+_events_rule_patterns() {
+	local rule="$1"
+	local rule_file="${RULES_PATH:-}/rules/$rule"
+	if [ ! -f "$rule_file" ]; then
+		rule_file="${RULES_PATH:-}/$rule"
+	fi
+	[ ! -f "$rule_file" ] && return 1
+	local patterns
+	patterns=$(
+		# no-op the tlog function so sourcing the rule doesn't run detection
+		_rule_tlog() { :; }
+		# override extract_hosts to print its pattern arguments
+		extract_hosts() {
+			local _p
+			for _p in "$@"; do
+				printf '%s\n' "$_p"
+			done
+		}
+		# shellcheck disable=SC1090,SC1091
+		. "$rule_file" 2>/dev/null
+	)
+	[ -z "$patterns" ] && return 1
+	echo "$patterns"
 }
 
 # _events_ip_data install_path ip — shared data gatherer for events_ip triplet
@@ -3573,7 +3686,7 @@ events_ip() {
 	# per-service table
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.evtip.XXXXXX")
-	echo "#SERVICE|WEIGHT|EVENTS|PRESSURE" > "$atmp"
+	echo "#SERVICE|WEIGHT|COUNT|PRESSURE" > "$atmp"
 	local _type _svc _wt _cnt _sp_fmt
 	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
 		[ "$_type" != "S" ] && continue
@@ -3596,6 +3709,31 @@ events_ip() {
 		echo "Status:           $ban_status"
 	else
 		echo "Status:           not banned"
+	fi
+
+	# log sample — extract recent log lines matching this IP
+	echo ""
+	echo "Recent log activity:"
+	local _log_total=0 _log_cap=15
+	local _seen_logs="" _log_file _log_lines _log_patterns
+	local _type _svc _wt _cnt _sp_fmt
+	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
+		[ "$_type" != "S" ] && continue
+		[ "$_log_total" -ge "$_log_cap" ] && break
+		_log_file=$(_events_rule_log_file "$_svc") || continue
+		# deduplicate log files (e.g., sshd + postfix both use AUTH_LOG_PATH)
+		case ",$_seen_logs," in
+			*",$_log_file,"*) continue ;;
+		esac
+		_seen_logs="${_seen_logs:+$_seen_logs,}$_log_file"
+		_log_patterns=$(_events_rule_patterns "$_svc") || _log_patterns=""
+		local _remain=$((_log_cap - _log_total))
+		_log_lines=$(_alert_sanitize_logs "$_log_file" "$ip" "$_remain" "$_log_patterns") || continue
+		echo "$_log_lines"
+		_log_total=$((_log_total + $(echo "$_log_lines" | wc -l)))
+	done <<< "$data"
+	if [ "$_log_total" -eq 0 ]; then
+		echo "  (no matching log entries found)"
 	fi
 }
 
@@ -3627,7 +3765,7 @@ events_cidr() {
 
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.evtcidr.XXXXXX")
-	echo "#IP|PRESSURE|EVENTS|SERVICES|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
+	echo "#IP|PRESSURE|COUNT|SERVICES|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
 	local match_count=0 total_events=0 banned_count=0
 	_events_cidr_awk "$events_file" "$now" "$half_life" "$trip" "$target_addr" "$target_mask" | \
 	while IFS='|' read -r _sort_key ip pw pf _trip cnt svcs first_ts last_ts; do
@@ -3653,7 +3791,7 @@ events_cidr() {
 	fi
 	format_table < "$atmp"
 	echo ""
-	echo "$match_count IPs, $total_events events, $banned_count banned"
+	echo "$match_count IPs, $total_events failures, $banned_count banned"
 	rm -f "$atmp"
 }
 
@@ -3687,7 +3825,7 @@ events_dashboard_json() {
 		else
 			echo ","
 		fi
-		printf '  {"ip": "%s", "pressure": %s.%s, "pressure_trip": %s, "events": %s, "services": %s, "first_seen": "%s", "last_seen": "%s", "status": "%s"}' \
+		printf '  {"ip": "%s", "pressure": %s.%s, "pressure_trip": %s, "count": %s, "services": %s, "first_seen": "%s", "last_seen": "%s", "status": "%s"}' \
 			"$(_json_escape "$ip")" "$pw" "$pf" "$_trip" "$cnt" \
 			"$(_json_array_from_csv "$svcs")" "$first_fmt" "$last_fmt" \
 			"$(_json_escape "$ban_status")"
@@ -3705,7 +3843,7 @@ events_dashboard_csv() {
 	half_life="${PRESSURE_HALF_LIFE:-300}"
 	trip="${GLOB_PRESSURE_TRIP:-20}"
 
-	echo "ip,pressure,pressure_trip,events,services,first_seen,last_seen,status"
+	echo "ip,pressure,pressure_trip,count,services,first_seen,last_seen,status"
 	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
 		return 0
 	fi
@@ -3735,7 +3873,7 @@ events_ip_json() {
 	fi
 	if [ "$rc" -eq 2 ]; then
 		ip=$(validate_ip_any "$ip" 2>/dev/null) || ip="$2"
-		printf '{"ip": "%s", "pressure": 0.0, "pressure_trip": %s, "half_life": %s, "services": [], "first_seen": null, "last_seen": null, "status": "not banned"}\n' \
+		printf '{"ip": "%s", "pressure": 0.0, "pressure_trip": %s, "half_life": %s, "services": [], "first_seen": null, "last_seen": null, "status": "not banned", "log_sample": []}\n' \
 			"$(_json_escape "$ip")" "$trip" "$half_life"
 		return 0
 	fi
@@ -3756,7 +3894,7 @@ events_ip_json() {
 		else
 			svcs_json="$svcs_json, "
 		fi
-		svcs_json="$svcs_json{\"service\": \"$(_json_escape "$_svc")\", \"weight\": $_wt, \"events\": $_cnt, \"pressure\": $_sp_fmt}"
+		svcs_json="$svcs_json{\"service\": \"$(_json_escape "$_svc")\", \"weight\": $_wt, \"count\": $_cnt, \"pressure\": $_sp_fmt}"
 	done <<< "$data"
 	svcs_json="$svcs_json]"
 
@@ -3769,9 +3907,36 @@ events_ip_json() {
 		last_fmt="\"$(_fmt_ts_iso "$last_ts")\""
 	fi
 
-	printf '{"ip": "%s", "pressure": %s, "pressure_trip": %s, "half_life": %s, "services": %s, "first_seen": %s, "last_seen": %s, "status": "%s"}\n' \
+	# build log_sample JSON array
+	local log_json="[" _log_total=0 _log_cap=15
+	local _seen_logs="" _log_file _log_lines _log_patterns _log_first=1
+	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
+		[ "$_type" != "S" ] && continue
+		[ "$_log_total" -ge "$_log_cap" ] && break
+		_log_file=$(_events_rule_log_file "$_svc") || continue
+		case ",$_seen_logs," in
+			*",$_log_file,"*) continue ;;
+		esac
+		_seen_logs="${_seen_logs:+$_seen_logs,}$_log_file"
+		_log_patterns=$(_events_rule_patterns "$_svc") || _log_patterns=""
+		local _remain=$((_log_cap - _log_total))
+		_log_lines=$(_alert_sanitize_logs "$_log_file" "$ip" "$_remain" "$_log_patterns") || continue
+		local _line
+		while IFS= read -r _line; do
+			if [ "$_log_first" -eq 1 ]; then
+				_log_first=0
+			else
+				log_json="$log_json, "
+			fi
+			log_json="$log_json\"$(_json_escape "$_line")\""
+			_log_total=$((_log_total + 1))
+		done <<< "$_log_lines"
+	done <<< "$data"
+	log_json="$log_json]"
+
+	printf '{"ip": "%s", "pressure": %s, "pressure_trip": %s, "half_life": %s, "services": %s, "first_seen": %s, "last_seen": %s, "status": "%s", "log_sample": %s}\n' \
 		"$(_json_escape "$ip")" "$_gp_fmt" "$_trip" "$_hl" \
-		"$svcs_json" "$first_fmt" "$last_fmt" "$(_json_escape "$ban_status")"
+		"$svcs_json" "$first_fmt" "$last_fmt" "$(_json_escape "$ban_status")" "$log_json"
 }
 
 # events_ip_csv install_path ip — CSV formatted per-IP pressure detail
@@ -3784,7 +3949,7 @@ events_ip_csv() {
 
 	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
 
-	echo "ip,pressure,pressure_trip,half_life,service,weight,events,service_pressure,first_seen,last_seen,status"
+	echo "ip,pressure,pressure_trip,half_life,service,weight,count,service_pressure,first_seen,last_seen,status"
 
 	local data rc=0
 	data=$(_events_ip_data "$install_path" "$ip") || rc=$?
@@ -3829,7 +3994,7 @@ events_cidr_json() {
 	target_mask="${cidr#*/}"
 
 	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
-		printf '{"cidr": "%s", "summary": {"match_count": 0, "total_events": 0, "banned_count": 0}, "ips": []}\n' \
+		printf '{"cidr": "%s", "summary": {"match_count": 0, "total_count": 0, "banned_count": 0}, "ips": []}\n' \
 			"$(_json_escape "$cidr")"
 		return 0
 	fi
@@ -3852,7 +4017,7 @@ events_cidr_json() {
 		else
 			echo ","
 		fi
-		printf '    {"ip": "%s", "pressure": %s.%s, "pressure_trip": %s, "events": %s, "services": %s, "first_seen": "%s", "last_seen": "%s", "status": "%s"}' \
+		printf '    {"ip": "%s", "pressure": %s.%s, "pressure_trip": %s, "count": %s, "services": %s, "first_seen": "%s", "last_seen": "%s", "status": "%s"}' \
 			"$(_json_escape "$ip")" "$pw" "$pf" "$_trip" "$cnt" \
 			"$(_json_array_from_csv "$svcs")" "$first_fmt" "$last_fmt" \
 			"$(_json_escape "$ban_status")"
@@ -3867,7 +4032,7 @@ events_cidr_json() {
 		banned_count=$(awk -F'|' '$2 != "not banned" && $2 != "" {c++} END {print c+0}' "$_cidr_summary")
 	fi
 
-	printf '{"cidr": "%s", "summary": {"match_count": %d, "total_events": %d, "banned_count": %d}, "ips": [\n' \
+	printf '{"cidr": "%s", "summary": {"match_count": %d, "total_count": %d, "banned_count": %d}, "ips": [\n' \
 		"$(_json_escape "$cidr")" "$match_count" "$total_events" "$banned_count"
 	cat "$_cidr_ips" 2>/dev/null
 	echo ""
@@ -3889,7 +4054,7 @@ events_cidr_csv() {
 	target_addr="${cidr%/*}"
 	target_mask="${cidr#*/}"
 
-	echo "ip,pressure,pressure_trip,events,services,first_seen,last_seen,status"
+	echo "ip,pressure,pressure_trip,count,services,first_seen,last_seen,status"
 	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
 		return 0
 	fi
@@ -3913,9 +4078,9 @@ search_ip_json() {
 	data=$(_search_ip_data "$install_path" "$ip") || return 1
 
 	# parse D line
-	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count
+	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures
 	d_line=$(echo "$data" | grep '^D|')
-	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count <<< "$d_line"
+	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures <<< "$d_line"
 
 	local now
 	now=$(date +"%s")
@@ -3961,11 +4126,11 @@ search_ip_json() {
 		last_fmt="\"$(_fmt_ts_iso "$last_ts")\""
 	fi
 
-	printf '{"ip": "%s", "status": "%s", "pressure": %s, "pressure_trip": %s, "ban_history_24h": %d, "ban_history_total": %d, "events_24h": %d, "services": %s, "first_seen": %s, "last_seen": %s, "attack_pool_triggers": %d}\n' \
+	printf '{"ip": "%s", "status": "%s", "pressure": %s, "pressure_trip": %s, "ban_history_24h": %d, "ban_history_total": %d, "count_24h": %d, "services": %s, "first_seen": %s, "last_seen": %s, "attack_pool_triggers": %d, "attack_pool_failures": %d}\n' \
 		"$(_json_escape "$ip")" "$(_json_escape "$status_str")" \
 		"$_gp_fmt" "$trip" \
 		"$hist_24h" "$hist_total" "$evt_count" "$svcs_json" \
-		"$first_fmt" "$last_fmt" "$pool_count"
+		"$first_fmt" "$last_fmt" "$pool_triggers" "$pool_failures"
 }
 
 # search_ip_csv install_path ip — CSV formatted unified IP report
@@ -3975,12 +4140,12 @@ search_ip_csv() {
 	local data
 	data=$(_search_ip_data "$install_path" "$ip") || return 1
 
-	echo "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers"
+	echo "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,count_24h,first_seen,last_seen,attack_pool_triggers,attack_pool_failures"
 
 	# parse D line
-	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count
+	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures
 	d_line=$(echo "$data" | grep '^D|')
-	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count <<< "$d_line"
+	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures <<< "$d_line"
 
 	local now
 	now=$(date +"%s")
@@ -4006,5 +4171,5 @@ search_ip_csv() {
 		last_fmt=$(_fmt_ts_iso "$last_ts")
 	fi
 
-	echo "$ip,$status_str,$_gp_fmt,$trip,$hist_24h,$hist_total,$evt_count,$first_fmt,$last_fmt,$pool_count"
+	echo "$ip,$status_str,$_gp_fmt,$trip,$hist_24h,$hist_total,$evt_count,$first_fmt,$last_fmt,$pool_triggers,$pool_failures"
 }

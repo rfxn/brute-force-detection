@@ -15,7 +15,6 @@ bfd_load_function _apool_report
 bfd_load_function _apool_ban_status
 bfd_load_function _apool_service_summary_awk
 bfd_load_function _apool_service_summary
-bfd_load_function _apool_prepare_weekly
 bfd_load_function apool_list
 
 setup() {
@@ -115,12 +114,13 @@ teardown() {
 
 # --- _apool_report with PRESSURE column ---
 
-@test "apool report: header includes PRESSURE column" {
+@test "apool report: header includes PRESSURE and COUNTRY columns" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
 	echo "1000 192.0.2.1 sshd" >> "$pool"
 	run _apool_report "$pool" "Test report"
 	assert_success
 	assert_output --partial "PRESSURE"
+	assert_output --partial "COUNTRY"
 }
 
 @test "apool report: pressure value shown for IP with events" {
@@ -200,24 +200,28 @@ teardown() {
 	assert_success
 }
 
-@test "apool_list: pool with entries shows today report and service summary" {
+@test "apool_list: pool with entries shows 24h and 7d reports" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 sshd" >> "$APOOL_LIST"
-	echo "1001 192.0.2.2 dovecot" >> "$APOOL_LIST"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
+	echo "$((now - 1)) 192.0.2.2 dovecot" >> "$APOOL_LIST"
 	run apool_list
 	assert_success
-	assert_output --partial "Top 25 brute force attackers today"
+	assert_output --partial "Top 25 brute force attackers (24h)"
 	assert_output --partial "Per-service breakdown"
-	assert_output --partial "Top 25 brute force attackers this week"
+	assert_output --partial "Top 25 brute force attackers (7d)"
 }
 
 @test "apool_list: search filter shows filtered results" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 sshd" >> "$APOOL_LIST"
-	echo "1001 192.0.2.2 dovecot" >> "$APOOL_LIST"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
+	echo "$((now - 1)) 192.0.2.2 dovecot" >> "$APOOL_LIST"
 	run apool_list "sshd"
 	assert_success
-	assert_output --partial "Events for search string"
+	assert_output --partial "Matching entries for"
 	assert_output --partial "sshd"
 }
 
@@ -254,12 +258,103 @@ teardown() {
 	[ "$(echo "$rules_field" | grep -o 'sshd' | wc -l)" -eq 1 ]
 }
 
-@test "apool_list: cleans up temp file after execution" {
+@test "apool_list: no temp files created for timestamp-based views" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 sshd" >> "$APOOL_LIST"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
 	apool_list >/dev/null 2>&1
-	# verify no leftover weekly temp files
+	# verify no leftover temp files from old weekly aggregation
 	local leftover
 	leftover=$(find "$INSTALL_PATH/tmp" -name '.weekly.apool.*' 2>/dev/null | wc -l)
 	[ "$leftover" -eq 0 ]
+}
+
+# --- enriched format tests ---
+
+@test "_apool_awk: sums count field from enriched entries" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 CN ban 600 22 15000 service" >> "$pool"
+	echo "$((now + 1)) 192.0.2.1 sshd 3 CN ban 600 22 12000 service" >> "$pool"
+	run _apool_awk "$pool"
+	assert_success
+	# total count should be 8 (5+3)
+	assert_output --partial "8|192.0.2.1"
+}
+
+@test "_apool_awk: backward compat with 3-field entries" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	echo "1000 192.0.2.1 sshd" >> "$pool"
+	echo "1001 192.0.2.1 sshd" >> "$pool"
+	run _apool_awk "$pool"
+	assert_success
+	# 3-field entries default COUNT=1, so 2 lines = count 2
+	assert_output --partial "2|192.0.2.1"
+}
+
+@test "_apool_awk: extracts country code from enriched entries" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 RU ban 600 22 15000 service" >> "$pool"
+	run _apool_awk "$pool"
+	assert_success
+	# 6th pipe-delimited field should be country code
+	local cc_field
+	cc_field=$(echo "$output" | awk -F'|' '{print $6}')
+	[ "$cc_field" = "RU" ]
+}
+
+@test "_apool_report: COUNTRY column present in output" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 DE ban 600 22 15000 service" >> "$pool"
+	run _apool_report "$pool" "Test report"
+	assert_success
+	assert_output --partial "DE"
+}
+
+@test "_apool_awk: cutoff filters old entries" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$((now - 200)) 192.0.2.1 sshd" >> "$pool"
+	echo "$now 192.0.2.2 sshd" >> "$pool"
+	# cutoff at now - 100: should exclude 192.0.2.1
+	run _apool_awk "$pool" "" "$((now - 100))"
+	assert_success
+	assert_output --partial "192.0.2.2"
+	refute_output --partial "192.0.2.1"
+}
+
+@test "state_pool_prune: removes old entries" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	# write entries: one old (400 days), one recent
+	echo "$((now - 34560000)) 192.0.2.1 sshd" >> "$pool"
+	echo "$now 192.0.2.2 sshd" >> "$pool"
+	state_pool_prune "$INSTALL_PATH" "365" "500000"
+	local content
+	content=$(cat "$pool")
+	echo "$content" | grep -qF "192.0.2.2"
+	! echo "$content" | grep -qF "192.0.2.1"
+}
+
+@test "state_pool_prune: respects max_lines cap" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 10); do
+		echo "$((now - i)) 192.0.2.$i sshd" >> "$pool"
+	done
+	# cap at 3 lines
+	state_pool_prune "$INSTALL_PATH" "0" "3"
+	local line_count
+	line_count=$(wc -l < "$pool")
+	[ "$line_count" -eq 3 ]
 }

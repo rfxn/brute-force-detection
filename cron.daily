@@ -21,7 +21,6 @@
 #
 INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
 LOCK_FILE="$INSTALL_PATH/lock.utime"
-dstamp=$(date +"%m%d%y.%H%M")
 
 # check if bfd is actively running (mkdir-based lock used by bfd/watch)
 if [ -d "$LOCK_FILE.lk" ]; then
@@ -31,20 +30,70 @@ if [ -d "$LOCK_FILE.lk" ]; then
 	fi
 fi
 
+# source config for retention settings
+if [ -f "$INSTALL_PATH/conf.bfd" ]; then
+	# shellcheck disable=SC1090,SC1091
+	. "$INSTALL_PATH/conf.bfd"
+fi
+APOOL_RETENTION_DAYS="${APOOL_RETENTION_DAYS:-365}"
+APOOL_MAX_LINES="${APOOL_MAX_LINES:-500000}"
+
+# discard stale digest spool — regular bfd runs flush within minutes;
+# if this file survives >24h, its log references are stale
+if [ -f "$INSTALL_PATH/tmp/.alert_spool" ]; then
+	_spool_age=$(( $(date +%s) - $(stat -c %Y "$INSTALL_PATH/tmp/.alert_spool" 2>/dev/null || echo 0) ))
+	if [ "$_spool_age" -gt 86400 ]; then
+		: > "$INSTALL_PATH/tmp/.alert_spool"
+	fi
+fi
+
 # acquire flock for self-contention (multiple cron.daily invocations)
 # uses a dedicated lock file to avoid contention with bfd's lock.utime writes
 CRON_LOCK="$INSTALL_PATH/tmp/.cron.daily.lock"
 (
 flock -x -w 30 200 || exit 0
-# rotate attack pool
-if [ -f "$INSTALL_PATH/stats/attack.pool" ]; then
-	cp "$INSTALL_PATH/stats/attack.pool" "$INSTALL_PATH/stats/attack.pool.$dstamp"
-	: > "$INSTALL_PATH/stats/attack.pool"
+
+# --- One-time migration: consolidate rotated archives ---
+pool_file="$INSTALL_PATH/stats/attack.pool"
+if find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' -type f \
+    2>/dev/null | head -1 | grep -q .; then
+	(
+		flock -x 201
+		find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' \
+			-type f -exec cat {} + >> "$pool_file"
+		find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' \
+			-type f -delete
+		sort -n "$pool_file" > "$pool_file.new"
+		cat "$pool_file.new" > "$pool_file"
+		rm -f "$pool_file.new"
+	) 201>>"$pool_file"
 fi
+
+# --- Age-based attack pool pruning (replaces daily rotation) ---
+if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
+	cutoff=0
+	if [ "$APOOL_RETENTION_DAYS" -gt 0 ] 2>/dev/null; then
+		cutoff=$(date -d "-${APOOL_RETENTION_DAYS} days" +%s 2>/dev/null) || cutoff=0
+	fi
+	(
+		flock -x 201
+		if [ "$cutoff" -gt 0 ]; then
+			awk -v cutoff="$cutoff" '$1+0 >= cutoff' "$pool_file" \
+				| tail -n "$APOOL_MAX_LINES" > "$pool_file.new"
+		elif [ "$APOOL_MAX_LINES" -gt 0 ] 2>/dev/null; then
+			tail -n "$APOOL_MAX_LINES" "$pool_file" > "$pool_file.new"
+		else
+			cp "$pool_file" "$pool_file.new"
+		fi
+		cat "$pool_file.new" > "$pool_file"
+		rm -f "$pool_file.new"
+	) 201>>"$pool_file"
+fi
+
 # clear transient state but preserve ban tracking and event data
 rm -f "$INSTALL_PATH"/tmp/.alist.*
 rm -f "$INSTALL_PATH"/tmp/.alerts.*
-rm -f "$INSTALL_PATH"/tmp/.weekly.apool.*
+
 # rotate bans.history (append-only, rotated daily)
 if [ -f "$INSTALL_PATH/tmp/bans.history" ]; then
 	cp "$INSTALL_PATH/tmp/bans.history" "$INSTALL_PATH/tmp/bans.history.$(date +%m%d%y)"
@@ -52,6 +101,5 @@ if [ -f "$INSTALL_PATH/tmp/bans.history" ]; then
 fi
 ) 200>"$CRON_LOCK"
 
-# purge rotated files older than 30 days (outside lock — no race)
+# purge rotated bans.history files older than 30 days (outside lock — no race)
 find "$INSTALL_PATH/tmp" -maxdepth 1 -name 'bans.history.*' -type f -mtime +30 -delete 2>/dev/null
-find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' -type f -mtime +30 -delete 2>/dev/null

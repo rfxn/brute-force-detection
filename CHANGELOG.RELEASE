@@ -1,7 +1,174 @@
 2.0.1:
 
+-- SMTP Relay Fixes --
+
+[Fix] _alert_send_relay(): --ssl-reqd was applied unconditionally, breaking
+      smtp://host:25 plain connections for internal relays; now conditional on
+      URL scheme (smtps:// and smtp://:587 require TLS, smtp://:25 is plain)
+[Fix] _alert_send_relay(): SMTP credentials were required as hard error,
+      preventing auth-free internal relays; now optional (--user flag omitted
+      when SMTP_USER/SMTP_PASS are empty)
+[Fix] _alert_send_relay(): curl stderr was suppressed with 2>/dev/null; now
+      captured to temp file and included in elog error message on failure
+
+-- Log Sample Pattern Filtering --
+
+[New] _events_rule_patterns(): extract detection patterns from rule files by
+      sourcing in subshell with pattern-capturing extract_hosts() override
+[Change] _alert_sanitize_logs(): accept optional detection patterns parameter;
+      when provided, filters log lines by rule patterns instead of blanket IP grep
+[Change] events_ip()/events_ip_json(): pass rule patterns to log sample extraction
+      so only failure lines matching detection rules are shown
+[Change] _alert_set_entry_vars(): pass service patterns to log sample for email
+      alerts, filtering out non-failure log entries
+
+-- Alert Integration Tests --
+
+[New] Integration tests for email pipeline: check() digest spool path, multi-cycle
+      accumulation, SKIP_ALERT filtering, RULE_EMAIL routing through digest,
+      timing-based digest flush via mail, scan-mode force-flush, relay delivery
+      from digest, MIME structure validation for format=both, watch mode digest
+      flush on shutdown, cron.daily stale spool truncation and fresh preservation
+
+-- Alert Documentation --
+
+[Change] bfd.1 man page: EMAIL_FORMAT, EMAIL_DIGEST, SMTP relay variables in
+      config section; new Email Templates and SMTP Relay subsections;
+      alert.bfd replaced by alert_lib.sh + alert/ in FILES section
+[Change] README.md: section 3.2 expanded with EMAIL_FORMAT, EMAIL_DIGEST,
+      EMAIL_REPUTATION_LINKS; new sections 3.9 (SMTP Relay) and 3.10
+      (Email Templates) with variable reference and customization guide
+
+-- Alert Packaging --
+
+[Change] install.sh: alert.bfd replaced by alert_lib.sh (chmod 640) and
+      alert/ template directory (chmod 750, templates 640)
+[Change] importconf: preserve user-customized alert/ templates on upgrade;
+      legacy alert.bfd preserved for pre-2.0.1 upgrades
+[Change] RPM spec: alert.bfd replaced by alert_lib.sh + alert/ directory in
+      %build path transforms, %install, %files, and symlink farm
+[Change] DEB rules/links: alert.bfd replaced by alert_lib.sh + alert/ directory
+      in install targets and backward-compat symlinks
+[Change] pkg test: alert.bfd checks replaced by alert_lib.sh + alert/ directory
+      + ALERT_TEMPLATE_DIR FHS path + template file count verification
+
+-- Alert Configuration --
+
+[New] conf.bfd: EMAIL_FORMAT, EMAIL_DIGEST, EMAIL_DIGEST_INTERVAL,
+      EMAIL_REPUTATION_LINKS, SMTP_RELAY, SMTP_FROM, SMTP_USER, SMTP_PASS
+      variables with conservative defaults matching existing behavior
+[Change] validate_config(): EMAIL_FORMAT/DIGEST enum validation, SMTP_RELAY URL
+      format check, SMTP_FROM required + email validation, reputation links
+      known-provider check (warning), SMTP credentials warning
+[Change] _hc_alerts(): expanded health checks — sendmail for html/both format,
+      curl for SMTP relay, SMTP_FROM/credentials, alert template directory and
+      all 8 template partials presence
+[Change] show_config(): whitelist extended with EMAIL_FORMAT, EMAIL_DIGEST,
+      EMAIL_DIGEST_INTERVAL, EMAIL_REPUTATION_LINKS, SMTP_RELAY, SMTP_FROM,
+      ALERT_TEMPLATE_DIR, APOOL_RETENTION_DAYS, APOOL_MAX_LINES
+
+-- Attack Pool --
+
+[Change] state_pool_append(): enriched 10-field format — TIMESTAMP IP MOD
+      COUNT CC ACTION DURATION PORTS PRESSURE TRIP_TYPE; backward compatible
+      with old 3-field entries (COUNT=1, CC=--, ACTION=ban, etc.)
+[Change] check(): restructure pool write path — append moves after ban outcome
+      to capture action, duration, and trip type; country lookup via warm cache
+[Change] check_distributed(): pass enriched fields (unique_count, ban_action,
+      duration, trip_type=subnet) to state_pool_append
+[Change] _apool_awk(): sum $4 count field, extract $5 country code
+[Change] _apool_service_summary_awk(): sum $4 count field for per-service totals
+[Change] _apool_report()/json/csv: add COUNTRY column/key to output
+[New] state_pool_prune(): age-based pruning with max-lines safety cap,
+      mirrors state_events_prune() pattern with flock + inode-preserving rewrite
+[New] conf.bfd: APOOL_RETENTION_DAYS (default 365), APOOL_MAX_LINES (default 500000)
+[Change] cron.daily: age-based pruning replaces daily rotation; one-time
+      migration consolidates existing .MMDDYY.HHMM archives into single pool
+[Change] check(): periodic pool pruning in watch mode (24h marker-based timer)
+[Change] _apool_awk()/_apool_service_summary_awk(): add cutoff parameter for
+      timestamp-based filtering (early AWK skip — no memory for old entries)
+[Change] apool_list()/json/csv: timestamp-based "Last 24h" / "Last 7d" views
+      replace file-based "today" / "this week" — no temp files needed
+[Change] search_ip()/json/csv: enriched pool display showing failure count
+      + ban count (attack_pool_failures + attack_pool_triggers)
+[Remove] _apool_prepare_weekly(): eliminated (timestamp filtering replaces
+      find+cat of fragmented archive files)
+
+-- Reporting --
+
+[Change] Rename EVENTS column/key to COUNT across all text/JSON/CSV views:
+      attack pool, events dashboard, events per-IP, events CIDR, search_ip
+[Change] search_ip: "Events (24h)" label renamed to "Failures (24h)";
+      events_24h key renamed to count_24h in JSON/CSV output
+[Change] events_cidr: total_events key renamed to total_count in JSON;
+      summary line uses "failures" instead of "events"
+
+-- Events Per-IP --
+
+[New] _events_rule_log_file(): extract LOG_FILE from rule without triggering
+      detection (subshell with _rule_tlog/extract_hosts no-op override)
+[Change] events_ip(): append "Recent log activity" section, up to 15 sanitized
+      log lines via _alert_sanitize_logs(), deduplicating shared log files
+[Change] events_ip_json(): add log_sample string array to JSON output
+
+-- CLI --
+
+[Change] usage_short(): add compact CLI matrix line listing all flags in
+      [-x|--long] form; expand common commands by category with brief
+      descriptions matching LMD's usage output style
+
+-- Alert Digest --
+
+[New] _alert_spool_append(): append timestamped entries to digest spool under
+      flock for timed accumulation across detection cycles
+[New] _alert_digest_check(): flush spool when EMAIL_DIGEST_INTERVAL expires;
+      optimistic age check without lock, flush under exclusive flock
+[New] _alert_digest_flush_now(): force-send accumulated alerts, strip epoch
+      prefix, truncate spool; releases lock before SMTP delivery
+[Change] check(): conditional spool vs immediate send based on EMAIL_DIGEST
+      mode; digest check runs every cycle for pre-existing spool entries
+[Change] cleanup_watch(): flush digest spool before watch mode shutdown
+[Change] config_init(): unset EMAIL_FORMAT, EMAIL_DIGEST, EMAIL_DIGEST_INTERVAL,
+      EMAIL_REPUTATION_LINKS, SMTP_RELAY/USER/PASS/FROM on reload
+[Change] --scan: force-flush digest spool after scan completion
+[Change] cron.daily: safety truncation for stale digest spool (>24h)
+
+-- Alert Delivery --
+
+[New] _alert_send_local(): local MTA delivery with text/html/multipart format
+      support; sendmail fallback to text-only via mail when unavailable
+[New] _alert_send_relay(): authenticated SMTP relay delivery via curl with
+      --ssl-reqd, credential validation, and error reporting
+[New] _alert_send(): delivery router between local MTA and SMTP relay; relay
+      path always builds full multipart MIME for richest content
+[Change] send_alerts() rewritten to use template-based rendering pipeline and
+      structured delivery functions; drops legacy sourced-template approach
+[Change] EMAIL_FORMAT support: text (default), html, both (multipart/alternative)
+[Change] SMTP relay support: configurable via SMTP_RELAY, SMTP_USER, SMTP_PASS,
+      SMTP_FROM variables
+[Change] ALERT_TEMPLATE_DIR replaces EMAIL_TEMPLATE in internals.conf; points to
+      files/alert/ template partials directory
+
 -- New Features --
 
+[New] Alert rendering pipeline: data preparation (_alert_set_global_vars,
+      _alert_set_entry_vars), summary aggregation (_alert_compute_summary),
+      text and HTML render orchestrators (_alert_render_text, _alert_render_html),
+      multipart/alternative MIME construction (_alert_build_mime); per-entry
+      variables include pressure bar, ban type colors, country lookup, reputation
+      links, history/escalation lines, sanitized source logs — all pre-computed
+      for zero-logic template rendering
+[Change] Alert template footer URLs updated to rfxn.com/projects/brute-force-detection
+[New] Alert template partials (files/alert/): 8 customizable {{VAR}} templates
+      (4 plain text + 4 HTML) replacing sourced-bash alert.bfd; email-safe HTML
+      with inline CSS and table layout; self-contained entry/summary cards;
+      conditional sections via pre-computed variables for zero-logic templates
+[New] Alert engine library (alert_lib.sh): safe {{VAR}} template renderer via
+      awk ENVIRON substitution (no shell sourcing), HTML entity escaping,
+      credential-redacting log sanitizer, IP reputation link builder
+      (AbuseIPDB, Shodan, VirusTotal, IPinfo, GreyNoise), ASCII pressure bar
+      visualization, color helpers for ban severity and pressure level,
+      Unicode country flag emoji from 2-letter codes
 [New] Pressure-to-response scoring model: exponential-decay scoring replaces
       fixed count thresholds; events add weighted pressure per rule, pressure
       decays via configurable half-life, bans fire when accumulated pressure

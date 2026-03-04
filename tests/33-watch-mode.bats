@@ -72,7 +72,8 @@ CNFEOF
 RULES_PATH="$INSTALL_PATH/rules"
 TLOG_PATH="$INSTALL_PATH/tlog"
 TLOG_BASERUN="$INSTALL_PATH/tmp"
-EMAIL_TEMPLATE="$INSTALL_PATH/alert.bfd"
+ALERT_TEMPLATE_DIR="$INSTALL_PATH/alert"
+ALERT_SPOOL_FILE="$INSTALL_PATH/tmp/.alert_spool"
 IGNORE_HOST_FILES="$INSTALL_PATH/exclude.files"
 LOCK_FILE="$INSTALL_PATH/lock.utime"
 LOCK_FILE_TIMEOUT="300"
@@ -191,7 +192,7 @@ teardown() {
 	# unset variables that should get fallback values
 	unset RULES_PATH
 	unset TLOG_PATH
-	unset EMAIL_TEMPLATE
+	unset ALERT_TEMPLATE_DIR
 	# also remove from internals.conf so sourcing doesn't set them
 	cat > "$INTCNF" <<'INTEOF'
 #!/bin/bash
@@ -205,7 +206,7 @@ INTEOF
 	# fallback values should be derived from INSTALL_PATH
 	[ "$RULES_PATH" = "$INSTALL_PATH/rules" ]
 	[ "$TLOG_PATH" = "$INSTALL_PATH/tlog" ]
-	[ "$EMAIL_TEMPLATE" = "$INSTALL_PATH/alert.bfd" ]
+	[ "$ALERT_TEMPLATE_DIR" = "$INSTALL_PATH/alert" ]
 }
 
 @test "reload_watch: refreshes firewall backend" {
@@ -299,8 +300,11 @@ _start_watch() {
 	chmod 750 "$inst/tlog_lib.sh"
 	cp "$PROJECT_ROOT/files/elog_lib.sh" "$inst/elog_lib.sh"
 	chmod 750 "$inst/elog_lib.sh"
+	cp "$PROJECT_ROOT/files/alert_lib.sh" "$inst/alert_lib.sh"
+	chmod 640 "$inst/alert_lib.sh"
 	touch "$inst/exclude.files"
-	touch "$inst/alert.bfd"
+	mkdir -p "$inst/alert"
+	cp "$PROJECT_ROOT/files/alert/"*.tpl "$inst/alert/"
 
 	cat > "$inst/conf.bfd" <<CNFEOF
 #!/bin/bash
@@ -341,7 +345,8 @@ CNFEOF
 RULES_PATH="$inst/rules"
 TLOG_PATH="$inst/tlog"
 TLOG_BASERUN="$inst/tmp"
-EMAIL_TEMPLATE="$inst/alert.bfd"
+ALERT_TEMPLATE_DIR="$inst/alert"
+ALERT_SPOOL_FILE="$inst/tmp/.alert_spool"
 IGNORE_HOST_FILES="$inst/exclude.files"
 LOCK_FILE="$inst/lock.utime"
 LOCK_FILE_TIMEOUT="300"
@@ -415,4 +420,72 @@ INTEOF
 
 	run grep "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log"
 	assert_success
+}
+
+# ============================================================
+# Tier 1: Unit tests — cleanup_watch() digest integration
+# ============================================================
+
+@test "cleanup_watch: flushes digest spool when EMAIL_DIGEST=timed" {
+	EMAIL_ALERTS="1"
+	EMAIL_DIGEST="timed"
+	ALERT_SPOOL_FILE="$INSTALL_PATH/tmp/.alert_spool"
+	EMAIL_SUBJECT="BFD Alert"
+	EMAIL_LOGLINES="50"
+	EMAIL_FORMAT="text"
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	mkdir -p "$INSTALL_PATH/tmp"
+	# populate spool
+	local now
+	now=$(date +%s)
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	# mock mail to track calls
+	mkdir -p "$TEST_TMPDIR/bin"
+	cat > "$TEST_TMPDIR/bin/mail" <<'MOCK'
+#!/bin/bash
+echo "MAIL_CALL: $@" >> "$MAIL_LOG"
+cat > /dev/null
+MOCK
+	chmod +x "$TEST_TMPDIR/bin/mail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	export MAIL_LOG="$TEST_TMPDIR/mail_calls"
+	# set up lock so _cleanup_common has something to clean
+	mkdir -p "$LOCK_FILE.lk"
+	echo "$$" > "$LOCK_FILE.lk/pid"
+	echo "1700000000" > "$LOCK_FILE"
+	cleanup_watch
+	# mail should have been called (digest flushed)
+	[ -f "$MAIL_LOG" ]
+	# spool should be empty after flush
+	[ ! -s "$ALERT_SPOOL_FILE" ]
+}
+
+@test "cleanup_watch: skips digest flush when EMAIL_DIGEST=cycle" {
+	EMAIL_ALERTS="1"
+	EMAIL_DIGEST="cycle"
+	ALERT_SPOOL_FILE="$INSTALL_PATH/tmp/.alert_spool"
+	mkdir -p "$INSTALL_PATH/tmp"
+	# populate spool
+	local now
+	now=$(date +%s)
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	# mock mail to track calls
+	mkdir -p "$TEST_TMPDIR/bin"
+	cat > "$TEST_TMPDIR/bin/mail" <<'MOCK'
+#!/bin/bash
+echo "MAIL_CALL: $@" >> "$MAIL_LOG"
+cat > /dev/null
+MOCK
+	chmod +x "$TEST_TMPDIR/bin/mail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	export MAIL_LOG="$TEST_TMPDIR/mail_calls"
+	# set up lock so _cleanup_common has something to clean
+	mkdir -p "$LOCK_FILE.lk"
+	echo "$$" > "$LOCK_FILE.lk/pid"
+	echo "1700000000" > "$LOCK_FILE"
+	cleanup_watch
+	# mail should NOT have been called (cycle mode doesn't flush on shutdown)
+	[ ! -f "$MAIL_LOG" ]
+	# spool should still have content
+	[ -s "$ALERT_SPOOL_FILE" ]
 }

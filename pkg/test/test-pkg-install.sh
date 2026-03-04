@@ -73,7 +73,8 @@ echo "--- Test 1: FHS file layout ---"
 check_file /usr/sbin/bfd "Executable"
 check_file /usr/lib/bfd/bfd.lib.sh "Library: bfd.lib.sh"
 check_file /usr/lib/bfd/tlog "Library: tlog"
-check_file /usr/lib/bfd/alert.bfd "Library: alert.bfd"
+check_file /usr/lib/bfd/alert_lib.sh "Library: alert_lib.sh"
+check_file /usr/lib/bfd/alert "Library: alert directory"
 check_file /usr/lib/bfd/update-ipcountry.sh "Library: update-ipcountry.sh"
 check_file /usr/lib/bfd/importconf "Library: importconf"
 check_file /etc/bfd/conf.bfd "Config: conf.bfd"
@@ -95,7 +96,8 @@ echo ""
 echo "--- Test 2: Symlink farm ---"
 check_link /usr/local/bfd/bfd.lib.sh /usr/lib/bfd/bfd.lib.sh "Symlink: bfd.lib.sh"
 check_link /usr/local/bfd/tlog /usr/lib/bfd/tlog "Symlink: tlog"
-check_link /usr/local/bfd/alert.bfd /usr/lib/bfd/alert.bfd "Symlink: alert.bfd"
+check_link /usr/local/bfd/alert_lib.sh /usr/lib/bfd/alert_lib.sh "Symlink: alert_lib.sh"
+check_link /usr/local/bfd/alert /usr/lib/bfd/alert "Symlink: alert"
 check_link /usr/local/bfd/update-ipcountry.sh /usr/lib/bfd/update-ipcountry.sh "Symlink: update-ipcountry.sh"
 check_link /usr/local/bfd/importconf /usr/lib/bfd/importconf "Symlink: importconf"
 check_link /usr/local/bfd/conf.bfd /etc/bfd/conf.bfd "Symlink: conf.bfd"
@@ -128,10 +130,10 @@ if grep -q '/var/lib/bfd/tmp' /etc/bfd/internals.conf; then
 else
 	fail "TLOG_BASERUN still uses \$INSTALL_PATH"
 fi
-if grep -q '/usr/lib/bfd/alert.bfd' /etc/bfd/internals.conf; then
-	pass "EMAIL_TEMPLATE uses FHS path"
+if grep -q '/usr/lib/bfd/alert"' /etc/bfd/internals.conf; then
+	pass "ALERT_TEMPLATE_DIR uses FHS path"
 else
-	fail "EMAIL_TEMPLATE still uses \$INSTALL_PATH"
+	fail "ALERT_TEMPLATE_DIR still uses \$INSTALL_PATH"
 fi
 if grep -q '/etc/bfd/exclude.files' /etc/bfd/internals.conf; then
 	pass "IGNORE_HOST_FILES uses FHS path"
@@ -184,6 +186,16 @@ if [ "$rule_count" -ge 40 ]; then
 	pass "Rule files present ($rule_count rules)"
 else
 	fail "Expected >= 40 rules, found $rule_count"
+fi
+echo ""
+
+# --- Test 7b: Alert template files ---
+echo "--- Test 7b: Alert templates ---"
+tpl_count=$(find /usr/lib/bfd/alert/ -maxdepth 1 -name '*.tpl' -type f 2>/dev/null | wc -l)
+if [ "$tpl_count" -eq 8 ]; then
+	pass "Alert template files present ($tpl_count templates)"
+else
+	fail "Expected 8 alert templates, found $tpl_count"
 fi
 echo ""
 

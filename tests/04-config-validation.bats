@@ -652,3 +652,152 @@ run_validate_output() {
 	assert_success
 	assert_output --partial "invalid address 'bad addr'"
 }
+
+# --- EMAIL_FORMAT ---
+
+@test "validate_config: EMAIL_FORMAT=text passes" {
+	run run_validate 'EMAIL_FORMAT="text"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_FORMAT=html passes" {
+	run run_validate 'EMAIL_FORMAT="html"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_FORMAT=both passes" {
+	run run_validate 'EMAIL_FORMAT="both"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_FORMAT=invalid rejects" {
+	run run_validate 'EMAIL_FORMAT="rtf"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_FORMAT empty uses default" {
+	run run_validate 'EMAIL_FORMAT=""'
+	assert_success
+}
+
+# --- EMAIL_DIGEST ---
+
+@test "validate_config: EMAIL_DIGEST=cycle passes" {
+	run run_validate 'EMAIL_DIGEST="cycle"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_DIGEST=timed passes" {
+	run run_validate 'EMAIL_DIGEST="timed"; EMAIL_DIGEST_INTERVAL="600"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_DIGEST=invalid rejects" {
+	run run_validate 'EMAIL_DIGEST="batch"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_DIGEST empty uses default" {
+	run run_validate 'EMAIL_DIGEST=""'
+	assert_success
+}
+
+# --- EMAIL_DIGEST_INTERVAL ---
+
+@test "validate_config: EMAIL_DIGEST_INTERVAL valid with timed passes" {
+	run run_validate 'EMAIL_DIGEST="timed"; EMAIL_DIGEST_INTERVAL="300"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_DIGEST_INTERVAL=0 with timed rejects" {
+	run run_validate 'EMAIL_DIGEST="timed"; EMAIL_DIGEST_INTERVAL="0"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_DIGEST_INTERVAL=abc with timed rejects" {
+	run run_validate 'EMAIL_DIGEST="timed"; EMAIL_DIGEST_INTERVAL="abc"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_DIGEST_INTERVAL ignored when cycle" {
+	run run_validate 'EMAIL_DIGEST="cycle"; EMAIL_DIGEST_INTERVAL="abc"'
+	assert_success
+}
+
+# --- EMAIL_REPUTATION_LINKS ---
+
+@test "validate_config: EMAIL_REPUTATION_LINKS valid keys pass" {
+	run run_validate 'EMAIL_REPUTATION_LINKS="abuseipdb,shodan,virustotal"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_REPUTATION_LINKS unknown key warns" {
+	run run_validate_output 'EMAIL_REPUTATION_LINKS="abuseipdb,bogus"'
+	assert_success
+	assert_output --partial "unknown provider 'bogus'"
+}
+
+@test "validate_config: EMAIL_REPUTATION_LINKS empty passes" {
+	run run_validate 'EMAIL_REPUTATION_LINKS=""'
+	assert_success
+}
+
+# --- SMTP_RELAY ---
+
+@test "validate_config: SMTP_RELAY valid URL with FROM passes" {
+	run run_validate 'SMTP_RELAY="smtps://smtp.example.com:465"; SMTP_FROM="bfd@example.com"; SMTP_USER="user"; SMTP_PASS="pass"'
+	assert_success
+}
+
+@test "validate_config: SMTP_RELAY no protocol rejects" {
+	run run_validate 'SMTP_RELAY="smtp.example.com:465"; SMTP_FROM="bfd@example.com"'
+	assert_failure
+}
+
+@test "validate_config: SMTP_RELAY set but missing SMTP_FROM rejects" {
+	run run_validate 'SMTP_RELAY="smtps://smtp.example.com:465"; SMTP_FROM=""'
+	assert_failure
+}
+
+@test "validate_config: SMTP_RELAY set with invalid SMTP_FROM rejects" {
+	run run_validate 'SMTP_RELAY="smtps://smtp.example.com:465"; SMTP_FROM="not-an-email"'
+	assert_failure
+}
+
+# --- SMTP_USER/SMTP_PASS ---
+
+@test "validate_config: warns when SMTP_RELAY set without SMTP_USER/PASS" {
+	run run_validate_output 'SMTP_RELAY="smtps://smtp.example.com:465"; SMTP_FROM="bfd@example.com"; SMTP_USER=""; SMTP_PASS=""'
+	assert_success
+	assert_output --partial "SMTP_USER/SMTP_PASS not set"
+}
+
+# --- show_config ---
+
+@test "show_config: EMAIL_FORMAT returns value" {
+	EMAIL_FORMAT="both"
+	run show_config EMAIL_FORMAT
+	assert_success
+	assert_output "both"
+}
+
+@test "show_config: dump includes new email/SMTP vars" {
+	EMAIL_FORMAT="html"
+	EMAIL_DIGEST="timed"
+	EMAIL_DIGEST_INTERVAL="600"
+	SMTP_RELAY="smtps://example.com:465"
+	SMTP_FROM="bfd@example.com"
+	ALERT_TEMPLATE_DIR="/tmp/alert"
+	APOOL_RETENTION_DAYS="365"
+	APOOL_MAX_LINES="500000"
+	run show_config
+	assert_success
+	assert_output --partial "EMAIL_FORMAT=html"
+	assert_output --partial "EMAIL_DIGEST=timed"
+	assert_output --partial "EMAIL_DIGEST_INTERVAL=600"
+	assert_output --partial "SMTP_RELAY=smtps://example.com:465"
+	assert_output --partial "SMTP_FROM=bfd@example.com"
+	assert_output --partial "ALERT_TEMPLATE_DIR=/tmp/alert"
+	assert_output --partial "APOOL_RETENTION_DAYS=365"
+	assert_output --partial "APOOL_MAX_LINES=500000"
+}
