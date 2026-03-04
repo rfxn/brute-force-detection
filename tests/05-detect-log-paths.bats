@@ -33,7 +33,7 @@ teardown() {
 @test "detect_log_paths: nonexistent paths with no fallback - unchanged" {
 	# Skip if Debian/Ubuntu fallback paths exist on this system
 	if [ -f "/var/log/auth.log" ] || [ -f "/var/log/syslog" ] || [ -f "/var/log/mail.log" ]; then
-		skip "system has Debian log paths, testing fallback instead"
+		skip "Debian/Ubuntu log paths exist — RHEL-only test skipped"
 	fi
 
 	AUTH_LOG_PATH="/nonexistent/secure"
@@ -50,7 +50,7 @@ teardown() {
 
 @test "detect_log_paths: AUTH fallback to auth.log on Debian" {
 	if [ ! -f "/var/log/auth.log" ]; then
-		skip "not a Debian/Ubuntu system"
+		skip "Debian log path not found — Debian-only test skipped"
 	fi
 	AUTH_LOG_PATH="/nonexistent/secure"
 
@@ -61,7 +61,7 @@ teardown() {
 
 @test "detect_log_paths: KERNEL fallback to syslog on Debian" {
 	if [ ! -f "/var/log/syslog" ]; then
-		skip "not a Debian/Ubuntu system"
+		skip "Debian log path not found — Debian-only test skipped"
 	fi
 	KERNEL_LOG_PATH="/nonexistent/messages"
 	OUTPUT_SYSLOG_FILE="$KERNEL_LOG_PATH"
@@ -74,7 +74,7 @@ teardown() {
 
 @test "detect_log_paths: MAIL fallback to mail.log on Debian" {
 	if [ ! -f "/var/log/mail.log" ]; then
-		skip "not a Debian/Ubuntu system"
+		skip "Debian log path not found — Debian-only test skipped"
 	fi
 	MAIL_LOG_PATH="/nonexistent/maillog"
 

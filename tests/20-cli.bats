@@ -528,3 +528,68 @@ teardown() {
 	[ "$line_count" -eq 1 ]
 }
 
+# --- vhead ---
+
+@test "vhead: output contains version string" {
+	bfd_load_function "vhead"
+	V="2.0.1"
+	run vhead
+	assert_success
+	assert_output --partial "v2.0.1"
+}
+
+@test "vhead: output contains copyright line" {
+	bfd_load_function "vhead"
+	V="2.0.1"
+	run vhead
+	assert_success
+	assert_output --partial "(C) 1999-"
+	assert_output --partial "R-fx Networks"
+}
+
+# --- pre ---
+
+@test "pre: succeeds when all prerequisites exist" {
+	bfd_load_function "pre"
+	TLOG_PATH="$TEST_TMPDIR/tlog"
+	touch "$TLOG_PATH"
+	touch "$INSTALL_PATH/tlog_lib.sh"
+	TLOG_BASERUN="$INSTALL_PATH/tlog_run"
+	run pre
+	assert_success
+}
+
+@test "pre: exits with error when TLOG_PATH missing" {
+	bfd_load_function "pre"
+	TLOG_PATH="$TEST_TMPDIR/nonexistent_tlog"
+	run pre
+	assert_failure
+	[ "$status" -eq "$EXIT_PREREQ_ERROR" ]
+}
+
+@test "pre: creates TLOG_BASERUN directory if absent" {
+	bfd_load_function "pre"
+	TLOG_PATH="$TEST_TMPDIR/tlog"
+	touch "$TLOG_PATH"
+	touch "$INSTALL_PATH/tlog_lib.sh"
+	TLOG_BASERUN="$TEST_TMPDIR/new_baserun"
+	[ ! -d "$TLOG_BASERUN" ]
+	pre
+	[ -d "$TLOG_BASERUN" ]
+}
+
+@test "pre: creates BFD_LOG_PATH file with 640 if absent" {
+	bfd_load_function "pre"
+	TLOG_PATH="$TEST_TMPDIR/tlog"
+	touch "$TLOG_PATH"
+	touch "$INSTALL_PATH/tlog_lib.sh"
+	TLOG_BASERUN="$INSTALL_PATH/tlog_run"
+	BFD_LOG_PATH="$TEST_TMPDIR/new_bfd.log"
+	[ ! -f "$BFD_LOG_PATH" ]
+	pre
+	[ -f "$BFD_LOG_PATH" ]
+	local perms
+	perms=$(stat -c '%a' "$BFD_LOG_PATH")
+	[ "$perms" = "640" ]
+}
+

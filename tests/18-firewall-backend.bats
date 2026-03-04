@@ -903,3 +903,99 @@ SCRIPT
 	"
 	assert_failure
 }
+
+# ============================================================
+# _fw_route_setup
+# ============================================================
+
+@test "_fw_route_setup: sets _FW_ROUTE_IP_BIN when ip exists" {
+	printf '#!/bin/bash\nexit 0\n' > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
+		export PATH='$MOCK_DIR:/usr/bin:/bin'
+		_fw_route_setup
+		echo \"\$_FW_ROUTE_IP_BIN\"
+	"
+	assert_success
+	assert_output "$MOCK_DIR/ip"
+}
+
+@test "_fw_route_setup: fails when ip not in PATH" {
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
+		export PATH='$MOCK_DIR'
+		_fw_route_setup
+	"
+	assert_failure
+}
+
+# ============================================================
+# Status functions (mocked)
+# ============================================================
+
+@test "_fw_route_status: reports blackhole route count" {
+	printf '#!/bin/bash\nif [ "$1" = "route" ] && [ "$2" = "list" ]; then printf "blackhole 192.0.2.0/24\\nblackhole 198.51.100.0/24\\n"; fi\nexit 0\n' > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
+	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
+	run _fw_route_status
+	assert_success
+	assert_output "route (2 blackhole routes)"
+}
+
+@test "_fw_firewalld_status: reports rich rule count" {
+	firewall-cmd() {
+		if [ "$1" = "--list-rich-rules" ]; then
+			printf 'rule family="ipv4" source address="192.0.2.1" drop\nrule family="ipv4" source address="192.0.2.2" drop\n'
+		fi
+	}
+	export -f firewall-cmd
+	run _fw_firewalld_status
+	assert_success
+	assert_output "firewalld (2 rich rules, runtime-only)"
+}
+
+@test "_fw_nftables_status: reports element counts" {
+	nft() {
+		if [[ "$*" == *"blocked4"* ]]; then
+			echo "elements = { 192.0.2.1, 192.0.2.2, 192.0.2.3 }"
+			echo "}"
+		elif [[ "$*" == *"blocked6"* ]]; then
+			echo "elements = { 2001:db8::1 }"
+			echo "}"
+		fi
+	}
+	export -f nft
+	run _fw_nftables_status
+	assert_success
+	assert_output "nftables (inet bfd table, 3 v4 + 1 v6 blocked)"
+}
+
+@test "_fw_iptables_status: reports rule counts" {
+	cat > "$MOCK_DIR/mock_iptables" <<SCRIPT
+#!/bin/bash
+echo "Chain bfd (1 references)"
+echo "target     prot opt source               destination"
+echo "DROP       all  --  192.0.2.1            0.0.0.0/0"
+echo "DROP       all  --  192.0.2.2            0.0.0.0/0"
+SCRIPT
+	chmod +x "$MOCK_DIR/mock_iptables"
+	cat > "$MOCK_DIR/mock_ip6tables" <<SCRIPT
+#!/bin/bash
+echo "Chain bfd (1 references)"
+echo "target     prot opt source               destination"
+echo "DROP       all      2001:db8::1          ::/0"
+SCRIPT
+	chmod +x "$MOCK_DIR/mock_ip6tables"
+	_FW_IPT_BIN="$MOCK_DIR/mock_iptables"
+	_FW_IP6T_BIN="$MOCK_DIR/mock_ip6tables"
+	run _fw_iptables_status
+	assert_success
+	assert_output "iptables (bfd chain, 2 v4 + 1 v6 rules)"
+}
