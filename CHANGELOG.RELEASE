@@ -1,4 +1,11 @@
 2.0.1:
+[Fix] install.sh: preserve user-customized cron schedule on upgrade;
+      /etc/cron.d/bfd was unconditionally overwritten with shipped default
+      interval, losing custom schedules (F-078)
+[Note] F-079: FALSE POSITIVE — merge_conf() + ${VAR:-default} pattern
+      already handles relocated variables correctly
+[Note] F-080: FALSE POSITIVE — BAN_ESCALATION defaults to "none",
+      making BAN_ESCALATION_CAP inert until user enables escalation
 [Fix] importconf: preserve pressure-country.conf on upgrade; user-customized
       country pressure multipliers were silently overwritten (F-046)
 [Change] importconf: legacy variable migration notice now recommends 'bfd -c'

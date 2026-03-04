@@ -82,6 +82,11 @@ install(){
 		cp bfd.bash-completion /etc/bash_completion.d/bfd
 		chmod 644 /etc/bash_completion.d/bfd
 	fi
+	# save existing cron schedule before overwriting (F-078)
+	local _old_cron_sched=""
+	if [ "${_IS_UPGRADE:-0}" = "1" ] && [ -f /etc/cron.d/bfd ]; then
+		_old_cron_sched=$(awk '/^[^#]/ && NF>=6 {print $1,$2,$3,$4,$5; exit}' /etc/cron.d/bfd)
+	fi
 	if [ -f "cron" ]; then
 		cp cron /etc/cron.d/bfd
 		chmod 644 /etc/cron.d/bfd
@@ -143,6 +148,17 @@ install(){
 				sed -i "s|/usr/local/sbin/bfd|$BINPATH|g" "$_idir/bfd-watch"
 			fi
 		done
+	fi
+	# restore user-customized cron schedule after all sed operations (F-078)
+	if [ -n "${_old_cron_sched:-}" ] && [ -f /etc/cron.d/bfd ]; then
+		local _new_cron_sched
+		_new_cron_sched=$(awk '/^[^#]/ && NF>=6 {print $1,$2,$3,$4,$5; exit}' /etc/cron.d/bfd)
+		if [ "$_old_cron_sched" != "$_new_cron_sched" ]; then
+			# escape * for sed regex (common in cron schedules)
+			local _sed_safe
+			_sed_safe=$(printf '%s\n' "$_new_cron_sched" | sed 's/\*/\\*/g')
+			sed -i "s|^${_sed_safe}|${_old_cron_sched}|" /etc/cron.d/bfd
+		fi
 	fi
 	# daemon-reload after sed so systemd sees final paths
 	if command -v systemctl >/dev/null 2>&1; then
