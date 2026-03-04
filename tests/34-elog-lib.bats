@@ -305,3 +305,64 @@ d	e')
 	assert_success
 	assert_output --partial "with flag"
 }
+
+# --- _elog_level_num ---
+
+@test "_elog_level_num: maps all standard level names" {
+	run _elog_level_num "debug"
+	assert_output "0"
+	run _elog_level_num "info"
+	assert_output "1"
+	run _elog_level_num "warn"
+	assert_output "2"
+	run _elog_level_num "error"
+	assert_output "3"
+	run _elog_level_num "critical"
+	assert_output "4"
+}
+
+@test "_elog_level_num: unknown level defaults to 1" {
+	run _elog_level_num "bogus"
+	assert_output "1"
+	run _elog_level_num ""
+	assert_output "1"
+}
+
+# --- _elog_level_name ---
+
+@test "_elog_level_name: maps all standard level numbers" {
+	run _elog_level_name "0"
+	assert_output "debug"
+	run _elog_level_name "1"
+	assert_output "info"
+	run _elog_level_name "2"
+	assert_output "warn"
+	run _elog_level_name "3"
+	assert_output "error"
+	run _elog_level_name "4"
+	assert_output "critical"
+}
+
+@test "_elog_level_name: unknown number defaults to info" {
+	run _elog_level_name "9"
+	assert_output "info"
+	run _elog_level_name ""
+	assert_output "info"
+}
+
+# --- _elog_strip_tag ---
+
+@test "_elog_strip_tag: strips {tag} prefix from message" {
+	run _elog_strip_tag "{sshd} login failed"
+	assert_output "login failed"
+}
+
+@test "_elog_strip_tag: passes through message without tag" {
+	run _elog_strip_tag "no tag here"
+	assert_output "no tag here"
+}
+
+@test "_elog_strip_tag: preserves message when braces not at start" {
+	run _elog_strip_tag "some {tag} in middle"
+	assert_output "some {tag} in middle"
+}
