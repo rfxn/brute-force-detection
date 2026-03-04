@@ -1714,6 +1714,30 @@ state_events_prune() {
 	) 200>>"$events_file"
 }
 
+# state_pool_prune install_path [retention_days] [max_lines] — age-based pool pruning
+# Removes entries older than retention_days. Safety cap at max_lines.
+# Preserves file inode via cat-overwrite (important for flock handles).
+state_pool_prune() {
+	local install_path="$1" retention_days="${2:-365}" max_lines="${3:-500000}"
+	local pool_file="$install_path/stats/attack.pool"
+	[ ! -f "$pool_file" ] || [ ! -s "$pool_file" ] && return 0
+	local cutoff=0
+	if [ "$retention_days" -gt 0 ] 2>/dev/null; then
+		cutoff=$(( $(date +%s) - (retention_days * 86400) ))
+	fi
+	(
+		flock -x 200
+		if [ "$cutoff" -gt 0 ]; then
+			awk -v cutoff="$cutoff" '$1+0 >= cutoff' "$pool_file" \
+				| tail -n "$max_lines" > "$pool_file.new"
+		else
+			tail -n "$max_lines" "$pool_file" > "$pool_file.new"
+		fi
+		cat "$pool_file.new" > "$pool_file"   # preserves inode for flock
+		rm -f "$pool_file.new"
+	) 200>>"$pool_file"
+}
+
 # --- Pressure scoring functions ---
 
 # pressure_compute install_path host half_life now [mod] — compute decayed pressure
@@ -2867,15 +2891,16 @@ _search_ip_data() {
 		fi
 	fi
 
-	# Attack pool
+	# Attack pool — sum failures (COUNT field) and count ban events (lines)
 	local pool_file="$install_path/stats/attack.pool"
-	local pool_count=0
+	local pool_triggers=0 pool_failures=0
 	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
-		pool_count=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
+		pool_triggers=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
+		pool_failures=$(awk -v ip="$ip" '$2 == ip { c += ($4+0 > 0 ? $4+0 : 1) } END {print c+0}' "$pool_file")
 	fi
 
 	# Output: D line (core data)
-	echo "D|$ban_ts|$ban_expiry|$hist_24h|$hist_total|$evt_count|$first_ts|$last_ts|$_gp_fmt|$trip|$half_life|$pool_count"
+	echo "D|$ban_ts|$ban_expiry|$hist_24h|$hist_total|$evt_count|$first_ts|$last_ts|$_gp_fmt|$trip|$half_life|$pool_triggers|$pool_failures"
 
 	# Output: E lines (per-service 24h event counts)
 	if [ -n "${evt_raw:-}" ]; then
@@ -2902,9 +2927,9 @@ search_ip() {
 	data=$(_search_ip_data "$install_path" "$ip") || return 1
 
 	# parse D line
-	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count
+	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures
 	d_line=$(echo "$data" | grep '^D|')
-	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count <<< "$d_line"
+	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures <<< "$d_line"
 
 	local now
 	now=$(date +"%s")
@@ -2966,8 +2991,8 @@ search_ip() {
 	fi
 
 	# Attack pool
-	if [ "$pool_count" -gt 0 ] 2>/dev/null; then
-		echo "  Attack pool:    $pool_count total triggers"
+	if [ "$pool_triggers" -gt 0 ] 2>/dev/null; then
+		echo "  Attack pool:    $pool_failures failures across $pool_triggers bans"
 	fi
 }
 
@@ -3830,9 +3855,9 @@ search_ip_json() {
 	data=$(_search_ip_data "$install_path" "$ip") || return 1
 
 	# parse D line
-	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count
+	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures
 	d_line=$(echo "$data" | grep '^D|')
-	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count <<< "$d_line"
+	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures <<< "$d_line"
 
 	local now
 	now=$(date +"%s")
@@ -3878,11 +3903,11 @@ search_ip_json() {
 		last_fmt="\"$(_fmt_ts_iso "$last_ts")\""
 	fi
 
-	printf '{"ip": "%s", "status": "%s", "pressure": %s, "pressure_trip": %s, "ban_history_24h": %d, "ban_history_total": %d, "events_24h": %d, "services": %s, "first_seen": %s, "last_seen": %s, "attack_pool_triggers": %d}\n' \
+	printf '{"ip": "%s", "status": "%s", "pressure": %s, "pressure_trip": %s, "ban_history_24h": %d, "ban_history_total": %d, "events_24h": %d, "services": %s, "first_seen": %s, "last_seen": %s, "attack_pool_triggers": %d, "attack_pool_failures": %d}\n' \
 		"$(_json_escape "$ip")" "$(_json_escape "$status_str")" \
 		"$_gp_fmt" "$trip" \
 		"$hist_24h" "$hist_total" "$evt_count" "$svcs_json" \
-		"$first_fmt" "$last_fmt" "$pool_count"
+		"$first_fmt" "$last_fmt" "$pool_triggers" "$pool_failures"
 }
 
 # search_ip_csv install_path ip — CSV formatted unified IP report
@@ -3892,12 +3917,12 @@ search_ip_csv() {
 	local data
 	data=$(_search_ip_data "$install_path" "$ip") || return 1
 
-	echo "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers"
+	echo "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers,attack_pool_failures"
 
 	# parse D line
-	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count
+	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures
 	d_line=$(echo "$data" | grep '^D|')
-	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_count <<< "$d_line"
+	IFS='|' read -r _ ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures <<< "$d_line"
 
 	local now
 	now=$(date +"%s")
@@ -3923,5 +3948,5 @@ search_ip_csv() {
 		last_fmt=$(_fmt_ts_iso "$last_ts")
 	fi
 
-	echo "$ip,$status_str,$_gp_fmt,$trip,$hist_24h,$hist_total,$evt_count,$first_fmt,$last_fmt,$pool_count"
+	echo "$ip,$status_str,$_gp_fmt,$trip,$hist_24h,$hist_total,$evt_count,$first_fmt,$last_fmt,$pool_triggers,$pool_failures"
 }

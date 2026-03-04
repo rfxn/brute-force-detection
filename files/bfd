@@ -121,6 +121,7 @@ config_init() {
 		# legacy compat aliases
 		unset TRIG TRIG_WINDOW TRIG_GLOBAL
 		unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
+		unset APOOL_RETENTION_DAYS APOOL_MAX_LINES
 		# internals.conf variables
 		unset RULES_PATH TLOG_PATH TLOG_BASERUN
 		unset ALERT_TEMPLATE_DIR ALERT_SPOOL_FILE IGNORE_HOST_FILES LOCK_FILE
@@ -355,6 +356,17 @@ check() {
 	local prune_window=$((PRESSURE_HALF_LIFE * 10))
 	state_events_prune "$INSTALL_PATH" "$prune_window" "$UTIME"
 
+	# prune attack pool periodically (once per 24h) — cron.daily skips during watch mode
+	if [ "${_SCAN_MODE:-}" != "1" ]; then
+		local _pool_prune_marker="$INSTALL_PATH/tmp/.pool_prune_ts"
+		local _pool_last_prune=0
+		[ -f "$_pool_prune_marker" ] && _pool_last_prune=$(cat "$_pool_prune_marker" 2>/dev/null)
+		if [ $(( UTIME - _pool_last_prune )) -gt 86400 ]; then
+			state_pool_prune "$INSTALL_PATH" "${APOOL_RETENTION_DAYS:-365}" "${APOOL_MAX_LINES:-500000}"
+			echo "$UTIME" > "$_pool_prune_marker"
+		fi
+	fi
+
 	for str in "$RULES_PATH"/*; do
 		str=$(basename "$str")
 		# scan mode: skip rules not matching the target
@@ -521,6 +533,7 @@ _apool_report() {
 	local source_file="$1"
 	local title="$2"
 	local search="${3:-}"
+	local cutoff="${4:-0}"
 	local atmp
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.alist.XXXXXX")
 	echo "[+] $title" && echo
@@ -538,7 +551,7 @@ _apool_report() {
 		_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
 		_gp_fmt=$(pressure_format "$_gp")
 		echo "$cnt|$aip|${_gp_fmt}/${trip}|${aip_cc:---}|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
-	done < <(_apool_awk "$source_file" "$search")
+	done < <(_apool_awk "$source_file" "$search" "$cutoff")
 	format_table < "$atmp"
 	rm -f "$atmp"
 }
@@ -572,12 +585,15 @@ _apool_ban_status() {
 	fi
 }
 
-# _apool_service_summary_awk source_file — shared AWK helper for per-service breakdown
+# _apool_service_summary_awk source_file [cutoff] — shared AWK helper for per-service breakdown
 # Outputs pipe-delimited: event_count|service_name|unique_ip_count
 # Sorted by event count descending.
 _apool_service_summary_awk() {
 	local source_file="$1"
-	awk '{
+	local cutoff="${2:-0}"
+	awk -v cutoff="$cutoff" '{
+		ts = $1 + 0
+		if (cutoff > 0 && ts < cutoff) next
 		cnt = ($4+0 > 0) ? $4+0 : 1
 		svc[$3] += cnt
 		key = $3 " " $2
@@ -588,9 +604,10 @@ _apool_service_summary_awk() {
 	}' "$source_file" | sort -t'|' -k1 -nr
 }
 
-# _apool_service_summary source_file — per-service event and unique IP breakdown
+# _apool_service_summary source_file [cutoff] — per-service event and unique IP breakdown
 _apool_service_summary() {
 	local source_file="$1"
+	local cutoff="${2:-0}"
 	if [ ! -f "$source_file" ] || [ ! -s "$source_file" ]; then
 		return 0
 	fi
@@ -598,52 +615,45 @@ _apool_service_summary() {
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.svcsum.XXXXXX")
 	echo "[+] Per-service breakdown" && echo
 	echo "SERVICE|EVENTS|UNIQUE_IPS" > "$atmp"
-	_apool_service_summary_awk "$source_file" >> "$atmp"
+	_apool_service_summary_awk "$source_file" "$cutoff" >> "$atmp"
 	format_table < "$atmp"
 	rm -f "$atmp"
 }
 
-# _apool_prepare_weekly — create temp file with 7-day aggregated pool data
-# Outputs temp file path via stdout; caller must rm -f after use.
-_apool_prepare_weekly() {
-	local wtmp
-	wtmp=$(mktemp "$INSTALL_PATH/tmp/.weekly.apool.XXXXXX")
-	find "$APOOL_LIST"* -type f -mtime -7 -exec cat {} + > "$wtmp" 2>/dev/null
-	echo "$wtmp"
-}
-
 apool_list() {
 	local ahost="${1:-}"
+	local now cutoff_24h cutoff_7d
+	now=$(date +"%s")
+	cutoff_24h=$((now - 86400))
+	cutoff_7d=$((now - 604800))
 	if [ -n "$ahost" ]; then
-		local WAPOOL_LIST
-		WAPOOL_LIST=$(_apool_prepare_weekly)
-		_apool_report "$WAPOOL_LIST" "Events for search string \"$ahost\"" "$ahost"
-		rm -f "$WAPOOL_LIST"
+		_apool_report "$APOOL_LIST" "Matching entries for \"$ahost\" (7d)" "$ahost" "$cutoff_7d"
 	elif [ -f "$APOOL_LIST" ]; then
-		_apool_report "$APOOL_LIST" "Top 25 brute force attackers today"
+		_apool_report "$APOOL_LIST" "Top 25 brute force attackers (24h)" "" "$cutoff_24h"
 		echo
-		_apool_service_summary "$APOOL_LIST"
+		_apool_service_summary "$APOOL_LIST" "$cutoff_24h"
 		echo
-		local WAPOOL_LIST
-		WAPOOL_LIST=$(_apool_prepare_weekly)
-		_apool_report "$WAPOOL_LIST" "Top 25 brute force attackers this week"
-		rm -f "$WAPOOL_LIST"
+		_apool_report "$APOOL_LIST" "Top 25 brute force attackers (7d)" "" "$cutoff_7d"
 	fi
 }
 
 # --- Structured output for attack pool ---
 
-# _apool_awk source_file [search] — shared aggregation pipeline for attack pool
+# _apool_awk source_file [search] [cutoff] — shared aggregation pipeline for attack pool
 # Outputs pipe-delimited: cnt|ip|first_ts|last_ts|rules_csv|country_code
+# cutoff: epoch timestamp — entries older than cutoff are skipped (0 = no filter)
 _apool_awk() {
 	local source_file="$1"
 	local search="${2:-}"
+	local cutoff="${3:-0}"
 	if [ -n "$search" ]; then
 		grep -F "$search" "$source_file"
 	else
 		cat "$source_file"
-	fi | awk '{
-		ip = $2; ts = $1 + 0; rule = $3
+	fi | awk -v cutoff="$cutoff" '{
+		ts = $1 + 0
+		if (cutoff > 0 && ts < cutoff) next
+		ip = $2; rule = $3
 		cnt = ($4+0 > 0) ? $4+0 : 1
 		cc_val = ($5 != "" && $5 != "--") ? $5 : ""
 		count[ip] += cnt
@@ -659,10 +669,11 @@ _apool_awk() {
 	}' | sort -t'|' -k1 -nr | head -n 25
 }
 
-# _apool_report_json source_file [search] — JSON array of attack pool entries
+# _apool_report_json source_file [search] [cutoff] — JSON array of attack pool entries
 _apool_report_json() {
 	local source_file="$1"
 	local search="${2:-}"
+	local cutoff="${3:-0}"
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
@@ -671,7 +682,7 @@ _apool_report_json() {
 	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
 		local first=1
 		local cnt aip first_ts last_ts mods aip_cc
-		_apool_awk "$source_file" "$search" | \
+		_apool_awk "$source_file" "$search" "$cutoff" | \
 		while IFS='|' read -r cnt aip first_ts last_ts mods aip_cc; do
 			[ -z "$cnt" ] && continue
 			local first_fmt last_fmt ban_status _gp _gp_fmt
@@ -696,10 +707,11 @@ _apool_report_json() {
 	echo "  ]"
 }
 
-# _apool_report_csv source_file [search] — CSV formatted attack pool entries
+# _apool_report_csv source_file [search] [cutoff] — CSV formatted attack pool entries
 _apool_report_csv() {
 	local source_file="$1"
 	local search="${2:-}"
+	local cutoff="${3:-0}"
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
@@ -707,7 +719,7 @@ _apool_report_csv() {
 	echo "events,ip,pressure,pressure_trip,country,first_seen,last_seen,rules,status"
 	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
 		local cnt aip first_ts last_ts mods aip_cc
-		_apool_awk "$source_file" "$search" | \
+		_apool_awk "$source_file" "$search" "$cutoff" | \
 		while IFS='|' read -r cnt aip first_ts last_ts mods aip_cc; do
 			[ -z "$cnt" ] && continue
 			local first_fmt last_fmt ban_status _gp _gp_fmt
@@ -722,13 +734,14 @@ _apool_report_csv() {
 	fi
 }
 
-# _apool_service_summary_json source_file — JSON array of per-service breakdown
+# _apool_service_summary_json source_file [cutoff] — JSON array of per-service breakdown
 _apool_service_summary_json() {
 	local source_file="$1"
+	local cutoff="${2:-0}"
 	echo "["
 	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
 		local first=1
-		_apool_service_summary_awk "$source_file" | \
+		_apool_service_summary_awk "$source_file" "$cutoff" | \
 		while IFS='|' read -r svc_cnt svc_name svc_uniq; do
 			[ -z "$svc_cnt" ] && continue
 			if [ "$first" -eq 1 ]; then
@@ -744,12 +757,13 @@ _apool_service_summary_json() {
 	echo "  ]"
 }
 
-# _apool_service_summary_csv source_file — CSV formatted per-service breakdown
+# _apool_service_summary_csv source_file [cutoff] — CSV formatted per-service breakdown
 _apool_service_summary_csv() {
 	local source_file="$1"
+	local cutoff="${2:-0}"
 	echo "service,events,unique_ips"
 	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
-		_apool_service_summary_awk "$source_file" | \
+		_apool_service_summary_awk "$source_file" "$cutoff" | \
 		while IFS='|' read -r svc_cnt svc_name svc_uniq; do
 			[ -z "$svc_cnt" ] && continue
 			echo "$svc_name,$svc_cnt,$svc_uniq"
@@ -760,24 +774,22 @@ _apool_service_summary_csv() {
 # apool_list_json [search] — JSON formatted attack pool report
 apool_list_json() {
 	local ahost="${1:-}"
+	local now cutoff_24h cutoff_7d
+	now=$(date +"%s")
+	cutoff_24h=$((now - 86400))
+	cutoff_7d=$((now - 604800))
 	if [ -n "$ahost" ]; then
-		local WAPOOL_LIST
-		WAPOOL_LIST=$(_apool_prepare_weekly)
 		printf '{"search": "%s", "results": ' "$(_json_escape "$ahost")"
-		_apool_report_json "$WAPOOL_LIST" "$ahost"
+		_apool_report_json "$APOOL_LIST" "$ahost" "$cutoff_7d"
 		echo "}"
-		rm -f "$WAPOOL_LIST"
 	elif [ -f "$APOOL_LIST" ]; then
-		local WAPOOL_LIST
-		WAPOOL_LIST=$(_apool_prepare_weekly)
-		printf '{"today": '
-		_apool_report_json "$APOOL_LIST"
+		printf '{"last_24h": '
+		_apool_report_json "$APOOL_LIST" "" "$cutoff_24h"
 		printf ', "services": '
-		_apool_service_summary_json "$APOOL_LIST"
-		printf ', "this_week": '
-		_apool_report_json "$WAPOOL_LIST"
+		_apool_service_summary_json "$APOOL_LIST" "$cutoff_24h"
+		printf ', "last_7d": '
+		_apool_report_json "$APOOL_LIST" "" "$cutoff_7d"
 		echo "}"
-		rm -f "$WAPOOL_LIST"
 	else
 		echo "{}"
 	fi
@@ -786,24 +798,22 @@ apool_list_json() {
 # apool_list_csv [search] — CSV formatted attack pool report
 apool_list_csv() {
 	local ahost="${1:-}"
+	local now cutoff_24h cutoff_7d
+	now=$(date +"%s")
+	cutoff_24h=$((now - 86400))
+	cutoff_7d=$((now - 604800))
 	if [ -n "$ahost" ]; then
-		local WAPOOL_LIST
-		WAPOOL_LIST=$(_apool_prepare_weekly)
 		echo "# search: $ahost"
-		_apool_report_csv "$WAPOOL_LIST" "$ahost"
-		rm -f "$WAPOOL_LIST"
+		_apool_report_csv "$APOOL_LIST" "$ahost" "$cutoff_7d"
 	elif [ -f "$APOOL_LIST" ]; then
-		local WAPOOL_LIST
-		WAPOOL_LIST=$(_apool_prepare_weekly)
-		echo "# today"
-		_apool_report_csv "$APOOL_LIST"
+		echo "# last_24h"
+		_apool_report_csv "$APOOL_LIST" "" "$cutoff_24h"
 		echo ""
 		echo "# services"
-		_apool_service_summary_csv "$APOOL_LIST"
+		_apool_service_summary_csv "$APOOL_LIST" "$cutoff_24h"
 		echo ""
-		echo "# this_week"
-		_apool_report_csv "$WAPOOL_LIST"
-		rm -f "$WAPOOL_LIST"
+		echo "# last_7d"
+		_apool_report_csv "$APOOL_LIST" "" "$cutoff_7d"
 	fi
 }
 

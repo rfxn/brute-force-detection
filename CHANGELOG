@@ -1,4 +1,18 @@
 2.0.1:
+[New] state_pool_prune(): age-based pruning with max-lines safety cap,
+      mirrors state_events_prune() pattern with flock + inode-preserving rewrite
+[New] conf.bfd: APOOL_RETENTION_DAYS (default 365), APOOL_MAX_LINES (default 500000)
+[Change] cron.daily: age-based pruning replaces daily rotation; one-time
+      migration consolidates existing .MMDDYY.HHMM archives into single pool
+[Change] check(): periodic pool pruning in watch mode (24h marker-based timer)
+[Change] _apool_awk()/_apool_service_summary_awk(): add cutoff parameter for
+      timestamp-based filtering (early AWK skip — no memory for old entries)
+[Change] apool_list()/json/csv: timestamp-based "Last 24h" / "Last 7d" views
+      replace file-based "today" / "this week" — no temp files needed
+[Change] search_ip()/json/csv: enriched pool display showing failure count
+      + ban count (attack_pool_failures + attack_pool_triggers)
+[Remove] _apool_prepare_weekly(): eliminated (timestamp filtering replaces
+      find+cat of fragmented archive files)
 [Change] state_pool_append(): enriched 10-field format — TIMESTAMP IP MOD
       COUNT CC ACTION DURATION PORTS PRESSURE TRIP_TYPE; backward compatible
       with old 3-field entries (COUNT=1, CC=--, ACTION=ban, etc.)

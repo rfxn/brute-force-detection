@@ -16,7 +16,6 @@ bfd_load_function _apool_report_csv
 bfd_load_function _apool_service_summary_awk
 bfd_load_function _apool_service_summary_json
 bfd_load_function _apool_service_summary_csv
-bfd_load_function _apool_prepare_weekly
 bfd_load_function apool_list_json
 bfd_load_function apool_list_csv
 
@@ -268,6 +267,7 @@ teardown() {
 	assert_output --partial '"events_24h":'
 	assert_output --partial '"services":'
 	assert_output --partial '"attack_pool_triggers":'
+	assert_output --partial '"attack_pool_failures":'
 }
 
 @test "search_ip_json: invalid IP returns error" {
@@ -290,7 +290,7 @@ teardown() {
 @test "search_ip_csv: header and single row" {
 	run search_ip_csv "$INSTALL_PATH" "192.0.2.10"
 	assert_success
-	assert_output --partial "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers"
+	assert_output --partial "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers,attack_pool_failures"
 	[ "$(echo "$output" | wc -l)" -eq 2 ]
 }
 
@@ -364,18 +364,20 @@ teardown() {
 	run apool_list_json
 	assert_success
 	# pool file exists but empty: still outputs full JSON structure
-	assert_output --partial '"today":'
+	assert_output --partial '"last_24h":'
 	assert_output --partial '"services":'
 }
 
-@test "apool_list_json: has today, services, this_week sections" {
+@test "apool_list_json: has last_24h, services, last_7d sections" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 sshd" >> "$APOOL_LIST"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
 	run apool_list_json
 	assert_success
-	assert_output --partial '"today":'
+	assert_output --partial '"last_24h":'
 	assert_output --partial '"services":'
-	assert_output --partial '"this_week":'
+	assert_output --partial '"last_7d":'
 }
 
 @test "apool_list_json: search mode has search and results" {
@@ -391,12 +393,14 @@ teardown() {
 
 @test "apool_list_csv: sections labeled" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 sshd" >> "$APOOL_LIST"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
 	run apool_list_csv
 	assert_success
-	assert_output --partial "# today"
+	assert_output --partial "# last_24h"
 	assert_output --partial "# services"
-	assert_output --partial "# this_week"
+	assert_output --partial "# last_7d"
 }
 
 # --- events_cidr_json: temp file cleanup ---

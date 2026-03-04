@@ -183,3 +183,15 @@ LOG_LEVEL="1"
 # ban/unban command retry count with exponential backoff (default 2)
 # set to 0 to disable retries (useful for testing)
 #BAN_RETRY_COUNT="2"
+
+# =============================================
+# Attack Pool (Long-term History)
+# =============================================
+
+# how long to retain attack pool entries in days (default 1 year)
+# entries older than this are pruned daily; 0 = no age limit (size cap still applies)
+APOOL_RETENTION_DAYS="365"
+
+# maximum attack pool entries (safety cap for high-volume servers)
+# oldest entries are dropped when this limit is reached; 0 = no limit
+APOOL_MAX_LINES="500000"
