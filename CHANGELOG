@@ -1,4 +1,7 @@
 2.0.1:
+[Change] usage_short(): add compact CLI matrix line listing all flags in
+      [-x|--long] form; expand common commands by category with brief
+      descriptions matching LMD's usage output style
 [New] _alert_spool_append(): append timestamped entries to digest spool under
       flock for timed accumulation across detection cycles
 [New] _alert_digest_check(): flush spool when EMAIL_DIGEST_INTERVAL expires;
