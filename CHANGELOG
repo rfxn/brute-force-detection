@@ -1,4 +1,17 @@
 2.0.1:
+[New] _alert_spool_append(): append timestamped entries to digest spool under
+      flock for timed accumulation across detection cycles
+[New] _alert_digest_check(): flush spool when EMAIL_DIGEST_INTERVAL expires;
+      optimistic age check without lock, flush under exclusive flock
+[New] _alert_digest_flush_now(): force-send accumulated alerts, strip epoch
+      prefix, truncate spool; releases lock before SMTP delivery
+[Change] check(): conditional spool vs immediate send based on EMAIL_DIGEST
+      mode; digest check runs every cycle for pre-existing spool entries
+[Change] cleanup_watch(): flush digest spool before watch mode shutdown
+[Change] config_init(): unset EMAIL_FORMAT, EMAIL_DIGEST, EMAIL_DIGEST_INTERVAL,
+      EMAIL_REPUTATION_LINKS, SMTP_RELAY/USER/PASS/FROM on reload
+[Change] --scan: force-flush digest spool after scan completion
+[Change] cron.daily: safety truncation for stale digest spool (>24h)
 [New] _alert_send_local(): local MTA delivery with text/html/multipart format
       support; sendmail fallback to text-only via mail when unavailable
 [New] _alert_send_relay(): authenticated SMTP relay delivery via curl with

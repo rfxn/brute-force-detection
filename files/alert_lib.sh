@@ -816,3 +816,93 @@ _alert_send() {
 	# local MTA path
 	_alert_send_local "$recip" "$subject" "$text_file" "$html_file" "$format"
 }
+
+# ---------------------------------------------------------------------------
+# Digest Mode (Phase 5)
+# ---------------------------------------------------------------------------
+
+# _alert_spool_append alerts_file — append timestamped entries to digest spool
+# Prepends current epoch to each line of alerts_file and appends to
+# $ALERT_SPOOL_FILE under exclusive flock (10s timeout).
+# No-op if alerts_file is empty or missing.
+_alert_spool_append() {
+	local alerts_file="$1"
+	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
+		return 0
+	fi
+	local spool="${ALERT_SPOOL_FILE:-}"
+	if [ -z "$spool" ]; then
+		elog error "ALERT_SPOOL_FILE not set, cannot spool digest alerts."
+		return 1
+	fi
+	local now
+	now=$(date +%s)
+	local lock_file="${spool}.lock"
+	(
+		flock -x -w 10 200 || { elog error "digest spool lock timeout, skipping append."; exit 1; }
+		while IFS= read -r _line; do
+			[ -z "$_line" ] && continue
+			echo "${now}|${_line}"
+		done < "$alerts_file" >> "$spool"
+	) 200>"$lock_file"
+}
+
+# _alert_digest_check — flush spool if EMAIL_DIGEST_INTERVAL has expired
+# Returns immediately if EMAIL_DIGEST != "timed" or spool is empty/missing.
+# Reads first line's epoch for age check (optimistic, no lock needed).
+_alert_digest_check() {
+	if [ "${EMAIL_DIGEST:-cycle}" != "timed" ]; then
+		return 0
+	fi
+	local spool="${ALERT_SPOOL_FILE:-}"
+	if [ -z "$spool" ] || [ ! -f "$spool" ] || [ ! -s "$spool" ]; then
+		return 0
+	fi
+	local first_epoch
+	IFS='|' read -r first_epoch _ < "$spool"
+	if [ -z "$first_epoch" ]; then
+		return 0
+	fi
+	local now interval
+	now=$(date +%s)
+	interval="${EMAIL_DIGEST_INTERVAL:-900}"
+	if [ $((now - first_epoch)) -ge "$interval" ]; then
+		_alert_digest_flush_now
+	fi
+}
+
+# _alert_digest_flush_now — force-send accumulated digest alerts
+# Under exclusive flock: strips epoch prefix, copies to temp flush file,
+# truncates spool. Releases lock before calling send_alerts() to avoid
+# holding flock during SMTP delivery. No-op if EMAIL_ALERTS!=1 or spool empty.
+_alert_digest_flush_now() {
+	if [ "${EMAIL_ALERTS:-0}" != "1" ]; then
+		return 0
+	fi
+	local spool="${ALERT_SPOOL_FILE:-}"
+	if [ -z "$spool" ] || [ ! -f "$spool" ] || [ ! -s "$spool" ]; then
+		return 0
+	fi
+	local lock_file="${spool}.lock"
+	local flush_file
+	flush_file=$(mktemp "${spool}.flush.XXXXXX")
+	local flush_count=0
+	(
+		flock -x -w 10 200 || { elog error "digest flush lock timeout, skipping flush."; exit 1; }
+		# re-check spool non-empty under lock
+		if [ ! -s "$spool" ]; then
+			exit 0
+		fi
+		# strip epoch prefix (field 0) — send_alerts expects 12-field format
+		cut -d'|' -f2- "$spool" > "$flush_file"
+		# truncate spool
+		: > "$spool"
+	) 200>"$lock_file"
+	# send outside lock to avoid holding flock during delivery
+	if [ -s "$flush_file" ]; then
+		flush_count=$(wc -l < "$flush_file")
+		eout "digest flush: sending $flush_count accumulated alert(s)." le
+		send_alerts "$flush_file" "${EMAIL_SUBJECT:-BFD Alert}" "${EMAIL_LOGLINES:-50}"
+	fi
+	rm -f "$flush_file"
+}

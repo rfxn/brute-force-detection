@@ -109,6 +109,9 @@ config_init() {
 		unset BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW
 		unset BAN_ESCALATION BAN_ESCALATION_CAP
 		unset EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES
+		unset EMAIL_FORMAT EMAIL_DIGEST EMAIL_DIGEST_INTERVAL
+		unset EMAIL_REPUTATION_LINKS
+		unset SMTP_RELAY SMTP_USER SMTP_PASS SMTP_FROM
 		unset FIREWALL
 		unset BAN_COMMAND UNBAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND_V6
 		unset AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH
@@ -472,9 +475,17 @@ check() {
 		bans_count=$((bans_count + subnet_bans))
 	fi
 
-	# send batched alert emails
+	# send batched alert emails (or spool for digest)
 	if [ "$EMAIL_ALERTS" = "1" ] && [ -s "$alerts_file" ]; then
-		send_alerts "$alerts_file" "$EMAIL_SUBJECT" "${EMAIL_LOGLINES:-50}"
+		if [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
+			_alert_spool_append "$alerts_file"
+		else
+			send_alerts "$alerts_file" "$EMAIL_SUBJECT" "${EMAIL_LOGLINES:-50}"
+		fi
+	fi
+	# check digest spool for timed flush (handles pre-existing entries too)
+	if [ "$EMAIL_ALERTS" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
+		_alert_digest_check
 	fi
 	rm -f "$alerts_file"
 
@@ -786,6 +797,10 @@ run() {
 # shellcheck disable=SC2317 # called via trap
 cleanup_watch() {
 	eout "watch mode shutting down (pid=$$)" le
+	# flush any accumulated digest alerts before shutdown
+	if [ "${EMAIL_ALERTS:-0}" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
+		_alert_digest_flush_now
+	fi
 	_cleanup_common
 }
 
@@ -1060,6 +1075,10 @@ case "${1:-}" in
 	eout "scan: processing ${_SCAN_RULE:-all rules} (max_lines=$SCAN_MAX_LINES, timeout=${SCAN_TIMEOUT}s, dry_run=$DRY_RUN)" le
 	process_unbans "$INSTALL_PATH" "$UTIME"
 	check
+	# force-flush digest spool after scan (one-shot operation)
+	if [ "${EMAIL_ALERTS:-0}" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
+		_alert_digest_flush_now
+	fi
 	_SCAN_MODE=""
 	if [ "$DRY_RUN" != "1" ] && [ -n "$_SCAN_LOG_PAIRS" ]; then
 		_deduped_pairs=$(printf '%s\n' "$_SCAN_LOG_PAIRS" | sort -u)

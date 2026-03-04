@@ -1541,3 +1541,221 @@ MOCK
 	run grep "multipart/alternative" "$SENDMAIL_LOG"
 	assert_success
 }
+
+# ===================================================================
+# Digest mode — _alert_spool_append
+# ===================================================================
+
+# helper: mock send_alerts that records calls
+_setup_mock_send_alerts() {
+	export DIGEST_CALLS_LOG="$TEST_TMPDIR/digest_calls.log"
+	export DIGEST_FLUSH_DIR="$TEST_TMPDIR/digest_flush"
+	mkdir -p "$DIGEST_FLUSH_DIR"
+	# override send_alerts
+	send_alerts() {
+		local _af="$1" _subj="$2" _ll="$3"
+		local _n
+		_n=$(wc -l < "$_af")
+		echo "SEND_ALERTS: count=$_n subject=$_subj loglines=$_ll" >> "$DIGEST_CALLS_LOG"
+		cp "$_af" "$DIGEST_FLUSH_DIR/flush_$(date +%s%N).dat"
+	}
+}
+
+@test "_alert_spool_append: appends timestamped entries to spool" {
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	local af="$TEST_TMPDIR/alerts"
+	cat > "$af" <<'EOF'
+192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1
+198.51.100.5|dovecot|143|8000|0|ban|0||root|10|300|2
+EOF
+	_alert_spool_append "$af"
+	[ -f "$ALERT_SPOOL_FILE" ]
+	local count
+	count=$(wc -l < "$ALERT_SPOOL_FILE")
+	[ "$count" -eq 2 ]
+	# each line should start with epoch (10+ digits) followed by pipe
+	local _ep_pat='^[0-9]{10,}\|'
+	while IFS= read -r line; do
+		[[ "$line" =~ $_ep_pat ]]
+	done < "$ALERT_SPOOL_FILE"
+}
+
+@test "_alert_spool_append: no-op on empty file" {
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	local af="$TEST_TMPDIR/empty_alerts"
+	: > "$af"
+	_alert_spool_append "$af"
+	# spool should not exist (never written)
+	[ ! -f "$ALERT_SPOOL_FILE" ]
+}
+
+@test "_alert_spool_append: appends to existing spool" {
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	# pre-populate with one line
+	echo "1000000000|203.0.113.1|postfix|25|3000|0|ban|0||root|10|300|1" > "$ALERT_SPOOL_FILE"
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1" > "$af"
+	_alert_spool_append "$af"
+	local count
+	count=$(wc -l < "$ALERT_SPOOL_FILE")
+	[ "$count" -eq 2 ]
+}
+
+# ===================================================================
+# Digest mode — _alert_digest_check
+# ===================================================================
+
+@test "_alert_digest_check: no-op when EMAIL_DIGEST=cycle" {
+	EMAIL_DIGEST="cycle"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	echo "1000000000|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1" > "$ALERT_SPOOL_FILE"
+	_setup_mock_send_alerts
+	_alert_digest_check
+	[ ! -f "$DIGEST_CALLS_LOG" ]
+}
+
+@test "_alert_digest_check: no-op on empty spool" {
+	EMAIL_DIGEST="timed"
+	EMAIL_DIGEST_INTERVAL="900"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool_empty"
+	: > "$ALERT_SPOOL_FILE"
+	_setup_mock_send_alerts
+	_alert_digest_check
+	[ ! -f "$DIGEST_CALLS_LOG" ]
+}
+
+@test "_alert_digest_check: no-op on missing spool" {
+	EMAIL_DIGEST="timed"
+	EMAIL_DIGEST_INTERVAL="900"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/nonexistent_spool"
+	_setup_mock_send_alerts
+	_alert_digest_check
+	[ ! -f "$DIGEST_CALLS_LOG" ]
+}
+
+@test "_alert_digest_check: does not flush before interval" {
+	EMAIL_DIGEST="timed"
+	EMAIL_DIGEST_INTERVAL="900"
+	EMAIL_ALERTS="1"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	# spool only 100s old
+	local now
+	now=$(date +%s)
+	local old_epoch=$((now - 100))
+	echo "${old_epoch}|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1" > "$ALERT_SPOOL_FILE"
+	_setup_mock_send_alerts
+	_alert_digest_check
+	# should NOT have flushed
+	[ ! -f "$DIGEST_CALLS_LOG" ]
+	# spool should still have content
+	[ -s "$ALERT_SPOOL_FILE" ]
+}
+
+@test "_alert_digest_check: flushes when interval expired" {
+	EMAIL_DIGEST="timed"
+	EMAIL_DIGEST_INTERVAL="900"
+	EMAIL_ALERTS="1"
+	EMAIL_SUBJECT="BFD Alert"
+	EMAIL_LOGLINES="50"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	# spool 1000s old (> 900s interval)
+	local now
+	now=$(date +%s)
+	local old_epoch=$((now - 1000))
+	echo "${old_epoch}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	_setup_mock_send_alerts
+	_alert_digest_check
+	# should have flushed
+	[ -f "$DIGEST_CALLS_LOG" ]
+	run grep "SEND_ALERTS:" "$DIGEST_CALLS_LOG"
+	assert_success
+	assert_output --partial "count=1"
+	# spool should be empty
+	[ ! -s "$ALERT_SPOOL_FILE" ]
+}
+
+# ===================================================================
+# Digest mode — _alert_digest_flush_now
+# ===================================================================
+
+@test "_alert_digest_flush_now: sends all entries and truncates spool" {
+	EMAIL_ALERTS="1"
+	EMAIL_SUBJECT="BFD Alert"
+	EMAIL_LOGLINES="50"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	local now
+	now=$(date +%s)
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${now}|198.51.100.5|dovecot|143|8000|0|ban|0|/dev/null|root|10|300|2" >> "$ALERT_SPOOL_FILE"
+	_setup_mock_send_alerts
+	_alert_digest_flush_now
+	# should have sent
+	[ -f "$DIGEST_CALLS_LOG" ]
+	run grep "SEND_ALERTS:" "$DIGEST_CALLS_LOG"
+	assert_success
+	assert_output --partial "count=2"
+	# spool should be empty
+	[ ! -s "$ALERT_SPOOL_FILE" ]
+}
+
+@test "_alert_digest_flush_now: strips epoch prefix from flush file" {
+	EMAIL_ALERTS="1"
+	EMAIL_SUBJECT="BFD Alert"
+	EMAIL_LOGLINES="50"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	local now
+	now=$(date +%s)
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	_setup_mock_send_alerts
+	_alert_digest_flush_now
+	# check that flush file had 12 fields (not 13)
+	local flush_file
+	flush_file=$(ls "$DIGEST_FLUSH_DIR"/flush_*.dat 2>/dev/null | head -1)
+	[ -n "$flush_file" ]
+	local field_count
+	field_count=$(head -1 "$flush_file" | awk -F'|' '{print NF}')
+	[ "$field_count" -eq 12 ]
+}
+
+@test "_alert_digest_flush_now: no-op when EMAIL_ALERTS=0" {
+	EMAIL_ALERTS="0"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	local now
+	now=$(date +%s)
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1" > "$ALERT_SPOOL_FILE"
+	_setup_mock_send_alerts
+	_alert_digest_flush_now
+	[ ! -f "$DIGEST_CALLS_LOG" ]
+	# spool untouched
+	[ -s "$ALERT_SPOOL_FILE" ]
+}
+
+@test "_alert_digest_flush_now: no-op on empty spool" {
+	EMAIL_ALERTS="1"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool_empty"
+	: > "$ALERT_SPOOL_FILE"
+	_setup_mock_send_alerts
+	_alert_digest_flush_now
+	[ ! -f "$DIGEST_CALLS_LOG" ]
+}
+
+@test "_alert_digest_flush_now: safe to call multiple times" {
+	EMAIL_ALERTS="1"
+	EMAIL_SUBJECT="BFD Alert"
+	EMAIL_LOGLINES="50"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	local now
+	now=$(date +%s)
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	_setup_mock_send_alerts
+	_alert_digest_flush_now
+	_alert_digest_flush_now
+	# should have only one SEND_ALERTS call (second was no-op)
+	local call_count
+	call_count=$(grep -c "SEND_ALERTS:" "$DIGEST_CALLS_LOG")
+	[ "$call_count" -eq 1 ]
+}

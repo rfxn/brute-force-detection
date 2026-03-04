@@ -31,6 +31,15 @@ if [ -d "$LOCK_FILE.lk" ]; then
 	fi
 fi
 
+# discard stale digest spool — regular bfd runs flush within minutes;
+# if this file survives >24h, its log references are stale
+if [ -f "$INSTALL_PATH/tmp/.alert_spool" ]; then
+	_spool_age=$(( $(date +%s) - $(stat -c %Y "$INSTALL_PATH/tmp/.alert_spool" 2>/dev/null || echo 0) ))
+	if [ "$_spool_age" -gt 86400 ]; then
+		: > "$INSTALL_PATH/tmp/.alert_spool"
+	fi
+fi
+
 # acquire flock for self-contention (multiple cron.daily invocations)
 # uses a dedicated lock file to avoid contention with bfd's lock.utime writes
 CRON_LOCK="$INSTALL_PATH/tmp/.cron.daily.lock"
