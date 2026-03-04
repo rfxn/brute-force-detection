@@ -115,12 +115,13 @@ teardown() {
 
 # --- _apool_report with PRESSURE column ---
 
-@test "apool report: header includes PRESSURE column" {
+@test "apool report: header includes PRESSURE and COUNTRY columns" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
 	echo "1000 192.0.2.1 sshd" >> "$pool"
 	run _apool_report "$pool" "Test report"
 	assert_success
 	assert_output --partial "PRESSURE"
+	assert_output --partial "COUNTRY"
 }
 
 @test "apool report: pressure value shown for IP with events" {
@@ -262,4 +263,51 @@ teardown() {
 	local leftover
 	leftover=$(find "$INSTALL_PATH/tmp" -name '.weekly.apool.*' 2>/dev/null | wc -l)
 	[ "$leftover" -eq 0 ]
+}
+
+# --- enriched format tests ---
+
+@test "_apool_awk: sums count field from enriched entries" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 CN ban 600 22 15000 service" >> "$pool"
+	echo "$((now + 1)) 192.0.2.1 sshd 3 CN ban 600 22 12000 service" >> "$pool"
+	run _apool_awk "$pool"
+	assert_success
+	# total count should be 8 (5+3)
+	assert_output --partial "8|192.0.2.1"
+}
+
+@test "_apool_awk: backward compat with 3-field entries" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	echo "1000 192.0.2.1 sshd" >> "$pool"
+	echo "1001 192.0.2.1 sshd" >> "$pool"
+	run _apool_awk "$pool"
+	assert_success
+	# 3-field entries default COUNT=1, so 2 lines = count 2
+	assert_output --partial "2|192.0.2.1"
+}
+
+@test "_apool_awk: extracts country code from enriched entries" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 RU ban 600 22 15000 service" >> "$pool"
+	run _apool_awk "$pool"
+	assert_success
+	# 6th pipe-delimited field should be country code
+	local cc_field
+	cc_field=$(echo "$output" | awk -F'|' '{print $6}')
+	[ "$cc_field" = "RU" ]
+}
+
+@test "_apool_report: COUNTRY column present in output" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 DE ban 600 22 15000 service" >> "$pool"
+	run _apool_report "$pool" "Test report"
+	assert_success
+	assert_output --partial "DE"
 }

@@ -296,7 +296,7 @@ teardown() {
 
 # --- _apool_report_json ---
 
-@test "_apool_report_json: formats entries as JSON array with pressure" {
+@test "_apool_report_json: formats entries as JSON array with pressure and country" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
 	echo "1000 192.0.2.1 sshd" >> "$pool"
 	echo "1001 192.0.2.1 sshd" >> "$pool"
@@ -307,6 +307,7 @@ teardown() {
 	assert_output --partial '"rules": ["sshd"]'
 	assert_output --partial '"pressure":'
 	assert_output --partial '"pressure_trip":'
+	assert_output --partial '"country":'
 }
 
 @test "_apool_report_json: empty pool returns empty array" {
@@ -326,7 +327,7 @@ teardown() {
 	echo "1000 192.0.2.1 sshd" >> "$pool"
 	run _apool_report_csv "$pool"
 	assert_success
-	assert_output --partial "events,ip,pressure,pressure_trip,first_seen,last_seen,rules,status"
+	assert_output --partial "events,ip,pressure,pressure_trip,country,first_seen,last_seen,rules,status"
 	assert_output --partial "192.0.2.1"
 }
 

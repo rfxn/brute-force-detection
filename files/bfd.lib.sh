@@ -1553,7 +1553,9 @@ manual_ban() {
 
 # --- State file I/O functions ---
 # State file formats:
-#   attack.pool:  "UTIME IP MOD" — persistent attack history
+#   attack.pool:  "UTIME IP MOD COUNT CC ACTION DURATION PORTS PRESSURE TRIP_TYPE"
+#     10-field enriched format — backward compatible (old 3-field entries read as:
+#     COUNT=1, CC=--, ACTION=ban, DURATION=0, PORTS=all, PRESSURE=0, TRIP_TYPE=service)
 
 # state_init install_path — ensure state dirs/files exist with correct perms
 state_init() {
@@ -1580,13 +1582,16 @@ state_init() {
 	fi
 }
 
-# state_pool_append install_path utime host mod — append to attack.pool
+# state_pool_append install_path utime host mod [count cc action duration ports pressure trip_type]
 state_pool_append() {
 	local install_path="$1" utime="$2" host="$3" mod="$4"
+	local count="${5:-1}" cc="${6:---}" action="${7:-ban}"
+	local duration="${8:-0}" ports="${9:-all}" pressure="${10:-0}"
+	local trip_type="${11:-service}"
 	local pool_file="$install_path/stats/attack.pool"
 	(
 		flock -x 200
-		echo "$utime $host $mod" >> "$pool_file"
+		echo "$utime $host $mod $count $cc $action $duration $ports $pressure $trip_type" >> "$pool_file"
 	) 200>>"$pool_file"
 }
 
@@ -2002,7 +2007,15 @@ check_distributed() {
 			ban_result=$(record_ban "$install_path" "$now" "$subnet" "$mod" "all" "subnet")
 			local ban_expiry ban_action recent_bans
 			IFS='|' read -r ban_expiry ban_action recent_bans <<< "$ban_result"
-			state_pool_append "$install_path" "$now" "$subnet" "$mod"
+			local _dist_duration="-1"
+			if [ "$ban_expiry" = "0" ]; then
+				_dist_duration="0"
+			else
+				_dist_duration=$((ban_expiry - now))
+			fi
+			state_pool_append "$install_path" "$now" "$subnet" "$mod" \
+				"$unique_count" "--" "$ban_action" "$_dist_duration" "all" \
+				"0" "subnet"
 			if [ "$EMAIL_ALERTS" = "1" ] && [ "$DRY_RUN" != "1" ]; then
 				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}||${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}|1" >> "$alerts_file"
 			fi

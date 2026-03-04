@@ -1,5 +1,18 @@
 2.0.1:
 
+-- Attack Pool --
+
+[Change] state_pool_append(): enriched 10-field format — TIMESTAMP IP MOD
+      COUNT CC ACTION DURATION PORTS PRESSURE TRIP_TYPE; backward compatible
+      with old 3-field entries (COUNT=1, CC=--, ACTION=ban, etc.)
+[Change] check(): restructure pool write path — append moves after ban outcome
+      to capture action, duration, and trip type; country lookup via warm cache
+[Change] check_distributed(): pass enriched fields (unique_count, ban_action,
+      duration, trip_type=subnet) to state_pool_append
+[Change] _apool_awk(): sum $4 count field, extract $5 country code
+[Change] _apool_service_summary_awk(): sum $4 count field for per-service totals
+[Change] _apool_report()/json/csv: add COUNTRY column/key to output
+
 -- CLI --
 
 [Change] usage_short(): add compact CLI matrix line listing all flags in
