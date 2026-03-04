@@ -1218,3 +1218,326 @@ EOF
 	# closing boundary
 	echo "$result" | grep -q "^--${boundary}--$"
 }
+
+# ===================================================================
+# _alert_send_local — local MTA delivery
+# ===================================================================
+
+# helper: create mock mail binary that logs calls
+_setup_mock_mail() {
+	mkdir -p "$TEST_TMPDIR/bin"
+	cat > "$TEST_TMPDIR/bin/mail" <<'MOCK'
+#!/bin/bash
+echo "MAIL_CALL: $@" >> "$MAIL_LOG"
+cat >> "$MAIL_LOG"
+MOCK
+	chmod +x "$TEST_TMPDIR/bin/mail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	export MAIL_LOG="$TEST_TMPDIR/mail_log"
+}
+
+# helper: create mock sendmail binary that logs calls
+_setup_mock_sendmail() {
+	mkdir -p "$TEST_TMPDIR/bin"
+	cat > "$TEST_TMPDIR/bin/sendmail" <<'MOCK'
+#!/bin/bash
+echo "SENDMAIL_CALL: $@" >> "$SENDMAIL_LOG"
+cat >> "$SENDMAIL_LOG"
+MOCK
+	chmod +x "$TEST_TMPDIR/bin/sendmail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	export SENDMAIL_LOG="$TEST_TMPDIR/sendmail_log"
+}
+
+# helper: create mock curl binary that logs calls
+_setup_mock_curl() {
+	mkdir -p "$TEST_TMPDIR/bin"
+	cat > "$TEST_TMPDIR/bin/curl" <<'MOCK'
+#!/bin/bash
+echo "CURL_CALL: $@" >> "$CURL_LOG"
+MOCK
+	chmod +x "$TEST_TMPDIR/bin/curl"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	export CURL_LOG="$TEST_TMPDIR/curl_log"
+}
+
+# helper: create text and html test files
+_create_test_bodies() {
+	echo "Plain text alert body" > "$TEST_TMPDIR/text_body"
+	echo "<html><body>HTML alert body</body></html>" > "$TEST_TMPDIR/html_body"
+}
+
+@test "_alert_send_local: text format pipes to mail -s" {
+	_setup_mock_mail
+	_create_test_bodies
+	_alert_send_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "text"
+	[ -f "$MAIL_LOG" ]
+	run grep "MAIL_CALL:" "$MAIL_LOG"
+	assert_output --partial "-s"
+	assert_output --partial "Test Subject"
+	assert_output --partial "root"
+	run grep "Plain text alert body" "$MAIL_LOG"
+	assert_success
+}
+
+@test "_alert_send_local: html format uses sendmail -t -oi" {
+	_setup_mock_sendmail
+	_create_test_bodies
+	_alert_send_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "html"
+	[ -f "$SENDMAIL_LOG" ]
+	run grep "SENDMAIL_CALL:" "$SENDMAIL_LOG"
+	assert_output --partial "-t -oi"
+	run grep "Content-Type: text/html" "$SENDMAIL_LOG"
+	assert_success
+	run grep "HTML alert body" "$SENDMAIL_LOG"
+	assert_success
+}
+
+@test "_alert_send_local: both format uses sendmail with MIME" {
+	_setup_mock_sendmail
+	_create_test_bodies
+	_alert_send_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "both"
+	[ -f "$SENDMAIL_LOG" ]
+	run grep "multipart/alternative" "$SENDMAIL_LOG"
+	assert_success
+	run grep "Plain text alert body" "$SENDMAIL_LOG"
+	assert_success
+	run grep "HTML alert body" "$SENDMAIL_LOG"
+	assert_success
+}
+
+@test "_alert_send_local: html falls back to text when sendmail missing" {
+	_setup_mock_mail
+	# ensure no sendmail in PATH
+	rm -f "$TEST_TMPDIR/bin/sendmail" 2>/dev/null || true
+	_create_test_bodies
+	_alert_send_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "html"
+	# should have used mail instead
+	[ -f "$MAIL_LOG" ]
+	run grep "MAIL_CALL:" "$MAIL_LOG"
+	assert_success
+}
+
+@test "_alert_send_local: returns 1 when mail binary missing" {
+	# create a minimal PATH with essential binaries but without mail/sendmail
+	local _saved_path="$PATH"
+	mkdir -p "$TEST_TMPDIR/safebin"
+	for cmd in date hostname cat printf rm; do
+		local real_path
+		real_path=$(command -v "$cmd" 2>/dev/null || true)
+		[ -n "$real_path" ] && ln -sf "$real_path" "$TEST_TMPDIR/safebin/$cmd"
+	done
+	export PATH="$TEST_TMPDIR/safebin"
+	_create_test_bodies
+	run _alert_send_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "text"
+	export PATH="$_saved_path"
+	assert_failure
+}
+
+@test "_alert_send_local: From header uses SMTP_FROM when set" {
+	_setup_mock_sendmail
+	_create_test_bodies
+	SMTP_FROM="alerts@example.com"
+	_alert_send_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "html"
+	run grep "From: alerts@example.com" "$SENDMAIL_LOG"
+	assert_success
+	unset SMTP_FROM
+}
+
+@test "_alert_send_local: From header uses hostname fallback when SMTP_FROM empty" {
+	_setup_mock_sendmail
+	_create_test_bodies
+	unset SMTP_FROM
+	_alert_send_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "html"
+	run grep "From: root@" "$SENDMAIL_LOG"
+	assert_success
+}
+
+# ===================================================================
+# _alert_send_relay — SMTP relay delivery
+# ===================================================================
+
+@test "_alert_send_relay: calls curl with correct arguments" {
+	_setup_mock_curl
+	SMTP_RELAY="smtps://smtp.example.com:465"
+	SMTP_FROM="alerts@example.com"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	echo "RFC822 message" > "$TEST_TMPDIR/msg_file"
+	_alert_send_relay "root" "Test Subject" "$TEST_TMPDIR/msg_file"
+	[ -f "$CURL_LOG" ]
+	run grep "CURL_CALL:" "$CURL_LOG"
+	assert_output --partial "--url"
+	assert_output --partial "smtps://smtp.example.com:465"
+	assert_output --partial "--mail-from"
+	assert_output --partial "alerts@example.com"
+	assert_output --partial "--mail-rcpt"
+	assert_output --partial "root"
+	assert_output --partial "--user"
+	assert_output --partial "--upload-file"
+	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS
+}
+
+@test "_alert_send_relay: returns 1 when SMTP_FROM missing" {
+	unset SMTP_FROM
+	SMTP_RELAY="smtps://smtp.example.com:465"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	echo "msg" > "$TEST_TMPDIR/msg_file"
+	run _alert_send_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
+	assert_failure
+	unset SMTP_RELAY SMTP_USER SMTP_PASS
+}
+
+@test "_alert_send_relay: returns 1 when curl binary missing" {
+	# create a minimal PATH with essential binaries but without curl
+	local _saved_path="$PATH"
+	mkdir -p "$TEST_TMPDIR/nocurl"
+	for cmd in date hostname cat printf rm; do
+		local real_path
+		real_path=$(command -v "$cmd" 2>/dev/null || true)
+		[ -n "$real_path" ] && ln -sf "$real_path" "$TEST_TMPDIR/nocurl/$cmd"
+	done
+	export PATH="$TEST_TMPDIR/nocurl"
+	SMTP_RELAY="smtps://smtp.example.com:465"
+	SMTP_FROM="alerts@example.com"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	echo "msg" > "$TEST_TMPDIR/msg_file"
+	run _alert_send_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
+	export PATH="$_saved_path"
+	assert_failure
+	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS
+}
+
+@test "_alert_send_relay: returns 1 on curl failure" {
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/curl"
+	echo 'exit 67' >> "$TEST_TMPDIR/bin/curl"
+	chmod +x "$TEST_TMPDIR/bin/curl"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	SMTP_RELAY="smtps://smtp.example.com:465"
+	SMTP_FROM="alerts@example.com"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	echo "msg" > "$TEST_TMPDIR/msg_file"
+	run _alert_send_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
+	assert_failure
+	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS
+}
+
+# ===================================================================
+# _alert_send — delivery router
+# ===================================================================
+
+@test "_alert_send: empty SMTP_RELAY routes to local path" {
+	_setup_mock_mail
+	_create_test_bodies
+	unset SMTP_RELAY
+	_alert_send "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "text"
+	[ -f "$MAIL_LOG" ]
+	run grep "MAIL_CALL:" "$MAIL_LOG"
+	assert_success
+}
+
+@test "_alert_send: SMTP_RELAY set routes to relay path" {
+	_setup_mock_curl
+	_create_test_bodies
+	SMTP_RELAY="smtps://smtp.example.com:465"
+	SMTP_FROM="alerts@example.com"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	_alert_send "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "text"
+	[ -f "$CURL_LOG" ]
+	run grep "CURL_CALL:" "$CURL_LOG"
+	assert_output --partial "smtps://smtp.example.com:465"
+	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS
+}
+
+@test "_alert_send: relay path builds full message with headers" {
+	_setup_mock_curl
+	_create_test_bodies
+	SMTP_RELAY="smtps://smtp.example.com:465"
+	SMTP_FROM="alerts@example.com"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	# capture the message file before it's deleted by using a recording curl
+	mkdir -p "$TEST_TMPDIR/bin"
+	cat > "$TEST_TMPDIR/bin/curl" <<'MOCK'
+#!/bin/bash
+# find --upload-file arg and copy its contents
+while [ $# -gt 0 ]; do
+	if [ "$1" = "--upload-file" ]; then
+		cp "$2" "$CURL_LOG.msg"
+		break
+	fi
+	shift
+done
+echo "ok" >> "$CURL_LOG"
+MOCK
+	chmod +x "$TEST_TMPDIR/bin/curl"
+	_alert_send "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "text"
+	[ -f "$CURL_LOG.msg" ]
+	run grep "^From: alerts@example.com" "$CURL_LOG.msg"
+	assert_success
+	run grep "^To: root" "$CURL_LOG.msg"
+	assert_success
+	run grep "^Subject: Test Subject" "$CURL_LOG.msg"
+	assert_success
+	run grep "^Date:" "$CURL_LOG.msg"
+	assert_success
+	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS
+}
+
+# ===================================================================
+# send_alerts integration (new pipeline)
+# ===================================================================
+
+@test "send_alerts integration: single entry text format calls mail" {
+	_setup_mock_mail
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	EMAIL_FORMAT="text"
+	local af="$TEST_TMPDIR/alerts_one"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	send_alerts "$af" "BFD Alert" "50"
+	[ -f "$MAIL_LOG" ]
+	run grep "MAIL_CALL:" "$MAIL_LOG"
+	assert_output --partial "BFD Alert"
+}
+
+@test "send_alerts integration: multi entry subject has ban count" {
+	_setup_mock_mail
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	EMAIL_FORMAT="text"
+	local af="$TEST_TMPDIR/alerts_multi"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2" >> "$af"
+	send_alerts "$af" "BFD Alert" "50"
+	run grep "MAIL_CALL:" "$MAIL_LOG"
+	assert_output --partial "(2 bans)"
+}
+
+@test "send_alerts integration: multi recipient sends separate emails" {
+	_setup_mock_mail
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	EMAIL_FORMAT="text"
+	local af="$TEST_TMPDIR/alerts_multi_recip"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|admin@example.com|5|300|3" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|ops@example.com|10|300|2" >> "$af"
+	send_alerts "$af" "BFD Alert" "50"
+	local call_count
+	call_count=$(grep -c "MAIL_CALL:" "$MAIL_LOG")
+	[ "$call_count" -eq 2 ]
+}
+
+@test "send_alerts integration: format=both uses sendmail with MIME" {
+	_setup_mock_sendmail
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	EMAIL_FORMAT="both"
+	local af="$TEST_TMPDIR/alerts_both"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	send_alerts "$af" "BFD Alert" "50"
+	[ -f "$SENDMAIL_LOG" ]
+	run grep "multipart/alternative" "$SENDMAIL_LOG"
+	assert_success
+}

@@ -1,5 +1,21 @@
 2.0.1:
 
+-- Alert Delivery --
+
+[New] _alert_send_local(): local MTA delivery with text/html/multipart format
+      support; sendmail fallback to text-only via mail when unavailable
+[New] _alert_send_relay(): authenticated SMTP relay delivery via curl with
+      --ssl-reqd, credential validation, and error reporting
+[New] _alert_send(): delivery router between local MTA and SMTP relay; relay
+      path always builds full multipart MIME for richest content
+[Change] send_alerts() rewritten to use template-based rendering pipeline and
+      structured delivery functions; drops legacy sourced-template approach
+[Change] EMAIL_FORMAT support: text (default), html, both (multipart/alternative)
+[Change] SMTP relay support: configurable via SMTP_RELAY, SMTP_USER, SMTP_PASS,
+      SMTP_FROM variables
+[Change] ALERT_TEMPLATE_DIR replaces EMAIL_TEMPLATE in internals.conf; points to
+      files/alert/ template partials directory
+
 -- New Features --
 
 [New] Alert rendering pipeline: data preparation (_alert_set_global_vars,

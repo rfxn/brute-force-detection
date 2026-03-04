@@ -1350,7 +1350,7 @@ _execute_fw_with_retry() {
 # returns 0 on success, ban command exit code on failure
 execute_ban() {
 	local host="$1" mod="$2" dry_run="$3" ports="${4:-all}"
-	# set globals needed by alert.bfd template and custom backend
+	# set globals needed by alert templates and custom backend
 	ATTACK_HOST="$host"
 	MOD="$mod"
 	PORTS="$ports"
@@ -2314,156 +2314,24 @@ format_duration() {
 	echo "$result"
 }
 
-# format_alert_entry n total host mod ports pressure_scaled expiry action recent trip half_life weight
-# Format a single ban's detail block for email alerts.
-# Sets ATTACK_HOST, MOD, PORTS globals so $BAN_COMMAND_TEMPLATE expands correctly.
-format_alert_entry() {
-	local n="$1" total="$2" host="$3" mod="$4" ports="$5"
-	local pressure_scaled="$6" expiry="$7" action="$8" recent="$9"
-	shift 9
-	local trip="$1" half_life="$2" weight="${3:-1}"
-
-	if [ "$total" -gt 1 ]; then
-		echo "--- Ban $n of $total ---"
-		echo ""
-	fi
-
-	# set globals for BAN_COMMAND_TEMPLATE expansion
-	ATTACK_HOST="$host"
-	MOD="$mod"
-	PORTS="$ports"
-
-	local ban_type ban_detail=""
-	if [ "$action" = "escalate" ]; then
-		ban_type="Permanent (escalated from repeat offenses)"
-	elif [ "$expiry" = "0" ]; then
-		ban_type="Permanent"
-	else
-		local duration=$((expiry - UTIME))
-		if [ "$duration" -lt 0 ]; then
-			duration=0
-		fi
-		local base_duration="${BAN_TTL:-${BAN_DURATION:-0}}"
-		if [ "${BAN_ESCALATION:-none}" != "none" ] && [ "$recent" -gt 0 ] && [ "$duration" -gt "$base_duration" ]; then
-			ban_type="Temporary ($(format_duration "$duration"), escalated from $(format_duration "$base_duration"))"
-		else
-			ban_type="Temporary ($(format_duration "$duration"))"
-		fi
-		ban_detail=$(date -d "@${expiry}" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || echo "$expiry")
-	fi
-
-	local port_display="$ports"
-	if [ "$port_display" = "all" ]; then
-		port_display="all ports"
-	else
-		port_display="port $port_display"
-	fi
-
-	local pressure_display trip_display
-	pressure_display=$(pressure_format "$pressure_scaled")
-	trip_display=$(pressure_format $((trip * 1000)))
-
-	echo "  Host:       $host"
-	echo "  Service:    $mod ($port_display)"
-	echo "  Pressure:   ${pressure_display}/${trip_display} (weight $weight, half-life ${half_life}s)"
-	if [ -n "$ban_detail" ]; then
-		echo "  Ban:        $ban_type, expires $ban_detail"
-	else
-		echo "  Ban:        $ban_type"
-	fi
-	local esc_after="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}"
-	local esc_window="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
-	if [ "$esc_after" -gt 0 ]; then
-		echo "  History:    $recent previous ban(s) in ${esc_window}s (permanent at ${esc_after})"
-	fi
-	# reconstruct ban command display
-	local display_cmd
-	if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
-		display_cmd=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
-	else
-		display_cmd="fw_ban $host ($_FW_BACKEND)"
-	fi
-	echo "  Command:    $display_cmd"
-	echo ""
-}
-
-# format_alert_body alerts_file loglines — full email body content
-# Reads alerts_file, formats entries and log excerpts.
-# Output goes to stdout.
-format_alert_body() {
-	local alerts_file="$1" loglines="${2:-50}"
-	local entry_count=0
-
-	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
-		return 0
-	fi
-
-	entry_count=$(wc -l < "$alerts_file")
-
-	if [ "$entry_count" -gt 1 ]; then
-		echo "$entry_count hosts banned in this check cycle."
-	fi
-	echo ""
-
-	# format each entry
-	local n=0
-	local host mod ports count expiry action recent lp recipient trig trig_window weight
-	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window weight; do
-		[ -z "$host" ] && continue
-		n=$((n + 1))
-		format_alert_entry "$n" "$entry_count" "$host" "$mod" "$ports" \
-			"$count" "$expiry" "$action" "$recent" "$trig" "$trig_window" "${weight:-1}"
-	done < "$alerts_file"
-
-	# log section
-	local has_logs=0
-	n=0
-	# shellcheck disable=SC2034  # recipient: positional placeholder in read
-	while IFS='|' read -r host mod ports count expiry action recent lp recipient trig trig_window weight; do
-		[ -z "$host" ] && continue
-		n=$((n + 1))
-		if [ -z "$lp" ] || [ ! -f "$lp" ]; then
-			if [ "$has_logs" -eq 0 ]; then
-				echo "  Source logs: not available (logs via systemd journal)"
-				has_logs=1
-			fi
-			continue
-		fi
-		has_logs=1
-		if [ "$entry_count" -gt 1 ]; then
-			echo "  Source logs from '$mod' [$host]:"
-		else
-			echo "  Source logs from '$mod':"
-		fi
-		tail -n 5000 "$lp" | grep -Fw "$host" | tail -n "$loglines" | \
-			sed -e 's/\([Pp]ass[a-z]*\)[=:][[:space:]]*[^ ]*/\1=<REDACTED>/g' \
-			    -e 's/\([Aa]uthorization:[[:space:]]*\).*/\1<REDACTED>/' \
-			    -e 's/^/  /'
-		echo ""
-	done < "$alerts_file"
-}
-
-# send_alerts alerts_file subject template loglines — orchestrate batched alert emails
-# Groups entries by RECIPIENT field, calls format_alert_body per recipient,
-# sources template and pipes to mail.
+# send_alerts alerts_file subject loglines — orchestrate batched alert emails
+# Groups entries by RECIPIENT field, renders text/HTML via alert_lib.sh pipeline,
+# delivers via local MTA or SMTP relay.
 send_alerts() {
-	local alerts_file="$1" subject="$2" template="$3" loglines="${4:-50}"
+	local alerts_file="$1" subject="$2" loglines="${3:-50}"
 
 	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
 		return 0
 	fi
 
-	# validate template safety before sourcing
-	if [ ! -f "$template" ]; then
-		elog warn "alert template '$template' not found, skipping alerts."
-		rm -f "$alerts_file"
+	# resolve template directory
+	local tpl_dir="${ALERT_TEMPLATE_DIR:-$INSTALL_PATH/alert}"
+	if [ ! -d "$tpl_dir" ] || [ ! -f "$tpl_dir/text.header.tpl" ]; then
+		elog warn "alert template directory '$tpl_dir' invalid, skipping alerts."
 		return 1
 	fi
-	if ! _check_file_safety "$template"; then
-		elog warn "alert template has unsafe ownership or permissions, skipping alerts."
-		rm -f "$alerts_file"
-		return 1
-	fi
+
+	local format="${EMAIL_FORMAT:-text}"
 
 	# get unique recipients (field 9)
 	local recipients
@@ -2480,46 +2348,68 @@ send_alerts() {
 		local alert_count
 		alert_count=$(wc -l < "$recip_file")
 
-		# set ALERT_COUNT and ALERT_ENTRIES for template (consumed by sourced alert.bfd)
-		# shellcheck disable=SC2034
-		ALERT_COUNT="$alert_count"
-		# shellcheck disable=SC2034
-		ALERT_ENTRIES=$(format_alert_body "$recip_file" "$loglines")
-
-		# set backward-compat globals for single-ban case
-		if [ "$alert_count" -eq 1 ]; then
-			local _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt
-			IFS='|' read -r _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt < "$recip_file"
-			ATTACK_HOST="$_host"
-			MOD="$_mod"
-			# backward compat: _count is pressure_scaled (e.g., 18400);
-			# old templates expect a count, so use whole pressure units
-			ATTACK_COUNT="$(( _count / 1000 ))"
-			if [ "$ATTACK_COUNT" -lt 1 ]; then ATTACK_COUNT=1; fi
-			LOG_FILE="$_lp"
-			LP="$_lp"  # backward compat for custom alert templates
-			PORTS="$_ports"
-			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
-				BAN_COMMAND=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
-			else
-				# shellcheck disable=SC2034  # consumed by sourced alert.bfd
-				BAN_COMMAND="fw_ban $_host ($_FW_BACKEND)"
-			fi
-		fi
-
 		# augment subject for multi-ban
 		local mail_subject="$subject"
 		if [ "$alert_count" -gt 1 ]; then
 			mail_subject="$subject ($alert_count bans)"
 		fi
 
-		# source template and pipe to mail
-		# shellcheck disable=SC1090  # template path is runtime-configured
-		if ! (. "$template") | mail -s "$mail_subject" "$recip" 2>/dev/null; then
-			elog error "alert email to $recip failed (mail command returned non-zero)."
+		# render text body
+		local text_file=""
+		if [ "$format" = "text" ] || [ "$format" = "both" ]; then
+			text_file=$(mktemp "${alerts_file}.text.XXXXXX")
+			_alert_render_text "$recip_file" "$tpl_dir" "$loglines" > "$text_file"
 		fi
 
-		rm -f "$recip_file"
+		# render HTML body
+		local html_file=""
+		if [ "$format" = "html" ] || [ "$format" = "both" ]; then
+			html_file=$(mktemp "${alerts_file}.html.XXXXXX")
+			_alert_render_html "$recip_file" "$tpl_dir" "$loglines" > "$html_file"
+		fi
+
+		# for text-only: html_file needed by relay path, render it too
+		if [ "$format" = "text" ] && [ -n "${SMTP_RELAY:-}" ]; then
+			html_file=$(mktemp "${alerts_file}.html.XXXXXX")
+			_alert_render_html "$recip_file" "$tpl_dir" "$loglines" > "$html_file"
+		fi
+		# for html-only: text_file needed as sendmail fallback
+		if [ "$format" = "html" ] && [ -z "$text_file" ]; then
+			text_file=$(mktemp "${alerts_file}.text.XXXXXX")
+			_alert_render_text "$recip_file" "$tpl_dir" "$loglines" > "$text_file"
+		fi
+
+		if _alert_send "$recip" "$mail_subject" "$text_file" "$html_file" "$format"; then
+			elog info "alert email sent to $recip ($alert_count ban(s), format=$format)."
+		else
+			elog error "alert email to $recip failed."
+		fi
+
+		# set backward-compat globals for single-ban case
+		# (needed by custom hooks or external integrations that read these after send_alerts)
+		if [ "$alert_count" -eq 1 ]; then
+			local _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt
+			IFS='|' read -r _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt < "$recip_file"
+			ATTACK_HOST="$_host"
+			MOD="$_mod"
+			# backward compat: _count is pressure_scaled (e.g., 18400);
+			# custom hooks expect a count, so use whole pressure units
+			ATTACK_COUNT="$(( _count / 1000 ))"
+			if [ "$ATTACK_COUNT" -lt 1 ]; then ATTACK_COUNT=1; fi
+			LOG_FILE="$_lp"
+			LP="$_lp"
+			PORTS="$_ports"
+			if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
+				BAN_COMMAND=$(expand_command_template "$BAN_COMMAND_TEMPLATE")
+			else
+				# shellcheck disable=SC2034  # consumed by custom hooks
+				BAN_COMMAND="fw_ban $_host ($_FW_BACKEND)"
+			fi
+		fi
+		# shellcheck disable=SC2034  # consumed by custom hooks
+		ALERT_COUNT="$alert_count"
+
+		rm -f "$recip_file" "$text_file" "$html_file"
 	done <<< "$recipients"
 }
 

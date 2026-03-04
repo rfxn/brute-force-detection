@@ -120,7 +120,7 @@ config_init() {
 		unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
 		# internals.conf variables
 		unset RULES_PATH TLOG_PATH TLOG_BASERUN
-		unset EMAIL_TEMPLATE IGNORE_HOST_FILES LOCK_FILE
+		unset ALERT_TEMPLATE_DIR ALERT_SPOOL_FILE IGNORE_HOST_FILES LOCK_FILE
 		unset PRESSURE_CONF THRESHOLDS_CONF TIME_ZONE
 		unset LOCK_FILE_TIMEOUT OUTPUT_SYSLOG_FILE BAN_RETRY_COUNT LOG_SOURCE
 	fi
@@ -151,7 +151,8 @@ config_init() {
 	RULES_PATH="${RULES_PATH:-$INSTALL_PATH/rules}"
 	TLOG_PATH="${TLOG_PATH:-$INSTALL_PATH/tlog}"
 	TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
-	EMAIL_TEMPLATE="${EMAIL_TEMPLATE:-$INSTALL_PATH/alert.bfd}"
+	ALERT_TEMPLATE_DIR="${ALERT_TEMPLATE_DIR:-$INSTALL_PATH/alert}"
+	ALERT_SPOOL_FILE="${ALERT_SPOOL_FILE:-$INSTALL_PATH/tmp/.alert_spool}"
 	IGNORE_HOST_FILES="${IGNORE_HOST_FILES:-$INSTALL_PATH/exclude.files}"
 	LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
 	TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
@@ -473,7 +474,7 @@ check() {
 
 	# send batched alert emails
 	if [ "$EMAIL_ALERTS" = "1" ] && [ -s "$alerts_file" ]; then
-		send_alerts "$alerts_file" "$EMAIL_SUBJECT" "$EMAIL_TEMPLATE" "${EMAIL_LOGLINES:-50}"
+		send_alerts "$alerts_file" "$EMAIL_SUBJECT" "${EMAIL_LOGLINES:-50}"
 	fi
 	rm -f "$alerts_file"
 
