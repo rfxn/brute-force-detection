@@ -660,7 +660,7 @@ EOF
 	assert_success
 	assert_output --partial "BFD (Brute Force Detection) 2.0.1"
 	assert_output --partial "bfd@rfxn.com"
-	assert_output --partial "github.com/rfxn/bfd"
+	assert_output --partial "rfxn.com/projects/brute-force-detection"
 }
 
 @test "template render: html.header.tpl contains banner and timestamp" {
@@ -717,7 +717,7 @@ EOF
 	assert_output --partial "</html>"
 	assert_output --partial "</body>"
 	assert_output --partial "2.0.1"
-	assert_output --partial "github.com/rfxn/bfd"
+	assert_output --partial "rfxn.com/projects/brute-force-detection"
 }
 
 # ===================================================================
@@ -792,4 +792,429 @@ EOF
 	# Should not contain History or Escalation labels
 	refute_output --partial "History"
 	refute_output --partial "Escalation"
+}
+
+# ===================================================================
+# _alert_set_global_vars
+# ===================================================================
+
+@test "_alert_set_global_vars: sets HOSTNAME and TIMESTAMP" {
+	V="2.0.1"
+	_alert_set_global_vars 3
+	[ -n "$HOSTNAME" ]
+	[ -n "$TIMESTAMP" ]
+	[[ "$TIMESTAMP" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]]
+	[ "$ALERT_COUNT" = "3" ]
+	[ "$BFD_VERSION" = "2.0.1" ]
+}
+
+@test "_alert_set_global_vars: TIMESTAMP_ISO has ISO 8601 format" {
+	V="2.0.1"
+	_alert_set_global_vars 1
+	[[ "$TIMESTAMP_ISO" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2} ]]
+}
+
+@test "_alert_set_global_vars: TIME_ZONE is exported" {
+	_alert_set_global_vars 0
+	[ -n "$TIME_ZONE" ]
+}
+
+@test "_alert_set_global_vars: BFD_VERSION falls back to ALERT_LIB_VERSION" {
+	unset V 2>/dev/null || true
+	unset BFD_VERSION 2>/dev/null || true
+	_alert_set_global_vars 0
+	[ "$BFD_VERSION" = "$ALERT_LIB_VERSION" ]
+}
+
+# ===================================================================
+# _alert_set_entry_vars
+# ===================================================================
+
+@test "_alert_set_entry_vars: parses basic pipe-delimited line" {
+	# set up required globals
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	UTIME="1000"
+	local line="192.0.2.1|sshd|22|15000|0|ban|0|/dev/null|root|10|300|3"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$HOST" = "192.0.2.1" ]
+	[ "$HOST_VERSION" = "IPv4" ]
+	[ "$SERVICE" = "sshd" ]
+	[ "$PORTS" = "port 22" ]
+	[ "$BAN_TYPE" = "Permanent" ]
+	[ "$ENTRY_NUM" = "1" ]
+	[ "$ENTRY_TOTAL" = "1" ]
+	[ "$WEIGHT" = "3" ]
+}
+
+@test "_alert_set_entry_vars: IPv6 sets HOST_VERSION correctly" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local line="2001:db8::1|sshd|22|5000|0|ban|0||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$HOST_VERSION" = "IPv6" ]
+	[ "$HOST" = "2001:db8::1" ]
+}
+
+@test "_alert_set_entry_vars: ports=all becomes 'all ports'" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local line="192.0.2.1|sshd|all|5000|0|ban|0||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$PORTS" = "all ports" ]
+}
+
+@test "_alert_set_entry_vars: pressure percentage computed correctly" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	# 15000 scaled / (10 * 1000) = 150%
+	local line="192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$PRESSURE_PCT" = "150" ]
+	[ "$PRESSURE_PCT_CLAMPED" = "100" ]
+}
+
+@test "_alert_set_entry_vars: escalated ban type" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="5"
+	BAN_ESCALATION="linear"
+	EMAIL_REPUTATION_LINKS=""
+	local line="192.0.2.1|sshd|22|15000|0|escalate|5||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$BAN_TYPE" = "Permanent (escalated)" ]
+	[ "$BAN_TYPE_COLOR" = "#f57c00" ]
+	[[ "$ESCALATION_LINE" == *"permanent after 5 offenses"* ]]
+	[[ "$ESCALATION_ROW_HTML" == *"Permanent after 5 offenses"* ]]
+}
+
+@test "_alert_set_entry_vars: temporary ban with expiry" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	# expiry far in the future
+	local future_expiry=$(($(date +%s) + 600))
+	local line="192.0.2.1|sshd|22|15000|${future_expiry}|ban|0||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$BAN_TYPE" = "Temporary" ]
+	[[ "$BAN_DURATION_DETAIL" == *"expires"* ]]
+	[ "$BAN_TYPE_COLOR" = "#f9a825" ]
+}
+
+@test "_alert_set_entry_vars: history line when escalation configured" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="5"
+	BAN_ESCALATE_WINDOW="86400"
+	BAN_ESCALATION="linear"
+	EMAIL_REPUTATION_LINKS=""
+	local line="192.0.2.1|sshd|22|15000|0|ban|3||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 2
+	[[ "$HISTORY_LINE" == *"3 previous ban(s)"* ]]
+	[[ "$HISTORY_LINE" == *"permanent at 5"* ]]
+	[[ "$HISTORY_ROW_HTML" == *"3 previous ban(s)"* ]]
+}
+
+@test "_alert_set_entry_vars: no history when recent=0" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="5"
+	BAN_ESCALATION="linear"
+	EMAIL_REPUTATION_LINKS=""
+	local line="192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[ -z "$HISTORY_LINE" ]
+	[ -z "$HISTORY_ROW_HTML" ]
+}
+
+@test "_alert_set_entry_vars: ban command with fw_backend" {
+	BAN_COMMAND_TEMPLATE=""
+	_FW_BACKEND="iptables"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[[ "$BAN_COMMAND" == *"fw_ban 192.0.2.1"* ]]
+	[[ "$BAN_COMMAND" == *"iptables"* ]]
+}
+
+@test "_alert_set_entry_vars: reputation links when configured" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS="abuseipdb,ipinfo"
+	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[[ "$REPUTATION_SECTION_TEXT" == *"Reputation:"* ]]
+	[[ "$REPUTATION_SECTION_TEXT" == *"AbuseIPDB"* ]]
+	[[ "$REPUTATION_SECTION_HTML" == *"Reputation"* ]]
+}
+
+@test "_alert_set_entry_vars: no reputation when not configured" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[ -z "$REPUTATION_SECTION_TEXT" ]
+	[ -z "$REPUTATION_SECTION_HTML" ]
+}
+
+@test "_alert_set_entry_vars: source logs with journal fallback" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	# empty log path = journal
+	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"systemd journal"* ]]
+	[[ "$SOURCE_LOGS_SECTION_HTML" == *"systemd journal"* ]]
+}
+
+@test "_alert_set_entry_vars: source logs from file" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local logfile="$TEST_TMPDIR/auth.log"
+	echo "Jan  1 00:00:01 host sshd: Failed password from 192.0.2.1" > "$logfile"
+	local line="192.0.2.1|sshd|22|5000|0|ban|0|${logfile}|root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Source logs from"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Failed password"* ]]
+	[[ "$SOURCE_LOGS_SECTION_HTML" == *"Failed password"* ]]
+}
+
+@test "_alert_set_entry_vars: country code defaults to --" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	# no ipcountry.dat available
+	local _old_ip="${INSTALL_PATH:-}"
+	INSTALL_PATH="$TEST_TMPDIR/nonexistent"
+	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$COUNTRY_CODE" = "--" ]
+	INSTALL_PATH="$_old_ip"
+}
+
+# ===================================================================
+# _alert_compute_summary
+# ===================================================================
+
+@test "_alert_compute_summary: basic single entry" {
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1" > "$af"
+	_alert_compute_summary "$af"
+	[ "$SUMMARY_TOTAL_BANS" = "1" ]
+	[ "$SUMMARY_UNIQUE_IPS" = "1" ]
+	[ "$SUMMARY_PERMANENT" = "1" ]
+	[ "$SUMMARY_TEMPORARY" = "0" ]
+	[ "$SUMMARY_ESCALATED" = "0" ]
+	[ "$SUMMARY_REPEAT_OFFENDERS" = "0" ]
+	[ "$SUMMARY_REPEAT_PCT" = "0" ]
+}
+
+@test "_alert_compute_summary: multiple entries with mixed types" {
+	local af="$TEST_TMPDIR/alerts"
+	cat > "$af" <<'EOF'
+192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1
+198.51.100.5|dovecot|143|8000|1709553600|ban|2||root|10|300|1
+203.0.113.10|sshd|22|12000|0|escalate|5||root|10|300|1
+192.0.2.1|postfix|25|6000|1709553600|ban|0||root|10|300|1
+EOF
+	_alert_compute_summary "$af"
+	[ "$SUMMARY_TOTAL_BANS" = "4" ]
+	[ "$SUMMARY_UNIQUE_IPS" = "3" ]
+	[ "$SUMMARY_PERMANENT" = "1" ]
+	[ "$SUMMARY_TEMPORARY" = "2" ]
+	[ "$SUMMARY_ESCALATED" = "1" ]
+	[ "$SUMMARY_REPEAT_OFFENDERS" = "2" ]
+	[ "$SUMMARY_REPEAT_PCT" = "50" ]
+	[[ "$SUMMARY_SERVICES" == *"sshd"* ]]
+	[[ "$SUMMARY_SERVICES" == *"dovecot"* ]]
+}
+
+@test "_alert_compute_summary: returns 1 for empty file" {
+	local af="$TEST_TMPDIR/alerts_empty"
+	: > "$af"
+	run _alert_compute_summary "$af"
+	assert_failure
+}
+
+@test "_alert_compute_summary: returns 1 for missing file" {
+	run _alert_compute_summary "$TEST_TMPDIR/nonexistent_alerts"
+	assert_failure
+}
+
+# ===================================================================
+# _alert_render_text
+# ===================================================================
+
+@test "_alert_render_text: renders single entry email" {
+	V="2.0.1"
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|3" > "$af"
+	run _alert_render_text "$af" "${PROJECT_ROOT}/files/alert"
+	assert_success
+	# header
+	assert_output --partial "BFD Alert for"
+	assert_output --partial "1 host(s) banned"
+	# entry
+	assert_output --partial "Ban 1 of 1"
+	assert_output --partial "192.0.2.1"
+	assert_output --partial "sshd"
+	# footer
+	assert_output --partial "BFD (Brute Force Detection) 2.0.1"
+	assert_output --partial "rfxn.com/projects/brute-force-detection"
+	# no summary for single entry
+	refute_output --partial "Summary"
+}
+
+@test "_alert_render_text: renders multi-entry with summary" {
+	V="2.0.1"
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local af="$TEST_TMPDIR/alerts"
+	cat > "$af" <<'EOF'
+192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1
+198.51.100.5|dovecot|143|8000|0|ban|0||root|10|300|1
+EOF
+	run _alert_render_text "$af" "${PROJECT_ROOT}/files/alert"
+	assert_success
+	assert_output --partial "2 host(s) banned"
+	assert_output --partial "Ban 1 of 2"
+	assert_output --partial "Ban 2 of 2"
+	assert_output --partial "Summary"
+	assert_output --partial "Total bans:"
+}
+
+@test "_alert_render_text: returns 1 for empty alerts" {
+	local af="$TEST_TMPDIR/alerts_empty"
+	: > "$af"
+	run _alert_render_text "$af" "${PROJECT_ROOT}/files/alert"
+	assert_failure
+}
+
+# ===================================================================
+# _alert_render_html
+# ===================================================================
+
+@test "_alert_render_html: renders single entry HTML" {
+	V="2.0.1"
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|3" > "$af"
+	run _alert_render_html "$af" "${PROJECT_ROOT}/files/alert"
+	assert_success
+	assert_output --partial "<!DOCTYPE html>"
+	assert_output --partial "BFD Alert"
+	assert_output --partial "192.0.2.1"
+	assert_output --partial "</html>"
+	# no summary for single
+	refute_output --partial "Summary"
+}
+
+@test "_alert_render_html: multi-entry includes summary card" {
+	V="2.0.1"
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local af="$TEST_TMPDIR/alerts"
+	cat > "$af" <<'EOF'
+192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1
+198.51.100.5|dovecot|143|8000|0|ban|0||root|10|300|1
+EOF
+	run _alert_render_html "$af" "${PROJECT_ROOT}/files/alert"
+	assert_success
+	assert_output --partial "Summary"
+	assert_output --partial "<!DOCTYPE html>"
+	assert_output --partial "</html>"
+}
+
+@test "_alert_render_html: pressure bar has color and width" {
+	V="2.0.1"
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1" > "$af"
+	run _alert_render_html "$af" "${PROJECT_ROOT}/files/alert"
+	assert_success
+	# pressure bar should contain color and percentage width
+	assert_output --partial "background-color:#d32f2f"
+	assert_output --partial "150%"
+}
+
+# ===================================================================
+# _alert_build_mime
+# ===================================================================
+
+@test "_alert_build_mime: produces valid MIME structure" {
+	local text_body="Plain text content here"
+	local html_body="<html><body>HTML content</body></html>"
+	run _alert_build_mime "$text_body" "$html_body"
+	assert_success
+	assert_output --partial "MIME-Version: 1.0"
+	assert_output --partial "Content-Type: multipart/alternative"
+	assert_output --partial "Content-Type: text/plain; charset=UTF-8"
+	assert_output --partial "Content-Type: text/html; charset=UTF-8"
+	assert_output --partial "Plain text content here"
+	assert_output --partial "HTML content"
+}
+
+@test "_alert_build_mime: boundary is present and closes" {
+	local text_body="text"
+	local html_body="<html>html</html>"
+	local result
+	result=$(_alert_build_mime "$text_body" "$html_body")
+	# extract boundary from Content-Type header
+	local boundary
+	boundary=$(echo "$result" | grep 'boundary=' | sed 's/.*boundary="\(.*\)"/\1/')
+	[ -n "$boundary" ]
+	# opening boundaries
+	local opens
+	opens=$(echo "$result" | grep -c "^--${boundary}$" || true)
+	[ "$opens" -eq 2 ]
+	# closing boundary
+	echo "$result" | grep -q "^--${boundary}--$"
 }

@@ -7,7 +7,7 @@
 <tr>
 <td style="color:#9e9e9e;font-size:11px;">
 BFD (Brute Force Detection) {{BFD_VERSION}}<br>
-<a href="https://github.com/rfxn/bfd" style="color:#9e9e9e;text-decoration:none;">github.com/rfxn/bfd</a>
+<a href="https://www.rfxn.com/projects/brute-force-detection" style="color:#9e9e9e;text-decoration:none;">rfxn.com/projects/brute-force-detection</a>
 &nbsp;&middot;&nbsp;
 <a href="mailto:bfd@rfxn.com" style="color:#9e9e9e;text-decoration:none;">bfd@rfxn.com</a>
 </td>

@@ -255,3 +255,426 @@ _alert_ban_type_color() {
 		echo "#f9a825"
 	fi
 }
+
+# ---------------------------------------------------------------------------
+# Data Preparation (Phase 3)
+# ---------------------------------------------------------------------------
+
+# _alert_set_global_vars alert_count — export global template variables
+# Sets: HOSTNAME, TIMESTAMP, TIMESTAMP_ISO, TIME_ZONE, ALERT_COUNT, BFD_VERSION
+# Must be called once before rendering begins.
+_alert_set_global_vars() {
+	local alert_count="${1:-0}"
+	# HOSTNAME is typically already set by the shell; export to ensure ENVIRON visibility
+	export HOSTNAME="${HOSTNAME:-$(hostname)}"
+	export TIMESTAMP
+	TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+	export TIMESTAMP_ISO
+	TIMESTAMP_ISO=$(date +"%Y-%m-%dT%H:%M:%S%z")
+	# TIME_ZONE set by internals.conf; fallback to date
+	export TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
+	export ALERT_COUNT="$alert_count"
+	# V is the version variable set in files/bfd; fall back to ALERT_LIB_VERSION
+	export BFD_VERSION="${V:-${BFD_VERSION:-$ALERT_LIB_VERSION}}"
+}
+
+# _alert_set_entry_vars pipe_line entry_num entry_total — parse alert line, export entry variables
+# Input: pipe-delimited line with 12 fields:
+#   host|mod|ports|pressure_scaled|expiry|action|recent|log_path|recipient|trip|half_life|weight
+# Sets all per-entry template variables into exported environment for _tpl_render.
+# Requires: format_duration(), pressure_format(), ip_to_country(), expand_command_template(),
+#   _alert_build_reputation_links(), _alert_pressure_bar(), _alert_pressure_color(),
+#   _alert_ban_type_color(), _alert_country_flag(), _html_escape(), _alert_sanitize_logs()
+#   (all from bfd.lib.sh or alert_lib.sh)
+_alert_set_entry_vars() {
+	local pipe_line="$1" entry_num="$2" entry_total="$3"
+	local loglines="${4:-50}"
+
+	# parse pipe-delimited fields
+	local host mod ports pressure_scaled expiry action recent lp recipient trip half_life weight
+	IFS='|' read -r host mod ports pressure_scaled expiry action recent lp recipient trip half_life weight <<< "$pipe_line"
+
+	export ENTRY_NUM="$entry_num"
+	export ENTRY_TOTAL="$entry_total"
+	export HOST="$host"
+
+	# host version: IPv6 contains ':'
+	if [[ "$host" == *:* ]]; then
+		export HOST_VERSION="IPv6"
+	else
+		export HOST_VERSION="IPv4"
+	fi
+
+	export SERVICE="$mod"
+
+	# port display
+	if [ "$ports" = "all" ]; then
+		export PORTS="all ports"
+	else
+		export PORTS="port $ports"
+	fi
+
+	# pressure formatting (pressure_scaled is in thousandths, e.g. 18400 = 18.4)
+	local p_fmt t_fmt
+	p_fmt=$(pressure_format "$pressure_scaled")
+	t_fmt=$(pressure_format $((trip * 1000)))
+	export PRESSURE="$p_fmt"
+	export PRESSURE_TRIP="$t_fmt"
+
+	# percentage of trip
+	local pct=0
+	if [ "$trip" -gt 0 ]; then
+		pct=$(( (pressure_scaled * 100) / (trip * 1000) ))
+	fi
+	export PRESSURE_PCT="$pct"
+	local pct_clamped="$pct"
+	if [ "$pct_clamped" -gt 100 ]; then
+		pct_clamped=100
+	fi
+	export PRESSURE_PCT_CLAMPED="$pct_clamped"
+
+	# pressure bar and colors
+	export PRESSURE_BAR
+	PRESSURE_BAR=$(_alert_pressure_bar "$pct")
+	export PRESSURE_COLOR
+	PRESSURE_COLOR=$(_alert_pressure_color "$pct")
+
+	export WEIGHT="${weight:-1}"
+
+	# half-life: format seconds to human-readable
+	export HALF_LIFE_FMT
+	HALF_LIFE_FMT=$(format_duration "${half_life:-300}")
+
+	# ban type
+	local ban_type ban_duration_detail=""
+	if [ "$action" = "escalate" ]; then
+		ban_type="Permanent (escalated)"
+	elif [ "$expiry" = "0" ]; then
+		ban_type="Permanent"
+	else
+		local duration=$(( expiry - $(date +"%s") ))
+		if [ "$duration" -lt 0 ]; then
+			duration=0
+		fi
+		ban_type="Temporary"
+		local dur_fmt
+		dur_fmt=$(format_duration "$duration")
+		local exp_str
+		exp_str=$(date -d "@${expiry}" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || echo "$expiry")
+		ban_duration_detail=" ($dur_fmt), expires $exp_str"
+	fi
+	export BAN_TYPE="$ban_type"
+	export BAN_DURATION_DETAIL="$ban_duration_detail"
+	export BAN_TYPE_COLOR
+	BAN_TYPE_COLOR=$(_alert_ban_type_color "$action" "$expiry")
+
+	# history and escalation lines (pre-computed with label or empty)
+	local esc_after="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}"
+	local esc_window="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
+	if [ "${esc_after:-0}" -gt 0 ] && [ "${recent:-0}" -gt 0 ]; then
+		local _esc_dur
+		_esc_dur=$(format_duration "$esc_window")
+		HISTORY_LINE="  History:     $recent previous ban(s) in $_esc_dur (permanent at $esc_after)"
+		export HISTORY_LINE
+		HISTORY_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 14px;color:#757575;vertical-align:top;">History</td>\n<td style="padding:4px 14px;">%s previous ban(s) in %s (permanent at %s)</td>\n</tr>' \
+			"$recent" "$_esc_dur" "$esc_after")
+		export HISTORY_ROW_HTML
+	else
+		export HISTORY_LINE=""
+		export HISTORY_ROW_HTML=""
+	fi
+
+	if [ "$action" = "escalate" ]; then
+		export ESCALATION_LINE="  Escalation:  permanent after $esc_after offenses"
+		export ESCALATION_ROW_HTML
+		ESCALATION_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 14px;color:#757575;vertical-align:top;">Escalation</td>\n<td style="padding:4px 14px;color:#d32f2f;font-weight:bold;">Permanent after %s offenses</td>\n</tr>' \
+			"$esc_after")
+	elif [ "${BAN_ESCALATION:-none}" != "none" ] && [ "${recent:-0}" -gt 0 ]; then
+		export ESCALATION_LINE="  Escalation:  ${BAN_ESCALATION}, step $((recent + 1))"
+		export ESCALATION_ROW_HTML
+		ESCALATION_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 14px;color:#757575;vertical-align:top;">Escalation</td>\n<td style="padding:4px 14px;">%s, step %s</td>\n</tr>' \
+			"${BAN_ESCALATION}" "$((recent + 1))")
+	else
+		export ESCALATION_LINE=""
+		export ESCALATION_ROW_HTML=""
+	fi
+
+	# ban command display
+	# expand_command_template uses globals ATTACK_HOST, MOD, PORTS (raw values)
+	local _saved_ports="$PORTS"
+	ATTACK_HOST="$host"
+	MOD="$mod"
+	PORTS="$ports"
+	local display_cmd
+	if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
+		display_cmd=$(expand_command_template "${BAN_COMMAND_TEMPLATE:-}")
+	else
+		display_cmd="fw_ban $host ($_FW_BACKEND)"
+	fi
+	export BAN_COMMAND="$display_cmd"
+	# restore formatted PORTS for template rendering
+	PORTS="$_saved_ports"
+	export PORTS
+
+	# country lookup
+	local cc=""
+	if [ -n "${INSTALL_PATH:-}" ] && [ -f "${INSTALL_PATH}/ipcountry.dat" ]; then
+		cc=$(ip_to_country "$host" "$INSTALL_PATH/ipcountry.dat")
+	fi
+	export COUNTRY_CODE="${cc:---}"
+	export COUNTRY_FLAG
+	if [ -n "$cc" ]; then
+		COUNTRY_FLAG=$(_alert_country_flag "$cc")
+	else
+		COUNTRY_FLAG=""
+	fi
+
+	# reputation links
+	local rep_config="${EMAIL_REPUTATION_LINKS:-}"
+	if [ -n "$rep_config" ]; then
+		_alert_build_reputation_links "$host" "$rep_config"
+		export REPUTATION_SECTION_TEXT=""
+		export REPUTATION_SECTION_HTML=""
+		if [ -n "$REPUTATION_LINKS_TEXT" ]; then
+			REPUTATION_SECTION_TEXT="  Reputation:
+$REPUTATION_LINKS_TEXT"
+			export REPUTATION_SECTION_TEXT
+			local _esc_html="$REPUTATION_LINKS_HTML"
+			REPUTATION_SECTION_HTML=$(printf '<tr>\n<td style="padding:4px 14px 8px;color:#757575;vertical-align:top;">Reputation</td>\n<td style="padding:4px 14px 8px;">%s</td>\n</tr>' "$_esc_html")
+			export REPUTATION_SECTION_HTML
+		fi
+	else
+		export REPUTATION_LINKS_TEXT="" REPUTATION_LINKS_HTML=""
+		export REPUTATION_SECTION_TEXT="" REPUTATION_SECTION_HTML=""
+	fi
+
+	# source logs
+	export SOURCE_LOGS="" SOURCE_LOGS_HTML=""
+	export SOURCE_LOGS_SECTION_TEXT="" SOURCE_LOGS_SECTION_HTML=""
+	if [ -n "$lp" ] && [ -f "$lp" ]; then
+		local raw_logs
+		raw_logs=$(_alert_sanitize_logs "$lp" "$host" "$loglines") || true
+		if [ -n "$raw_logs" ]; then
+			export SOURCE_LOGS="$raw_logs"
+			# indent for text display
+			local indented_logs
+			indented_logs=$(echo "$raw_logs" | sed 's/^/    /')
+			# shellcheck disable=SC2089  # single quotes are literal output, not shell quoting
+			if [ "$entry_total" -gt 1 ]; then
+				SOURCE_LOGS_SECTION_TEXT="  Source logs from '${mod}' [${host}]:
+${indented_logs}"
+			else
+				SOURCE_LOGS_SECTION_TEXT="  Source logs from '${mod}':
+${indented_logs}"
+			fi
+			# shellcheck disable=SC2090  # variable contains literal quotes for template output
+			export SOURCE_LOGS_SECTION_TEXT
+
+			# HTML: escape log content
+			local html_logs
+			html_logs=$(_html_escape "$raw_logs")
+			export SOURCE_LOGS_HTML="$html_logs"
+			SOURCE_LOGS_SECTION_HTML=$(printf '<tr>\n<td colspan="2" style="padding:8px 14px;">\n<div style="background-color:#f5f5f5;border:1px solid #e0e0e0;border-radius:3px;padding:8px;font-family:monospace,monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;">%s</div>\n</td>\n</tr>' "$html_logs")
+			export SOURCE_LOGS_SECTION_HTML
+		fi
+	elif [ -z "$lp" ] || [ ! -f "${lp:-/dev/null}" ]; then
+		# journal-based logs: no log file path available
+		SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (logs via systemd journal)"
+		export SOURCE_LOGS_SECTION_TEXT
+		# shellcheck disable=SC2089  # variable contains HTML with literal quotes, not shell quoting
+		SOURCE_LOGS_SECTION_HTML='<tr><td colspan="2" style="padding:8px 14px;color:#9e9e9e;font-style:italic;">Source logs not available (systemd journal)</td></tr>'
+		# shellcheck disable=SC2090  # variable contains HTML output
+		export SOURCE_LOGS_SECTION_HTML
+	fi
+}
+
+# _alert_compute_summary alerts_file — compute summary variables from alerts file
+# Single awk pass to compute: total bans, unique IPs, per-service counts,
+# per-country counts, ban type counts (temporary/escalated/permanent),
+# repeat offender count. Exports SUMMARY_* variables.
+_alert_compute_summary() {
+	local alerts_file="$1"
+	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
+		return 1
+	fi
+
+	# single awk pass: field layout host|mod|ports|pressure|expiry|action|recent|lp|recip|trip|hl|weight
+	local summary
+	summary=$(awk -F'|' '
+	{
+		total++
+		ips[$1]++
+		services[$2]++
+		if ($6 == "escalate") { escalated++ }
+		else if ($5 == "0") { permanent++ }
+		else { temporary++ }
+		if ($7 + 0 > 0) { repeats++ }
+	}
+	END {
+		unique = 0; for (i in ips) unique++
+		# build service string: "sshd(3), dovecot(2)"
+		svc = ""
+		for (s in services) {
+			if (svc != "") svc = svc ", "
+			svc = svc s "(" services[s] ")"
+		}
+		printf "%d\n%d\n%s\n%d\n%d\n%d\n%d\n",
+			total, unique, svc,
+			temporary + 0, escalated + 0, permanent + 0, repeats + 0
+	}' "$alerts_file")
+
+	local line_num=0
+	local s_total s_unique s_services s_temp s_esc s_perm s_repeats
+	while IFS= read -r _line; do
+		line_num=$((line_num + 1))
+		case $line_num in
+			1) s_total="$_line" ;;
+			2) s_unique="$_line" ;;
+			3) s_services="$_line" ;;
+			4) s_temp="$_line" ;;
+			5) s_esc="$_line" ;;
+			6) s_perm="$_line" ;;
+			7) s_repeats="$_line" ;;
+		esac
+	done <<< "$summary"
+
+	export SUMMARY_TOTAL_BANS="${s_total:-0}"
+	export SUMMARY_UNIQUE_IPS="${s_unique:-0}"
+	export SUMMARY_SERVICES="${s_services:-}"
+	export SUMMARY_TEMPORARY="${s_temp:-0}"
+	export SUMMARY_ESCALATED="${s_esc:-0}"
+	export SUMMARY_PERMANENT="${s_perm:-0}"
+	export SUMMARY_REPEAT_OFFENDERS="${s_repeats:-0}"
+
+	# repeat percentage
+	local repeat_pct=0
+	if [ "${s_total:-0}" -gt 0 ]; then
+		repeat_pct=$(( (${s_repeats:-0} * 100) / s_total ))
+	fi
+	export SUMMARY_REPEAT_PCT="$repeat_pct"
+
+	# country breakdown: need ip_to_country for each unique IP
+	local countries_str=""
+	if [ -n "${INSTALL_PATH:-}" ] && [ -f "${INSTALL_PATH}/ipcountry.dat" ]; then
+		# collect unique IPs and look up countries
+		local _ip _cc
+		local -a _cc_counts=()
+		local _cc_list=""
+		while IFS='|' read -r _ip _ _ _ _ _ _ _ _ _ _ _; do
+			[ -z "$_ip" ] && continue
+			_cc=$(ip_to_country "$_ip" "$INSTALL_PATH/ipcountry.dat")
+			_cc="${_cc:---}"
+			_cc_list="${_cc_list}${_cc}
+"
+		done < "$alerts_file"
+		# count and format
+		countries_str=$(echo "$_cc_list" | grep -v '^$' | sort | uniq -c | sort -rn | \
+			awk '{printf "%s(%d), ", $2, $1}' | sed 's/, $//')
+	fi
+	export SUMMARY_COUNTRIES="${countries_str:---}"
+}
+
+# ---------------------------------------------------------------------------
+# Rendering Pipeline (Phase 3)
+# ---------------------------------------------------------------------------
+
+# _alert_render_text alerts_file template_dir [loglines] — render full text email
+# Orchestrates: header → N×entry → [summary] → footer
+# Output goes to stdout.
+_alert_render_text() {
+	local alerts_file="$1" template_dir="$2" loglines="${3:-50}"
+	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
+		return 1
+	fi
+
+	local entry_total
+	entry_total=$(wc -l < "$alerts_file")
+
+	# global vars
+	_alert_set_global_vars "$entry_total"
+
+	# header
+	_tpl_render "$template_dir/text.header.tpl"
+
+	# entries
+	local n=0 line
+	while IFS= read -r line; do
+		[ -z "$line" ] && continue
+		n=$((n + 1))
+		_alert_set_entry_vars "$line" "$n" "$entry_total" "$loglines"
+		_tpl_render "$template_dir/text.entry.tpl"
+	done < "$alerts_file"
+
+	# summary (multi-ban only)
+	if [ "$entry_total" -gt 1 ]; then
+		_alert_compute_summary "$alerts_file"
+		_tpl_render "$template_dir/text.summary.tpl"
+	fi
+
+	# footer
+	_tpl_render "$template_dir/text.footer.tpl"
+}
+
+# _alert_render_html alerts_file template_dir [loglines] — render full HTML email
+# Same flow as text but with HTML partials and HTML-escaped values.
+# Output goes to stdout.
+_alert_render_html() {
+	local alerts_file="$1" template_dir="$2" loglines="${3:-50}"
+	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
+		return 1
+	fi
+
+	local entry_total
+	entry_total=$(wc -l < "$alerts_file")
+
+	# global vars
+	_alert_set_global_vars "$entry_total"
+
+	# header
+	_tpl_render "$template_dir/html.header.tpl"
+
+	# entries
+	local n=0 line
+	while IFS= read -r line; do
+		[ -z "$line" ] && continue
+		n=$((n + 1))
+		_alert_set_entry_vars "$line" "$n" "$entry_total" "$loglines"
+		_tpl_render "$template_dir/html.entry.tpl"
+	done < "$alerts_file"
+
+	# summary (multi-ban only)
+	if [ "$entry_total" -gt 1 ]; then
+		_alert_compute_summary "$alerts_file"
+		_tpl_render "$template_dir/html.summary.tpl"
+	fi
+
+	# footer
+	_tpl_render "$template_dir/html.footer.tpl"
+}
+
+# _alert_build_mime text_body html_body — construct multipart/alternative MIME message
+# Writes MIME headers and both text and HTML parts to stdout.
+# Caller is responsible for adding Subject/To/From headers before this output.
+# The boundary uses epoch+PID for uniqueness (sufficient for email context).
+_alert_build_mime() {
+	local text_body="$1" html_body="$2"
+	local boundary
+	boundary="BFD_$(date +%s)_$$"
+
+	echo "MIME-Version: 1.0"
+	echo "Content-Type: multipart/alternative; boundary=\"$boundary\""
+	echo ""
+	echo "--$boundary"
+	echo "Content-Type: text/plain; charset=UTF-8"
+	echo "Content-Transfer-Encoding: 8bit"
+	echo ""
+	echo "$text_body"
+	echo ""
+	echo "--$boundary"
+	echo "Content-Type: text/html; charset=UTF-8"
+	echo "Content-Transfer-Encoding: 8bit"
+	echo ""
+	echo "$html_body"
+	echo ""
+	echo "--${boundary}--"
+}

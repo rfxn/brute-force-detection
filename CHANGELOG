@@ -1,4 +1,12 @@
 2.0.1:
+[New] Alert rendering pipeline: data preparation (_alert_set_global_vars,
+      _alert_set_entry_vars), summary aggregation (_alert_compute_summary),
+      text and HTML render orchestrators (_alert_render_text, _alert_render_html),
+      multipart/alternative MIME construction (_alert_build_mime); per-entry
+      variables include pressure bar, ban type colors, country lookup, reputation
+      links, history/escalation lines, sanitized source logs — all pre-computed
+      for zero-logic template rendering
+[Change] Alert template footer URLs updated to rfxn.com/projects/brute-force-detection
 [New] Alert template partials (files/alert/): 8 customizable {{VAR}} templates
       (4 plain text + 4 HTML) replacing sourced-bash alert.bfd; email-safe HTML
       with inline CSS and table layout; self-contained entry/summary cards;
