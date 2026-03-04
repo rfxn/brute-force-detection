@@ -1,4 +1,8 @@
 2.0.1:
+[New] Alert template partials (files/alert/): 8 customizable {{VAR}} templates
+      (4 plain text + 4 HTML) replacing sourced-bash alert.bfd; email-safe HTML
+      with inline CSS and table layout; self-contained entry/summary cards;
+      conditional sections via pre-computed variables for zero-logic templates
 [New] Alert engine library (alert_lib.sh): safe {{VAR}} template renderer via
       awk ENVIRON substitution (no shell sourcing), HTML entity escaping,
       credential-redacting log sanitizer, IP reputation link builder

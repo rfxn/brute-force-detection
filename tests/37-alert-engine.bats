@@ -513,3 +513,283 @@ EOF
 	assert_success
 	assert_output "#f57c00"
 }
+
+# ===================================================================
+# Template partials — file existence and structure
+# ===================================================================
+
+@test "template partials: all 8 files exist" {
+	local tpl_dir="${PROJECT_ROOT}/files/alert"
+	local expected=(
+		text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl
+		html.header.tpl html.entry.tpl html.summary.tpl html.footer.tpl
+	)
+	local f
+	for f in "${expected[@]}"; do
+		[ -f "$tpl_dir/$f" ]
+	done
+}
+
+@test "template partials: text templates contain {{VAR}} tokens" {
+	local tpl_dir="${PROJECT_ROOT}/files/alert"
+	# each text template should have at least one {{VAR}} token
+	local f
+	for f in text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl; do
+		grep -qE '\{\{[A-Z_][A-Z0-9_]*\}\}' "$tpl_dir/$f"
+	done
+}
+
+@test "template partials: HTML templates contain {{VAR}} tokens" {
+	local tpl_dir="${PROJECT_ROOT}/files/alert"
+	local f
+	for f in html.header.tpl html.entry.tpl html.summary.tpl html.footer.tpl; do
+		grep -qE '\{\{[A-Z_][A-Z0-9_]*\}\}' "$tpl_dir/$f"
+	done
+}
+
+@test "template partials: text templates have no HTML tags" {
+	local tpl_dir="${PROJECT_ROOT}/files/alert"
+	local f
+	for f in text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl; do
+		! grep -qE '<[a-z]+[> ]' "$tpl_dir/$f"
+	done
+}
+
+@test "template partials: HTML header opens html/body/table" {
+	local tpl="${PROJECT_ROOT}/files/alert/html.header.tpl"
+	grep -q '<html' "$tpl"
+	grep -q '<body' "$tpl"
+	grep -q '<table' "$tpl"
+}
+
+@test "template partials: HTML footer closes html/body/table" {
+	local tpl="${PROJECT_ROOT}/files/alert/html.footer.tpl"
+	grep -q '</html>' "$tpl"
+	grep -q '</body>' "$tpl"
+	grep -q '</table>' "$tpl"
+}
+
+@test "template partials: HTML entry is self-contained" {
+	local tpl="${PROJECT_ROOT}/files/alert/html.entry.tpl"
+	# count opening and closing table tags — must balance
+	local opens closes
+	opens=$(grep -c '<table' "$tpl")
+	closes=$(grep -c '</table>' "$tpl")
+	[ "$opens" -eq "$closes" ]
+	[ "$opens" -gt 0 ]
+}
+
+@test "template partials: HTML summary is self-contained" {
+	local tpl="${PROJECT_ROOT}/files/alert/html.summary.tpl"
+	local opens closes
+	opens=$(grep -c '<table' "$tpl")
+	closes=$(grep -c '</table>' "$tpl")
+	[ "$opens" -eq "$closes" ]
+	[ "$opens" -gt 0 ]
+}
+
+# ===================================================================
+# Template partials — rendering tests
+# ===================================================================
+
+@test "template render: text.header.tpl smoke test" {
+	export HOSTNAME="web01.example.com"
+	export TIMESTAMP="2026-03-04 14:22:31"
+	export TIME_ZONE="-0600"
+	export ALERT_COUNT="3"
+	run _tpl_render "${PROJECT_ROOT}/files/alert/text.header.tpl"
+	assert_success
+	assert_output --partial "BFD Alert for web01.example.com"
+	assert_output --partial "2026-03-04 14:22:31 GMT -0600"
+	assert_output --partial "3 host(s) banned"
+}
+
+@test "template render: text.entry.tpl smoke test" {
+	export HOST="192.0.2.1"
+	export HOST_VERSION="IPv4"
+	export COUNTRY_CODE="US"
+	export SERVICE="sshd"
+	export PORTS="22"
+	export PRESSURE="85"
+	export PRESSURE_TRIP="100"
+	export PRESSURE_BAR="[=================   ] 85%"
+	export WEIGHT="10"
+	export HALF_LIFE_FMT="30m"
+	export BAN_TYPE="temporary"
+	export BAN_DURATION_DETAIL=" (10m), expires 2026-03-04 14:32:31"
+	export BAN_COMMAND="/sbin/iptables -I INPUT -s 192.0.2.1 -j DROP"
+	export ENTRY_NUM="1"
+	export ENTRY_TOTAL="3"
+	export HISTORY_LINE="  History:     2 prior bans"
+	export ESCALATION_LINE=""
+	export REPUTATION_SECTION_TEXT=""
+	export SOURCE_LOGS_SECTION_TEXT=""
+	run _tpl_render "${PROJECT_ROOT}/files/alert/text.entry.tpl"
+	assert_success
+	assert_output --partial "Ban 1 of 3"
+	assert_output --partial "Host:        192.0.2.1 (IPv4) US"
+	assert_output --partial "Service:     sshd (22)"
+	assert_output --partial "Pressure:    85/100"
+	assert_output --partial "Ban:         temporary (10m)"
+	assert_output --partial "History:     2 prior bans"
+	assert_output --partial "Command:"
+}
+
+@test "template render: text.summary.tpl smoke test" {
+	export SUMMARY_TOTAL_BANS="5"
+	export SUMMARY_UNIQUE_IPS="3"
+	export SUMMARY_SERVICES="sshd, dovecot"
+	export SUMMARY_COUNTRIES="US, CN, RU"
+	export SUMMARY_TEMPORARY="3"
+	export SUMMARY_ESCALATED="1"
+	export SUMMARY_PERMANENT="1"
+	export SUMMARY_REPEAT_OFFENDERS="2"
+	export SUMMARY_REPEAT_PCT="40"
+	run _tpl_render "${PROJECT_ROOT}/files/alert/text.summary.tpl"
+	assert_success
+	assert_output --partial "Summary"
+	assert_output --partial "5 (3 unique IPs)"
+	assert_output --partial "sshd, dovecot"
+	assert_output --partial "3 temporary, 1 escalated, 1 permanent"
+	assert_output --partial "2 of 5 (40%)"
+}
+
+@test "template render: text.footer.tpl smoke test" {
+	export BFD_VERSION="2.0.1"
+	run _tpl_render "${PROJECT_ROOT}/files/alert/text.footer.tpl"
+	assert_success
+	assert_output --partial "BFD (Brute Force Detection) 2.0.1"
+	assert_output --partial "bfd@rfxn.com"
+	assert_output --partial "github.com/rfxn/bfd"
+}
+
+@test "template render: html.header.tpl contains banner and timestamp" {
+	export HOSTNAME="mail01.example.com"
+	export TIMESTAMP="2026-03-04 15:00:00"
+	export TIME_ZONE="+0000"
+	export ALERT_COUNT="1"
+	run _tpl_render "${PROJECT_ROOT}/files/alert/html.header.tpl"
+	assert_success
+	assert_output --partial "BFD Alert"
+	assert_output --partial "mail01.example.com"
+	assert_output --partial "1 host(s) banned"
+	assert_output --partial "#1a237e"
+}
+
+@test "template render: html.entry.tpl contains pressure bar and detail rows" {
+	export HOST="198.51.100.5"
+	export HOST_VERSION="IPv4"
+	export COUNTRY_CODE="CN"
+	export COUNTRY_FLAG=""
+	export SERVICE="dovecot"
+	export PORTS="110,143"
+	export PRESSURE="120"
+	export PRESSURE_TRIP="100"
+	export PRESSURE_PCT="120"
+	export PRESSURE_PCT_CLAMPED="100"
+	export PRESSURE_COLOR="#d32f2f"
+	export WEIGHT="15"
+	export HALF_LIFE_FMT="1h"
+	export BAN_TYPE="escalated"
+	export BAN_TYPE_COLOR="#f57c00"
+	export BAN_DURATION_DETAIL=""
+	export BAN_COMMAND="/sbin/iptables -I INPUT -s 198.51.100.5 -j DROP"
+	export ENTRY_NUM="2"
+	export ENTRY_TOTAL="2"
+	export HISTORY_ROW_HTML=""
+	export ESCALATION_ROW_HTML=""
+	export REPUTATION_SECTION_HTML=""
+	export SOURCE_LOGS_SECTION_HTML=""
+	run _tpl_render "${PROJECT_ROOT}/files/alert/html.entry.tpl"
+	assert_success
+	assert_output --partial "198.51.100.5"
+	assert_output --partial "#f57c00"
+	assert_output --partial "dovecot"
+	assert_output --partial "120%"
+	assert_output --partial "#d32f2f"
+}
+
+@test "template render: html.footer.tpl closes structure and shows version" {
+	export BFD_VERSION="2.0.1"
+	export HOSTNAME="test01"
+	run _tpl_render "${PROJECT_ROOT}/files/alert/html.footer.tpl"
+	assert_success
+	assert_output --partial "</html>"
+	assert_output --partial "</body>"
+	assert_output --partial "2.0.1"
+	assert_output --partial "github.com/rfxn/bfd"
+}
+
+# ===================================================================
+# Template partials — conditional variable behavior
+# ===================================================================
+
+@test "template render: empty HISTORY_LINE produces no label text" {
+	export HOST="192.0.2.1" HOST_VERSION="IPv4" COUNTRY_CODE="US"
+	export SERVICE="sshd" PORTS="22" PRESSURE="50" PRESSURE_TRIP="100"
+	export PRESSURE_BAR="[==========          ] 50%"
+	export WEIGHT="10" HALF_LIFE_FMT="30m"
+	export BAN_TYPE="temporary" BAN_DURATION_DETAIL="" BAN_COMMAND="iptables -I"
+	export ENTRY_NUM="1" ENTRY_TOTAL="1"
+	export HISTORY_LINE="" ESCALATION_LINE=""
+	export REPUTATION_SECTION_TEXT="" SOURCE_LOGS_SECTION_TEXT=""
+	run _tpl_render "${PROJECT_ROOT}/files/alert/text.entry.tpl"
+	assert_success
+	refute_output --partial "History:"
+	refute_output --partial "Escalation:"
+}
+
+@test "template render: populated HISTORY_LINE appears in output" {
+	export HOST="192.0.2.1" HOST_VERSION="IPv4" COUNTRY_CODE=""
+	export SERVICE="sshd" PORTS="22" PRESSURE="100" PRESSURE_TRIP="100"
+	export PRESSURE_BAR="[====================] 100%"
+	export WEIGHT="10" HALF_LIFE_FMT="30m"
+	export BAN_TYPE="temporary" BAN_DURATION_DETAIL="" BAN_COMMAND="iptables -I"
+	export ENTRY_NUM="1" ENTRY_TOTAL="1"
+	export HISTORY_LINE="  History:     3 prior bans (last: 2026-03-01)"
+	export ESCALATION_LINE="  Escalation:  linear, step 2 of 5"
+	export REPUTATION_SECTION_TEXT="" SOURCE_LOGS_SECTION_TEXT=""
+	run _tpl_render "${PROJECT_ROOT}/files/alert/text.entry.tpl"
+	assert_success
+	assert_output --partial "History:     3 prior bans"
+	assert_output --partial "Escalation:  linear, step 2 of 5"
+}
+
+@test "template render: multi-line SOURCE_LOGS_SECTION_TEXT renders correctly" {
+	export HOST="203.0.113.1" HOST_VERSION="IPv4" COUNTRY_CODE="RU"
+	export SERVICE="sshd" PORTS="22" PRESSURE="90" PRESSURE_TRIP="100"
+	export PRESSURE_BAR="[==================  ] 90%"
+	export WEIGHT="10" HALF_LIFE_FMT="30m"
+	export BAN_TYPE="temporary" BAN_DURATION_DETAIL="" BAN_COMMAND="iptables -I"
+	export ENTRY_NUM="1" ENTRY_TOTAL="1"
+	export HISTORY_LINE="" ESCALATION_LINE=""
+	export REPUTATION_SECTION_TEXT=""
+	# multi-line variable — must appear on its own template line
+	local logs
+	logs="  Source logs:
+    Jan  1 00:00:01 host sshd: Failed password from 203.0.113.1
+    Jan  1 00:00:02 host sshd: Failed password from 203.0.113.1"
+	export SOURCE_LOGS_SECTION_TEXT="$logs"
+	run _tpl_render "${PROJECT_ROOT}/files/alert/text.entry.tpl"
+	assert_success
+	assert_output --partial "Source logs:"
+	assert_output --partial "Failed password from 203.0.113.1"
+}
+
+@test "template render: empty HTML conditional rows leave no artifacts" {
+	export HOST="192.0.2.1" HOST_VERSION="IPv4" COUNTRY_CODE=""
+	export COUNTRY_FLAG="" SERVICE="sshd" PORTS="22"
+	export PRESSURE="50" PRESSURE_TRIP="100" PRESSURE_PCT="50"
+	export PRESSURE_PCT_CLAMPED="50" PRESSURE_COLOR="#4caf50"
+	export WEIGHT="10" HALF_LIFE_FMT="30m"
+	export BAN_TYPE="temporary" BAN_TYPE_COLOR="#f9a825"
+	export BAN_DURATION_DETAIL="" BAN_COMMAND="iptables -I"
+	export ENTRY_NUM="1" ENTRY_TOTAL="1"
+	export HISTORY_ROW_HTML="" ESCALATION_ROW_HTML=""
+	export REPUTATION_SECTION_HTML="" SOURCE_LOGS_SECTION_HTML=""
+	run _tpl_render "${PROJECT_ROOT}/files/alert/html.entry.tpl"
+	assert_success
+	# Should not contain History or Escalation labels
+	refute_output --partial "History"
+	refute_output --partial "Escalation"
+}
