@@ -109,9 +109,11 @@
       10-category verification test suite covering FHS paths, symlink farm,
       config transforms, permissions, rule files, systemd units, and execution
 [New] GitHub Actions release workflow: builds RPM (el7/el8/el9/el10) and DEB
-      packages in parallel on tag push; creates GitHub Release with assets
+      packages in parallel on tag push; creates GitHub Release with assets;
+      build jobs gated by tag-push guard to prevent wasted CI on dispatch
 [New] GitHub Actions CI pipeline: 10-OS Docker matrix with Buildx caching,
-      bash -n syntax checks, and shellcheck static analysis
+      bash -n syntax checks, and shellcheck static analysis; DEB maintainer
+      scripts and bash-completion included in lint targets
 [New] BATS test suite: 1200 tests across 36 files; shared helpers; parallel
       runner; 10 Dockerfiles; RFC 5737 test IPs; dedicated pressure model,
       country multiplier, watch mode, and scan mode test suites
