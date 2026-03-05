@@ -23,7 +23,8 @@ bfd \- brute force detection and IP banning
 .RB [ \-a
 .RI [ IP | STRING ]]
 .RB [ \-e
-.RI [ IP | CIDR ]]
+.RI [ IP | CIDR ]
+.RI [ N ]]
 .RB [ \-S
 .RI [ SERVICE ]]
 .RB [ \-C
@@ -165,13 +166,17 @@ or
 .B \-\-csv
 for structured output.
 .TP
-.BI \-e " \fR[" IP | CIDR \fR]
+.BI \-e " \fR[" IP | CIDR "\fR] [" N \fR]
 Active events and pressure report.
 Without arguments, shows a pressure dashboard of all tracked IPs
 sorted by pressure descending, with event counts, services,
 and ban status.
 With a valid IP, shows per-IP pressure detail including per-service
 breakdown with individual weights, event counts, and sub-scores.
+The optional
+.I N
+overrides the number of log sample lines shown (default:
+.BR EMAIL_LOGLINES ).
 With an IPv4 CIDR (mask 8\-32), shows a subnet-scoped report with
 matching IPs and a summary line.
 Combine with
@@ -293,7 +298,8 @@ Alert recipient; comma-separated for multiple (default: root).
 Alert subject line; $HOSTNAME expands at runtime.
 .TP
 .B EMAIL_LOGLINES
-Log lines from the offending service included in each alert (default: 50).
+Log lines from the offending service included in each alert and events
+view (default: 5).
 .TP
 .B EMAIL_FORMAT
 Email body format:

@@ -265,7 +265,7 @@ Per-rule weights are configured in `pressure.conf` (centralized) or in individua
 | `EMAIL_ALERTS` | `0` | Send email alerts (0 = off, 1 = on) |
 | `EMAIL_ADDRESS` | `root` | Alert recipient(s), comma-separated |
 | `EMAIL_SUBJECT` | `Brute Force Warning for $HOSTNAME` | Subject line (auto-appends `(N bans)` when batched) |
-| `EMAIL_LOGLINES` | `50` | Number of log lines per host in alert body |
+| `EMAIL_LOGLINES` | `5` | Number of log lines per host in alert body and events view |
 | `EMAIL_FORMAT` | `text` | Email body format: `text` (plain text), `html` (HTML only), `both` (multipart text+HTML) |
 | `EMAIL_DIGEST` | `cycle` | Digest mode: `cycle` (one email per run), `timed` (accumulate and send on interval) |
 | `EMAIL_DIGEST_INTERVAL` | `900` | Digest flush interval in seconds when `EMAIL_DIGEST="timed"` (default 15 minutes) |

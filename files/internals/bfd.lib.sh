@@ -715,7 +715,7 @@ validate_config() {
 		echo "error: BAN_RETRY_COUNT must be a non-negative integer (got '${BAN_RETRY_COUNT:-}')." >&2
 		return $EXIT_CONFIG_ERROR
 	fi
-	if ! [[ "${EMAIL_LOGLINES:-50}" =~ $int_pattern ]] || [ "${EMAIL_LOGLINES:-50}" -eq 0 ]; then
+	if ! [[ "${EMAIL_LOGLINES:-5}" =~ $int_pattern ]] || [ "${EMAIL_LOGLINES:-5}" -eq 0 ]; then
 		echo "error: EMAIL_LOGLINES must be a positive integer (got '${EMAIL_LOGLINES:-}')." >&2
 		return $EXIT_CONFIG_ERROR
 	fi
@@ -3469,7 +3469,7 @@ test_alert_email() {
 	subject="${subject//\$HOSTNAME/$(hostname)}"
 	subject="[TEST] $subject"
 
-	if send_alerts "$alerts_file" "$subject" "${EMAIL_LOGLINES:-50}"; then
+	if send_alerts "$alerts_file" "$subject" "${EMAIL_LOGLINES:-5}"; then
 		echo "Test alert sent successfully."
 		rm -f "$alerts_file"
 		return 0
@@ -3815,9 +3815,9 @@ _events_ip_data() {
 	done <<< "$raw"
 }
 
-# events_ip install_path ip — per-IP pressure detail with service breakdown
+# events_ip install_path ip [loglines] — per-IP pressure detail with service breakdown
 events_ip() {
-	local install_path="$1" ip="$2"
+	local install_path="$1" ip="$2" _cli_loglines="${3:-}"
 	local half_life trip
 	half_life="${PRESSURE_HALF_LIFE:-300}"
 	trip="${GLOB_PRESSURE_TRIP:-20}"
@@ -3874,7 +3874,7 @@ events_ip() {
 	# log sample — extract recent log lines matching this IP
 	echo ""
 	echo "Recent log activity:"
-	local _log_total=0 _log_cap=15
+	local _log_total=0 _log_cap="${_cli_loglines:-${EMAIL_LOGLINES:-5}}"
 	local _seen_logs="" _log_file _log_lines _log_patterns
 	local _type _svc _wt _cnt _sp_fmt
 	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
@@ -4022,9 +4022,9 @@ events_dashboard_csv() {
 	done
 }
 
-# events_ip_json install_path ip — JSON object for per-IP pressure detail
+# events_ip_json install_path ip [loglines] — JSON object for per-IP pressure detail
 events_ip_json() {
-	local install_path="$1" ip="$2"
+	local install_path="$1" ip="$2" _cli_loglines="${3:-}"
 	local half_life trip
 	half_life="${PRESSURE_HALF_LIFE:-300}"
 	trip="${GLOB_PRESSURE_TRIP:-20}"
@@ -4072,7 +4072,7 @@ events_ip_json() {
 	fi
 
 	# build log_sample JSON array
-	local log_json="[" _log_total=0 _log_cap=15
+	local log_json="[" _log_total=0 _log_cap="${_cli_loglines:-${EMAIL_LOGLINES:-5}}"
 	local _seen_logs="" _log_file _log_lines _log_patterns _log_first=1
 	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
 		[ "$_type" != "S" ] && continue

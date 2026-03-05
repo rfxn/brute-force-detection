@@ -125,7 +125,7 @@ _html_escape() {
 # is provided, filters by rule patterns instead of blanket IP grep.
 # Returns 1 if log_file missing or empty match.
 _alert_sanitize_logs() {
-	local log_file="$1" host="$2" loglines="${3:-50}" patterns="${4:-}"
+	local log_file="$1" host="$2" loglines="${3:-5}" patterns="${4:-}"
 	if [ -z "$log_file" ] || [ ! -f "$log_file" ]; then
 		return 1
 	fi
@@ -325,7 +325,7 @@ _alert_set_global_vars() {
 #   (all from bfd.lib.sh or alert_lib.sh)
 _alert_set_entry_vars() {
 	local pipe_line="$1" entry_num="$2" entry_total="$3"
-	local loglines="${4:-50}"
+	local loglines="${4:-5}"
 
 	# parse pipe-delimited fields
 	local host mod ports pressure_scaled expiry action recent lp recipient trip half_life weight
@@ -620,7 +620,7 @@ _alert_compute_summary() {
 # Orchestrates: header → N×entry → [summary] → footer
 # Output goes to stdout.
 _alert_render_text() {
-	local alerts_file="$1" template_dir="$2" loglines="${3:-50}"
+	local alerts_file="$1" template_dir="$2" loglines="${3:-5}"
 	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
 		return 1
 	fi
@@ -661,7 +661,7 @@ _alert_render_text() {
 # Same flow as text but with HTML partials and HTML-escaped values.
 # Output goes to stdout.
 _alert_render_html() {
-	local alerts_file="$1" template_dir="$2" loglines="${3:-50}"
+	local alerts_file="$1" template_dir="$2" loglines="${3:-5}"
 	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
 		return 1
 	fi
@@ -718,9 +718,10 @@ _alert_build_mime() {
 	echo ""
 	echo "--$boundary"
 	echo "Content-Type: text/html; charset=UTF-8"
-	echo "Content-Transfer-Encoding: 8bit"
+	echo "Content-Transfer-Encoding: base64"
 	echo ""
-	echo "$html_body"
+	# base64 wraps at 76 chars, satisfying RFC 5321 998-char line limit
+	printf '%s\n' "$html_body" | base64
 	echo ""
 	echo "--${boundary}--"
 }
@@ -755,9 +756,10 @@ _alert_send_local() {
 					echo "To: $recip"
 					echo "Subject: $subject"
 					echo "Content-Type: text/html; charset=UTF-8"
-					echo "Content-Transfer-Encoding: 8bit"
+					echo "Content-Transfer-Encoding: base64"
 					echo ""
-					cat "$html_file"
+					# base64 wraps at 76 chars, satisfying RFC 5321 998-char line limit
+					base64 < "$html_file"
 				} | "$sendmail_bin" -t -oi
 				return $?
 			fi
@@ -968,7 +970,7 @@ _alert_digest_flush_now() {
 	if [ -s "$flush_file" ]; then
 		flush_count=$(wc -l < "$flush_file")
 		eout "digest flush: sending $flush_count accumulated alert(s)." le
-		send_alerts "$flush_file" "${EMAIL_SUBJECT:-BFD Alert}" "${EMAIL_LOGLINES:-50}"
+		send_alerts "$flush_file" "${EMAIL_SUBJECT:-BFD Alert}" "${EMAIL_LOGLINES:-5}"
 	fi
 	rm -f "$flush_file"
 }

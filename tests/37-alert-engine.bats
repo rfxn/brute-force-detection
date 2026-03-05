@@ -1259,7 +1259,8 @@ EOF
 	assert_output --partial "Content-Type: text/plain; charset=UTF-8"
 	assert_output --partial "Content-Type: text/html; charset=UTF-8"
 	assert_output --partial "Plain text content here"
-	assert_output --partial "HTML content"
+	# HTML part is base64-encoded (RFC 5321 line length compliance)
+	assert_output --partial "Content-Transfer-Encoding: base64"
 }
 
 @test "_alert_build_mime: boundary is present and closes" {
@@ -1349,7 +1350,8 @@ _create_test_bodies() {
 	assert_output --partial "-t -oi"
 	run grep "Content-Type: text/html" "$SENDMAIL_LOG"
 	assert_success
-	run grep "HTML alert body" "$SENDMAIL_LOG"
+	# HTML body is base64-encoded (RFC 5321 line length compliance)
+	run grep "Content-Transfer-Encoding: base64" "$SENDMAIL_LOG"
 	assert_success
 }
 
@@ -1362,7 +1364,8 @@ _create_test_bodies() {
 	assert_success
 	run grep "Plain text alert body" "$SENDMAIL_LOG"
 	assert_success
-	run grep "HTML alert body" "$SENDMAIL_LOG"
+	# HTML body is base64-encoded (RFC 5321 line length compliance)
+	run grep "Content-Transfer-Encoding: base64" "$SENDMAIL_LOG"
 	assert_success
 }
 
