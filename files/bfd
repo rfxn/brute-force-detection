@@ -22,23 +22,23 @@
 #
 INSTALL_PATH="/usr/local/bfd"
 CNF="$INSTALL_PATH/conf.bfd"
-INTCNF="$INSTALL_PATH/internals.conf"
+INTCNF="$INSTALL_PATH/internals/internals.conf"
 V="2.0.1"
 # shellcheck disable=SC2034 # APPN used by importconf
 APPN="BFD"
 UTIME=$(date +"%s")
 
 # inline: _check_file_safety unavailable before bfd.lib.sh is sourced
-_lib_owner=$(stat -L -c '%u' "$INSTALL_PATH/bfd.lib.sh")
-_lib_perms=$(stat -L -c '%a' "$INSTALL_PATH/bfd.lib.sh")
+_lib_owner=$(stat -L -c '%u' "$INSTALL_PATH/internals/bfd.lib.sh")
+_lib_perms=$(stat -L -c '%a' "$INSTALL_PATH/internals/bfd.lib.sh")
 _lib_group="${_lib_perms:1:1}"
 _lib_world="${_lib_perms: -1}"
 if [ "$_lib_owner" != "0" ] || [ "$((_lib_group & 2))" -ne 0 ] || [ "$((_lib_world & 2))" -ne 0 ]; then
 	echo "bfd.lib.sh has unsafe ownership (uid=$_lib_owner) or group/world-writable permissions ($_lib_perms), aborting."
 	exit 1
 fi
-# shellcheck source=files/bfd.lib.sh
-. "$INSTALL_PATH/bfd.lib.sh"
+# shellcheck source=files/internals/bfd.lib.sh
+. "$INSTALL_PATH/internals/bfd.lib.sh"
 
 # initialize variables that may be unset
 SKIP_ALERT=""
@@ -250,7 +250,7 @@ if [ ! -f "$TLOG_PATH" ]; then
 	elog error "could not locate \$TLOG_PATH, aborting."
 	exit "$EXIT_PREREQ_ERROR"
 fi
-if [ ! -f "$INSTALL_PATH/tlog_lib.sh" ]; then
+if [ ! -f "$INSTALL_PATH/internals/tlog_lib.sh" ]; then
 	elog error "could not locate tlog_lib.sh, aborting."
 	exit "$EXIT_PREREQ_ERROR"
 fi

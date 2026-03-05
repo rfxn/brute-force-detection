@@ -23,48 +23,27 @@
 # This file is sourced by bfd and test scripts.
 # Functions here are defined but not called; callers invoke as needed.
 
+# Source sibling libraries (all co-located in internals/)
+_internals_dir="${BASH_SOURCE[0]%/*}"
+
 # Source shared tlog library
-_tlog_lib_path="${INSTALL_PATH:-/usr/local/bfd}/tlog_lib.sh"
-if [ -f "$_tlog_lib_path" ]; then
-	# shellcheck disable=SC1091 source=files/tlog_lib.sh
-	. "$_tlog_lib_path"
-else
-	# Fallback for test environments: try relative to this script
-	_tlog_lib_dir="${BASH_SOURCE[0]%/*}"
-	if [ -f "$_tlog_lib_dir/tlog_lib.sh" ]; then
-		# shellcheck disable=SC1091 source=files/tlog_lib.sh
-		. "$_tlog_lib_dir/tlog_lib.sh"
-	fi
+if [ -f "$_internals_dir/tlog_lib.sh" ]; then
+	# shellcheck disable=SC1091
+	. "$_internals_dir/tlog_lib.sh"
 fi
-unset _tlog_lib_path _tlog_lib_dir
 
 # Source shared elog library
-_elog_lib_path="${INSTALL_PATH:-/usr/local/bfd}/elog_lib.sh"
-if [ -f "$_elog_lib_path" ]; then
-	# shellcheck disable=SC1090,SC1091
-	. "$_elog_lib_path"
-else
-	_elog_lib_dir="${BASH_SOURCE[0]%/*}"
-	if [ -f "$_elog_lib_dir/elog_lib.sh" ]; then
-		# shellcheck disable=SC1091
-		. "$_elog_lib_dir/elog_lib.sh"
-	fi
+if [ -f "$_internals_dir/elog_lib.sh" ]; then
+	# shellcheck disable=SC1091
+	. "$_internals_dir/elog_lib.sh"
 fi
-unset _elog_lib_path _elog_lib_dir
 
 # Source alert library (template engine, formatting, delivery)
-_alert_lib_path="${INSTALL_PATH:-/usr/local/bfd}/alert_lib.sh"
-if [ -f "$_alert_lib_path" ]; then
-	# shellcheck disable=SC1090,SC1091
-	. "$_alert_lib_path"
-else
-	_alert_lib_dir="${BASH_SOURCE[0]%/*}"
-	if [ -f "$_alert_lib_dir/alert_lib.sh" ]; then
-		# shellcheck disable=SC1091
-		. "$_alert_lib_dir/alert_lib.sh"
-	fi
+if [ -f "$_internals_dir/alert_lib.sh" ]; then
+	# shellcheck disable=SC1091
+	. "$_internals_dir/alert_lib.sh"
 fi
-unset _alert_lib_path _alert_lib_dir
+unset _internals_dir
 
 # _bfd_journal_register_all: populate journal filter mappings for all BFD rules
 # Wrapped in a function so reload_watch can re-register after clearing arrays
@@ -2348,7 +2327,7 @@ _hc_state() {
 		_hc_warn=$((_hc_warn + 1))
 	fi
 
-	local _tlog_lib="${INSTALL_PATH:-$install_path}/tlog_lib.sh"
+	local _tlog_lib="${INSTALL_PATH:-$install_path}/internals/tlog_lib.sh"
 	if [ -f "$_tlog_lib" ]; then
 		echo "[PASS] tlog_lib.sh: $_tlog_lib (present)"
 		_hc_pass=$((_hc_pass + 1))
