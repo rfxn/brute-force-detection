@@ -1,5 +1,15 @@
 2.0.1:
 
+-- Email Template Rebrand --
+
+[Change] HTML email templates rebranded to rfxn.com design system: teal brand
+      bar header with monospace rfxn logo and uppercase tagline, zinc neutrals,
+      surface cards, pill badge count, severity top-line entry cards
+[Change] Ban type severity colors: temporary teal (#0891b2), escalated amber
+      (#d97706), permanent red (#dc2626)
+[Change] Pressure bar colors: success green (#16a34a), warning amber (#d97706),
+      critical red (#dc2626)
+
 -- Per-Rule Pressure Trip Display --
 
 [New] _resolve_trip()/_resolve_min_trip(): per-rule pressure trip threshold

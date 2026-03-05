@@ -214,7 +214,7 @@ _alert_build_reputation_links() {
 				text_lines="${text_lines}    ${label}: ${url}"
 				local _link
 				# shellcheck disable=SC2089  # literal quotes are intentional HTML output
-				printf -v _link '<a href="%s" style="color:#1976d2;text-decoration:none;">%s</a>' "$url" "$label"
+				printf -v _link '<a href="%s" style="color:#0891b2;text-decoration:none;">%s</a>' "$url" "$label"
 				html_parts="${html_parts}${_link}"
 				found=$((found + 1))
 				break
@@ -256,28 +256,28 @@ _alert_pressure_bar() {
 }
 
 # _alert_pressure_color pct — return HTML hex color for pressure percentage
-# 0-69%: green (#4caf50), 70-99%: orange (#ff9800), 100%+: red (#d32f2f)
+# 0-69%: green (#16a34a), 70-99%: amber (#d97706), 100%+: red (#dc2626)
 _alert_pressure_color() {
 	local pct="${1:-0}"
 	if [ "$pct" -ge 100 ]; then
-		echo "#d32f2f"
+		echo "#dc2626"
 	elif [ "$pct" -ge 70 ]; then
-		echo "#ff9800"
+		echo "#d97706"
 	else
-		echo "#4caf50"
+		echo "#16a34a"
 	fi
 }
 
 # _alert_ban_type_color action expiry — return HTML hex color for ban severity
-# escalated: orange (#f57c00), permanent: red (#d32f2f), temporary: amber (#f9a825)
+# escalated: amber (#d97706), permanent: red (#dc2626), temporary: teal (#0891b2)
 _alert_ban_type_color() {
 	local action="$1" expiry="$2"
 	if [ "$action" = "escalate" ]; then
-		echo "#f57c00"
+		echo "#d97706"
 	elif [ "$expiry" = "0" ]; then
-		echo "#d32f2f"
+		echo "#dc2626"
 	else
-		echo "#f9a825"
+		echo "#0891b2"
 	fi
 }
 
@@ -401,7 +401,7 @@ _alert_set_entry_vars() {
 		_esc_dur=$(format_duration "$esc_window")
 		HISTORY_LINE="  History:     $recent previous ban(s) in $_esc_dur (permanent at $esc_after)"
 		export HISTORY_LINE
-		HISTORY_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 14px;color:#757575;vertical-align:top;">History</td>\n<td style="padding:4px 14px;">%s previous ban(s) in %s (permanent at %s)</td>\n</tr>' \
+		HISTORY_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 16px;color:#71717a;vertical-align:top;">History</td>\n<td style="padding:4px 16px;color:#09090b;">%s previous ban(s) in %s (permanent at %s)</td>\n</tr>' \
 			"$recent" "$_esc_dur" "$esc_after")
 		export HISTORY_ROW_HTML
 	else
@@ -412,12 +412,12 @@ _alert_set_entry_vars() {
 	if [ "$action" = "escalate" ]; then
 		export ESCALATION_LINE="  Escalation:  permanent after $esc_after offenses"
 		export ESCALATION_ROW_HTML
-		ESCALATION_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 14px;color:#757575;vertical-align:top;">Escalation</td>\n<td style="padding:4px 14px;color:#d32f2f;font-weight:bold;">Permanent after %s offenses</td>\n</tr>' \
+		ESCALATION_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 16px;color:#71717a;vertical-align:top;">Escalation</td>\n<td style="padding:4px 16px;color:#dc2626;font-weight:bold;">Permanent after %s offenses</td>\n</tr>' \
 			"$esc_after")
 	elif [ "${BAN_ESCALATION:-none}" != "none" ] && [ "${recent:-0}" -gt 0 ]; then
 		export ESCALATION_LINE="  Escalation:  ${BAN_ESCALATION}, step $((recent + 1))"
 		export ESCALATION_ROW_HTML
-		ESCALATION_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 14px;color:#757575;vertical-align:top;">Escalation</td>\n<td style="padding:4px 14px;">%s, step %s</td>\n</tr>' \
+		ESCALATION_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 16px;color:#71717a;vertical-align:top;">Escalation</td>\n<td style="padding:4px 16px;color:#09090b;">%s, step %s</td>\n</tr>' \
 			"${BAN_ESCALATION}" "$((recent + 1))")
 	else
 		export ESCALATION_LINE=""
@@ -465,7 +465,7 @@ _alert_set_entry_vars() {
 $REPUTATION_LINKS_TEXT"
 			export REPUTATION_SECTION_TEXT
 			local _esc_html="$REPUTATION_LINKS_HTML"
-			REPUTATION_SECTION_HTML=$(printf '<tr>\n<td style="padding:4px 14px 8px;color:#757575;vertical-align:top;">Reputation</td>\n<td style="padding:4px 14px 8px;">%s</td>\n</tr>' "$_esc_html")
+			REPUTATION_SECTION_HTML=$(printf '<tr>\n<td style="padding:4px 16px 8px;color:#71717a;vertical-align:top;">Reputation</td>\n<td style="padding:4px 16px 8px;">%s</td>\n</tr>' "$_esc_html")
 			export REPUTATION_SECTION_HTML
 		fi
 	else
@@ -500,7 +500,7 @@ ${indented_logs}"
 			local html_logs
 			html_logs=$(_html_escape "$raw_logs")
 			export SOURCE_LOGS_HTML="$html_logs"
-			SOURCE_LOGS_SECTION_HTML=$(printf '<tr>\n<td colspan="2" style="padding:8px 14px;">\n<div style="background-color:#f5f5f5;border:1px solid #e0e0e0;border-radius:3px;padding:8px;font-family:monospace,monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;">%s</div>\n</td>\n</tr>' "$html_logs")
+			SOURCE_LOGS_SECTION_HTML=$(printf '<tr>\n<td colspan="2" style="padding:8px 16px;">\n<div style="background-color:#f4f4f5;border:1px solid #d4d4d8;border-radius:6px;padding:10px;font-family:&apos;Courier New&apos;,Courier,monospace;font-size:11px;color:#09090b;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;">%s</div>\n</td>\n</tr>' "$html_logs")
 			export SOURCE_LOGS_SECTION_HTML
 		fi
 	elif [ -z "$lp" ] || [ ! -f "${lp:-/dev/null}" ]; then
@@ -508,7 +508,7 @@ ${indented_logs}"
 		SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (logs via systemd journal)"
 		export SOURCE_LOGS_SECTION_TEXT
 		# shellcheck disable=SC2089  # variable contains HTML with literal quotes, not shell quoting
-		SOURCE_LOGS_SECTION_HTML='<tr><td colspan="2" style="padding:8px 14px;color:#9e9e9e;font-style:italic;">Source logs not available (systemd journal)</td></tr>'
+		SOURCE_LOGS_SECTION_HTML='<tr><td colspan="2" style="padding:8px 16px;color:#71717a;font-style:italic;">Source logs not available (systemd journal)</td></tr>'
 		# shellcheck disable=SC2090  # variable contains HTML output
 		export SOURCE_LOGS_SECTION_HTML
 	fi

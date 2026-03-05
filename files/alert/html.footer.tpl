@@ -2,16 +2,19 @@
 </tr>
 <!-- Footer -->
 <tr>
-<td style="background-color:#f5f5f5;padding:12px 20px;border-top:1px solid #dddddd;">
+<td style="padding:16px 24px;border-top:1px solid #d4d4d8;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
 <tr>
-<td style="color:#9e9e9e;font-size:11px;">
-BFD (Brute Force Detection) {{BFD_VERSION}}<br>
-<a href="https://www.rfxn.com/projects/brute-force-detection" style="color:#9e9e9e;text-decoration:none;">rfxn.com/projects/brute-force-detection</a>
+<td style="font-size:11px;color:#71717a;">
+<span style="font-family:'Courier New',Courier,monospace;color:#0891b2;">R-fx Networks</span>
 &nbsp;&middot;&nbsp;
-<a href="mailto:bfd@rfxn.com" style="color:#9e9e9e;text-decoration:none;">bfd@rfxn.com</a>
+BFD {{BFD_VERSION}}
+&nbsp;&middot;&nbsp;
+GPL v2
 </td>
-<td align="right" style="color:#9e9e9e;font-size:11px;">{{HOSTNAME}}</td>
+<td align="right" style="font-size:11px;">
+<a href="https://www.rfxn.com/projects/brute-force-detection" style="color:#0891b2;text-decoration:none;">rfxn.com</a>
+</td>
 </tr>
 </table>
 </td>
