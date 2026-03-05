@@ -2451,6 +2451,23 @@ _hc_alerts() {
 				echo "[PASS] Alert templates: all 8 partials present"
 				_hc_pass=$((_hc_pass + 1))
 			fi
+			# report custom.d/ overrides
+			local _custom_dir="$_atd/custom.d"
+			if [ -d "$_custom_dir" ]; then
+				local _custom_count=0
+				for _tpl in text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl \
+				            html.header.tpl html.entry.tpl html.summary.tpl html.footer.tpl; do
+					if [ -f "$_custom_dir/$_tpl" ]; then
+						echo "[PASS] Custom override: $_tpl"
+						_hc_pass=$((_hc_pass + 1))
+						_custom_count=$((_custom_count + 1))
+					fi
+				done
+				if [ "$_custom_count" -gt 0 ]; then
+					echo "[PASS] Custom templates: $_custom_count override(s) active in custom.d/"
+					_hc_pass=$((_hc_pass + 1))
+				fi
+			fi
 		else
 			echo "[WARN] Alert templates: $_atd (not found)"
 			_hc_warn=$((_hc_warn + 1))

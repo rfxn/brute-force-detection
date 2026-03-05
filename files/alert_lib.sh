@@ -24,7 +24,7 @@
 # template rendering engine, content formatting, and delivery mechanisms.
 
 # shellcheck disable=SC2034  # version checked by health_check and show_config
-ALERT_LIB_VERSION="1.0.0"
+ALERT_LIB_VERSION="1.1.0"
 
 # ---------------------------------------------------------------------------
 # IP Reputation Link Registry
@@ -82,6 +82,18 @@ _tpl_render() {
 		}
 		print line
 	}' "$template_file"
+}
+
+# _tpl_resolve template_dir template_name — resolve template with custom.d/ override
+# If $template_dir/custom.d/$template_name exists, uses that path (user override).
+# Otherwise uses $template_dir/$template_name (shipped default).
+# Sets _TPL_RESOLVED (avoids subshell fork from stdout return).
+_tpl_resolve() {
+	local template_dir="$1" template_name="$2"
+	_TPL_RESOLVED="$template_dir/$template_name"
+	if [ -f "$template_dir/custom.d/$template_name" ]; then
+		_TPL_RESOLVED="$template_dir/custom.d/$template_name"
+	fi
 }
 
 # _html_escape str — escape HTML special characters for safe embedding
@@ -620,7 +632,8 @@ _alert_render_text() {
 	_alert_set_global_vars "$entry_total"
 
 	# header
-	_tpl_render "$template_dir/text.header.tpl"
+	_tpl_resolve "$template_dir" "text.header.tpl"
+	_tpl_render "$_TPL_RESOLVED"
 
 	# entries
 	local n=0 line
@@ -628,17 +641,20 @@ _alert_render_text() {
 		[ -z "$line" ] && continue
 		n=$((n + 1))
 		_alert_set_entry_vars "$line" "$n" "$entry_total" "$loglines"
-		_tpl_render "$template_dir/text.entry.tpl"
+		_tpl_resolve "$template_dir" "text.entry.tpl"
+		_tpl_render "$_TPL_RESOLVED"
 	done < "$alerts_file"
 
 	# summary (multi-ban only)
 	if [ "$entry_total" -gt 1 ]; then
 		_alert_compute_summary "$alerts_file"
-		_tpl_render "$template_dir/text.summary.tpl"
+		_tpl_resolve "$template_dir" "text.summary.tpl"
+		_tpl_render "$_TPL_RESOLVED"
 	fi
 
 	# footer
-	_tpl_render "$template_dir/text.footer.tpl"
+	_tpl_resolve "$template_dir" "text.footer.tpl"
+	_tpl_render "$_TPL_RESOLVED"
 }
 
 # _alert_render_html alerts_file template_dir [loglines] — render full HTML email
@@ -657,7 +673,8 @@ _alert_render_html() {
 	_alert_set_global_vars "$entry_total"
 
 	# header
-	_tpl_render "$template_dir/html.header.tpl"
+	_tpl_resolve "$template_dir" "html.header.tpl"
+	_tpl_render "$_TPL_RESOLVED"
 
 	# entries
 	local n=0 line
@@ -665,17 +682,20 @@ _alert_render_html() {
 		[ -z "$line" ] && continue
 		n=$((n + 1))
 		_alert_set_entry_vars "$line" "$n" "$entry_total" "$loglines"
-		_tpl_render "$template_dir/html.entry.tpl"
+		_tpl_resolve "$template_dir" "html.entry.tpl"
+		_tpl_render "$_TPL_RESOLVED"
 	done < "$alerts_file"
 
 	# summary (multi-ban only)
 	if [ "$entry_total" -gt 1 ]; then
 		_alert_compute_summary "$alerts_file"
-		_tpl_render "$template_dir/html.summary.tpl"
+		_tpl_resolve "$template_dir" "html.summary.tpl"
+		_tpl_render "$_TPL_RESOLVED"
 	fi
 
 	# footer
-	_tpl_render "$template_dir/html.footer.tpl"
+	_tpl_resolve "$template_dir" "html.footer.tpl"
+	_tpl_render "$_TPL_RESOLVED"
 }
 
 # _alert_build_mime text_body html_body — construct multipart/alternative MIME message
