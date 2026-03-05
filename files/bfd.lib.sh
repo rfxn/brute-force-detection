@@ -728,6 +728,71 @@ validate_config() {
 		echo "error: EMAIL_LOGLINES must be a positive integer (got '${EMAIL_LOGLINES:-}')." >&2
 		return $EXIT_CONFIG_ERROR
 	fi
+	# EMAIL_FORMAT: must be "text", "html", or "both"
+	local _ef="${EMAIL_FORMAT:-text}"
+	if [ "$_ef" != "text" ] && [ "$_ef" != "html" ] && [ "$_ef" != "both" ]; then
+		echo "error: EMAIL_FORMAT must be text, html, or both (got '${EMAIL_FORMAT:-}')." >&2
+		return $EXIT_CONFIG_ERROR
+	fi
+	# EMAIL_DIGEST: must be "cycle" or "timed"
+	local _ed="${EMAIL_DIGEST:-cycle}"
+	if [ "$_ed" != "cycle" ] && [ "$_ed" != "timed" ]; then
+		echo "error: EMAIL_DIGEST must be cycle or timed (got '${EMAIL_DIGEST:-}')." >&2
+		return $EXIT_CONFIG_ERROR
+	fi
+	# EMAIL_DIGEST_INTERVAL: positive integer when EMAIL_DIGEST=timed
+	if [ "$_ed" = "timed" ]; then
+		if ! [[ "${EMAIL_DIGEST_INTERVAL:-900}" =~ $int_pattern ]] || [ "${EMAIL_DIGEST_INTERVAL:-900}" -eq 0 ]; then
+			echo "error: EMAIL_DIGEST_INTERVAL must be a positive integer (got '${EMAIL_DIGEST_INTERVAL:-}')." >&2
+			return $EXIT_CONFIG_ERROR
+		fi
+	fi
+	# EMAIL_REPUTATION_LINKS: comma-separated keys from known set (warning only)
+	if [ -n "${EMAIL_REPUTATION_LINKS:-}" ]; then
+		local _rl _rl_ifs_save="$IFS" _rl_known="abuseipdb shodan virustotal ipinfo greynoise"
+		IFS=','
+		for _rl in $EMAIL_REPUTATION_LINKS; do
+			IFS="$_rl_ifs_save"
+			_rl="${_rl## }"
+			_rl="${_rl%% }"
+			if [ -n "$_rl" ]; then
+				local _rl_valid=0 _rl_k
+				for _rl_k in $_rl_known; do
+					if [ "$_rl" = "$_rl_k" ]; then
+						_rl_valid=1
+						break
+					fi
+				done
+				if [ "$_rl_valid" -eq 0 ]; then
+					echo "warning: EMAIL_REPUTATION_LINKS contains unknown provider '$_rl'." >&2
+				fi
+			fi
+		done
+		IFS="$_rl_ifs_save"
+	fi
+	# SMTP_RELAY: must contain "://" when set
+	if [ -n "${SMTP_RELAY:-}" ]; then
+		case "$SMTP_RELAY" in
+			*"://"*) ;;
+			*)
+				echo "error: SMTP_RELAY must be a URL with protocol (got '$SMTP_RELAY')." >&2
+				return $EXIT_CONFIG_ERROR
+				;;
+		esac
+		# SMTP_FROM: required when SMTP_RELAY is set
+		if [ -z "${SMTP_FROM:-}" ]; then
+			echo "error: SMTP_FROM must be set when SMTP_RELAY is configured." >&2
+			return $EXIT_CONFIG_ERROR
+		fi
+		if ! validate_email "$SMTP_FROM"; then
+			echo "error: SMTP_FROM is not a valid email address (got '$SMTP_FROM')." >&2
+			return $EXIT_CONFIG_ERROR
+		fi
+		# SMTP_USER/SMTP_PASS: warn if not set (some relays are auth-free)
+		if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
+			echo "warning: SMTP_USER/SMTP_PASS not set; relay may fail if authentication is required." >&2
+		fi
+	fi
 	# LOG_FORMAT: must be "classic" or "json"
 	local _lf="${LOG_FORMAT:-classic}"
 	if [ "$_lf" != "classic" ] && [ "$_lf" != "json" ]; then
@@ -2283,17 +2348,72 @@ _hc_state() {
 
 # _hc_alerts — validate email alert configuration
 _hc_alerts() {
-	if [ "$EMAIL_ALERTS" = "1" ]; then
-		if command -v mail >/dev/null 2>&1; then
-			echo "[PASS] Email alerts: enabled (mail command found)"
-			_hc_pass=$((_hc_pass + 1))
-		else
-			echo "[WARN] Email alerts: enabled but 'mail' command not found"
-			_hc_warn=$((_hc_warn + 1))
-		fi
-	else
+	if [ "$EMAIL_ALERTS" != "1" ]; then
 		echo "[PASS] Email alerts: disabled"
 		_hc_pass=$((_hc_pass + 1))
+		return
+	fi
+	# mail command (local MTA)
+	if command -v mail >/dev/null 2>&1; then
+		echo "[PASS] Email alerts: enabled (mail command found)"
+		_hc_pass=$((_hc_pass + 1))
+	else
+		echo "[WARN] Email alerts: enabled but 'mail' command not found"
+		_hc_warn=$((_hc_warn + 1))
+	fi
+	# sendmail required for html/both formats
+	local _ef="${EMAIL_FORMAT:-text}"
+	if [ "$_ef" = "html" ] || [ "$_ef" = "both" ]; then
+		if command -v sendmail >/dev/null 2>&1; then
+			echo "[PASS] sendmail: found (required for EMAIL_FORMAT=$_ef)"
+			_hc_pass=$((_hc_pass + 1))
+		else
+			echo "[WARN] sendmail: not found (EMAIL_FORMAT=$_ef will fall back to text)"
+			_hc_warn=$((_hc_warn + 1))
+		fi
+	fi
+	# SMTP relay checks
+	if [ -n "${SMTP_RELAY:-}" ]; then
+		if command -v curl >/dev/null 2>&1; then
+			echo "[PASS] curl: found (required for SMTP relay)"
+			_hc_pass=$((_hc_pass + 1))
+		else
+			echo "[WARN] curl: not found (SMTP relay delivery will fail)"
+			_hc_warn=$((_hc_warn + 1))
+		fi
+		if [ -z "${SMTP_FROM:-}" ]; then
+			echo "[WARN] SMTP_FROM: not set (required for SMTP relay)"
+			_hc_warn=$((_hc_warn + 1))
+		fi
+		if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
+			echo "[WARN] SMTP credentials: SMTP_USER/SMTP_PASS not set"
+			_hc_warn=$((_hc_warn + 1))
+		fi
+	fi
+	# Alert template directory
+	local _atd="${ALERT_TEMPLATE_DIR:-}"
+	if [ -n "$_atd" ]; then
+		if [ -d "$_atd" ]; then
+			echo "[PASS] Alert templates: $_atd (exists)"
+			_hc_pass=$((_hc_pass + 1))
+			# check for all 8 template partials
+			local _tpl _tpl_missing=0
+			for _tpl in text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl \
+			            html.header.tpl html.entry.tpl html.summary.tpl html.footer.tpl; do
+				if [ ! -f "$_atd/$_tpl" ]; then
+					echo "[WARN] Alert template missing: $_tpl"
+					_hc_warn=$((_hc_warn + 1))
+					_tpl_missing=1
+				fi
+			done
+			if [ "$_tpl_missing" -eq 0 ]; then
+				echo "[PASS] Alert templates: all 8 partials present"
+				_hc_pass=$((_hc_pass + 1))
+			fi
+		else
+			echo "[WARN] Alert templates: $_atd (not found)"
+			_hc_warn=$((_hc_warn + 1))
+		fi
 	fi
 }
 
@@ -2729,7 +2849,7 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
-	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES LOG_FORMAT LOG_LEVEL LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT PRESSURE_CONF"
+	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES EMAIL_FORMAT EMAIL_DIGEST EMAIL_DIGEST_INTERVAL EMAIL_REPUTATION_LINKS SMTP_RELAY SMTP_FROM ALERT_TEMPLATE_DIR LOG_FORMAT LOG_LEVEL LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT APOOL_RETENTION_DAYS APOOL_MAX_LINES PRESSURE_CONF"
 	if [ -n "$var" ]; then
 		# validate against whitelist
 		local _found=0 _v

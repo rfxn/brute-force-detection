@@ -300,6 +300,191 @@ EOF
 	assert_output --partial "[WARN] UNBAN_COMMAND_V6 binary: /nonexistent/v6unban (not found)"
 }
 
+# --- _hc_alerts: EMAIL_FORMAT, SMTP, template checks ---
+
+@test "health_check: EMAIL_FORMAT=html with sendmail shows PASS" {
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="root@localhost"
+	EMAIL_FORMAT="html"
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/sendmail"
+	chmod +x "$TEST_TMPDIR/bin/mail" "$TEST_TMPDIR/bin/sendmail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[PASS] sendmail: found (required for EMAIL_FORMAT=html)"
+}
+
+@test "health_check: EMAIL_FORMAT=both without sendmail shows WARN" {
+	# run in subshell with restricted PATH (no sendmail)
+	local clean_dir
+	clean_dir=$(mktemp -d)
+	local cmd cmd_path
+	for cmd in bash stat awk wc hostname date cat grep curl; do
+		cmd_path=$(command -v "$cmd" 2>/dev/null) || true
+		if [ -n "$cmd_path" ]; then
+			ln -s "$cmd_path" "$clean_dir/$cmd"
+		fi
+	done
+	echo '#!/bin/bash' > "$clean_dir/mail"
+	chmod +x "$clean_dir/mail"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		INSTALL_PATH='$INSTALL_PATH'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='/dev/null'
+		PRESSURE_TRIP='15'; PRESSURE_HALF_LIFE='300'; PRESSURE_TRIP_GLOBAL='0'
+		BAN_TTL='0'; BAN_ESCALATE_AFTER='0'; BAN_ESCALATE_WINDOW='86400'
+		EMAIL_ALERTS='1'; EMAIL_ADDRESS='root@localhost'; LOCK_FILE_TIMEOUT='300'
+		EMAIL_FORMAT='both'
+		BAN_COMMAND_TEMPLATE='/bin/true'
+		UNBAN_COMMAND_TEMPLATE=''
+		BAN_COMMAND_V6_TEMPLATE=''
+		GLOB_PRESSURE_TRIP='15'
+		RULES_PATH='$INSTALL_PATH/rules'
+		TLOG_PATH='$INSTALL_PATH/tlog'
+		LOCK_FILE='$INSTALL_PATH/lock.utime'
+		AUTH_LOG_PATH='$AUTH_LOG_PATH'
+		KERNEL_LOG_PATH='$KERNEL_LOG_PATH'
+		MAIL_LOG_PATH='$MAIL_LOG_PATH'
+		_FW_BACKEND='custom'
+		export PATH='$clean_dir'
+		health_check '$INSTALL_PATH'
+	"
+	rm -rf "$clean_dir"
+	assert_output --partial "[WARN] sendmail: not found (EMAIL_FORMAT=both will fall back to text)"
+}
+
+@test "health_check: SMTP_RELAY with curl shows PASS" {
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="root@localhost"
+	SMTP_RELAY="smtps://smtp.example.com:465"
+	SMTP_FROM="bfd@example.com"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/curl"
+	chmod +x "$TEST_TMPDIR/bin/mail" "$TEST_TMPDIR/bin/curl"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[PASS] curl: found (required for SMTP relay)"
+}
+
+@test "health_check: SMTP_RELAY without curl shows WARN" {
+	# run in subshell with restricted PATH (no curl) — same pattern as "without mail" test
+	local clean_dir
+	clean_dir=$(mktemp -d)
+	local cmd cmd_path
+	for cmd in bash stat awk wc hostname date cat grep; do
+		cmd_path=$(command -v "$cmd" 2>/dev/null) || true
+		if [ -n "$cmd_path" ]; then
+			ln -s "$cmd_path" "$clean_dir/$cmd"
+		fi
+	done
+	echo '#!/bin/bash' > "$clean_dir/mail"
+	chmod +x "$clean_dir/mail"
+	run bash -c "
+		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		INSTALL_PATH='$INSTALL_PATH'
+		BFD_LOG_PATH='$BFD_LOG_PATH'
+		OUTPUT_SYSLOG='0'
+		OUTPUT_SYSLOG_FILE='/dev/null'
+		PRESSURE_TRIP='15'; PRESSURE_HALF_LIFE='300'; PRESSURE_TRIP_GLOBAL='0'
+		BAN_TTL='0'; BAN_ESCALATE_AFTER='0'; BAN_ESCALATE_WINDOW='86400'
+		EMAIL_ALERTS='1'; EMAIL_ADDRESS='root@localhost'; LOCK_FILE_TIMEOUT='300'
+		SMTP_RELAY='smtps://smtp.example.com:465'
+		SMTP_FROM='bfd@example.com'
+		SMTP_USER='user'; SMTP_PASS='pass'
+		BAN_COMMAND_TEMPLATE='/bin/true'
+		UNBAN_COMMAND_TEMPLATE=''
+		BAN_COMMAND_V6_TEMPLATE=''
+		GLOB_PRESSURE_TRIP='15'
+		RULES_PATH='$INSTALL_PATH/rules'
+		TLOG_PATH='$INSTALL_PATH/tlog'
+		LOCK_FILE='$INSTALL_PATH/lock.utime'
+		AUTH_LOG_PATH='$AUTH_LOG_PATH'
+		KERNEL_LOG_PATH='$KERNEL_LOG_PATH'
+		MAIL_LOG_PATH='$MAIL_LOG_PATH'
+		_FW_BACKEND='custom'
+		export PATH='$clean_dir'
+		health_check '$INSTALL_PATH'
+	"
+	rm -rf "$clean_dir"
+	assert_output --partial "[WARN] curl: not found (SMTP relay delivery will fail)"
+}
+
+@test "health_check: SMTP_RELAY without SMTP_FROM shows WARN" {
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="root@localhost"
+	SMTP_RELAY="smtps://smtp.example.com:465"
+	SMTP_FROM=""
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/curl"
+	chmod +x "$TEST_TMPDIR/bin/mail" "$TEST_TMPDIR/bin/curl"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[WARN] SMTP_FROM: not set (required for SMTP relay)"
+}
+
+@test "health_check: ALERT_TEMPLATE_DIR present shows PASS" {
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="root@localhost"
+	ALERT_TEMPLATE_DIR="$TEST_TMPDIR/alert_tpl"
+	mkdir -p "$ALERT_TEMPLATE_DIR"
+	for tpl in text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl \
+	           html.header.tpl html.entry.tpl html.summary.tpl html.footer.tpl; do
+		touch "$ALERT_TEMPLATE_DIR/$tpl"
+	done
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
+	chmod +x "$TEST_TMPDIR/bin/mail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[PASS] Alert templates: $ALERT_TEMPLATE_DIR (exists)"
+	assert_output --partial "[PASS] Alert templates: all 8 partials present"
+}
+
+@test "health_check: ALERT_TEMPLATE_DIR missing shows WARN" {
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="root@localhost"
+	ALERT_TEMPLATE_DIR="$TEST_TMPDIR/no_such_dir"
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
+	chmod +x "$TEST_TMPDIR/bin/mail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[WARN] Alert templates: $ALERT_TEMPLATE_DIR (not found)"
+}
+
+@test "health_check: missing template partial shows WARN" {
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="root@localhost"
+	ALERT_TEMPLATE_DIR="$TEST_TMPDIR/alert_tpl"
+	mkdir -p "$ALERT_TEMPLATE_DIR"
+	# create 7 of 8 partials — skip html.footer.tpl
+	for tpl in text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl \
+	           html.header.tpl html.entry.tpl html.summary.tpl; do
+		touch "$ALERT_TEMPLATE_DIR/$tpl"
+	done
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/mail"
+	chmod +x "$TEST_TMPDIR/bin/mail"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	run health_check "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "[WARN] Alert template missing: html.footer.tpl"
+}
+
 @test "_hc_config: validates log paths with case statement" {
 	AUTH_LOG_PATH="/var/log/auth.log"
 	KERNEL_LOG_PATH=""

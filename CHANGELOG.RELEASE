@@ -1,5 +1,20 @@
 2.0.1:
 
+-- Alert Configuration --
+
+[New] conf.bfd: EMAIL_FORMAT, EMAIL_DIGEST, EMAIL_DIGEST_INTERVAL,
+      EMAIL_REPUTATION_LINKS, SMTP_RELAY, SMTP_FROM, SMTP_USER, SMTP_PASS
+      variables with conservative defaults matching existing behavior
+[Change] validate_config(): EMAIL_FORMAT/DIGEST enum validation, SMTP_RELAY URL
+      format check, SMTP_FROM required + email validation, reputation links
+      known-provider check (warning), SMTP credentials warning
+[Change] _hc_alerts(): expanded health checks — sendmail for html/both format,
+      curl for SMTP relay, SMTP_FROM/credentials, alert template directory and
+      all 8 template partials presence
+[Change] show_config(): whitelist extended with EMAIL_FORMAT, EMAIL_DIGEST,
+      EMAIL_DIGEST_INTERVAL, EMAIL_REPUTATION_LINKS, SMTP_RELAY, SMTP_FROM,
+      ALERT_TEMPLATE_DIR, APOOL_RETENTION_DAYS, APOOL_MAX_LINES
+
 -- Attack Pool --
 
 [Change] state_pool_append(): enriched 10-field format — TIMESTAMP IP MOD
