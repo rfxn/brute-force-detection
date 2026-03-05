@@ -44,7 +44,7 @@ and email alerting.
 
 %build
 # Apply FHS path transforms to copies — never modify source files
-cp files/internals.conf files/internals.conf.pkg
+cp files/internals/internals.conf files/internals.conf.pkg
 sed -i \
     -e 's|\$INSTALL_PATH/rules|/usr/share/bfd/rules|' \
     -e 's|\$INSTALL_PATH/tlog|/usr/lib/bfd/tlog|' \
@@ -81,11 +81,11 @@ rm -rf %{buildroot}
 install -D -m 755 files/bfd %{buildroot}/usr/sbin/bfd
 
 # Library files
-install -D -m 644 files/bfd.lib.sh %{buildroot}/usr/lib/bfd/bfd.lib.sh
-install -D -m 644 files/tlog_lib.sh %{buildroot}/usr/lib/bfd/tlog_lib.sh
-install -D -m 644 files/elog_lib.sh %{buildroot}/usr/lib/bfd/elog_lib.sh
+install -D -m 644 files/internals/bfd.lib.sh %{buildroot}/usr/lib/bfd/internals/bfd.lib.sh
+install -D -m 644 files/internals/tlog_lib.sh %{buildroot}/usr/lib/bfd/internals/tlog_lib.sh
+install -D -m 644 files/internals/elog_lib.sh %{buildroot}/usr/lib/bfd/internals/elog_lib.sh
 install -D -m 755 files/tlog %{buildroot}/usr/lib/bfd/tlog
-install -D -m 644 files/alert_lib.sh %{buildroot}/usr/lib/bfd/alert_lib.sh
+install -D -m 644 files/internals/alert_lib.sh %{buildroot}/usr/lib/bfd/internals/alert_lib.sh
 install -d -m 755 %{buildroot}/usr/lib/bfd/alert
 for tpl in files/alert/*.tpl; do
     install -m 644 "$tpl" %{buildroot}/usr/lib/bfd/alert/
@@ -143,16 +143,17 @@ install -D -m 644 CHANGELOG %{buildroot}/usr/share/doc/bfd/CHANGELOG
 
 # Symlink farm at /usr/local/bfd for backward compatibility
 install -d -m 755 %{buildroot}%{legacy_path}
-ln -s /usr/lib/bfd/bfd.lib.sh %{buildroot}%{legacy_path}/bfd.lib.sh
-ln -s /usr/lib/bfd/tlog_lib.sh %{buildroot}%{legacy_path}/tlog_lib.sh
-ln -s /usr/lib/bfd/elog_lib.sh %{buildroot}%{legacy_path}/elog_lib.sh
+install -d -m 755 %{buildroot}%{legacy_path}/internals
+ln -s /usr/lib/bfd/internals/bfd.lib.sh %{buildroot}%{legacy_path}/internals/bfd.lib.sh
+ln -s /usr/lib/bfd/internals/tlog_lib.sh %{buildroot}%{legacy_path}/internals/tlog_lib.sh
+ln -s /usr/lib/bfd/internals/elog_lib.sh %{buildroot}%{legacy_path}/internals/elog_lib.sh
+ln -s /usr/lib/bfd/internals/alert_lib.sh %{buildroot}%{legacy_path}/internals/alert_lib.sh
+ln -s /etc/bfd/internals.conf %{buildroot}%{legacy_path}/internals/internals.conf
 ln -s /usr/lib/bfd/tlog %{buildroot}%{legacy_path}/tlog
-ln -s /usr/lib/bfd/alert_lib.sh %{buildroot}%{legacy_path}/alert_lib.sh
 ln -s /usr/lib/bfd/alert %{buildroot}%{legacy_path}/alert
 ln -s /usr/lib/bfd/update-ipcountry.sh %{buildroot}%{legacy_path}/update-ipcountry.sh
 ln -s /usr/lib/bfd/importconf %{buildroot}%{legacy_path}/importconf
 ln -s /etc/bfd/conf.bfd %{buildroot}%{legacy_path}/conf.bfd
-ln -s /etc/bfd/internals.conf %{buildroot}%{legacy_path}/internals.conf
 ln -s /etc/bfd/pressure.conf %{buildroot}%{legacy_path}/pressure.conf
 ln -s /etc/bfd/pressure-country.conf %{buildroot}%{legacy_path}/pressure-country.conf
 ln -s /etc/bfd/exclude.files %{buildroot}%{legacy_path}/exclude.files
@@ -168,7 +169,7 @@ ln -s /usr/sbin/bfd %{buildroot}/usr/local/sbin/bfd
 
 %pre
 # Detect and back up existing install.sh-based installation
-if [ -f "%{legacy_path}/bfd" ] && [ ! -L "%{legacy_path}/bfd.lib.sh" ]; then
+if [ -f "%{legacy_path}/bfd" ] && [ ! -L "%{legacy_path}/internals/bfd.lib.sh" ] && [ ! -L "%{legacy_path}/bfd.lib.sh" ]; then
     # This is a real (non-package) install — back up
     _bkdir="%{legacy_path}.bk.$(date +%%Y%%m%%d-%%s)"
     echo "Backing up existing install.sh installation to $_bkdir"
@@ -252,11 +253,11 @@ fi
 %files
 %license COPYING.GPL
 /usr/sbin/bfd
-/usr/lib/bfd/bfd.lib.sh
-/usr/lib/bfd/tlog_lib.sh
-/usr/lib/bfd/elog_lib.sh
+/usr/lib/bfd/internals/bfd.lib.sh
+/usr/lib/bfd/internals/tlog_lib.sh
+/usr/lib/bfd/internals/elog_lib.sh
+/usr/lib/bfd/internals/alert_lib.sh
 /usr/lib/bfd/tlog
-/usr/lib/bfd/alert_lib.sh
 /usr/lib/bfd/alert/
 %dir %attr(755,root,root) /usr/lib/bfd/alert/custom.d
 /usr/lib/bfd/update-ipcountry.sh
@@ -285,16 +286,16 @@ fi
 %dir %attr(750,root,root) /var/lib/bfd/tmp
 %dir %attr(750,root,root) /var/lib/bfd/stats
 # Symlink farm
-%{legacy_path}/bfd.lib.sh
-%{legacy_path}/tlog_lib.sh
-%{legacy_path}/elog_lib.sh
+%{legacy_path}/internals/bfd.lib.sh
+%{legacy_path}/internals/tlog_lib.sh
+%{legacy_path}/internals/elog_lib.sh
+%{legacy_path}/internals/alert_lib.sh
+%{legacy_path}/internals/internals.conf
 %{legacy_path}/tlog
-%{legacy_path}/alert_lib.sh
 %{legacy_path}/alert
 %{legacy_path}/update-ipcountry.sh
 %{legacy_path}/importconf
 %{legacy_path}/conf.bfd
-%{legacy_path}/internals.conf
 %{legacy_path}/pressure.conf
 %{legacy_path}/pressure-country.conf
 %{legacy_path}/exclude.files

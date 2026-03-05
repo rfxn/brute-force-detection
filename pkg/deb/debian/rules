@@ -4,7 +4,7 @@
 
 override_dh_auto_build:
 	# Apply FHS path transforms to copies — never modify source files
-	cp files/internals.conf files/internals.conf.pkg
+	cp files/internals/internals.conf files/internals.conf.pkg
 	sed -i \
 	    -e 's|\$$INSTALL_PATH/rules|/usr/share/bfd/rules|' \
 	    -e 's|\$$INSTALL_PATH/tlog|/usr/lib/bfd/tlog|' \
@@ -32,11 +32,11 @@ override_dh_auto_install:
 	# Executable
 	install -D -m 755 files/bfd $(CURDIR)/debian/bfd/usr/sbin/bfd
 	# Library files
-	install -D -m 644 files/bfd.lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/bfd.lib.sh
-	install -D -m 644 files/tlog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/tlog_lib.sh
-	install -D -m 644 files/elog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/elog_lib.sh
+	install -D -m 644 files/internals/bfd.lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd.lib.sh
+	install -D -m 644 files/internals/tlog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/tlog_lib.sh
+	install -D -m 644 files/internals/elog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/elog_lib.sh
 	install -D -m 755 files/tlog $(CURDIR)/debian/bfd/usr/lib/bfd/tlog
-	install -D -m 644 files/alert_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/alert_lib.sh
+	install -D -m 644 files/internals/alert_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/alert_lib.sh
 	install -d -m 755 $(CURDIR)/debian/bfd/usr/lib/bfd/alert
 	for tpl in files/alert/*.tpl; do \
 	    install -m 644 "$$tpl" $(CURDIR)/debian/bfd/usr/lib/bfd/alert/; \
