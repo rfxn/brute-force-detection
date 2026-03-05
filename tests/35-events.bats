@@ -453,3 +453,82 @@ RULE
 	assert_success
 	assert_output --partial '"log_sample": []'
 }
+
+# --- Per-rule pressure trip threshold display ---
+
+@test "_resolve_trip: returns per-rule trip when set" {
+	_PRESS_TRIP=([sshd]="10" [dovecot]="30")
+	run _resolve_trip "sshd"
+	assert_success
+	assert_output "10"
+}
+
+@test "_resolve_trip: falls back to GLOB_PRESSURE_TRIP when unset" {
+	_PRESS_TRIP=([dovecot]="30")
+	GLOB_PRESSURE_TRIP="50"
+	run _resolve_trip "sshd"
+	assert_success
+	assert_output "50"
+}
+
+@test "_resolve_min_trip: returns minimum across multiple services" {
+	_PRESS_TRIP=([sshd]="15" [dovecot]="8" [postfix]="25")
+	GLOB_PRESSURE_TRIP="20"
+	run _resolve_min_trip "sshd,dovecot,postfix"
+	assert_success
+	assert_output "8"
+}
+
+@test "_resolve_min_trip: uses global fallback for unknown services" {
+	_PRESS_TRIP=([sshd]="30")
+	GLOB_PRESSURE_TRIP="10"
+	run _resolve_min_trip "sshd,unknown_svc"
+	assert_success
+	assert_output "10"
+}
+
+@test "_resolve_min_trip: all unknown returns global" {
+	_PRESS_TRIP=()
+	GLOB_PRESSURE_TRIP="42"
+	run _resolve_min_trip "foo,bar"
+	assert_success
+	assert_output "42"
+}
+
+@test "events_dashboard: shows per-rule trip when _PRESS_TRIP set" {
+	_PRESS_TRIP=([sshd]="15")
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	run events_dashboard "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "/15"
+	refute_output --partial "/20"
+}
+
+@test "events_ip: per-service table shows per-service trip" {
+	_PRESS_TRIP=([sshd]="12" [dovecot]="30")
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "1" "1"
+	run events_ip "$INSTALL_PATH" "192.0.2.10"
+	assert_success
+	# per-service lines should show their own trips
+	assert_output --partial "/12"
+	assert_output --partial "/30"
+}
+
+@test "search_ip: per-service pressure shows per-rule trip" {
+	_PRESS_TRIP=([sshd]="8")
+	GLOB_PRESSURE_TRIP="20"
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "5"
+	run search_ip "$INSTALL_PATH" "192.0.2.10"
+	assert_success
+	# overall pressure line uses min-trip from services
+	assert_output --partial "/8"
+	# per-service pressure line uses per-rule trip
+	assert_output --regexp "sshd:.*\/8"
+}

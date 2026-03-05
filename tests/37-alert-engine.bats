@@ -506,72 +506,72 @@ EOF
 @test "_alert_pressure_color: low pressure is green" {
 	run _alert_pressure_color 30
 	assert_success
-	assert_output "#4caf50"
+	assert_output "#16a34a"
 }
 
 @test "_alert_pressure_color: 0% is green" {
 	run _alert_pressure_color 0
 	assert_success
-	assert_output "#4caf50"
+	assert_output "#16a34a"
 }
 
 @test "_alert_pressure_color: 69% is green" {
 	run _alert_pressure_color 69
 	assert_success
-	assert_output "#4caf50"
+	assert_output "#16a34a"
 }
 
-@test "_alert_pressure_color: 70% is orange" {
+@test "_alert_pressure_color: 70% is amber" {
 	run _alert_pressure_color 70
 	assert_success
-	assert_output "#ff9800"
+	assert_output "#d97706"
 }
 
-@test "_alert_pressure_color: 99% is orange" {
+@test "_alert_pressure_color: 99% is amber" {
 	run _alert_pressure_color 99
 	assert_success
-	assert_output "#ff9800"
+	assert_output "#d97706"
 }
 
 @test "_alert_pressure_color: 100% is red" {
 	run _alert_pressure_color 100
 	assert_success
-	assert_output "#d32f2f"
+	assert_output "#dc2626"
 }
 
 @test "_alert_pressure_color: 200% is red" {
 	run _alert_pressure_color 200
 	assert_success
-	assert_output "#d32f2f"
+	assert_output "#dc2626"
 }
 
 # ===================================================================
 # _alert_ban_type_color
 # ===================================================================
 
-@test "_alert_ban_type_color: escalate is orange" {
+@test "_alert_ban_type_color: escalate is amber" {
 	run _alert_ban_type_color "escalate" "0"
 	assert_success
-	assert_output "#f57c00"
+	assert_output "#d97706"
 }
 
 @test "_alert_ban_type_color: permanent (expiry=0) is red" {
 	run _alert_ban_type_color "ban" "0"
 	assert_success
-	assert_output "#d32f2f"
+	assert_output "#dc2626"
 }
 
-@test "_alert_ban_type_color: temporary is amber" {
+@test "_alert_ban_type_color: temporary is teal" {
 	run _alert_ban_type_color "ban" "1709553600"
 	assert_success
-	assert_output "#f9a825"
+	assert_output "#0891b2"
 }
 
 @test "_alert_ban_type_color: escalate overrides expiry check" {
-	# even with non-zero expiry, escalate action should be orange
+	# even with non-zero expiry, escalate action should be amber
 	run _alert_ban_type_color "escalate" "1709553600"
 	assert_success
-	assert_output "#f57c00"
+	assert_output "#d97706"
 }
 
 # ===================================================================
@@ -732,8 +732,8 @@ EOF
 	assert_success
 	assert_output --partial "BFD Alert"
 	assert_output --partial "mail01.example.com"
-	assert_output --partial "1 host(s) banned"
-	assert_output --partial "#1a237e"
+	assert_output --partial "1 banned"
+	assert_output --partial "#0891b2"
 }
 
 @test "template render: html.entry.tpl contains pressure bar and detail rows" {
@@ -747,11 +747,11 @@ EOF
 	export PRESSURE_TRIP="100"
 	export PRESSURE_PCT="120"
 	export PRESSURE_PCT_CLAMPED="100"
-	export PRESSURE_COLOR="#d32f2f"
+	export PRESSURE_COLOR="#dc2626"
 	export WEIGHT="15"
 	export HALF_LIFE_FMT="1h"
 	export BAN_TYPE="escalated"
-	export BAN_TYPE_COLOR="#f57c00"
+	export BAN_TYPE_COLOR="#d97706"
 	export BAN_DURATION_DETAIL=""
 	export BAN_COMMAND="/sbin/iptables -I INPUT -s 198.51.100.5 -j DROP"
 	export ENTRY_NUM="2"
@@ -763,10 +763,10 @@ EOF
 	run _tpl_render "${PROJECT_ROOT}/files/alert/html.entry.tpl"
 	assert_success
 	assert_output --partial "198.51.100.5"
-	assert_output --partial "#f57c00"
+	assert_output --partial "#d97706"
 	assert_output --partial "dovecot"
 	assert_output --partial "120%"
-	assert_output --partial "#d32f2f"
+	assert_output --partial "#dc2626"
 }
 
 @test "template render: html.footer.tpl closes structure and shows version" {
@@ -840,9 +840,9 @@ EOF
 	export HOST="192.0.2.1" HOST_VERSION="IPv4" COUNTRY_CODE=""
 	export COUNTRY_FLAG="" SERVICE="sshd" PORTS="22"
 	export PRESSURE="50" PRESSURE_TRIP="100" PRESSURE_PCT="50"
-	export PRESSURE_PCT_CLAMPED="50" PRESSURE_COLOR="#4caf50"
+	export PRESSURE_PCT_CLAMPED="50" PRESSURE_COLOR="#16a34a"
 	export WEIGHT="10" HALF_LIFE_FMT="30m"
-	export BAN_TYPE="temporary" BAN_TYPE_COLOR="#f9a825"
+	export BAN_TYPE="temporary" BAN_TYPE_COLOR="#0891b2"
 	export BAN_DURATION_DETAIL="" BAN_COMMAND="iptables -I"
 	export ENTRY_NUM="1" ENTRY_TOTAL="1"
 	export HISTORY_ROW_HTML="" ESCALATION_ROW_HTML=""
@@ -955,7 +955,7 @@ EOF
 	local line="192.0.2.1|sshd|22|15000|0|escalate|5||root|10|300|1"
 	_alert_set_entry_vars "$line" 1 1
 	[ "$BAN_TYPE" = "Permanent (escalated)" ]
-	[ "$BAN_TYPE_COLOR" = "#f57c00" ]
+	[ "$BAN_TYPE_COLOR" = "#d97706" ]
 	[[ "$ESCALATION_LINE" == *"permanent after 5 offenses"* ]]
 	[[ "$ESCALATION_ROW_HTML" == *"Permanent after 5 offenses"* ]]
 }
@@ -972,7 +972,7 @@ EOF
 	_alert_set_entry_vars "$line" 1 1
 	[ "$BAN_TYPE" = "Temporary" ]
 	[[ "$BAN_DURATION_DETAIL" == *"expires"* ]]
-	[ "$BAN_TYPE_COLOR" = "#f9a825" ]
+	[ "$BAN_TYPE_COLOR" = "#0891b2" ]
 }
 
 @test "_alert_set_entry_vars: history line when escalation configured" {
@@ -1241,7 +1241,7 @@ EOF
 	run _alert_render_html "$af" "${PROJECT_ROOT}/files/alert"
 	assert_success
 	# pressure bar should contain color and percentage width
-	assert_output --partial "background-color:#d32f2f"
+	assert_output --partial "background-color:#dc2626"
 	assert_output --partial "150%"
 }
 

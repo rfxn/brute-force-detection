@@ -550,6 +550,7 @@ _apool_report() {
 		ban_status=$(_apool_ban_status "$aip")
 		_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
 		_gp_fmt=$(pressure_format "$_gp")
+		trip=$(_resolve_min_trip "$mods")
 		echo "$cnt|$aip|${_gp_fmt}/${trip}|${aip_cc:---}|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
 	done < <(_apool_awk "$source_file" "$search" "$cutoff")
 	format_table < "$atmp"
@@ -692,6 +693,7 @@ _apool_report_json() {
 			[ -z "$ban_status" ] && ban_status="not banned"
 			_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
 			_gp_fmt=$(pressure_format "$_gp")
+			trip=$(_resolve_min_trip "$mods")
 			if [ "$first" -eq 1 ]; then
 				first=0
 			else
@@ -729,6 +731,7 @@ _apool_report_csv() {
 			[ -z "$ban_status" ] && ban_status="not banned"
 			_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
 			_gp_fmt=$(pressure_format "$_gp")
+			trip=$(_resolve_min_trip "$mods")
 			echo "$cnt,$aip,$_gp_fmt,$trip,${aip_cc:---},$first_fmt,$last_fmt,$mods,$ban_status"
 		done
 	fi
@@ -856,6 +859,9 @@ watch() {
 	trap 'exit 143' TERM
 	trap 'exit 130' INT
 	trap reload_watch HUP
+	# suppress stdout in daemon mode — elog writes directly to syslog/log files;
+	# systemd SyslogIdentifier would re-log stdout causing duplicate entries
+	ELOG_STDOUT="never"
 	pre
 	get_state
 	eout "watch mode started (interval=${WATCH_INTERVAL}s, pid=$$)" le
@@ -875,7 +881,8 @@ usage_short() {
 	echo "      [-b|--ban IP] [-u|--unban IP] [--flush-temp] [--flush-all]"
 	echo "      [-l|--list] [-a|--attackpool [IP]] [-e|--events [IP|CIDR]]"
 	echo "      [-S|--status] [-C|--config] [-R|--rules] [-c|--check]"
-	echo "      [-T|--test RULE] [--test-pattern PAT] [--scan [RULE]]"
+	echo "      [-T|--test RULE] [--test-pattern PAT] [--test-alert email]"
+	echo "      [--scan [RULE]]"
 	echo "      [--json] [--csv] [-V|--verbose] [-v|--version] [-h|--help]"
 	echo ""
 	echo "Run modes:"
@@ -901,8 +908,9 @@ usage_short() {
 	echo "  bfd -R [RULE]       list rules or show rule detail"
 	echo "  bfd -c              health check diagnostics"
 	echo ""
-	echo "Rule testing:"
+	echo "Testing:"
 	echo "  bfd -T RULE [FILE]  test rule against log or stdin"
+	echo "  bfd --test-alert email  send test email alert"
 	echo "  bfd --scan [RULE]   full-log scan (all or specific rule)"
 	echo ""
 	echo "Output modifiers:    --json  --csv  -V (verbose)"
@@ -936,9 +944,10 @@ usage() {
 	echo "  -R, --rules [RULE]          list rules or show rule detail"
 	echo "  -c, --check                 health check diagnostics"
 	echo ""
-	echo "Rule Testing:"
+	echo "Testing:"
 	echo "  -T, --test RULE [FILE|-]    test rule patterns against log or stdin"
 	echo "  --test-pattern PAT [FILE|-] test raw <HOST> pattern against log or stdin"
+	echo "  --test-alert email          send a test email alert to verify delivery"
 	echo ""
 	echo "Scan Mode:"
 	echo "  --scan [RULE] [-d]          full-log scan (all rules or specific rule)"
@@ -1079,6 +1088,10 @@ case "${1:-}" in
 		echo "error: --test-pattern requires a pattern." >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
 	fi
 	test_pattern "$2" "${3:-}" || exit "$?"
+	;;
+--test-alert)
+	vhead; pre
+	test_alert "$INSTALL_PATH" "${2:-}" || exit "$?"
 	;;
 --scan)
 	vhead; pre

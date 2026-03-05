@@ -1,12 +1,19 @@
 <!-- Entry card -->
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:16px;border:1px solid #e0e0e0;border-radius:4px;overflow:hidden;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:16px;border:1px solid #d4d4d8;border-radius:8px;overflow:hidden;">
+<!-- Severity top line -->
+<tr>
+<td style="background-color:{{BAN_TYPE_COLOR}};height:3px;font-size:0;line-height:0;">&nbsp;</td>
+</tr>
 <!-- Entry header -->
 <tr>
-<td style="background-color:{{BAN_TYPE_COLOR}};padding:10px 14px;">
+<td style="background-color:#f4f4f5;padding:10px 16px;border-bottom:1px solid #d4d4d8;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
 <tr>
-<td style="color:#ffffff;font-size:14px;font-weight:bold;">{{COUNTRY_FLAG}} {{HOST}}</td>
-<td align="right" style="color:#ffffff;font-size:12px;">{{BAN_TYPE}} ({{ENTRY_NUM}}/{{ENTRY_TOTAL}})</td>
+<td style="font-family:'Courier New',Courier,monospace;font-size:14px;font-weight:bold;color:#09090b;">{{COUNTRY_FLAG}} {{HOST}}</td>
+<td align="right" style="white-space:nowrap;">
+<span style="display:inline-block;background-color:{{BAN_TYPE_COLOR}};color:#ffffff;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:bold;font-family:'Courier New',Courier,monospace;">{{BAN_TYPE}}</span>
+<span style="color:#71717a;font-size:11px;padding-left:4px;">{{ENTRY_NUM}}/{{ENTRY_TOTAL}}</span>
+</td>
 </tr>
 </table>
 </td>
@@ -17,44 +24,44 @@
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size:13px;">
 <!-- Service -->
 <tr>
-<td style="padding:8px 14px 4px;color:#757575;width:100px;vertical-align:top;">Service</td>
-<td style="padding:8px 14px 4px;">{{SERVICE}} ({{PORTS}})</td>
+<td style="padding:10px 16px 4px;color:#71717a;width:100px;vertical-align:top;">Service</td>
+<td style="padding:10px 16px 4px;color:#09090b;">{{SERVICE}} ({{PORTS}})</td>
 </tr>
 <!-- Host -->
 <tr>
-<td style="padding:4px 14px;color:#757575;vertical-align:top;">Host</td>
-<td style="padding:4px 14px;">{{HOST}} ({{HOST_VERSION}}) {{COUNTRY_CODE}}</td>
+<td style="padding:4px 16px;color:#71717a;vertical-align:top;">Host</td>
+<td style="padding:4px 16px;color:#09090b;">{{HOST}} ({{HOST_VERSION}}) {{COUNTRY_CODE}}</td>
 </tr>
 <!-- Pressure -->
 <tr>
-<td style="padding:4px 14px;color:#757575;vertical-align:top;">Pressure</td>
-<td style="padding:4px 14px;">
+<td style="padding:4px 16px;color:#71717a;vertical-align:top;">Pressure</td>
+<td style="padding:4px 16px;color:#09090b;">
 {{PRESSURE}}/{{PRESSURE_TRIP}} &mdash; weight {{WEIGHT}}, half-life {{HALF_LIFE_FMT}}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:4px;">
 <tr>
-<td style="background-color:#eeeeee;border-radius:3px;padding:0;">
+<td style="background-color:#e4e4e7;border-radius:3px;padding:0;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:{{PRESSURE_PCT_CLAMPED}}%;min-width:1px;">
 <tr>
 <td style="background-color:{{PRESSURE_COLOR}};height:8px;border-radius:3px;">&nbsp;</td>
 </tr>
 </table>
 </td>
-<td style="width:45px;padding-left:6px;font-size:11px;color:#757575;white-space:nowrap;">{{PRESSURE_PCT}}%</td>
+<td style="width:45px;padding-left:6px;font-size:11px;color:#71717a;white-space:nowrap;">{{PRESSURE_PCT}}%</td>
 </tr>
 </table>
 </td>
 </tr>
 <!-- Ban -->
 <tr>
-<td style="padding:4px 14px;color:#757575;vertical-align:top;">Ban</td>
-<td style="padding:4px 14px;">{{BAN_TYPE}}{{BAN_DURATION_DETAIL}}</td>
+<td style="padding:4px 16px;color:#71717a;vertical-align:top;">Ban</td>
+<td style="padding:4px 16px;color:#09090b;">{{BAN_TYPE}}{{BAN_DURATION_DETAIL}}</td>
 </tr>
 {{HISTORY_ROW_HTML}}
 {{ESCALATION_ROW_HTML}}
 <!-- Command -->
 <tr>
-<td style="padding:4px 14px;color:#757575;vertical-align:top;">Command</td>
-<td style="padding:4px 14px;"><code style="font-size:12px;background-color:#f5f5f5;padding:2px 6px;border-radius:2px;">{{BAN_COMMAND}}</code></td>
+<td style="padding:4px 16px;color:#71717a;vertical-align:top;">Command</td>
+<td style="padding:4px 16px;"><code style="font-family:'Courier New',Courier,monospace;font-size:12px;background-color:#f4f4f5;padding:2px 6px;border-radius:4px;border:1px solid #d4d4d8;">{{BAN_COMMAND}}</code></td>
 </tr>
 {{REPUTATION_SECTION_HTML}}
 {{SOURCE_LOGS_SECTION_HTML}}

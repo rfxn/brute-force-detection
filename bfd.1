@@ -37,6 +37,8 @@ bfd \- brute force detection and IP banning
 .IR RULE " [" FILE | \- ]]
 .RB [ \-\-test\-pattern
 .IR PATTERN " [" FILE | \- ]]
+.RB [ \-\-test\-alert
+.IR email ]
 .br
 .B bfd
 .B \-\-scan
@@ -195,7 +197,7 @@ specific rule.
 Run health check diagnostics.
 Validates configuration, binaries, rules, state files, and alert
 capability.
-.SS Rule Testing
+.SS Testing
 .TP
 .BI \-T " RULE" "\fR [" FILE | \- \fR]
 Test a rule's patterns against its configured log file, a specific
@@ -208,6 +210,22 @@ Shows match count and unique IPs.
 Test a raw
 .I <HOST>
 pattern against a log file or stdin.
+.TP
+.BI \-\-test\-alert " email"
+Send a test email alert to verify the entire delivery pipeline.
+Uses a synthetic ban entry (RFC 5737 test IP 192.0.2.1, sshd service)
+and calls the real rendering and delivery path.
+Requires
+.B EMAIL_ALERTS=1
+and a valid
+.BR EMAIL_ADDRESS .
+Honors all email configuration:
+.BR EMAIL_FORMAT ", " SMTP_RELAY ", " EMAIL_REPUTATION_LINKS ,
+etc.
+The subject line is prefixed with
+.B [TEST]
+to distinguish from real alerts.
+Bypasses digest mode to always send immediately.
 .SS Output Modifiers
 .TP
 .B \-\-json

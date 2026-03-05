@@ -520,9 +520,10 @@ System:
   -R, --rules [RULE]          list rules or show rule detail
   -c, --check                 health check diagnostics
 
-Rule Testing:
+Testing:
   -T, --test RULE [FILE|-]    test rule patterns against log or stdin
   --test-pattern PAT [FILE|-] test raw <HOST> pattern against log or stdin
+  --test-alert email          send a test email alert to verify delivery
 
 Scan Mode:
   --scan [RULE] [-d]          full-log scan (all rules or specific rule)

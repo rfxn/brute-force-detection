@@ -1,4 +1,24 @@
 2.0.1:
+[Change] HTML email templates rebranded to rfxn.com design system: teal brand
+      bar header with monospace rfxn logo and uppercase tagline, zinc neutrals,
+      surface cards, pill badge count, severity top-line entry cards
+[Change] Ban type severity colors: temporary teal (#0891b2), escalated amber
+      (#d97706), permanent red (#dc2626)
+[Change] Pressure bar colors: success green (#16a34a), warning amber (#d97706),
+      critical red (#dc2626)
+[New] _resolve_trip()/_resolve_min_trip(): per-rule pressure trip threshold
+      helpers; resolve from _PRESS_TRIP[] with GLOB_PRESSURE_TRIP fallback
+[Change] Events dashboard/CIDR/per-IP, search_ip, and attack pool views now
+      display per-rule pressure trip thresholds from pressure.conf instead of
+      the global PRESSURE_TRIP default; aggregate views show the minimum
+      per-rule trip across matched services
+[New] --test-alert email: send a test email alert to verify the full delivery
+      pipeline (rendering, MIME, local MTA or SMTP relay) with synthetic data;
+      requires EMAIL_ALERTS=1; honors EMAIL_FORMAT, SMTP_RELAY, and all email
+      config; bypasses digest mode for immediate delivery
+[Fix] Watch mode: suppress elog stdout in daemon mode to prevent duplicate
+      syslog entries; systemd SyslogIdentifier captures stdout, creating a
+      second entry alongside the direct syslog write from elog
 [Fix] _alert_send_relay(): --ssl-reqd was applied unconditionally, breaking
       smtp://host:25 plain connections for internal relays; now conditional on
       URL scheme (smtps:// and smtp://:587 require TLS, smtp://:25 is plain)
