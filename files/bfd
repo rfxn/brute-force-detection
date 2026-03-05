@@ -507,7 +507,7 @@ check() {
 		if [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
 			_alert_spool_append "$alerts_file"
 		else
-			send_alerts "$alerts_file" "$EMAIL_SUBJECT" "${EMAIL_LOGLINES:-50}"
+			send_alerts "$alerts_file" "$EMAIL_SUBJECT" "${EMAIL_LOGLINES:-5}"
 		fi
 	fi
 	# check digest spool for timed flush (handles pre-existing entries too)
@@ -879,7 +879,7 @@ watch() {
 usage_short() {
 	echo "usage bfd [-s|--standard] [-q|--quiet] [-d|--dryrun] [-w|--watch]"
 	echo "      [-b|--ban IP] [-u|--unban IP] [--flush-temp] [--flush-all]"
-	echo "      [-l|--list] [-a|--attackpool [IP]] [-e|--events [IP|CIDR]]"
+	echo "      [-l|--list] [-a|--attackpool [IP]] [-e|--events [IP|CIDR] [N]]"
 	echo "      [-S|--status] [-C|--config] [-R|--rules] [-c|--check]"
 	echo "      [-T|--test RULE] [--test-pattern PAT] [--test-alert email]"
 	echo "      [--scan [RULE]]"
@@ -936,7 +936,7 @@ usage() {
 	echo "Reporting:                                      Supports: --json --csv"
 	echo "  -l, --list                  list active bans"
 	echo "  -a, --attackpool [IP|STR]   attack pool and IP investigation"
-	echo "  -e, --events [IP|CIDR]      pressure dashboard, IP or subnet detail"
+	echo "  -e, --events [IP|CIDR] [N]  pressure dashboard, IP or subnet detail (N=log lines)"
 	echo ""
 	echo "System:"
 	echo "  -S, --status [SERVICE]      operational status overview"
@@ -1017,9 +1017,9 @@ case "${1:-}" in
 	vhead; pre
 	if [ -n "${2:-}" ] && validate_ip_any "$2" >/dev/null 2>&1; then
 		case "$OUTPUT_FORMAT" in
-			json) events_ip_json "$INSTALL_PATH" "$2" ;;
+			json) events_ip_json "$INSTALL_PATH" "$2" "${3:-}" ;;
 			csv)  events_ip_csv "$INSTALL_PATH" "$2" ;;
-			*)    events_ip "$INSTALL_PATH" "$2" ;;
+			*)    events_ip "$INSTALL_PATH" "$2" "${3:-}" ;;
 		esac
 	elif [ -n "${2:-}" ] && [[ "$2" == */* ]]; then
 		case "$OUTPUT_FORMAT" in

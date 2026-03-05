@@ -1,6 +1,9 @@
 2.0.1:
 [Fix] HTML email: base64-encode HTML MIME part to comply with RFC 5321
       998-character line limit; fixes Exim rejection of long inline-CSS lines
+[Change] EMAIL_LOGLINES default reduced from 50 to 5; events per-IP view
+      (bfd -e IP) now shares this setting; optional count override via
+      bfd -e IP N
 [Change] Internal libraries (bfd.lib.sh, tlog_lib.sh, elog_lib.sh,
       alert_lib.sh, internals.conf) moved to internals/ subdirectory;
       reduces top-level clutter, simplifies library sourcing to single

@@ -264,7 +264,7 @@ EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME" - subject line for alert
   emails. When multiple bans occur in a single check cycle, "(N bans)" is
   appended automatically.
 
-EMAIL_LOGLINES="50" - number of log lines per host to include in alert body.
+EMAIL_LOGLINES="5" - number of log lines per host to include in alert body and events view.
 
 Alerts are batched: multiple bans in one check cycle produce a single email
 per recipient instead of one email per ban. Each alert includes:

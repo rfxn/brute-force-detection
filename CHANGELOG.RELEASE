@@ -4,6 +4,9 @@
 
 [Fix] HTML email: base64-encode HTML MIME part to comply with RFC 5321
       998-character line limit; fixes Exim rejection of long inline-CSS lines
+[Change] EMAIL_LOGLINES default reduced from 50 to 5; events per-IP view
+      (bfd -e IP) now shares this setting; optional count override via
+      bfd -e IP N
 
 -- Internal Library Reorganization --
 
