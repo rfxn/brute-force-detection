@@ -1,5 +1,13 @@
 2.0.1:
 
+-- Internal Library Reorganization --
+
+[Change] Internal libraries (bfd.lib.sh, tlog_lib.sh, elog_lib.sh,
+      alert_lib.sh, internals.conf) moved to internals/ subdirectory;
+      reduces top-level clutter, simplifies library sourcing to single
+      BASH_SOURCE-relative pattern; install.sh, importconf, packaging,
+      and symlink farm updated for new layout
+
 -- Template Overrides --
 
 [New] Template overrides: alert/custom.d/ directory for per-file template
