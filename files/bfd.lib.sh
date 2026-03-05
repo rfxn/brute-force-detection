@@ -3578,6 +3578,35 @@ _events_rule_log_file() {
 	)
 }
 
+# _events_rule_patterns rule — extract detection patterns from a rule file
+# Sources the rule in a subshell with a custom extract_hosts() that prints the
+# pattern arguments (one per line) instead of processing log data.
+# Returns 1 if the rule file does not exist or no patterns are found.
+_events_rule_patterns() {
+	local rule="$1"
+	local rule_file="${RULES_PATH:-}/rules/$rule"
+	if [ ! -f "$rule_file" ]; then
+		rule_file="${RULES_PATH:-}/$rule"
+	fi
+	[ ! -f "$rule_file" ] && return 1
+	local patterns
+	patterns=$(
+		# no-op the tlog function so sourcing the rule doesn't run detection
+		_rule_tlog() { :; }
+		# override extract_hosts to print its pattern arguments
+		extract_hosts() {
+			local _p
+			for _p in "$@"; do
+				printf '%s\n' "$_p"
+			done
+		}
+		# shellcheck disable=SC1090,SC1091
+		. "$rule_file" 2>/dev/null
+	)
+	[ -z "$patterns" ] && return 1
+	echo "$patterns"
+}
+
 # _events_ip_data install_path ip — shared data gatherer for events_ip triplet
 # Validates IP, checks for events, runs single-pass AWK, adds ban status.
 # Outputs:
@@ -3686,7 +3715,7 @@ events_ip() {
 	echo ""
 	echo "Recent log activity:"
 	local _log_total=0 _log_cap=15
-	local _seen_logs="" _log_file _log_lines
+	local _seen_logs="" _log_file _log_lines _log_patterns
 	local _type _svc _wt _cnt _sp_fmt
 	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
 		[ "$_type" != "S" ] && continue
@@ -3697,8 +3726,9 @@ events_ip() {
 			*",$_log_file,"*) continue ;;
 		esac
 		_seen_logs="${_seen_logs:+$_seen_logs,}$_log_file"
+		_log_patterns=$(_events_rule_patterns "$_svc") || _log_patterns=""
 		local _remain=$((_log_cap - _log_total))
-		_log_lines=$(_alert_sanitize_logs "$_log_file" "$ip" "$_remain") || continue
+		_log_lines=$(_alert_sanitize_logs "$_log_file" "$ip" "$_remain" "$_log_patterns") || continue
 		echo "$_log_lines"
 		_log_total=$((_log_total + $(echo "$_log_lines" | wc -l)))
 	done <<< "$data"
@@ -3879,7 +3909,7 @@ events_ip_json() {
 
 	# build log_sample JSON array
 	local log_json="[" _log_total=0 _log_cap=15
-	local _seen_logs="" _log_file _log_lines _log_first=1
+	local _seen_logs="" _log_file _log_lines _log_patterns _log_first=1
 	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
 		[ "$_type" != "S" ] && continue
 		[ "$_log_total" -ge "$_log_cap" ] && break
@@ -3888,8 +3918,9 @@ events_ip_json() {
 			*",$_log_file,"*) continue ;;
 		esac
 		_seen_logs="${_seen_logs:+$_seen_logs,}$_log_file"
+		_log_patterns=$(_events_rule_patterns "$_svc") || _log_patterns=""
 		local _remain=$((_log_cap - _log_total))
-		_log_lines=$(_alert_sanitize_logs "$_log_file" "$ip" "$_remain") || continue
+		_log_lines=$(_alert_sanitize_logs "$_log_file" "$ip" "$_remain" "$_log_patterns") || continue
 		local _line
 		while IFS= read -r _line; do
 			if [ "$_log_first" -eq 1 ]; then

@@ -1,4 +1,12 @@
 2.0.1:
+[New] _events_rule_patterns(): extract detection patterns from rule files by
+      sourcing in subshell with pattern-capturing extract_hosts() override
+[Change] _alert_sanitize_logs(): accept optional detection patterns parameter;
+      when provided, filters log lines by rule patterns instead of blanket IP grep
+[Change] events_ip()/events_ip_json(): pass rule patterns to log sample extraction
+      so only failure lines matching detection rules are shown
+[Change] _alert_set_entry_vars(): pass service patterns to log sample for email
+      alerts, filtering out non-failure log entries
 [New] Integration tests for email pipeline: check() digest spool path, multi-cycle
       accumulation, SKIP_ALERT filtering, RULE_EMAIL routing through digest,
       timing-based digest flush via mail, scan-mode force-flush, relay delivery

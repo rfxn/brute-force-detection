@@ -262,6 +262,66 @@ EOF
 	assert_failure
 }
 
+@test "_alert_sanitize_logs: patterns param filters to matching patterns only" {
+	local logfile="$TEST_TMPDIR/auth.log"
+	cat > "$logfile" <<'EOF'
+Jan  1 00:00:01 host sshd: Failed password for user from 192.0.2.1
+Jan  1 00:00:02 host sshd: Accepted password for admin from 192.0.2.1
+Jan  1 00:00:03 host sshd: Invalid user test from 192.0.2.1
+Jan  1 00:00:04 host sshd: Disconnected from 192.0.2.1
+EOF
+	local patterns
+	patterns=$(printf '%s\n' \
+		"sshd.*Failed password for .* from <HOST>" \
+		"sshd.*Invalid user .* from <HOST>")
+	run _alert_sanitize_logs "$logfile" "192.0.2.1" 50 "$patterns"
+	assert_success
+	assert_line --index 0 --partial "Failed password"
+	assert_line --index 1 --partial "Invalid user"
+	refute_output --partial "Accepted password"
+	refute_output --partial "Disconnected"
+}
+
+@test "_alert_sanitize_logs: patterns param escapes IPv4 dots" {
+	local logfile="$TEST_TMPDIR/auth.log"
+	cat > "$logfile" <<'EOF'
+Jan  1 00:00:01 host sshd: Failed password for user from 192.0.2.1
+Jan  1 00:00:02 host sshd: Failed password for user from 192X0X2X1
+EOF
+	local patterns="sshd.*Failed password for .* from <HOST>"
+	run _alert_sanitize_logs "$logfile" "192.0.2.1" 50 "$patterns"
+	assert_success
+	# dot-escaped IP should not match 192X0X2X1
+	local count
+	count=$(echo "$output" | wc -l)
+	[ "$count" -eq 1 ]
+	assert_output --partial "192.0.2.1"
+}
+
+@test "_alert_sanitize_logs: empty patterns falls back to IP grep" {
+	local logfile="$TEST_TMPDIR/auth.log"
+	cat > "$logfile" <<'EOF'
+Jan  1 00:00:01 host sshd: Failed password for user from 192.0.2.1
+Jan  1 00:00:02 host sshd: Accepted password for admin from 192.0.2.1
+EOF
+	run _alert_sanitize_logs "$logfile" "192.0.2.1" 50 ""
+	assert_success
+	# both lines match with blanket grep (backward compat)
+	local count
+	count=$(echo "$output" | wc -l)
+	[ "$count" -eq 2 ]
+}
+
+@test "_alert_sanitize_logs: patterns with redaction still works" {
+	local logfile="$TEST_TMPDIR/auth.log"
+	echo 'Jan  1 00:00:01 host sshd: Failed password=secret from 192.0.2.1' > "$logfile"
+	local patterns="sshd.*Failed password.* from <HOST>"
+	run _alert_sanitize_logs "$logfile" "192.0.2.1" 50 "$patterns"
+	assert_success
+	assert_output --partial "password=<REDACTED>"
+	refute_output --partial "secret"
+}
+
 # ===================================================================
 # _alert_country_flag
 # ===================================================================

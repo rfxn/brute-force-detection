@@ -106,19 +106,44 @@ _html_escape() {
 # Content Helpers
 # ---------------------------------------------------------------------------
 
-# _alert_sanitize_logs log_file host loglines — extract and redact log lines
+# _alert_sanitize_logs log_file host loglines [patterns] — extract and redact log lines
 # Extracts up to $loglines lines matching $host from $log_file, redacts
 # passwords and authorization headers. Output goes to stdout.
+# If $patterns (newline-delimited detection patterns with <HOST> placeholders)
+# is provided, filters by rule patterns instead of blanket IP grep.
 # Returns 1 if log_file missing or empty match.
 _alert_sanitize_logs() {
-	local log_file="$1" host="$2" loglines="${3:-50}"
+	local log_file="$1" host="$2" loglines="${3:-50}" patterns="${4:-}"
 	if [ -z "$log_file" ] || [ ! -f "$log_file" ]; then
 		return 1
 	fi
 	local lines
-	lines=$(tail -n 5000 "$log_file" | grep -Fw "$host" | tail -n "$loglines" | \
-		sed -e 's/\([Pp]ass[a-z]*\)[=:][[:space:]]*[^ ]*/\1=<REDACTED>/g' \
-		    -e 's/\([Aa]uthorization:[[:space:]]*\).*/\1<REDACTED>/')
+	if [ -n "$patterns" ]; then
+		# escape IP dots for grep -E (IPv4); colons (IPv6) are safe
+		local escaped_ip
+		escaped_ip=$(echo "$host" | sed 's/[.]/\\./g')
+		# replace <HOST> in each pattern with the escaped IP, join with |
+		local filter="" _pat
+		while IFS= read -r _pat; do
+			[ -z "$_pat" ] && continue
+			_pat="${_pat//<HOST>/$escaped_ip}"
+			filter="${filter:+$filter|}$_pat"
+		done <<< "$patterns"
+		if [ -n "$filter" ]; then
+			lines=$(tail -n 5000 "$log_file" | grep -E "$filter" | tail -n "$loglines" | \
+				sed -e 's/\([Pp]ass[a-z]*\)[=:][[:space:]]*[^ ]*/\1=<REDACTED>/g' \
+				    -e 's/\([Aa]uthorization:[[:space:]]*\).*/\1<REDACTED>/')
+		else
+			# patterns were all empty — fall back to IP grep
+			lines=$(tail -n 5000 "$log_file" | grep -Fw "$host" | tail -n "$loglines" | \
+				sed -e 's/\([Pp]ass[a-z]*\)[=:][[:space:]]*[^ ]*/\1=<REDACTED>/g' \
+				    -e 's/\([Aa]uthorization:[[:space:]]*\).*/\1<REDACTED>/')
+		fi
+	else
+		lines=$(tail -n 5000 "$log_file" | grep -Fw "$host" | tail -n "$loglines" | \
+			sed -e 's/\([Pp]ass[a-z]*\)[=:][[:space:]]*[^ ]*/\1=<REDACTED>/g' \
+			    -e 's/\([Aa]uthorization:[[:space:]]*\).*/\1<REDACTED>/')
+	fi
 	if [ -z "$lines" ]; then
 		return 1
 	fi
@@ -448,12 +473,13 @@ $REPUTATION_LINKS_TEXT"
 		export REPUTATION_SECTION_TEXT="" REPUTATION_SECTION_HTML=""
 	fi
 
-	# source logs
+	# source logs — filter by rule detection patterns when available
 	export SOURCE_LOGS="" SOURCE_LOGS_HTML=""
 	export SOURCE_LOGS_SECTION_TEXT="" SOURCE_LOGS_SECTION_HTML=""
 	if [ -n "$lp" ] && [ -f "$lp" ]; then
-		local raw_logs
-		raw_logs=$(_alert_sanitize_logs "$lp" "$host" "$loglines") || true
+		local _patterns raw_logs
+		_patterns=$(_events_rule_patterns "$mod") || _patterns=""
+		raw_logs=$(_alert_sanitize_logs "$lp" "$host" "$loglines" "$_patterns") || true
 		if [ -n "$raw_logs" ]; then
 			export SOURCE_LOGS="$raw_logs"
 			# indent for text display
