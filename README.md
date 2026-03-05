@@ -29,6 +29,8 @@ and IPv4/IPv6 support across 42 service rules.
   - [3.6 Log Paths](#36-log-paths)
   - [3.7 Advanced](#37-advanced)
   - [3.8 Country Weighting](#38-country-weighting)
+  - [3.9 SMTP Relay](#39-smtp-relay)
+  - [3.10 Email Templates](#310-email-templates)
 - [4. Firewall Integration](#4-firewall-integration)
 - [5. General Usage](#5-general-usage)
   - [5.1 Dry Run](#51-dry-run)
@@ -210,7 +212,7 @@ When upgrading from a previous BFD installation (including v1.5-2), `install.sh`
 | Firewall backend | Set to `"custom"` if pre-2.0.1 `BAN_COMMAND` detected |
 | Ban state | `bans.active`, `bans.history`, `events.dat` |
 | Log tracking state | tlog byte-offsets, journal cursors |
-| Custom alert template | `alert.bfd` |
+| Alert templates | `alert/` partials (user-modified preserved), legacy `alert.bfd` |
 | Ignore lists | `ignore.hosts` |
 
 **Post-upgrade verification:**
@@ -264,10 +266,18 @@ Per-rule weights are configured in `pressure.conf` (centralized) or in individua
 | `EMAIL_ADDRESS` | `root` | Alert recipient(s), comma-separated |
 | `EMAIL_SUBJECT` | `Brute Force Warning for $HOSTNAME` | Subject line (auto-appends `(N bans)` when batched) |
 | `EMAIL_LOGLINES` | `50` | Number of log lines per host in alert body |
+| `EMAIL_FORMAT` | `text` | Email body format: `text` (plain text), `html` (HTML only), `both` (multipart text+HTML) |
+| `EMAIL_DIGEST` | `cycle` | Digest mode: `cycle` (one email per run), `timed` (accumulate and send on interval) |
+| `EMAIL_DIGEST_INTERVAL` | `900` | Digest flush interval in seconds when `EMAIL_DIGEST="timed"` (default 15 minutes) |
+| `EMAIL_REPUTATION_LINKS` | *(empty)* | IP reputation links in alerts, comma-separated: `abuseipdb`, `shodan`, `virustotal`, `ipinfo`, `greynoise` |
 
-Alerts are **batched**: multiple bans in one check cycle produce a single email per recipient instead of one email per ban. Each alert includes host, service, failure count with threshold, ban type (temporary/permanent/escalated) with duration and expiry, recidivism history, the ban command, and source log lines.
+Alerts are **batched**: multiple bans in one check cycle produce a single email per recipient instead of one email per ban. Each alert includes host, service, pressure score with threshold, ban type (temporary/permanent/escalated) with duration and expiry, country code, recidivism history, IP reputation links, a pressure visualization bar, and source log lines.
 
-The email template (`alert.bfd`) is fully customizable. Individual rules can suppress alerts by setting `SKIP_ALERT="1"` in the rule file. Set `RULE_EMAIL="addr"` in a rule file to route that rule's alerts to a different recipient.
+**Digest modes**: In `cycle` mode (default), one email is sent at the end of each detection run. In `timed` mode, alerts accumulate across runs and are flushed when `EMAIL_DIGEST_INTERVAL` expires — reducing email volume on active servers. Watch mode checks the spool each iteration; cron mode checks each run. Accumulated alerts are force-flushed on shutdown and daily rotation.
+
+**Format options**: `text` sends plain text via `mail`. `html` sends HTML via `sendmail`. `both` sends a multipart MIME message with both text and HTML parts via `sendmail`, so the recipient's email client displays whichever it prefers. If `sendmail` is not available, `html` and `both` fall back to text-only via `mail`.
+
+Email templates are customizable — see [section 3.10](#310-email-templates). Individual rules can suppress alerts by setting `SKIP_ALERT="1"` in the rule file. Set `RULE_EMAIL="addr"` in a rule file to route that rule's alerts to a different recipient.
 
 ### 3.3 Banning
 
@@ -346,6 +356,73 @@ Country weighting is active automatically when `pressure-country.conf` contains 
 The country database (`ipcountry.dat`) maps IPv4 addresses to 2-letter country codes. Update it periodically with `update-ipcountry.sh` (or the pre-built file ships with BFD).
 
 The multiplier file (`pressure-country.conf`) uses `CC=N` format where N is weight×10 (e.g., `CN=20` means 2.0× weight, `US=10` means 1.0× = no change). Unlisted countries default to 1.0×.
+
+### 3.9 SMTP Relay
+
+By default, BFD sends alerts through the local MTA (`mail` or `sendmail`). For servers without a local MTA or for routing through an external mail service, BFD supports authenticated SMTP relay via `curl`.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SMTP_RELAY` | *(empty)* | SMTP relay server URL (empty = use local MTA) |
+| `SMTP_FROM` | *(empty)* | Sender address (required when `SMTP_RELAY` is set) |
+| `SMTP_USER` | *(empty)* | SMTP authentication username |
+| `SMTP_PASS` | *(empty)* | SMTP authentication password |
+
+**URL formats:**
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| `smtps://host:465` | `smtps://smtp.gmail.com:465` | Implicit TLS (Gmail, etc.) |
+| `smtp://host:587` | `smtp://relay.example.com:587` | STARTTLS (most relay services) |
+| `smtp://host:25` | `smtp://relay.internal:25` | Plain (internal relays) |
+
+**Example — Gmail SMTP relay:**
+
+```bash
+SMTP_RELAY="smtps://smtp.gmail.com:465"
+SMTP_FROM="alerts@example.com"
+SMTP_USER="alerts@example.com"
+SMTP_PASS="app-password-here"
+```
+
+`curl` is present on all target distributions and handles TLS/authentication natively. Credentials are stored in `conf.bfd` (permissions 640, root-owned). Use `bfd -c` to validate relay configuration.
+
+### 3.10 Email Templates
+
+Alert emails are rendered from customizable template partials in the `alert/` directory under the BFD install path (`/usr/local/bfd/alert/`). Templates use `{{VAR}}` mustache-style placeholders replaced at render time via a safe awk-based engine — no shell code execution, so templates cannot introduce security risks.
+
+**Template files:**
+
+| File | Description |
+|------|-------------|
+| `text.header.tpl` | Text: banner, hostname, timestamp |
+| `text.entry.tpl` | Text: per-ban detail block |
+| `text.summary.tpl` | Text: digest summary statistics |
+| `text.footer.tpl` | Text: version, project link |
+| `html.header.tpl` | HTML: banner and hostname bar |
+| `html.entry.tpl` | HTML: per-ban card with pressure bar |
+| `html.summary.tpl` | HTML: aggregate statistics table |
+| `html.footer.tpl` | HTML: footer and closing tags |
+
+The entry template is rendered once per ban. The summary template is included only when multiple bans are batched in one email. Header and footer wrap the entire message.
+
+To customize, edit the template files directly. On upgrade, `importconf` compares each partial against the shipped default — user-modified files are preserved, unmodified files are updated.
+
+**Key template variables:**
+
+| Variable | Example | Description |
+|----------|---------|-------------|
+| `{{HOSTNAME}}` | `web01.example.com` | System hostname |
+| `{{HOST}}` | `192.0.2.1` | Banned IP address |
+| `{{SERVICE}}` | `sshd` | Service name |
+| `{{PRESSURE}}` | `21.4` | Pressure score |
+| `{{BAN_TYPE}}` | `Temporary` | Ban type (Temporary/Permanent/Escalated) |
+| `{{BAN_DURATION}}` | `10m` | Human-readable duration |
+| `{{COUNTRY_CODE}}` | `CN` | 2-letter country code |
+| `{{SOURCE_LOGS}}` | *(log lines)* | Sanitized source log excerpt |
+| `{{REPUTATION_LINKS_TEXT}}` | `AbuseIPDB: https://...` | Text-format reputation links |
+
+See the shipped template files for the complete variable reference.
 
 ---
 

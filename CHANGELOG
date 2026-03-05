@@ -1,4 +1,10 @@
 2.0.1:
+[Change] bfd.1 man page: EMAIL_FORMAT, EMAIL_DIGEST, SMTP relay variables in
+      config section; new Email Templates and SMTP Relay subsections;
+      alert.bfd replaced by alert_lib.sh + alert/ in FILES section
+[Change] README.md: section 3.2 expanded with EMAIL_FORMAT, EMAIL_DIGEST,
+      EMAIL_REPUTATION_LINKS; new sections 3.9 (SMTP Relay) and 3.10
+      (Email Templates) with variable reference and customization guide
 [Change] install.sh: alert.bfd replaced by alert_lib.sh (chmod 640) and
       alert/ template directory (chmod 750, templates 640)
 [Change] importconf: preserve user-customized alert/ templates on upgrade;
