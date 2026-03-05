@@ -275,8 +275,17 @@ per recipient instead of one email per ban. Each alert includes:
   - reconstructed ban command
   - relevant source log lines per host
 
-The email template (alert.bfd) is fully customizable. Individual rules can
-suppress alerts by setting SKIP_ALERT="1" in the rule file.
+Alert emails use customizable template partials in alert/ (4 text + 4 HTML).
+To customize, copy the desired partial(s) into alert/custom.d/ and edit:
+
+  cp /usr/local/bfd/alert/html.entry.tpl /usr/local/bfd/alert/custom.d/
+  vi /usr/local/bfd/alert/custom.d/html.entry.tpl
+
+BFD checks custom.d/ first for each partial and falls back to the shipped
+default. Templates in custom.d/ persist across upgrades automatically.
+Run 'bfd -c' to verify which templates have custom overrides.
+
+Individual rules can suppress alerts by setting SKIP_ALERT="1" in the rule file.
 
 Per-rule alert routing: set RULE_EMAIL="addr" in a rule file to override
 EMAIL_ADDRESS for that rule's alerts. This routes alerts for specific services

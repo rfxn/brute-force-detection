@@ -1,4 +1,7 @@
 2.0.1:
+[New] Template overrides: alert/custom.d/ directory for per-file template
+      customization that persists across upgrades; one-time auto-migration
+      of previously modified templates; health check reports active overrides
 [Change] HTML email templates rebranded to rfxn.com design system: teal brand
       bar header with monospace rfxn logo and uppercase tagline, zinc neutrals,
       surface cards, pill badge count, severity top-line entry cards
