@@ -430,6 +430,10 @@ _load_pressure_conf() {
 					;;
 				PRESSURE_TRIP|TRIG)
 					if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 0 ]; then
+						if [ "$val" -gt 200 ]; then
+							elog warn "pressure.conf: $rule_name PRESSURE_TRIP=$val exceeds maximum (200), clamping"
+							val=200
+						fi
 						_PRESS_TRIP["$rule_name"]="$val"
 					else
 						elog warn "pressure.conf: $rule_name PRESSURE_TRIP='$val' invalid (must be positive integer), skipping"
@@ -595,6 +599,10 @@ validate_config() {
 		echo "error: PRESSURE_TRIP must be a positive integer (got '${PRESSURE_TRIP:-${TRIG:-}}')." >&2
 		return $EXIT_CONFIG_ERROR
 	fi
+	if [ "$_pt" -gt 200 ]; then
+		echo "error: PRESSURE_TRIP=$_pt exceeds maximum (200). Values above 200 effectively disable detection." >&2
+		return $EXIT_CONFIG_ERROR
+	fi
 	local _phl="${PRESSURE_HALF_LIFE-${TRIG_WINDOW:-300}}"
 	if [ -z "$_phl" ] || ! [[ "$_phl" =~ $int_pattern ]] || [ "$_phl" -eq 0 ]; then
 		echo "error: PRESSURE_HALF_LIFE must be a positive integer (got '${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-}}')." >&2
@@ -603,6 +611,10 @@ validate_config() {
 	local _ptg="${PRESSURE_TRIP_GLOBAL-${TRIG_GLOBAL:-0}}"
 	if [ -z "$_ptg" ] || ! [[ "$_ptg" =~ $int_pattern ]]; then
 		echo "error: PRESSURE_TRIP_GLOBAL must be a non-negative integer (got '${PRESSURE_TRIP_GLOBAL:-${TRIG_GLOBAL:-}}')." >&2
+		return $EXIT_CONFIG_ERROR
+	fi
+	if [ "$_ptg" -gt 200 ]; then
+		echo "error: PRESSURE_TRIP_GLOBAL=$_ptg exceeds maximum (200). Values above 200 effectively disable detection." >&2
 		return $EXIT_CONFIG_ERROR
 	fi
 	local _st="${SUBNET_TRIG:-0}"

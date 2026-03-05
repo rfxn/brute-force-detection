@@ -88,6 +88,20 @@ fi
 
 rm -f "$old_combined"
 
+# Clamp PRESSURE_TRIP values inherited from previous install
+# (catches prior bad migrations, e.g., old TRIG=500 that was already carried forward)
+_existing_pt=$(awk -F= '/^PRESSURE_TRIP=/{gsub(/"/, "", $2); print $2; exit}' "$new_conf")
+if [ -n "$_existing_pt" ] && [[ "$_existing_pt" =~ ^[0-9]+$ ]] && [ "$_existing_pt" -gt 200 ]; then
+	echo "  WARNING: PRESSURE_TRIP=$_existing_pt exceeds maximum (200), clamped to 200."
+	echo "  Values above 200 effectively disable detection in the pressure model."
+	sed -i "s|^PRESSURE_TRIP=.*|PRESSURE_TRIP=\"200\"|" "$new_conf"
+fi
+_existing_ptg=$(awk -F= '/^PRESSURE_TRIP_GLOBAL=/{gsub(/"/, "", $2); print $2; exit}' "$new_conf")
+if [ -n "$_existing_ptg" ] && [[ "$_existing_ptg" =~ ^[0-9]+$ ]] && [ "$_existing_ptg" -gt 200 ]; then
+	echo "  WARNING: PRESSURE_TRIP_GLOBAL=$_existing_ptg exceeds maximum (200), clamped to 200."
+	sed -i "s|^PRESSURE_TRIP_GLOBAL=.*|PRESSURE_TRIP_GLOBAL=\"200\"|" "$new_conf"
+fi
+
 # Migrate old variable names → new pressure model names in conf.bfd
 # Only if old config used legacy names (TRIG, BAN_DURATION, etc.)
 _pressure_migrated=0
@@ -95,6 +109,12 @@ if grep -q '^TRIG=' "$old_conf" 2>/dev/null && ! grep -q '^PRESSURE_TRIP=' "$old
 	# map old → new variable names in the merged conf.bfd
 	_old_val=$(awk -F= '/^TRIG=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
 	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
+		if [ "$_old_val" -gt 200 ]; then
+			echo "  WARNING: TRIG=$_old_val exceeds pressure model maximum (200), clamped to 200."
+			echo "  Old TRIG counted raw failures; the pressure model uses exponential decay."
+			echo "  Review PRESSURE_TRIP in conf.bfd and per-rule overrides in pressure.conf."
+			_old_val=200
+		fi
 		sed -i "s|^PRESSURE_TRIP=.*|PRESSURE_TRIP=\"${_old_val}\"|" "$new_conf"
 		_pressure_migrated=1
 	fi
@@ -109,6 +129,10 @@ fi
 if grep -q '^TRIG_GLOBAL=' "$old_conf" 2>/dev/null && ! grep -q '^PRESSURE_TRIP_GLOBAL=' "$old_conf" 2>/dev/null; then
 	_old_val=$(awk -F= '/^TRIG_GLOBAL=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
 	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
+		if [ "$_old_val" -gt 200 ]; then
+			echo "  WARNING: TRIG_GLOBAL=$_old_val exceeds pressure model maximum (200), clamped to 200."
+			_old_val=200
+		fi
 		sed -i "s|^PRESSURE_TRIP_GLOBAL=.*|PRESSURE_TRIP_GLOBAL=\"${_old_val}\"|" "$new_conf"
 		_pressure_migrated=1
 	fi
@@ -161,6 +185,9 @@ elif [ -f "$INSTALL_PATH.bk.last/thresholds.conf" ]; then
 		# extract TRIG value
 		_old_trig=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^TRIG=/){sub(/^TRIG=/,"",$i); print $i; exit}}}')
 		[[ "$_old_trig" =~ ^[0-9]+$ ]] || _old_trig=""
+		if [ -n "$_old_trig" ] && [ "$_old_trig" -gt 200 ]; then
+			_old_trig=200
+		fi
 		if [ -n "$_old_trig" ] && [ -f "$new_press" ]; then
 			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
 				# update existing entry — replace or add PRESSURE_TRIP
@@ -207,6 +234,9 @@ elif [ -f "$new_press" ] && [ -d "$INSTALL_PATH.bk.last/rules" ]; then
 			_old_trig="${_old_trig#TRIG=\"}"
 			_old_trig="${_old_trig%\"}"
 			[[ "$_old_trig" =~ ^[0-9]+$ ]] || continue
+			if [ "$_old_trig" -gt 200 ]; then
+				_old_trig=200
+			fi
 			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
 				# replace or add PRESSURE_TRIP from old rule TRIG
 				if grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then

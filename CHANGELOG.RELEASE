@@ -10,6 +10,15 @@
 [Change] Pressure bar colors: success green (#16a34a), warning amber (#d97706),
       critical red (#dc2626)
 
+-- Pressure Trip Ceiling --
+
+[New] Pressure trip ceiling (max 200): enforced in validate_config(),
+      _load_pressure_conf(), and importconf TRIG migration; values above 200
+      effectively disable detection under exponential decay
+[Fix] importconf: TRIG values above 200 clamped during migration to
+      PRESSURE_TRIP; old TRIG counted raw failures (different scale from
+      pressure model); also clamps inherited PRESSURE_TRIP>200 post-merge
+
 -- Per-Rule Pressure Trip Display --
 
 [New] _resolve_trip()/_resolve_min_trip(): per-rule pressure trip threshold
