@@ -26,7 +26,7 @@ teardown() {
 	local v1="$ELOG_LIB_VERSION"
 	_ELOG_LIB_LOADED=""
 	# shellcheck disable=SC1091
-	. "$PROJECT_ROOT/files/elog_lib.sh"
+	. "$PROJECT_ROOT/files/internals/elog_lib.sh"
 	[ "$ELOG_LIB_VERSION" = "$v1" ]
 }
 

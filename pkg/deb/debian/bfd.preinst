@@ -6,7 +6,7 @@ LEGACY_PATH="/usr/local/bfd"
 case "$1" in
     install|upgrade)
         # Detect and back up existing install.sh-based installation
-        if [ -f "$LEGACY_PATH/bfd" ] && [ ! -L "$LEGACY_PATH/bfd.lib.sh" ]; then
+        if [ -f "$LEGACY_PATH/bfd" ] && [ ! -L "$LEGACY_PATH/internals/bfd.lib.sh" ] && [ ! -L "$LEGACY_PATH/bfd.lib.sh" ]; then
             # This is a real (non-package) install — back up
             _bkdir="${LEGACY_PATH}.bk.$(date +%Y%m%d-%s)"
             echo "Backing up existing install.sh installation to $_bkdir"

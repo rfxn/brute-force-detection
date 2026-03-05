@@ -251,7 +251,7 @@ fi
 
 _SCRIPT_DIR="${0%/*}"
 [[ "$_SCRIPT_DIR" == "$0" ]] && _SCRIPT_DIR="."
-_LIB="${_SCRIPT_DIR}/tlog_lib.sh"
+_LIB="${_SCRIPT_DIR}/internals/tlog_lib.sh"
 
 if [[ ! -f "$_LIB" ]]; then
 	echo "tlog: library not found: $_LIB" >&2

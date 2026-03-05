@@ -28,7 +28,7 @@ teardown() {
 @test "detect_firewall: returns route when no firewall tools exist" {
 	# run in restricted PATH with no firewall tools
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		export PATH='$MOCK_DIR'
 		detect_firewall
 	"
@@ -45,7 +45,7 @@ exit 0
 SCRIPT
 	chmod +x "$MOCK_DIR/iptables"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		export PATH='$MOCK_DIR'
 		detect_firewall
 	"
@@ -70,7 +70,7 @@ SCRIPT
 	chmod +x "$MOCK_DIR/iptables"
 	# override detect_firewall to check our test path
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		# redefine detect_firewall to use test apf path
 		detect_firewall() {
 			if [ -x '$TEST_TMPDIR/etc/apf/apf' ]; then echo 'apf'; return; fi
@@ -189,7 +189,7 @@ SCRIPT
 	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/apf"
 	chmod +x "$MOCK_DIR/apf"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		_FW_APF_BIN='$MOCK_DIR/apf'
 		_fw_apf_ban '192.0.2.1' 'sshd'
 	"
@@ -203,7 +203,7 @@ SCRIPT
 	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/apf"
 	chmod +x "$MOCK_DIR/apf"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		_FW_APF_BIN='$MOCK_DIR/apf'
 		_fw_apf_unban '192.0.2.1'
 	"
@@ -227,7 +227,7 @@ SCRIPT
 	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/csf"
 	chmod +x "$MOCK_DIR/csf"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		_FW_CSF_BIN='$MOCK_DIR/csf'
 		_fw_csf_ban '192.0.2.1' 'sshd'
 	"
@@ -241,7 +241,7 @@ SCRIPT
 	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/csf"
 	chmod +x "$MOCK_DIR/csf"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		_FW_CSF_BIN='$MOCK_DIR/csf'
 		_fw_csf_unban '192.0.2.1'
 	"
@@ -762,7 +762,7 @@ exit 0
 SCRIPT
 	chmod +x "$MOCK_DIR/apf"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		export PATH='$MOCK_DIR'
 		detect_firewall
 	"
@@ -777,7 +777,7 @@ exit 0
 SCRIPT
 	chmod +x "$MOCK_DIR/csf"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		export PATH='$MOCK_DIR'
 		detect_firewall
 	"
@@ -792,7 +792,7 @@ exit 0
 SCRIPT
 	chmod +x "$MOCK_DIR/apf"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
 		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
@@ -806,7 +806,7 @@ SCRIPT
 
 @test "_fw_apf_setup: fails when apf not in PATH" {
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
 		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
@@ -823,7 +823,7 @@ exit 0
 SCRIPT
 	chmod +x "$MOCK_DIR/csf"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
 		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
@@ -837,7 +837,7 @@ SCRIPT
 
 @test "_fw_csf_setup: fails when csf not in PATH" {
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
 		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
@@ -855,7 +855,7 @@ exit 0
 SCRIPT
 	chmod +x "$MOCK_DIR/iptables"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
 		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
@@ -880,7 +880,7 @@ exit 0
 SCRIPT
 	chmod +x "$MOCK_DIR/iptables" "$MOCK_DIR/ip6tables"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
 		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
@@ -894,7 +894,7 @@ SCRIPT
 
 @test "_fw_iptables_setup: fails when iptables not in PATH" {
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
 		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
@@ -912,7 +912,7 @@ SCRIPT
 	printf '#!/bin/bash\nexit 0\n' > "$MOCK_DIR/ip"
 	chmod +x "$MOCK_DIR/ip"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
 		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
@@ -926,7 +926,7 @@ SCRIPT
 
 @test "_fw_route_setup: fails when ip not in PATH" {
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
 		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'

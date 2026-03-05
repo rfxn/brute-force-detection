@@ -603,20 +603,23 @@ which generates dual IPv4/IPv6 boundary-aware regular expressions.
 .I /usr/local/bfd/bfd
 Main executable.
 .TP
-.I /usr/local/bfd/bfd.lib.sh
+.I /usr/local/bfd/internals/bfd.lib.sh
 Function library (sourced by bfd).
 .TP
-.I /usr/local/bfd/elog_lib.sh
+.I /usr/local/bfd/internals/elog_lib.sh
 Structured logging library (sourced by bfd.lib.sh).
 .TP
-.I /usr/local/bfd/tlog_lib.sh
-Log tracking library for incremental reads (sourced by bfd).
+.I /usr/local/bfd/internals/tlog_lib.sh
+Log tracking library for incremental reads (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/alert_lib.sh
+Email alert library (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/internals.conf
+Internal/derived variables.
 .TP
 .I /usr/local/bfd/conf.bfd
 User configuration.
-.TP
-.I /usr/local/bfd/internals.conf
-Internal/derived variables.
 .TP
 .I /usr/local/bfd/pressure.conf
 Per-rule pressure weight and trip overrides.
@@ -632,9 +635,6 @@ Track log \(em byte-offset log reader CLI wrapper.
 .TP
 .I /usr/local/bfd/update-ipcountry.sh
 Script to download and update the IP-to-country database.
-.TP
-.I /usr/local/bfd/alert_lib.sh
-Email alert library (sourced by bfd.lib.sh).
 .TP
 .I /usr/local/bfd/alert/
 Email template partials directory (8 files: text.*.tpl, html.*.tpl).

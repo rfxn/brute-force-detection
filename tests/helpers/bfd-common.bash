@@ -19,7 +19,7 @@ export PROJECT_ROOT
 
 # Source the BFD function library
 # shellcheck disable=SC1091
-source "${PROJECT_ROOT}/files/bfd.lib.sh"
+source "${PROJECT_ROOT}/files/internals/bfd.lib.sh"
 
 # Load additional helpers
 # shellcheck disable=SC1091

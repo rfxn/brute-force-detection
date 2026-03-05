@@ -229,7 +229,7 @@ NEWEOF
 
 @test "importconf: pre-split conf.bfd variables migrate to internals.conf" {
 	local inst="$TEST_TMPDIR/bfd"
-	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats" "$inst/internals"
 
 	# old pre-split config has internal variables in conf.bfd
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
@@ -249,7 +249,7 @@ TRIG="15"
 NEWEOF
 
 	# new internals.conf (LOCK_FILE_TIMEOUT moved here in 2.0.1)
-	cat > "$inst/internals.conf" <<'INTEOF'
+	cat > "$inst/internals/internals.conf" <<'INTEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
 RULES_PATH="$INSTALL_PATH/rules"
 TLOG_PATH="$INSTALL_PATH/tlog"
@@ -267,22 +267,22 @@ INTEOF
 	# TRIG should migrate to conf.bfd
 	run grep '^TRIG=' "$inst/conf.bfd"
 	assert_output 'TRIG="10"'
-	# LOCK_FILE_TIMEOUT should migrate to internals.conf
-	run grep '^LOCK_FILE_TIMEOUT=' "$inst/internals.conf"
+	# LOCK_FILE_TIMEOUT should migrate to internals/internals.conf
+	run grep '^LOCK_FILE_TIMEOUT=' "$inst/internals/internals.conf"
 	assert_output 'LOCK_FILE_TIMEOUT="600"'
-	# RULES_PATH should migrate to internals.conf
-	run grep '^RULES_PATH=' "$inst/internals.conf"
+	# RULES_PATH should migrate to internals/internals.conf
+	run grep '^RULES_PATH=' "$inst/internals/internals.conf"
 	assert_output 'RULES_PATH="/usr/local/bfd/rules"'
-	# LOCK_FILE should migrate to internals.conf
-	run grep '^LOCK_FILE=' "$inst/internals.conf"
+	# LOCK_FILE should migrate to internals/internals.conf
+	run grep '^LOCK_FILE=' "$inst/internals/internals.conf"
 	assert_output 'LOCK_FILE="/usr/local/bfd/lock.utime"'
 }
 
 @test "importconf: post-split upgrade merges both old files" {
 	local inst="$TEST_TMPDIR/bfd"
-	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats" "$inst/internals"
 
-	# old post-split install has both files
+	# old post-split install has both files (flat layout)
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
 TRIG="8"
@@ -299,7 +299,7 @@ TRIG="15"
 NEWEOF
 
 	# new internals.conf
-	cat > "$inst/internals.conf" <<'INTEOF'
+	cat > "$inst/internals/internals.conf" <<'INTEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
 RULES_PATH="$INSTALL_PATH/rules"
 INTEOF
@@ -314,8 +314,8 @@ INTEOF
 	# conf.bfd value preserved
 	run grep '^TRIG=' "$inst/conf.bfd"
 	assert_output 'TRIG="8"'
-	# internals.conf value preserved from old internals.conf
-	run grep '^RULES_PATH=' "$inst/internals.conf"
+	# internals/internals.conf value preserved from old internals.conf
+	run grep '^RULES_PATH=' "$inst/internals/internals.conf"
 	assert_output 'RULES_PATH="/custom/rules"'
 }
 

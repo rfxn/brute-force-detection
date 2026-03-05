@@ -553,7 +553,8 @@ teardown() {
 	bfd_load_function "pre"
 	TLOG_PATH="$TEST_TMPDIR/tlog"
 	touch "$TLOG_PATH"
-	touch "$INSTALL_PATH/tlog_lib.sh"
+	mkdir -p "$INSTALL_PATH/internals"
+	touch "$INSTALL_PATH/internals/tlog_lib.sh"
 	TLOG_BASERUN="$INSTALL_PATH/tlog_run"
 	run pre
 	assert_success
@@ -571,7 +572,8 @@ teardown() {
 	bfd_load_function "pre"
 	TLOG_PATH="$TEST_TMPDIR/tlog"
 	touch "$TLOG_PATH"
-	touch "$INSTALL_PATH/tlog_lib.sh"
+	mkdir -p "$INSTALL_PATH/internals"
+	touch "$INSTALL_PATH/internals/tlog_lib.sh"
 	TLOG_BASERUN="$TEST_TMPDIR/new_baserun"
 	[ ! -d "$TLOG_BASERUN" ]
 	pre
@@ -582,7 +584,8 @@ teardown() {
 	bfd_load_function "pre"
 	TLOG_PATH="$TEST_TMPDIR/tlog"
 	touch "$TLOG_PATH"
-	touch "$INSTALL_PATH/tlog_lib.sh"
+	mkdir -p "$INSTALL_PATH/internals"
+	touch "$INSTALL_PATH/internals/tlog_lib.sh"
 	TLOG_BASERUN="$INSTALL_PATH/tlog_run"
 	BFD_LOG_PATH="$TEST_TMPDIR/new_bfd.log"
 	[ ! -f "$BFD_LOG_PATH" ]

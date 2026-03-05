@@ -57,11 +57,10 @@ install(){
 	chmod 755 /etc/cron.daily/bfd
         find "$INSPATH" -maxdepth 1 -type f -exec chmod 640 {} +
         chmod 750 "$INSPATH/tlog"
-        chmod 640 "$INSPATH/tlog_lib.sh"
         chmod 750 "$INSPATH/bfd"
-	chmod 640 "$INSPATH/elog_lib.sh"
-	chmod 640 "$INSPATH/alert_lib.sh"
 	chmod 750 "$INSPATH/update-ipcountry.sh"
+	chmod 750 "$INSPATH/internals"
+	find "$INSPATH/internals" -maxdepth 1 -type f -exec chmod 640 {} +
 	chmod 750 "$INSPATH/rules"
 	chmod 640 "$INSPATH"/rules/*
 	chmod 750 "$INSPATH/tmp"
@@ -127,8 +126,8 @@ install(){
 	# replace default paths when installing to a custom location
 	if [ "$INSPATH" != "/usr/local/bfd" ]; then
 		sed -i "s|/usr/local/bfd|$INSPATH|g" \
-			"$INSPATH/bfd" "$INSPATH/bfd.lib.sh" \
-			"$INSPATH/internals.conf" \
+			"$INSPATH/bfd" "$INSPATH/internals/bfd.lib.sh" \
+			"$INSPATH/internals/internals.conf" \
 			"$INSPATH/exclude.files" \
 			"$INSPATH/update-ipcountry.sh" /etc/cron.daily/bfd
 		if [ -f /usr/share/man/man1/bfd.1 ]; then

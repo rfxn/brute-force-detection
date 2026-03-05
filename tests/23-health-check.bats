@@ -37,7 +37,8 @@ setup() {
 	chmod +x "$TLOG_PATH"
 
 	# create tlog_lib.sh stub
-	touch "$INSTALL_PATH/tlog_lib.sh"
+	mkdir -p "$INSTALL_PATH/internals"
+	touch "$INSTALL_PATH/internals/tlog_lib.sh"
 }
 
 teardown() {
@@ -54,7 +55,7 @@ teardown() {
 	BAN_COMMAND_TEMPLATE=""
 	# validate_config will exit, so capture via subshell
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		INSTALL_PATH='$INSTALL_PATH'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
@@ -241,7 +242,7 @@ EOF
 	ln -s /bin/grep "$clean_dir/grep"
 	# run health_check in subshell with restricted PATH
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		INSTALL_PATH='$INSTALL_PATH'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
@@ -330,7 +331,7 @@ EOF
 	echo '#!/bin/bash' > "$clean_dir/mail"
 	chmod +x "$clean_dir/mail"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		INSTALL_PATH='$INSTALL_PATH'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
@@ -388,7 +389,7 @@ EOF
 	echo '#!/bin/bash' > "$clean_dir/mail"
 	chmod +x "$clean_dir/mail"
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		INSTALL_PATH='$INSTALL_PATH'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'

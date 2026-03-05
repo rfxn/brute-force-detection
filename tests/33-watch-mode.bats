@@ -27,11 +27,11 @@ _load_watch_functions() {
 # and safe permissions (for stat checks inside reload_watch).
 _setup_watch_env() {
 	INSTALL_PATH="$TEST_TMPDIR/bfd"
-	mkdir -p "$INSTALL_PATH/tmp" "$INSTALL_PATH/rules" "$INSTALL_PATH/stats"
+	mkdir -p "$INSTALL_PATH/tmp" "$INSTALL_PATH/rules" "$INSTALL_PATH/stats" "$INSTALL_PATH/internals"
 	state_init "$INSTALL_PATH"
 
 	CNF="$INSTALL_PATH/conf.bfd"
-	INTCNF="$INSTALL_PATH/internals.conf"
+	INTCNF="$INSTALL_PATH/internals/internals.conf"
 
 	cat > "$CNF" <<CNFEOF
 #!/bin/bash
@@ -289,19 +289,19 @@ INTEOF
 _start_watch() {
 	# create a minimal working install
 	local inst="$TEST_TMPDIR/watch-inst"
-	mkdir -p "$inst/tmp" "$inst/rules" "$inst/stats"
+	mkdir -p "$inst/tmp" "$inst/rules" "$inst/stats" "$inst/internals"
 	cp "$PROJECT_ROOT/files/bfd" "$inst/bfd"
-	cp "$PROJECT_ROOT/files/bfd.lib.sh" "$inst/bfd.lib.sh"
-	chown root "$inst/bfd.lib.sh"
-	chmod 640 "$inst/bfd.lib.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd.lib.sh" "$inst/internals/bfd.lib.sh"
+	chown root "$inst/internals/bfd.lib.sh"
+	chmod 640 "$inst/internals/bfd.lib.sh"
 	cp "$PROJECT_ROOT/files/tlog" "$inst/tlog"
 	chmod 750 "$inst/tlog"
-	cp "$PROJECT_ROOT/files/tlog_lib.sh" "$inst/tlog_lib.sh"
-	chmod 750 "$inst/tlog_lib.sh"
-	cp "$PROJECT_ROOT/files/elog_lib.sh" "$inst/elog_lib.sh"
-	chmod 750 "$inst/elog_lib.sh"
-	cp "$PROJECT_ROOT/files/alert_lib.sh" "$inst/alert_lib.sh"
-	chmod 640 "$inst/alert_lib.sh"
+	cp "$PROJECT_ROOT/files/internals/tlog_lib.sh" "$inst/internals/tlog_lib.sh"
+	chmod 750 "$inst/internals/tlog_lib.sh"
+	cp "$PROJECT_ROOT/files/internals/elog_lib.sh" "$inst/internals/elog_lib.sh"
+	chmod 750 "$inst/internals/elog_lib.sh"
+	cp "$PROJECT_ROOT/files/internals/alert_lib.sh" "$inst/internals/alert_lib.sh"
+	chmod 640 "$inst/internals/alert_lib.sh"
 	touch "$inst/exclude.files"
 	mkdir -p "$inst/alert"
 	cp "$PROJECT_ROOT/files/alert/"*.tpl "$inst/alert/"
@@ -340,7 +340,7 @@ CNFEOF
 	chown root "$inst/conf.bfd"
 	chmod 640 "$inst/conf.bfd"
 
-	cat > "$inst/internals.conf" <<INTEOF
+	cat > "$inst/internals/internals.conf" <<INTEOF
 #!/bin/bash
 RULES_PATH="$inst/rules"
 TLOG_PATH="$inst/tlog"
@@ -354,8 +354,8 @@ OUTPUT_SYSLOG_FILE="/dev/null"
 BAN_RETRY_COUNT="0"
 LOG_SOURCE="file"
 INTEOF
-	chown root "$inst/internals.conf"
-	chmod 640 "$inst/internals.conf"
+	chown root "$inst/internals/internals.conf"
+	chmod 640 "$inst/internals/internals.conf"
 
 	touch "$inst/tmp/bfd.log"
 
