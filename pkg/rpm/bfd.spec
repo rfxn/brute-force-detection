@@ -90,6 +90,7 @@ install -d -m 755 %{buildroot}/usr/lib/bfd/alert
 for tpl in files/alert/*.tpl; do
     install -m 644 "$tpl" %{buildroot}/usr/lib/bfd/alert/
 done
+install -d -m 755 %{buildroot}/usr/lib/bfd/alert/custom.d
 install -D -m 755 files/update-ipcountry.sh %{buildroot}/usr/lib/bfd/update-ipcountry.sh
 install -D -m 755 importconf %{buildroot}/usr/lib/bfd/importconf
 
@@ -257,6 +258,7 @@ fi
 /usr/lib/bfd/tlog
 /usr/lib/bfd/alert_lib.sh
 /usr/lib/bfd/alert/
+%dir %attr(755,root,root) /usr/lib/bfd/alert/custom.d
 /usr/lib/bfd/update-ipcountry.sh
 /usr/lib/bfd/importconf
 %config(noreplace) /etc/bfd/conf.bfd

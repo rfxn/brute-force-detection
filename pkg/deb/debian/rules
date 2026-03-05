@@ -41,6 +41,7 @@ override_dh_auto_install:
 	for tpl in files/alert/*.tpl; do \
 	    install -m 644 "$$tpl" $(CURDIR)/debian/bfd/usr/lib/bfd/alert/; \
 	done
+	install -d -m 755 $(CURDIR)/debian/bfd/usr/lib/bfd/alert/custom.d
 	install -D -m 755 files/update-ipcountry.sh $(CURDIR)/debian/bfd/usr/lib/bfd/update-ipcountry.sh
 	install -D -m 755 importconf $(CURDIR)/debian/bfd/usr/lib/bfd/importconf
 	# Config files
