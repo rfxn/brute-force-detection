@@ -1,5 +1,11 @@
 2.0.1:
 
+-- Watch Mode --
+
+[Fix] Watch mode: suppress elog stdout in daemon mode to prevent duplicate
+      syslog entries; systemd SyslogIdentifier captures stdout, creating a
+      second entry alongside the direct syslog write from elog
+
 -- SMTP Relay Fixes --
 
 [Fix] _alert_send_relay(): --ssl-reqd was applied unconditionally, breaking

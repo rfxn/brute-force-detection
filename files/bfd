@@ -856,6 +856,9 @@ watch() {
 	trap 'exit 143' TERM
 	trap 'exit 130' INT
 	trap reload_watch HUP
+	# suppress stdout in daemon mode — elog writes directly to syslog/log files;
+	# systemd SyslogIdentifier would re-log stdout causing duplicate entries
+	ELOG_STDOUT="never"
 	pre
 	get_state
 	eout "watch mode started (interval=${WATCH_INTERVAL}s, pid=$$)" le

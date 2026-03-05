@@ -1,4 +1,7 @@
 2.0.1:
+[Fix] Watch mode: suppress elog stdout in daemon mode to prevent duplicate
+      syslog entries; systemd SyslogIdentifier captures stdout, creating a
+      second entry alongside the direct syslog write from elog
 [Fix] _alert_send_relay(): --ssl-reqd was applied unconditionally, breaking
       smtp://host:25 plain connections for internal relays; now conditional on
       URL scheme (smtps:// and smtp://:587 require TLS, smtp://:25 is plain)
