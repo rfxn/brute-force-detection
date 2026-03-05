@@ -323,6 +323,20 @@ teardown() {
 	[ -z "${_PRESS_TRIP[sshd]:-}" ]
 }
 
+@test "_load_pressure_conf: PRESSURE_TRIP above 200 clamped" {
+	local pconf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_TRIP=500" > "$pconf"
+	_load_pressure_conf "$pconf"
+	[ "${_PRESS_TRIP[sshd]}" = "200" ]
+}
+
+@test "_load_pressure_conf: PRESSURE_TRIP=200 accepted (ceiling)" {
+	local pconf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_TRIP=200" > "$pconf"
+	_load_pressure_conf "$pconf"
+	[ "${_PRESS_TRIP[sshd]}" = "200" ]
+}
+
 # ============================================================
 # _apply_pressure()
 # ============================================================

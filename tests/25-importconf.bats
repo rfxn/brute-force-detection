@@ -528,6 +528,65 @@ NEWEOF
 	assert_output 'PRESSURE_TRIP="10"'
 }
 
+@test "importconf: TRIG=500 clamped to 200 during migration" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+TRIG="500"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+PRESSURE_TRIP="20"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "WARNING"
+	assert_output --partial "clamped to 200"
+
+	run grep '^PRESSURE_TRIP=' "$inst/conf.bfd"
+	assert_output 'PRESSURE_TRIP="200"'
+}
+
+@test "importconf: inherited PRESSURE_TRIP=500 clamped to 200 post-merge" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	# old config already has PRESSURE_TRIP=500 (from prior bad migration)
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+PRESSURE_TRIP="500"
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+PRESSURE_TRIP="20"
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+	assert_output --partial "WARNING"
+	assert_output --partial "clamped to 200"
+
+	run grep '^PRESSURE_TRIP=' "$inst/conf.bfd"
+	assert_output 'PRESSURE_TRIP="200"'
+}
+
 @test "importconf: BAN_DURATION migrated to BAN_TTL in conf.bfd" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"

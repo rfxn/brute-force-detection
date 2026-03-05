@@ -24,7 +24,8 @@
 #   Human: 5 typos over 4m -> pressure decays to ~11.1 -> NO BAN
 
 # pressure trip point — accumulated pressure needed to trigger a ban
-# per-rule overrides: edit rules/ files or pressure.conf; must be > 0
+# per-rule overrides: edit rules/ files or pressure.conf
+# range: 1-200 (values above 200 effectively disable detection)
 PRESSURE_TRIP="20"
 
 # pressure half-life in seconds (how fast pressure decays)
@@ -169,6 +170,7 @@ BFD_LOG_PATH="/var/log/bfd_log"
 
 # cross-service aggregate pressure trip point (0 = disabled)
 # when set, pressure from ALL services counts toward a single threshold
+# range: 0-200 (0 = disabled; values above 200 effectively disable detection)
 PRESSURE_TRIP_GLOBAL="0"
 
 # distributed attack detection — ban entire subnets when N unique IPs

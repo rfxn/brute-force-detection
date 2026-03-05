@@ -91,6 +91,23 @@ run_validate_output() {
 	assert_success
 }
 
+@test "validate_config: PRESSURE_TRIP=200 passes (ceiling)" {
+	run run_validate 'PRESSURE_TRIP="200"'
+	assert_success
+}
+
+@test "validate_config: PRESSURE_TRIP=201 rejects (exceeds ceiling)" {
+	run run_validate_output 'PRESSURE_TRIP="201"'
+	assert_failure
+	assert_output --partial "exceeds maximum"
+}
+
+@test "validate_config: PRESSURE_TRIP=500 rejects (exceeds ceiling)" {
+	run run_validate_output 'PRESSURE_TRIP="500"'
+	assert_failure
+	assert_output --partial "exceeds maximum"
+}
+
 @test "validate_config: EMAIL_ALERTS=2 rejects" {
 	run run_validate 'EMAIL_ALERTS="2"'
 	assert_failure
@@ -218,6 +235,17 @@ run_validate_output() {
 @test "validate_config: PRESSURE_TRIP_GLOBAL=-1 rejects" {
 	run run_validate 'PRESSURE_TRIP_GLOBAL="-1"'
 	assert_failure
+}
+
+@test "validate_config: PRESSURE_TRIP_GLOBAL=200 passes (ceiling)" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL="200"'
+	assert_success
+}
+
+@test "validate_config: PRESSURE_TRIP_GLOBAL=201 rejects (exceeds ceiling)" {
+	run run_validate_output 'PRESSURE_TRIP_GLOBAL="201"'
+	assert_failure
+	assert_output --partial "exceeds maximum"
 }
 
 
