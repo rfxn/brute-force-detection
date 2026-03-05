@@ -2968,7 +2968,7 @@ search_ip() {
 			[ "$_type" != "E" ] && continue
 			evt_svcs="${evt_svcs}${_svc}(${_cnt}) "
 		done <<< "$data"
-		echo "  Events (24h):   $evt_count failures across $evt_svcs"
+		echo "  Failures (24h): $evt_count across $evt_svcs"
 
 		# First/last seen
 		if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
@@ -2987,7 +2987,7 @@ search_ip() {
 			echo "                  ${_psvc}: ${_pfmt}/${trip}"
 		done <<< "$data"
 	else
-		echo "  Events (24h):   0"
+		echo "  Failures (24h): 0"
 	fi
 
 	# Attack pool
@@ -3391,7 +3391,7 @@ events_dashboard() {
 
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.events.XXXXXX")
-	echo "#IP|PRESSURE|EVENTS|SERVICES|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
+	echo "#IP|PRESSURE|COUNT|SERVICES|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
 	_events_dashboard_awk "$events_file" "$now" "$half_life" "$trip" | \
 	while IFS='|' read -r _sort_key ip pw pf _trip cnt svcs first_ts last_ts; do
 		local first_fmt last_fmt ban_status
@@ -3515,7 +3515,7 @@ events_ip() {
 	# per-service table
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.evtip.XXXXXX")
-	echo "#SERVICE|WEIGHT|EVENTS|PRESSURE" > "$atmp"
+	echo "#SERVICE|WEIGHT|COUNT|PRESSURE" > "$atmp"
 	local _type _svc _wt _cnt _sp_fmt
 	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
 		[ "$_type" != "S" ] && continue
@@ -3569,7 +3569,7 @@ events_cidr() {
 
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.evtcidr.XXXXXX")
-	echo "#IP|PRESSURE|EVENTS|SERVICES|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
+	echo "#IP|PRESSURE|COUNT|SERVICES|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
 	local match_count=0 total_events=0 banned_count=0
 	_events_cidr_awk "$events_file" "$now" "$half_life" "$trip" "$target_addr" "$target_mask" | \
 	while IFS='|' read -r _sort_key ip pw pf _trip cnt svcs first_ts last_ts; do
@@ -3595,7 +3595,7 @@ events_cidr() {
 	fi
 	format_table < "$atmp"
 	echo ""
-	echo "$match_count IPs, $total_events events, $banned_count banned"
+	echo "$match_count IPs, $total_events failures, $banned_count banned"
 	rm -f "$atmp"
 }
 
@@ -3629,7 +3629,7 @@ events_dashboard_json() {
 		else
 			echo ","
 		fi
-		printf '  {"ip": "%s", "pressure": %s.%s, "pressure_trip": %s, "events": %s, "services": %s, "first_seen": "%s", "last_seen": "%s", "status": "%s"}' \
+		printf '  {"ip": "%s", "pressure": %s.%s, "pressure_trip": %s, "count": %s, "services": %s, "first_seen": "%s", "last_seen": "%s", "status": "%s"}' \
 			"$(_json_escape "$ip")" "$pw" "$pf" "$_trip" "$cnt" \
 			"$(_json_array_from_csv "$svcs")" "$first_fmt" "$last_fmt" \
 			"$(_json_escape "$ban_status")"
@@ -3647,7 +3647,7 @@ events_dashboard_csv() {
 	half_life="${PRESSURE_HALF_LIFE:-300}"
 	trip="${GLOB_PRESSURE_TRIP:-20}"
 
-	echo "ip,pressure,pressure_trip,events,services,first_seen,last_seen,status"
+	echo "ip,pressure,pressure_trip,count,services,first_seen,last_seen,status"
 	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
 		return 0
 	fi
@@ -3698,7 +3698,7 @@ events_ip_json() {
 		else
 			svcs_json="$svcs_json, "
 		fi
-		svcs_json="$svcs_json{\"service\": \"$(_json_escape "$_svc")\", \"weight\": $_wt, \"events\": $_cnt, \"pressure\": $_sp_fmt}"
+		svcs_json="$svcs_json{\"service\": \"$(_json_escape "$_svc")\", \"weight\": $_wt, \"count\": $_cnt, \"pressure\": $_sp_fmt}"
 	done <<< "$data"
 	svcs_json="$svcs_json]"
 
@@ -3726,7 +3726,7 @@ events_ip_csv() {
 
 	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
 
-	echo "ip,pressure,pressure_trip,half_life,service,weight,events,service_pressure,first_seen,last_seen,status"
+	echo "ip,pressure,pressure_trip,half_life,service,weight,count,service_pressure,first_seen,last_seen,status"
 
 	local data rc=0
 	data=$(_events_ip_data "$install_path" "$ip") || rc=$?
@@ -3771,7 +3771,7 @@ events_cidr_json() {
 	target_mask="${cidr#*/}"
 
 	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
-		printf '{"cidr": "%s", "summary": {"match_count": 0, "total_events": 0, "banned_count": 0}, "ips": []}\n' \
+		printf '{"cidr": "%s", "summary": {"match_count": 0, "total_count": 0, "banned_count": 0}, "ips": []}\n' \
 			"$(_json_escape "$cidr")"
 		return 0
 	fi
@@ -3794,7 +3794,7 @@ events_cidr_json() {
 		else
 			echo ","
 		fi
-		printf '    {"ip": "%s", "pressure": %s.%s, "pressure_trip": %s, "events": %s, "services": %s, "first_seen": "%s", "last_seen": "%s", "status": "%s"}' \
+		printf '    {"ip": "%s", "pressure": %s.%s, "pressure_trip": %s, "count": %s, "services": %s, "first_seen": "%s", "last_seen": "%s", "status": "%s"}' \
 			"$(_json_escape "$ip")" "$pw" "$pf" "$_trip" "$cnt" \
 			"$(_json_array_from_csv "$svcs")" "$first_fmt" "$last_fmt" \
 			"$(_json_escape "$ban_status")"
@@ -3809,7 +3809,7 @@ events_cidr_json() {
 		banned_count=$(awk -F'|' '$2 != "not banned" && $2 != "" {c++} END {print c+0}' "$_cidr_summary")
 	fi
 
-	printf '{"cidr": "%s", "summary": {"match_count": %d, "total_events": %d, "banned_count": %d}, "ips": [\n' \
+	printf '{"cidr": "%s", "summary": {"match_count": %d, "total_count": %d, "banned_count": %d}, "ips": [\n' \
 		"$(_json_escape "$cidr")" "$match_count" "$total_events" "$banned_count"
 	cat "$_cidr_ips" 2>/dev/null
 	echo ""
@@ -3831,7 +3831,7 @@ events_cidr_csv() {
 	target_addr="${cidr%/*}"
 	target_mask="${cidr#*/}"
 
-	echo "ip,pressure,pressure_trip,events,services,first_seen,last_seen,status"
+	echo "ip,pressure,pressure_trip,count,services,first_seen,last_seen,status"
 	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
 		return 0
 	fi
@@ -3903,7 +3903,7 @@ search_ip_json() {
 		last_fmt="\"$(_fmt_ts_iso "$last_ts")\""
 	fi
 
-	printf '{"ip": "%s", "status": "%s", "pressure": %s, "pressure_trip": %s, "ban_history_24h": %d, "ban_history_total": %d, "events_24h": %d, "services": %s, "first_seen": %s, "last_seen": %s, "attack_pool_triggers": %d, "attack_pool_failures": %d}\n' \
+	printf '{"ip": "%s", "status": "%s", "pressure": %s, "pressure_trip": %s, "ban_history_24h": %d, "ban_history_total": %d, "count_24h": %d, "services": %s, "first_seen": %s, "last_seen": %s, "attack_pool_triggers": %d, "attack_pool_failures": %d}\n' \
 		"$(_json_escape "$ip")" "$(_json_escape "$status_str")" \
 		"$_gp_fmt" "$trip" \
 		"$hist_24h" "$hist_total" "$evt_count" "$svcs_json" \
@@ -3917,7 +3917,7 @@ search_ip_csv() {
 	local data
 	data=$(_search_ip_data "$install_path" "$ip") || return 1
 
-	echo "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,events_24h,first_seen,last_seen,attack_pool_triggers,attack_pool_failures"
+	echo "ip,status,pressure,pressure_trip,ban_history_24h,ban_history_total,count_24h,first_seen,last_seen,attack_pool_triggers,attack_pool_failures"
 
 	# parse D line
 	local d_line ban_ts ban_expiry hist_24h hist_total evt_count first_ts last_ts _gp_fmt trip half_life pool_triggers pool_failures

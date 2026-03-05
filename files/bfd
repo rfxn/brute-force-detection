@@ -537,7 +537,7 @@ _apool_report() {
 	local atmp
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.alist.XXXXXX")
 	echo "[+] $title" && echo
-	echo "#EVENTS|IP|PRESSURE|COUNTRY|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
+	echo "#COUNT|IP|PRESSURE|COUNTRY|FIRST_SEEN|LAST_SEEN|RULES|STATUS" > "$atmp"
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
@@ -614,7 +614,7 @@ _apool_service_summary() {
 	local atmp
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.svcsum.XXXXXX")
 	echo "[+] Per-service breakdown" && echo
-	echo "SERVICE|EVENTS|UNIQUE_IPS" > "$atmp"
+	echo "SERVICE|COUNT|UNIQUE_IPS" > "$atmp"
 	_apool_service_summary_awk "$source_file" "$cutoff" >> "$atmp"
 	format_table < "$atmp"
 	rm -f "$atmp"
@@ -697,7 +697,7 @@ _apool_report_json() {
 			else
 				echo ","
 			fi
-			printf '    {"events": %s, "ip": "%s", "pressure": %s, "pressure_trip": %s, "country": "%s", "first_seen": "%s", "last_seen": "%s", "rules": %s, "status": "%s"}' \
+			printf '    {"count": %s, "ip": "%s", "pressure": %s, "pressure_trip": %s, "country": "%s", "first_seen": "%s", "last_seen": "%s", "rules": %s, "status": "%s"}' \
 				"$cnt" "$(_json_escape "$aip")" "$_gp_fmt" "$trip" \
 				"$(_json_escape "${aip_cc:---}")" "$first_fmt" "$last_fmt" \
 				"$(_json_array_from_csv "$mods")" "$(_json_escape "$ban_status")"
@@ -716,7 +716,7 @@ _apool_report_csv() {
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
 	trip="${GLOB_PRESSURE_TRIP:-20}"
-	echo "events,ip,pressure,pressure_trip,country,first_seen,last_seen,rules,status"
+	echo "count,ip,pressure,pressure_trip,country,first_seen,last_seen,rules,status"
 	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
 		local cnt aip first_ts last_ts mods aip_cc
 		_apool_awk "$source_file" "$search" "$cutoff" | \
@@ -749,7 +749,7 @@ _apool_service_summary_json() {
 			else
 				echo ","
 			fi
-			printf '    {"service": "%s", "events": %s, "unique_ips": %s}' \
+			printf '    {"service": "%s", "count": %s, "unique_ips": %s}' \
 				"$(_json_escape "$svc_name")" "$svc_cnt" "$svc_uniq"
 		done
 	fi
@@ -761,7 +761,7 @@ _apool_service_summary_json() {
 _apool_service_summary_csv() {
 	local source_file="$1"
 	local cutoff="${2:-0}"
-	echo "service,events,unique_ips"
+	echo "service,count,unique_ips"
 	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
 		_apool_service_summary_awk "$source_file" "$cutoff" | \
 		while IFS='|' read -r svc_cnt svc_name svc_uniq; do

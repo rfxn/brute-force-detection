@@ -278,7 +278,7 @@ teardown() {
 	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
 	assert_output --partial "2 IPs"
-	assert_output --partial "5 events"
+	assert_output --partial "5 failures"
 }
 
 @test "events_cidr: invalid CIDR shows error" {

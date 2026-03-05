@@ -27,6 +27,15 @@
 [Remove] _apool_prepare_weekly(): eliminated (timestamp filtering replaces
       find+cat of fragmented archive files)
 
+-- Reporting --
+
+[Change] Rename EVENTS column/key to COUNT across all text/JSON/CSV views:
+      attack pool, events dashboard, events per-IP, events CIDR, search_ip
+[Change] search_ip: "Events (24h)" label renamed to "Failures (24h)";
+      events_24h key renamed to count_24h in JSON/CSV output
+[Change] events_cidr: total_events key renamed to total_count in JSON;
+      summary line uses "failures" instead of "events"
+
 -- CLI --
 
 [Change] usage_short(): add compact CLI matrix line listing all flags in
