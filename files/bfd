@@ -550,6 +550,7 @@ _apool_report() {
 		ban_status=$(_apool_ban_status "$aip")
 		_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
 		_gp_fmt=$(pressure_format "$_gp")
+		trip=$(_resolve_min_trip "$mods")
 		echo "$cnt|$aip|${_gp_fmt}/${trip}|${aip_cc:---}|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
 	done < <(_apool_awk "$source_file" "$search" "$cutoff")
 	format_table < "$atmp"
@@ -692,6 +693,7 @@ _apool_report_json() {
 			[ -z "$ban_status" ] && ban_status="not banned"
 			_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
 			_gp_fmt=$(pressure_format "$_gp")
+			trip=$(_resolve_min_trip "$mods")
 			if [ "$first" -eq 1 ]; then
 				first=0
 			else
@@ -729,6 +731,7 @@ _apool_report_csv() {
 			[ -z "$ban_status" ] && ban_status="not banned"
 			_gp=$(pressure_compute "$INSTALL_PATH" "$aip" "$half_life" "$now")
 			_gp_fmt=$(pressure_format "$_gp")
+			trip=$(_resolve_min_trip "$mods")
 			echo "$cnt,$aip,$_gp_fmt,$trip,${aip_cc:---},$first_fmt,$last_fmt,$mods,$ban_status"
 		done
 	fi

@@ -1,4 +1,10 @@
 2.0.1:
+[New] _resolve_trip()/_resolve_min_trip(): per-rule pressure trip threshold
+      helpers; resolve from _PRESS_TRIP[] with GLOB_PRESSURE_TRIP fallback
+[Change] Events dashboard/CIDR/per-IP, search_ip, and attack pool views now
+      display per-rule pressure trip thresholds from pressure.conf instead of
+      the global PRESSURE_TRIP default; aggregate views show the minimum
+      per-rule trip across matched services
 [New] --test-alert email: send a test email alert to verify the full delivery
       pipeline (rendering, MIME, local MTA or SMTP relay) with synthetic data;
       requires EMAIL_ALERTS=1; honors EMAIL_FORMAT, SMTP_RELAY, and all email

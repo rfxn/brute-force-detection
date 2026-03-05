@@ -1,5 +1,14 @@
 2.0.1:
 
+-- Per-Rule Pressure Trip Display --
+
+[New] _resolve_trip()/_resolve_min_trip(): per-rule pressure trip threshold
+      helpers; resolve from _PRESS_TRIP[] with GLOB_PRESSURE_TRIP fallback
+[Change] Events dashboard/CIDR/per-IP, search_ip, and attack pool views now
+      display per-rule pressure trip thresholds from pressure.conf instead of
+      the global PRESSURE_TRIP default; aggregate views show the minimum
+      per-rule trip across matched services
+
 -- Test Alert --
 
 [New] --test-alert email: send a test email alert to verify the full delivery

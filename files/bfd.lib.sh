@@ -1854,6 +1854,35 @@ pressure_format() {
 	echo "${whole}.${frac}"
 }
 
+# _resolve_trip service — return per-rule trip threshold for a service
+# Falls back to GLOB_PRESSURE_TRIP when no per-rule override exists.
+_resolve_trip() {
+	local svc="$1"
+	if [ "${_PRESS_TRIP[$svc]+x}" = "x" ]; then
+		echo "${_PRESS_TRIP[$svc]}"
+	else
+		echo "${GLOB_PRESSURE_TRIP:-20}"
+	fi
+}
+
+# _resolve_min_trip csv_services — return minimum per-rule trip across services
+# Input: comma-separated service list (e.g., "sshd,dovecot,postfix").
+# Returns the lowest per-rule trip found (or GLOB_PRESSURE_TRIP if none set).
+_resolve_min_trip() {
+	local csv="$1"
+	local min_trip="${GLOB_PRESSURE_TRIP:-20}" svc val
+	local IFS=','
+	for svc in $csv; do
+		if [ "${_PRESS_TRIP[$svc]+x}" = "x" ]; then
+			val="${_PRESS_TRIP[$svc]}"
+			if [ "$val" -lt "$min_trip" ]; then
+				min_trip="$val"
+			fi
+		fi
+	done
+	echo "$min_trip"
+}
+
 # _pressure_aggregate_all events_file now half_life
 # Single-pass AWK over events.dat: computes decayed pressure for ALL IPs.
 # Outputs "scaled_pressure ip" lines sorted descending, filtered to >0.
@@ -3019,6 +3048,19 @@ _search_ip_data() {
 		pool_failures=$(awk -v ip="$ip" '$2 == ip { c += ($4+0 > 0 ? $4+0 : 1) } END {print c+0}' "$pool_file")
 	fi
 
+	# Compute min-trip from per-service pressure lines
+	if [ "$has_events" -eq 1 ] && [ -n "${ip_awk_raw:-}" ]; then
+		local _p_svcs=""
+		local _type _svc _wt _cnt _sp
+		while IFS='|' read -r _type _svc _wt _cnt _sp; do
+			[ "$_type" != "S" ] && continue
+			_p_svcs="${_p_svcs:+$_p_svcs,}$_svc"
+		done <<< "$ip_awk_raw"
+		if [ -n "$_p_svcs" ]; then
+			trip=$(_resolve_min_trip "$_p_svcs")
+		fi
+	fi
+
 	# Output: D line (core data)
 	echo "D|$ban_ts|$ban_expiry|$hist_24h|$hist_total|$evt_count|$first_ts|$last_ts|$_gp_fmt|$trip|$half_life|$pool_triggers|$pool_failures"
 
@@ -3027,14 +3069,14 @@ _search_ip_data() {
 		echo "$evt_raw" | grep '^E|'
 	fi
 
-	# Output: P lines (per-service pressure)
+	# Output: P lines (per-service pressure + per-rule trip)
 	if [ "$has_events" -eq 1 ] && [ -n "${ip_awk_raw:-}" ]; then
-		local _type _svc _wt _cnt _sp
+		local _sp_fmt _svc_trip
 		while IFS='|' read -r _type _svc _wt _cnt _sp; do
 			[ "$_type" != "S" ] && continue
-			local _sp_fmt
 			_sp_fmt=$(pressure_format "$_sp")
-			echo "P|$_svc|$_sp_fmt"
+			_svc_trip=$(_resolve_trip "$_svc")
+			echo "P|$_svc|$_sp_fmt|$_svc_trip"
 		done <<< "$ip_awk_raw"
 	fi
 }
@@ -3101,10 +3143,10 @@ search_ip() {
 		# Pressure
 		echo "  Pressure:       ${_gp_fmt}/${trip} (half-life=${half_life}s)"
 		# Per-service pressure from P lines
-		local _ptype _psvc _pfmt
-		while IFS='|' read -r _ptype _psvc _pfmt; do
+		local _ptype _psvc _pfmt _ptrip
+		while IFS='|' read -r _ptype _psvc _pfmt _ptrip; do
 			[ "$_ptype" != "P" ] && continue
-			echo "                  ${_psvc}: ${_pfmt}/${trip}"
+			echo "                  ${_psvc}: ${_pfmt}/${_ptrip}"
 		done <<< "$data"
 	else
 		echo "  Failures (24h): 0"
@@ -3615,6 +3657,7 @@ events_dashboard() {
 		first_fmt=$(_fmt_ts "$first_ts")
 		last_fmt=$(_fmt_ts "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
+		_trip=$(_resolve_min_trip "$svcs")
 		echo "$ip|${pw}.${pf}/${_trip}|$cnt|$svcs|$first_fmt|$last_fmt|$ban_status"
 	done >> "$atmp"
 	format_table < "$atmp"
@@ -3742,10 +3785,21 @@ _events_ip_data() {
 	ban_status=$(_apool_ban_status "$ip")
 	[ -z "$ban_status" ] && ban_status="not banned"
 
+	# compute min-trip from all services present in S lines
+	local _s_svcs=""
+	local _type _svc _wt _cnt _sp
+	while IFS='|' read -r _type _svc _wt _cnt _sp; do
+		[ "$_type" != "S" ] && continue
+		_s_svcs="${_s_svcs:+$_s_svcs,}$_svc"
+	done <<< "$raw"
+	if [ -n "$_s_svcs" ]; then
+		trip=$(_resolve_min_trip "$_s_svcs")
+	fi
+
 	echo "H|$_gp_fmt|$trip|$half_life|$first_ts|$last_ts|$ban_status"
 
 	# emit service lines with formatted pressure
-	local _type _svc _wt _cnt _sp _sp_fmt
+	local _sp_fmt
 	while IFS='|' read -r _type _svc _wt _cnt _sp; do
 		[ "$_type" != "S" ] && continue
 		_sp_fmt=$(pressure_format "$_sp")
@@ -3784,10 +3838,11 @@ events_ip() {
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.evtip.XXXXXX")
 	echo "#SERVICE|WEIGHT|COUNT|PRESSURE" > "$atmp"
-	local _type _svc _wt _cnt _sp_fmt
+	local _type _svc _wt _cnt _sp_fmt _svc_trip
 	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
 		[ "$_type" != "S" ] && continue
-		echo "$_svc|$_wt|$_cnt|${_sp_fmt}/${_trip}" >> "$atmp"
+		_svc_trip=$(_resolve_trip "$_svc")
+		echo "$_svc|$_wt|$_cnt|${_sp_fmt}/${_svc_trip}" >> "$atmp"
 	done <<< "$data"
 	format_table < "$atmp"
 	rm -f "$atmp"
@@ -3870,6 +3925,7 @@ events_cidr() {
 		first_fmt=$(_fmt_ts "$first_ts")
 		last_fmt=$(_fmt_ts "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
+		_trip=$(_resolve_min_trip "$svcs")
 		echo "$ip|${pw}.${pf}/${_trip}|$cnt|$svcs|$first_fmt|$last_fmt|$ban_status"
 		# counters for summary (write to fd 3)
 		echo "M|$cnt|${ban_status:+1}" >&3
@@ -3917,6 +3973,7 @@ events_dashboard_json() {
 		last_fmt=$(_fmt_ts_iso "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
+		_trip=$(_resolve_min_trip "$svcs")
 		if [ "$first" -eq 1 ]; then
 			first=0
 		else
@@ -3952,6 +4009,7 @@ events_dashboard_csv() {
 		last_fmt=$(_fmt_ts_iso "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
+		_trip=$(_resolve_min_trip "$svcs")
 		echo "$ip,${pw}.${pf},$_trip,$cnt,$svcs,$first_fmt,$last_fmt,$ban_status"
 	done
 }
@@ -3983,7 +4041,7 @@ events_ip_json() {
 	# build services JSON array
 	local svcs_json="["
 	local svc_first=1
-	local _type _svc _wt _cnt _sp_fmt
+	local _type _svc _wt _cnt _sp_fmt _svc_trip
 	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
 		[ "$_type" != "S" ] && continue
 		if [ "$svc_first" -eq 1 ]; then
@@ -3991,7 +4049,8 @@ events_ip_json() {
 		else
 			svcs_json="$svcs_json, "
 		fi
-		svcs_json="$svcs_json{\"service\": \"$(_json_escape "$_svc")\", \"weight\": $_wt, \"count\": $_cnt, \"pressure\": $_sp_fmt}"
+		_svc_trip=$(_resolve_trip "$_svc")
+		svcs_json="$svcs_json{\"service\": \"$(_json_escape "$_svc")\", \"weight\": $_wt, \"count\": $_cnt, \"pressure\": $_sp_fmt, \"pressure_trip\": $_svc_trip}"
 	done <<< "$data"
 	svcs_json="$svcs_json]"
 
@@ -4109,6 +4168,7 @@ events_cidr_json() {
 		last_fmt=$(_fmt_ts_iso "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
+		_trip=$(_resolve_min_trip "$svcs")
 		if [ "$first" -eq 1 ]; then
 			first=0
 		else
@@ -4163,6 +4223,7 @@ events_cidr_csv() {
 		last_fmt=$(_fmt_ts_iso "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
+		_trip=$(_resolve_min_trip "$svcs")
 		echo "$ip,${pw}.${pf},$_trip,$cnt,$svcs,$first_fmt,$last_fmt,$ban_status"
 	done
 }
