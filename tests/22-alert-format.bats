@@ -597,7 +597,7 @@ RULEEOF
 }
 
 @test "pipeline: scan mode force-flushes digest spool" {
-	bfd_load_function _alert_digest_flush_now "$PROJECT_ROOT/files/alert_lib.sh"
+	bfd_load_function _alert_digest_flush_now "$PROJECT_ROOT/files/internals/alert_lib.sh"
 	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_ALERTS="1"

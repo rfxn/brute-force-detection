@@ -204,7 +204,7 @@ MOCK
 @test "tlog_journal_read: missing journalctl returns error" {
 	# run in subshell with restricted PATH to hide journalctl
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		export PATH='$EMPTY_BIN'
 		export BASERUN='$BASERUN'
 		tlog_journal_read 'sshd' '$BASERUN'
@@ -247,7 +247,7 @@ MOCK
 
 @test "tlog_read: file missing + no journalctl returns error" {
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		export PATH='$EMPTY_BIN'
 		export LOG_SOURCE='auto'
 		tlog_read '/nonexistent/auth.log' 'sshd' '$BASERUN'
@@ -291,7 +291,7 @@ MOCK
 
 @test "validate_rule: LOG_FILE missing + no journalctl fails" {
 	run bash -c "
-		source '${PROJECT_ROOT}/files/bfd.lib.sh'
+		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		export PATH='$EMPTY_BIN'
 		export BFD_LOG_PATH='$BFD_LOG_PATH'
 		export OUTPUT_SYSLOG='0'
