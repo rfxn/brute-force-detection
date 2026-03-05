@@ -496,10 +496,22 @@ Users can edit any partial without bash expertise; only
 .B {{VAR}}
 substitution is supported, not arbitrary code.
 .PP
-To customize templates, edit the files directly.
-On upgrade,
-.B importconf
-preserves user-modified partials by comparing against shipped defaults.
+To customize templates, copy the desired partial(s) into the
+.B alert/custom.d/
+directory and edit the copies.
+BFD checks
+.B custom.d/
+first for each partial and falls back to the shipped default.
+Only the overridden partials need to be present in
+.B custom.d/
+\(em the remaining partials use shipped defaults.
+Custom templates in
+.B custom.d/
+are preserved across upgrades automatically.
+Shipped templates are always updated to the latest version.
+Run
+.B bfd \-c
+to verify which templates have custom overrides.
 .PP
 Available template variables include:
 .B {{HOSTNAME}}\fR,
@@ -626,6 +638,9 @@ Email alert library (sourced by bfd.lib.sh).
 .TP
 .I /usr/local/bfd/alert/
 Email template partials directory (8 files: text.*.tpl, html.*.tpl).
+.TP
+.I /usr/local/bfd/alert/custom.d/
+User template overrides (per-file, preserved across upgrades).
 .TP
 .I /usr/local/bfd/rules/
 Service rule files (42 rules).

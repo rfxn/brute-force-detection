@@ -20,7 +20,7 @@
 <span style="color:rgba(255,255,255,0.4);padding:0 8px;font-size:18px;">|</span>
 <span style="font-family:'Courier New',Courier,monospace;font-size:10px;font-weight:bold;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:2px;">brute force detection</span>
 </td>
-<td align="right" style="font-family:'Courier New',Courier,monospace;color:#ffffff;font-size:12px;">{{HOSTNAME}}</td>
+<td align="right" style="font-family:'Courier New',Courier,monospace;font-size:12px;"><a style="color:#ffffff;text-decoration:none;">{{HOSTNAME}}</a></td>
 </tr>
 </table>
 </td>

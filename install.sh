@@ -68,6 +68,9 @@ install(){
 	chmod 750 "$INSPATH/stats"
 	chmod 750 "$INSPATH/alert"
 	chmod 640 "$INSPATH"/alert/*
+	# custom template override directory (preserved across upgrades via importconf)
+	[ -d "$INSPATH/alert/custom.d" ] || mkdir -p "$INSPATH/alert/custom.d"
+	chmod 750 "$INSPATH/alert/custom.d"
 	mkdir -p "$(dirname "$BINPATH")"
         ln -fs "$INSPATH/bfd" "$BINPATH"
 	if [ -f "uninstall.sh" ]; then

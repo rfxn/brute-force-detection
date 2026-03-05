@@ -199,6 +199,11 @@ else
 fi
 echo ""
 
+# --- Test 7c: Alert custom.d directory ---
+echo "--- Test 7c: Alert custom.d directory ---"
+check_file /usr/lib/bfd/alert/custom.d "Custom template override directory"
+echo ""
+
 # --- Test 8: exclude.files references ---
 echo "--- Test 8: exclude.files FHS paths ---"
 if grep -q '/etc/bfd/ignore.hosts' /etc/bfd/exclude.files; then

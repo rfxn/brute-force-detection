@@ -286,22 +286,43 @@ for _f in "$INSTALL_PATH.bk.last/tmp/"*; do
 	cp -f "$_f" "$INSTALL_PATH/tmp/" 2>/dev/null
 done
 
-# preserve user-customized alert templates from backup
-# only restore templates that the user modified (differ from shipped defaults)
-if [ -d "$INSTALL_PATH.bk.last/alert" ] && [ -d "$INSTALL_PATH/alert" ]; then
+# preserve custom.d/ template overrides from backup
+if [ -d "$INSTALL_PATH.bk.last/alert/custom.d" ] && [ -d "$INSTALL_PATH/alert" ]; then
+	mkdir -p "$INSTALL_PATH/alert/custom.d"
+	chmod 750 "$INSTALL_PATH/alert/custom.d"
 	_custom_tpl=0
+	for _old_custom in "$INSTALL_PATH.bk.last/alert/custom.d"/*.tpl; do
+		[ -f "$_old_custom" ] || continue
+		_tpl_name="${_old_custom##*/}"
+		cp -f "$_old_custom" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+		chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+		_custom_tpl=$((_custom_tpl + 1))
+	done
+	if [ "$_custom_tpl" -gt 0 ]; then
+		echo "  Preserved $_custom_tpl custom template override(s) in alert/custom.d/."
+	fi
+fi
+
+# one-time migration: move user-modified templates from alert/ to alert/custom.d/
+# (pre-custom.d installs stored customizations in-place; migrate on first upgrade)
+if [ -d "$INSTALL_PATH.bk.last/alert" ] && [ ! -d "$INSTALL_PATH.bk.last/alert/custom.d" ]; then
+	_migrated_tpl=0
 	for _old_tpl in "$INSTALL_PATH.bk.last/alert"/*.tpl; do
 		[ -f "$_old_tpl" ] || continue
 		_tpl_name="${_old_tpl##*/}"
 		_new_tpl="$INSTALL_PATH/alert/$_tpl_name"
-		# only restore if new shipped version exists and old differs
+		# only migrate if old template differs from new shipped version
 		if [ -f "$_new_tpl" ] && ! cmp -s "$_old_tpl" "$_new_tpl"; then
-			cp -f "$_old_tpl" "$_new_tpl"
-			_custom_tpl=$((_custom_tpl + 1))
+			mkdir -p "$INSTALL_PATH/alert/custom.d"
+			chmod 750 "$INSTALL_PATH/alert/custom.d"
+			cp -f "$_old_tpl" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+			chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+			_migrated_tpl=$((_migrated_tpl + 1))
 		fi
 	done
-	if [ "$_custom_tpl" -gt 0 ]; then
-		echo "  Restored $_custom_tpl customized alert template(s) from previous install."
+	if [ "$_migrated_tpl" -gt 0 ]; then
+		echo "  Migrated $_migrated_tpl customized template(s) to alert/custom.d/."
+		echo "  Custom templates now persist across upgrades without manual restore."
 	fi
 fi
 

@@ -1,5 +1,11 @@
 2.0.1:
 
+-- Template Overrides --
+
+[New] Template overrides: alert/custom.d/ directory for per-file template
+      customization that persists across upgrades; one-time auto-migration
+      of previously modified templates; health check reports active overrides
+
 -- Email Template Rebrand --
 
 [Change] HTML email templates rebranded to rfxn.com design system: teal brand
