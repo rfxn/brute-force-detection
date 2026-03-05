@@ -1,5 +1,18 @@
 2.0.1:
 
+-- Alert Packaging --
+
+[Change] install.sh: alert.bfd replaced by alert_lib.sh (chmod 640) and
+      alert/ template directory (chmod 750, templates 640)
+[Change] importconf: preserve user-customized alert/ templates on upgrade;
+      legacy alert.bfd preserved for pre-2.0.1 upgrades
+[Change] RPM spec: alert.bfd replaced by alert_lib.sh + alert/ directory in
+      %build path transforms, %install, %files, and symlink farm
+[Change] DEB rules/links: alert.bfd replaced by alert_lib.sh + alert/ directory
+      in install targets and backward-compat symlinks
+[Change] pkg test: alert.bfd checks replaced by alert_lib.sh + alert/ directory
+      + ALERT_TEMPLATE_DIR FHS path + template file count verification
+
 -- Alert Configuration --
 
 [New] conf.bfd: EMAIL_FORMAT, EMAIL_DIGEST, EMAIL_DIGEST_INTERVAL,

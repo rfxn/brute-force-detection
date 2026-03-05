@@ -9,7 +9,7 @@ override_dh_auto_build:
 	    -e 's|\$$INSTALL_PATH/rules|/usr/share/bfd/rules|' \
 	    -e 's|\$$INSTALL_PATH/tlog|/usr/lib/bfd/tlog|' \
 	    -e 's|\$$INSTALL_PATH/tmp|/var/lib/bfd/tmp|' \
-	    -e 's|\$$INSTALL_PATH/alert\.bfd|/usr/lib/bfd/alert.bfd|' \
+	    -e 's|\$$INSTALL_PATH/alert"|/usr/lib/bfd/alert"|' \
 	    -e 's|\$$INSTALL_PATH/exclude\.files|/etc/bfd/exclude.files|' \
 	    -e 's|\$$INSTALL_PATH/lock\.utime|/var/lib/bfd/lock.utime|' \
 	    -e 's|\$$INSTALL_PATH/pressure\.conf|/etc/bfd/pressure.conf|' \
@@ -36,7 +36,11 @@ override_dh_auto_install:
 	install -D -m 644 files/tlog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/tlog_lib.sh
 	install -D -m 644 files/elog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/elog_lib.sh
 	install -D -m 755 files/tlog $(CURDIR)/debian/bfd/usr/lib/bfd/tlog
-	install -D -m 644 files/alert.bfd $(CURDIR)/debian/bfd/usr/lib/bfd/alert.bfd
+	install -D -m 644 files/alert_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/alert_lib.sh
+	install -d -m 755 $(CURDIR)/debian/bfd/usr/lib/bfd/alert
+	for tpl in files/alert/*.tpl; do \
+	    install -m 644 "$$tpl" $(CURDIR)/debian/bfd/usr/lib/bfd/alert/; \
+	done
 	install -D -m 755 files/update-ipcountry.sh $(CURDIR)/debian/bfd/usr/lib/bfd/update-ipcountry.sh
 	install -D -m 755 importconf $(CURDIR)/debian/bfd/usr/lib/bfd/importconf
 	# Config files

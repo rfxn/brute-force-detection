@@ -256,9 +256,28 @@ for _f in "$INSTALL_PATH.bk.last/tmp/"*; do
 	cp -f "$_f" "$INSTALL_PATH/tmp/" 2>/dev/null
 done
 
-# preserve user's custom alert template (install.sh overwrites with new default)
-if [ -f "$INSTALL_PATH.bk.last/alert.bfd" ]; then
-	cp -f "$INSTALL_PATH.bk.last/alert.bfd" "$INSTALL_PATH/alert.bfd"
+# preserve user-customized alert templates from backup
+# only restore templates that the user modified (differ from shipped defaults)
+if [ -d "$INSTALL_PATH.bk.last/alert" ] && [ -d "$INSTALL_PATH/alert" ]; then
+	_custom_tpl=0
+	for _old_tpl in "$INSTALL_PATH.bk.last/alert"/*.tpl; do
+		[ -f "$_old_tpl" ] || continue
+		_tpl_name="${_old_tpl##*/}"
+		_new_tpl="$INSTALL_PATH/alert/$_tpl_name"
+		# only restore if new shipped version exists and old differs
+		if [ -f "$_new_tpl" ] && ! cmp -s "$_old_tpl" "$_new_tpl"; then
+			cp -f "$_old_tpl" "$_new_tpl"
+			_custom_tpl=$((_custom_tpl + 1))
+		fi
+	done
+	if [ "$_custom_tpl" -gt 0 ]; then
+		echo "  Restored $_custom_tpl customized alert template(s) from previous install."
+	fi
+fi
+
+# preserve legacy alert.bfd for users upgrading from pre-2.0.1 with custom templates
+if [ -f "$INSTALL_PATH.bk.last/alert.bfd" ] && [ ! -d "$INSTALL_PATH.bk.last/alert" ]; then
+	cp -f "$INSTALL_PATH.bk.last/alert.bfd" "$INSTALL_PATH/alert.bfd" 2>/dev/null || true
 fi
 
 # preserve custom rule files from backup (user-added rules not in shipped set)
