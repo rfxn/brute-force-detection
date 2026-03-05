@@ -331,3 +331,125 @@ teardown() {
 	assert_output --partial "192.0.2.10"
 	refute_output --partial "198.51.100.5"
 }
+
+# --- _events_rule_log_file ---
+
+@test "_events_rule_log_file: extracts LOG_FILE from rule" {
+	RULES_PATH="$INSTALL_PATH/rules"
+	mkdir -p "$RULES_PATH"
+	cat > "$RULES_PATH/testrule" <<'RULE'
+PREREQ=""
+LOG_FILE="/var/log/test.log"
+LOG_TAG="test"
+RULE
+	chown root "$RULES_PATH/testrule"
+	chmod 644 "$RULES_PATH/testrule"
+	run _events_rule_log_file "testrule"
+	assert_success
+	assert_output "/var/log/test.log"
+}
+
+@test "_events_rule_log_file: returns failure for missing rule" {
+	RULES_PATH="$INSTALL_PATH/rules"
+	mkdir -p "$RULES_PATH"
+	run _events_rule_log_file "nonexistent"
+	assert_failure
+}
+
+# --- events_ip: log sample ---
+
+@test "events_ip: shows log sample section" {
+	RULES_PATH="$INSTALL_PATH/rules"
+	mkdir -p "$RULES_PATH"
+	local logfile="$TEST_TMPDIR/auth.log"
+	cat > "$logfile" <<EOF
+Mar  4 10:00:01 server sshd[1234]: Failed password for root from 192.0.2.10 port 22 ssh2
+Mar  4 10:00:02 server sshd[1235]: Invalid user admin from 192.0.2.10 port 22 ssh2
+EOF
+	cat > "$RULES_PATH/sshd" <<RULE
+PREREQ=""
+LOG_FILE="$logfile"
+LOG_TAG="sshd"
+RULE
+	chown root "$RULES_PATH/sshd"
+	chmod 644 "$RULES_PATH/sshd"
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "2" "1"
+	run events_ip "$INSTALL_PATH" "192.0.2.10"
+	assert_success
+	assert_output --partial "Recent log activity:"
+	assert_output --partial "Failed password"
+	assert_output --partial "192.0.2.10"
+}
+
+@test "events_ip: no log file shows fallback message" {
+	RULES_PATH="$INSTALL_PATH/rules"
+	mkdir -p "$RULES_PATH"
+	# rule points to nonexistent log
+	cat > "$RULES_PATH/sshd" <<RULE
+PREREQ=""
+LOG_FILE="/nonexistent/log/file.log"
+LOG_TAG="sshd"
+RULE
+	chown root "$RULES_PATH/sshd"
+	chmod 644 "$RULES_PATH/sshd"
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	run events_ip "$INSTALL_PATH" "192.0.2.10"
+	assert_success
+	assert_output --partial "(no matching log entries found)"
+}
+
+@test "events_ip: log sample redacts credentials" {
+	RULES_PATH="$INSTALL_PATH/rules"
+	mkdir -p "$RULES_PATH"
+	local logfile="$TEST_TMPDIR/auth.log"
+	cat > "$logfile" <<EOF
+Mar  4 10:00:01 server sshd[1234]: password=secret123 from 192.0.2.10
+EOF
+	cat > "$RULES_PATH/sshd" <<RULE
+PREREQ=""
+LOG_FILE="$logfile"
+LOG_TAG="sshd"
+RULE
+	chown root "$RULES_PATH/sshd"
+	chmod 644 "$RULES_PATH/sshd"
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	run events_ip "$INSTALL_PATH" "192.0.2.10"
+	assert_success
+	assert_output --partial "<REDACTED>"
+	refute_output --partial "secret123"
+}
+
+@test "events_ip_json: log_sample array present" {
+	RULES_PATH="$INSTALL_PATH/rules"
+	mkdir -p "$RULES_PATH"
+	local logfile="$TEST_TMPDIR/auth.log"
+	cat > "$logfile" <<EOF
+Mar  4 10:00:01 server sshd[1234]: Failed password for root from 192.0.2.10 port 22 ssh2
+EOF
+	cat > "$RULES_PATH/sshd" <<RULE
+PREREQ=""
+LOG_FILE="$logfile"
+LOG_TAG="sshd"
+RULE
+	chown root "$RULES_PATH/sshd"
+	chmod 644 "$RULES_PATH/sshd"
+	local now
+	now=$(date +"%s")
+	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	run events_ip_json "$INSTALL_PATH" "192.0.2.10"
+	assert_success
+	assert_output --partial '"log_sample":'
+	assert_output --partial "Failed password"
+}
+
+@test "events_ip_json: empty events returns log_sample key" {
+	run events_ip_json "$INSTALL_PATH" "192.0.2.10"
+	assert_success
+	assert_output --partial '"log_sample": []'
+}

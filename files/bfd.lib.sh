@@ -3436,6 +3436,28 @@ _events_ip_awk() {
 	}' "$events_file"
 }
 
+# _events_rule_log_file rule — extract LOG_FILE from a rule without detection
+# Sources the rule in a subshell with _rule_tlog() no-op'd, so the detection
+# pipeline does not execute. Outputs the LOG_FILE value if set.
+# Returns 1 if the rule file does not exist or LOG_FILE is empty.
+_events_rule_log_file() {
+	local rule="$1"
+	local rule_file="${RULES_PATH:-}/rules/$rule"
+	# if RULES_PATH already includes the project root, try both forms
+	if [ ! -f "$rule_file" ]; then
+		rule_file="${RULES_PATH:-}/$rule"
+	fi
+	[ ! -f "$rule_file" ] && return 1
+	(
+		# no-op the tlog function so sourcing the rule doesn't run detection
+		_rule_tlog() { :; }
+		extract_hosts() { :; }
+		# shellcheck disable=SC1090,SC1091
+		. "$rule_file" 2>/dev/null
+		[ -n "${LOG_FILE:-}" ] && echo "$LOG_FILE"
+	)
+}
+
 # _events_ip_data install_path ip — shared data gatherer for events_ip triplet
 # Validates IP, checks for events, runs single-pass AWK, adds ban status.
 # Outputs:
@@ -3538,6 +3560,30 @@ events_ip() {
 		echo "Status:           $ban_status"
 	else
 		echo "Status:           not banned"
+	fi
+
+	# log sample — extract recent log lines matching this IP
+	echo ""
+	echo "Recent log activity:"
+	local _log_total=0 _log_cap=15
+	local _seen_logs="" _log_file _log_lines
+	local _type _svc _wt _cnt _sp_fmt
+	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
+		[ "$_type" != "S" ] && continue
+		[ "$_log_total" -ge "$_log_cap" ] && break
+		_log_file=$(_events_rule_log_file "$_svc") || continue
+		# deduplicate log files (e.g., sshd + postfix both use AUTH_LOG_PATH)
+		case ",$_seen_logs," in
+			*",$_log_file,"*) continue ;;
+		esac
+		_seen_logs="${_seen_logs:+$_seen_logs,}$_log_file"
+		local _remain=$((_log_cap - _log_total))
+		_log_lines=$(_alert_sanitize_logs "$_log_file" "$ip" "$_remain") || continue
+		echo "$_log_lines"
+		_log_total=$((_log_total + $(echo "$_log_lines" | wc -l)))
+	done <<< "$data"
+	if [ "$_log_total" -eq 0 ]; then
+		echo "  (no matching log entries found)"
 	fi
 }
 
@@ -3677,7 +3723,7 @@ events_ip_json() {
 	fi
 	if [ "$rc" -eq 2 ]; then
 		ip=$(validate_ip_any "$ip" 2>/dev/null) || ip="$2"
-		printf '{"ip": "%s", "pressure": 0.0, "pressure_trip": %s, "half_life": %s, "services": [], "first_seen": null, "last_seen": null, "status": "not banned"}\n' \
+		printf '{"ip": "%s", "pressure": 0.0, "pressure_trip": %s, "half_life": %s, "services": [], "first_seen": null, "last_seen": null, "status": "not banned", "log_sample": []}\n' \
 			"$(_json_escape "$ip")" "$trip" "$half_life"
 		return 0
 	fi
@@ -3711,9 +3757,35 @@ events_ip_json() {
 		last_fmt="\"$(_fmt_ts_iso "$last_ts")\""
 	fi
 
-	printf '{"ip": "%s", "pressure": %s, "pressure_trip": %s, "half_life": %s, "services": %s, "first_seen": %s, "last_seen": %s, "status": "%s"}\n' \
+	# build log_sample JSON array
+	local log_json="[" _log_total=0 _log_cap=15
+	local _seen_logs="" _log_file _log_lines _log_first=1
+	while IFS='|' read -r _type _svc _wt _cnt _sp_fmt; do
+		[ "$_type" != "S" ] && continue
+		[ "$_log_total" -ge "$_log_cap" ] && break
+		_log_file=$(_events_rule_log_file "$_svc") || continue
+		case ",$_seen_logs," in
+			*",$_log_file,"*) continue ;;
+		esac
+		_seen_logs="${_seen_logs:+$_seen_logs,}$_log_file"
+		local _remain=$((_log_cap - _log_total))
+		_log_lines=$(_alert_sanitize_logs "$_log_file" "$ip" "$_remain") || continue
+		local _line
+		while IFS= read -r _line; do
+			if [ "$_log_first" -eq 1 ]; then
+				_log_first=0
+			else
+				log_json="$log_json, "
+			fi
+			log_json="$log_json\"$(_json_escape "$_line")\""
+			_log_total=$((_log_total + 1))
+		done <<< "$_log_lines"
+	done <<< "$data"
+	log_json="$log_json]"
+
+	printf '{"ip": "%s", "pressure": %s, "pressure_trip": %s, "half_life": %s, "services": %s, "first_seen": %s, "last_seen": %s, "status": "%s", "log_sample": %s}\n' \
 		"$(_json_escape "$ip")" "$_gp_fmt" "$_trip" "$_hl" \
-		"$svcs_json" "$first_fmt" "$last_fmt" "$(_json_escape "$ban_status")"
+		"$svcs_json" "$first_fmt" "$last_fmt" "$(_json_escape "$ban_status")" "$log_json"
 }
 
 # events_ip_csv install_path ip — CSV formatted per-IP pressure detail

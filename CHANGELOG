@@ -19,6 +19,11 @@
       events_24h key renamed to count_24h in JSON/CSV output
 [Change] events_cidr: total_events key renamed to total_count in JSON;
       summary line uses "failures" instead of "events"
+[New] _events_rule_log_file(): extract LOG_FILE from rule without triggering
+      detection (subshell with _rule_tlog/extract_hosts no-op override)
+[Change] events_ip(): append "Recent log activity" section, up to 15 sanitized
+      log lines via _alert_sanitize_logs(), deduplicating shared log files
+[Change] events_ip_json(): add log_sample string array to JSON output
 [Change] state_pool_append(): enriched 10-field format — TIMESTAMP IP MOD
       COUNT CC ACTION DURATION PORTS PRESSURE TRIP_TYPE; backward compatible
       with old 3-field entries (COUNT=1, CC=--, ACTION=ban, etc.)

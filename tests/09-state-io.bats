@@ -68,7 +68,7 @@ teardown() {
 	state_init "$INSTALL_PATH"
 	state_pool_append "$INSTALL_PATH" "1700000000" "192.0.2.1" "sshd"
 	run cat "$INSTALL_PATH/stats/attack.pool"
-	assert_output "1700000000 192.0.2.1 sshd"
+	assert_output "1700000000 192.0.2.1 sshd 1 -- ban 0 all 0 service"
 }
 
 @test "state_pool_append: multiple appends accumulate" {

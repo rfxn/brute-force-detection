@@ -36,6 +36,14 @@
 [Change] events_cidr: total_events key renamed to total_count in JSON;
       summary line uses "failures" instead of "events"
 
+-- Events Per-IP --
+
+[New] _events_rule_log_file(): extract LOG_FILE from rule without triggering
+      detection (subshell with _rule_tlog/extract_hosts no-op override)
+[Change] events_ip(): append "Recent log activity" section, up to 15 sanitized
+      log lines via _alert_sanitize_logs(), deduplicating shared log files
+[Change] events_ip_json(): add log_sample string array to JSON output
+
 -- CLI --
 
 [Change] usage_short(): add compact CLI matrix line listing all flags in
