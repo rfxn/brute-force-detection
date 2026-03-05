@@ -71,9 +71,12 @@ BEGIN {
 # (for pre-split installs, all variables are in conf.bfd; for post-split,
 # internals.conf has the internal variables)
 old_combined=$(mktemp "$INSTALL_PATH/tmp/.importconf.XXXXXX")
-trap 'rm -f "$old_combined" "$INSTALL_PATH/conf.bfd.tmp" "$INSTALL_PATH/internals.conf.tmp" "$INSTALL_PATH/thresholds.conf.tmp" "$INSTALL_PATH/pressure.conf.tmp"' EXIT INT TERM
+trap 'rm -f "$old_combined" "$INSTALL_PATH/conf.bfd.tmp" "$INSTALL_PATH/internals/internals.conf.tmp" "$INSTALL_PATH/thresholds.conf.tmp" "$INSTALL_PATH/pressure.conf.tmp"' EXIT INT TERM
 cat "$old_conf" > "$old_combined"
-if [ -f "$INSTALL_PATH.bk.last/internals.conf" ]; then
+# support both new (internals/) and old (flat) backup layouts
+if [ -f "$INSTALL_PATH.bk.last/internals/internals.conf" ]; then
+	cat "$INSTALL_PATH.bk.last/internals/internals.conf" >> "$old_combined"
+elif [ -f "$INSTALL_PATH.bk.last/internals.conf" ]; then
 	cat "$INSTALL_PATH.bk.last/internals.conf" >> "$old_combined"
 fi
 
@@ -81,7 +84,7 @@ fi
 merge_conf "$old_combined" "$new_conf"
 
 # merge internals.conf if new install has it
-new_int="$INSTALL_PATH/internals.conf"
+new_int="$INSTALL_PATH/internals/internals.conf"
 if [ -f "$new_int" ]; then
 	merge_conf "$old_combined" "$new_int"
 fi
