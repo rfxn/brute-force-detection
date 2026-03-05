@@ -3333,6 +3333,103 @@ test_pattern() {
 	IGNOREREGEX="$_sv_ign"
 }
 
+# test_alert install_path [type] — dispatch test alert by type
+test_alert() {
+	local install_path="$1"
+	local alert_type="${2:-}"
+
+	case "$alert_type" in
+		email) test_alert_email "$install_path" ;;
+		"")
+			echo "error: --test-alert requires a type (e.g., email)." >&2
+			echo >&2; usage >&2; return 1 ;;
+		*)
+			echo "error: unknown alert type '$alert_type' (available: email)." >&2
+			return 1 ;;
+	esac
+}
+
+# test_alert_email install_path — send a test email alert through the full pipeline
+# Builds a synthetic 12-field alert entry using RFC 5737 test IP and calls
+# send_alerts() directly (bypasses digest spool).
+test_alert_email() {
+	local install_path="$1"
+
+	# validate email is configured
+	if [ "${EMAIL_ALERTS:-0}" != "1" ]; then
+		echo "error: EMAIL_ALERTS is not enabled (set EMAIL_ALERTS=\"1\" in conf.bfd)." >&2
+		return 1
+	fi
+	if [ -z "${EMAIL_ADDRESS:-}" ]; then
+		echo "error: EMAIL_ADDRESS is not set in conf.bfd." >&2
+		return 1
+	fi
+
+	local format="${EMAIL_FORMAT:-text}"
+	local delivery="local MTA"
+	if [ -n "${SMTP_RELAY:-}" ]; then
+		delivery="SMTP relay ($SMTP_RELAY)"
+	else
+		local _sm_bin
+		_sm_bin=$(command -v sendmail 2>/dev/null || true)
+		if [ -n "$_sm_bin" ] && [ "$format" != "text" ]; then
+			delivery="local MTA (sendmail)"
+		else
+			local _ml_bin
+			_ml_bin=$(command -v mail 2>/dev/null || true)
+			if [ -n "$_ml_bin" ]; then
+				delivery="local MTA (mail)"
+			else
+				delivery="local MTA (no binary found)"
+			fi
+		fi
+	fi
+
+	echo "Sending test alert email..."
+	echo "  Recipient: $EMAIL_ADDRESS"
+	echo "  Format:    $format"
+	echo "  Delivery:  $delivery"
+	echo ""
+
+	# build synthetic alert entry (12 pipe-delimited fields matching check() format)
+	local test_ip="192.0.2.1"
+	local test_service="sshd"
+	local test_ports="22"
+	local test_pressure=21400    # 21.4 scaled (above default trip of 20)
+	local test_trip=20000        # 20.0 scaled
+	local test_weight=3          # sshd default
+	local test_half_life="${PRESSURE_HALF_LIFE:-300}"
+	local test_recent=0
+	local test_log="${AUTH_LOG_PATH:-/var/log/secure}"
+	local test_recip="$EMAIL_ADDRESS"
+	local test_expiry test_action
+	if [ "${BAN_TTL:-600}" = "0" ]; then
+		test_expiry=0
+		test_action="permanent"
+	else
+		test_expiry=$(( $(date +%s) + ${BAN_TTL:-600} ))
+		test_action="temporary"
+	fi
+
+	local alerts_file
+	alerts_file=$(mktemp "$install_path/tmp/.test_alert.XXXXXX")
+	echo "${test_ip}|${test_service}|${test_ports}|${test_pressure}|${test_expiry}|${test_action}|${test_recent}|${test_log}|${test_recip}|${test_trip}|${test_half_life}|${test_weight}" > "$alerts_file"
+
+	local subject="${EMAIL_SUBJECT:-[BFD] brute force attempt on \$HOSTNAME}"
+	subject="${subject//\$HOSTNAME/$(hostname)}"
+	subject="[TEST] $subject"
+
+	if send_alerts "$alerts_file" "$subject" "${EMAIL_LOGLINES:-50}"; then
+		echo "Test alert sent successfully."
+		rm -f "$alerts_file"
+		return 0
+	else
+		echo "Test alert failed — check EMAIL_* and SMTP_* configuration (bfd -c)." >&2
+		rm -f "$alerts_file"
+		return 1
+	fi
+}
+
 # --- Structured output formatters ---
 
 # _json_escape str — escape string for JSON output (RFC 8259 §7)

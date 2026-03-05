@@ -878,7 +878,8 @@ usage_short() {
 	echo "      [-b|--ban IP] [-u|--unban IP] [--flush-temp] [--flush-all]"
 	echo "      [-l|--list] [-a|--attackpool [IP]] [-e|--events [IP|CIDR]]"
 	echo "      [-S|--status] [-C|--config] [-R|--rules] [-c|--check]"
-	echo "      [-T|--test RULE] [--test-pattern PAT] [--scan [RULE]]"
+	echo "      [-T|--test RULE] [--test-pattern PAT] [--test-alert email]"
+	echo "      [--scan [RULE]]"
 	echo "      [--json] [--csv] [-V|--verbose] [-v|--version] [-h|--help]"
 	echo ""
 	echo "Run modes:"
@@ -904,8 +905,9 @@ usage_short() {
 	echo "  bfd -R [RULE]       list rules or show rule detail"
 	echo "  bfd -c              health check diagnostics"
 	echo ""
-	echo "Rule testing:"
+	echo "Testing:"
 	echo "  bfd -T RULE [FILE]  test rule against log or stdin"
+	echo "  bfd --test-alert email  send test email alert"
 	echo "  bfd --scan [RULE]   full-log scan (all or specific rule)"
 	echo ""
 	echo "Output modifiers:    --json  --csv  -V (verbose)"
@@ -939,9 +941,10 @@ usage() {
 	echo "  -R, --rules [RULE]          list rules or show rule detail"
 	echo "  -c, --check                 health check diagnostics"
 	echo ""
-	echo "Rule Testing:"
+	echo "Testing:"
 	echo "  -T, --test RULE [FILE|-]    test rule patterns against log or stdin"
 	echo "  --test-pattern PAT [FILE|-] test raw <HOST> pattern against log or stdin"
+	echo "  --test-alert email          send a test email alert to verify delivery"
 	echo ""
 	echo "Scan Mode:"
 	echo "  --scan [RULE] [-d]          full-log scan (all rules or specific rule)"
@@ -1082,6 +1085,10 @@ case "${1:-}" in
 		echo "error: --test-pattern requires a pattern." >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
 	fi
 	test_pattern "$2" "${3:-}" || exit "$?"
+	;;
+--test-alert)
+	vhead; pre
+	test_alert "$INSTALL_PATH" "${2:-}" || exit "$?"
 	;;
 --scan)
 	vhead; pre

@@ -1,5 +1,12 @@
 2.0.1:
 
+-- Test Alert --
+
+[New] --test-alert email: send a test email alert to verify the full delivery
+      pipeline (rendering, MIME, local MTA or SMTP relay) with synthetic data;
+      requires EMAIL_ALERTS=1; honors EMAIL_FORMAT, SMTP_RELAY, and all email
+      config; bypasses digest mode for immediate delivery
+
 -- Watch Mode --
 
 [Fix] Watch mode: suppress elog stdout in daemon mode to prevent duplicate
