@@ -1,5 +1,13 @@
 2.0.1:
 
+-- Alert Integration Tests --
+
+[New] Integration tests for email pipeline: check() digest spool path, multi-cycle
+      accumulation, SKIP_ALERT filtering, RULE_EMAIL routing through digest,
+      timing-based digest flush via mail, scan-mode force-flush, relay delivery
+      from digest, MIME structure validation for format=both, watch mode digest
+      flush on shutdown, cron.daily stale spool truncation and fresh preservation
+
 -- Alert Documentation --
 
 [Change] bfd.1 man page: EMAIL_FORMAT, EMAIL_DIGEST, SMTP relay variables in

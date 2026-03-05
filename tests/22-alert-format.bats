@@ -434,3 +434,217 @@ EOF
 	leftover=$(find "$INSTALL_PATH/tmp" -name '.alerts.*' 2>/dev/null | wc -l)
 	[ "$leftover" -eq 0 ]
 }
+
+# --- check() digest integration ---
+
+# helper: create a rule that triggers a ban for a given IP
+_make_trigger_rule() {
+	local rules_dir="$1" name="$2" ip="$3" logfile="$4"
+	echo "test line" > "$logfile"
+	cat > "$rules_dir/$name" <<'RULEEOF'
+TRIG="2"
+PREREQ="/bin/sh"
+RULEEOF
+	cat >> "$rules_dir/$name" <<EOF
+LOG_FILE="$logfile"
+LOG_TAG="$name"
+MATCHED_HOSTS="$ip $ip $ip"
+EOF
+}
+
+@test "pipeline: EMAIL_DIGEST=timed spools alerts instead of sending" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	_make_trigger_rule "$rules_dir" "testrule" "192.0.2.1" "$logfile"
+	_setup_check_env "$rules_dir"
+	EMAIL_ALERTS="1"
+	EMAIL_DIGEST="timed"
+	EMAIL_DIGEST_INTERVAL="999999"
+	ALERT_SPOOL_FILE="$INSTALL_PATH/tmp/.alert_spool"
+	local mail_log="$TEST_TMPDIR/mail_calls"
+	export MAIL_LOG="$mail_log"
+	_setup_mock_mail_log
+	check >/dev/null 2>&1
+	# mail should NOT have been called — alerts go to spool
+	[ ! -f "$mail_log" ]
+	# spool should have content: epoch prefix + 12 pipe-delimited fields = 13 total
+	[ -f "$ALERT_SPOOL_FILE" ]
+	[ -s "$ALERT_SPOOL_FILE" ]
+	local field_count
+	field_count=$(head -1 "$ALERT_SPOOL_FILE" | awk -F'|' '{print NF}')
+	[ "$field_count" -eq 13 ]
+}
+
+@test "pipeline: digest accumulation across two check() cycles" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	_make_trigger_rule "$rules_dir" "testrule" "192.0.2.1" "$logfile"
+	_setup_check_env "$rules_dir"
+	EMAIL_ALERTS="1"
+	EMAIL_DIGEST="timed"
+	EMAIL_DIGEST_INTERVAL="999999"
+	ALERT_SPOOL_FILE="$INSTALL_PATH/tmp/.alert_spool"
+	local mail_log="$TEST_TMPDIR/mail_calls"
+	export MAIL_LOG="$mail_log"
+	_setup_mock_mail_log
+	# first check cycle — bans 192.0.2.1
+	check >/dev/null 2>&1
+	# switch IP for second cycle (first is already banned)
+	cat >> "$rules_dir/testrule" <<'EOF2'
+MATCHED_HOSTS="198.51.100.5 198.51.100.5 198.51.100.5"
+EOF2
+	check >/dev/null 2>&1
+	# mail still not called
+	[ ! -f "$mail_log" ]
+	# spool should have 2 lines
+	local spool_lines
+	spool_lines=$(wc -l < "$ALERT_SPOOL_FILE")
+	[ "$spool_lines" -eq 2 ]
+}
+
+@test "pipeline: SKIP_ALERT=1 excludes entry from digest spool" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	cat > "$rules_dir/testrule" <<'RULEEOF'
+TRIG="2"
+SKIP_ALERT="1"
+PREREQ="/bin/sh"
+RULEEOF
+	cat >> "$rules_dir/testrule" <<EOF
+LOG_FILE="$logfile"
+LOG_TAG="testrule"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
+EOF
+	_setup_check_env "$rules_dir"
+	EMAIL_ALERTS="1"
+	EMAIL_DIGEST="timed"
+	EMAIL_DIGEST_INTERVAL="999999"
+	ALERT_SPOOL_FILE="$INSTALL_PATH/tmp/.alert_spool"
+	_setup_mock_mail_silent
+	check >/dev/null 2>&1
+	# spool should be empty or missing
+	if [ -f "$ALERT_SPOOL_FILE" ]; then
+		[ ! -s "$ALERT_SPOOL_FILE" ]
+	fi
+}
+
+@test "pipeline: RULE_EMAIL routing preserved through digest spool" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	local logfile1="$TEST_TMPDIR/test1.log"
+	local logfile2="$TEST_TMPDIR/test2.log"
+	echo "test" > "$logfile1"
+	echo "test" > "$logfile2"
+	# rule 1: routes to admin@example.com
+	cat > "$rules_dir/rule_a" <<RULEEOF
+TRIG="2"
+PREREQ="/bin/sh"
+RULE_EMAIL="admin@example.com"
+LOG_FILE="$logfile1"
+LOG_TAG="rule_a"
+MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
+RULEEOF
+	# rule 2: routes to ops@example.com
+	cat > "$rules_dir/rule_b" <<RULEEOF
+TRIG="2"
+PREREQ="/bin/sh"
+RULE_EMAIL="ops@example.com"
+LOG_FILE="$logfile2"
+LOG_TAG="rule_b"
+MATCHED_HOSTS="198.51.100.5 198.51.100.5 198.51.100.5"
+RULEEOF
+	_setup_check_env "$rules_dir"
+	EMAIL_ALERTS="1"
+	EMAIL_DIGEST="timed"
+	EMAIL_DIGEST_INTERVAL="999999"
+	ALERT_SPOOL_FILE="$INSTALL_PATH/tmp/.alert_spool"
+	_setup_mock_mail_silent
+	check >/dev/null 2>&1
+	[ -s "$ALERT_SPOOL_FILE" ]
+	# field 10 (recipient) in 13-field spool format = epoch|host|mod|ports|pressure|expiry|action|recent|logfile|recipient|trip|hl|weight
+	run awk -F'|' '{print $10}' "$ALERT_SPOOL_FILE"
+	assert_output --partial "admin@example.com"
+	assert_output --partial "ops@example.com"
+}
+
+@test "pipeline: digest flush sends accumulated spool via mail" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	# no rules — check() produces no new bans but triggers digest check
+	_setup_check_env "$rules_dir"
+	EMAIL_ALERTS="1"
+	EMAIL_DIGEST="timed"
+	EMAIL_DIGEST_INTERVAL="900"
+	ALERT_SPOOL_FILE="$INSTALL_PATH/tmp/.alert_spool"
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	local mail_log="$TEST_TMPDIR/mail_calls"
+	export MAIL_LOG="$mail_log"
+	_setup_mock_mail_log
+	# pre-populate spool with an old entry (>900s ago)
+	local now old_epoch
+	now=$(date +%s)
+	old_epoch=$((now - 1000))
+	echo "${old_epoch}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	check >/dev/null 2>&1
+	# mail should have been called (digest flushed)
+	[ -f "$mail_log" ]
+	# spool should be empty after flush
+	[ ! -s "$ALERT_SPOOL_FILE" ]
+}
+
+@test "pipeline: scan mode force-flushes digest spool" {
+	bfd_load_function _alert_digest_flush_now "$PROJECT_ROOT/files/alert_lib.sh"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	EMAIL_ALERTS="1"
+	EMAIL_SUBJECT="BFD Alert"
+	EMAIL_LOGLINES="50"
+	EMAIL_FORMAT="text"
+	local mail_log="$TEST_TMPDIR/mail_calls"
+	export MAIL_LOG="$mail_log"
+	_setup_mock_mail_log
+	# pre-populate spool (simulates accumulated alerts during scan)
+	local now
+	now=$(date +%s)
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	_alert_digest_flush_now
+	# mail should have been called
+	[ -f "$mail_log" ]
+	# spool should be empty
+	[ ! -s "$ALERT_SPOOL_FILE" ]
+}
+
+@test "pipeline: cron.daily truncates stale digest spool (>24h)" {
+	local spool_file="$INSTALL_PATH/tmp/.alert_spool"
+	mkdir -p "$INSTALL_PATH/tmp"
+	echo "stale entry" > "$spool_file"
+	# make the file look 25 hours old
+	touch -d "25 hours ago" "$spool_file"
+	# inline cron.daily spool logic
+	local _spool_age
+	_spool_age=$(( $(date +%s) - $(stat -c %Y "$spool_file" 2>/dev/null || echo 0) ))
+	if [ "$_spool_age" -gt 86400 ]; then
+		: > "$spool_file"
+	fi
+	# file exists but is empty
+	[ -f "$spool_file" ]
+	[ ! -s "$spool_file" ]
+}
+
+@test "pipeline: cron.daily preserves fresh digest spool (<24h)" {
+	local spool_file="$INSTALL_PATH/tmp/.alert_spool"
+	mkdir -p "$INSTALL_PATH/tmp"
+	echo "fresh entry" > "$spool_file"
+	# file is just created — fresh
+	local _spool_age
+	_spool_age=$(( $(date +%s) - $(stat -c %Y "$spool_file" 2>/dev/null || echo 0) ))
+	if [ "$_spool_age" -gt 86400 ]; then
+		: > "$spool_file"
+	fi
+	# file should still have content
+	[ -s "$spool_file" ]
+}

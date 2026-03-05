@@ -1759,3 +1759,98 @@ EOF
 	call_count=$(grep -c "SEND_ALERTS:" "$DIGEST_CALLS_LOG")
 	[ "$call_count" -eq 1 ]
 }
+
+# ===================================================================
+# Integration: send_alerts MIME structure and relay delivery
+# ===================================================================
+
+@test "send_alerts integration: format=both MIME has text and HTML parts" {
+	_setup_mock_sendmail
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	EMAIL_FORMAT="both"
+	local af="$TEST_TMPDIR/alerts_mime"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	send_alerts "$af" "BFD Alert" "50"
+	[ -f "$SENDMAIL_LOG" ]
+	# MIME boundary present
+	run grep "multipart/alternative" "$SENDMAIL_LOG"
+	assert_success
+	# both content types present
+	run grep "Content-Type: text/plain" "$SENDMAIL_LOG"
+	assert_success
+	run grep "Content-Type: text/html" "$SENDMAIL_LOG"
+	assert_success
+}
+
+@test "send_alerts integration: relay path renders templates and calls curl" {
+	# create recording curl that captures the uploaded message
+	mkdir -p "$TEST_TMPDIR/bin"
+	cat > "$TEST_TMPDIR/bin/curl" <<'MOCK'
+#!/bin/bash
+while [ $# -gt 0 ]; do
+	if [ "$1" = "--upload-file" ]; then
+		cp "$2" "$CURL_LOG.msg"
+		break
+	fi
+	shift
+done
+echo "ok" >> "$CURL_LOG"
+MOCK
+	chmod +x "$TEST_TMPDIR/bin/curl"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	export CURL_LOG="$TEST_TMPDIR/curl_log"
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	EMAIL_FORMAT="text"
+	SMTP_RELAY="smtps://smtp.example.com:465"
+	SMTP_FROM="alerts@example.com"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	local af="$TEST_TMPDIR/alerts_relay"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	send_alerts "$af" "BFD Alert" "50"
+	# curl was called
+	[ -f "$CURL_LOG" ]
+	# captured message has RFC822 headers
+	[ -f "$CURL_LOG.msg" ]
+	run grep "^From: alerts@example.com" "$CURL_LOG.msg"
+	assert_success
+	run grep "^Subject: BFD Alert" "$CURL_LOG.msg"
+	assert_success
+	# message has multipart MIME structure (relay always builds full MIME)
+	run grep "multipart/alternative" "$CURL_LOG.msg"
+	assert_success
+	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS
+}
+
+@test "digest flush: sends via relay when SMTP_RELAY set" {
+	# create recording curl
+	mkdir -p "$TEST_TMPDIR/bin"
+	cat > "$TEST_TMPDIR/bin/curl" <<'MOCK'
+#!/bin/bash
+echo "CURL_CALL: $@" >> "$CURL_LOG"
+MOCK
+	chmod +x "$TEST_TMPDIR/bin/curl"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	export CURL_LOG="$TEST_TMPDIR/curl_log"
+	EMAIL_ALERTS="1"
+	EMAIL_SUBJECT="BFD Alert"
+	EMAIL_LOGLINES="50"
+	EMAIL_FORMAT="text"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	SMTP_RELAY="smtps://smtp.example.com:465"
+	SMTP_FROM="alerts@example.com"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	local now
+	now=$(date +%s)
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	_alert_digest_flush_now
+	# curl should have been called with relay URL
+	[ -f "$CURL_LOG" ]
+	run grep "CURL_CALL:" "$CURL_LOG"
+	assert_output --partial "smtps://smtp.example.com:465"
+	# spool should be empty
+	[ ! -s "$ALERT_SPOOL_FILE" ]
+	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS
+}
