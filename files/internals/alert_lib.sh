@@ -718,9 +718,10 @@ _alert_build_mime() {
 	echo ""
 	echo "--$boundary"
 	echo "Content-Type: text/html; charset=UTF-8"
-	echo "Content-Transfer-Encoding: 8bit"
+	echo "Content-Transfer-Encoding: base64"
 	echo ""
-	echo "$html_body"
+	# base64 wraps at 76 chars, satisfying RFC 5321 998-char line limit
+	printf '%s\n' "$html_body" | base64
 	echo ""
 	echo "--${boundary}--"
 }
@@ -755,9 +756,10 @@ _alert_send_local() {
 					echo "To: $recip"
 					echo "Subject: $subject"
 					echo "Content-Type: text/html; charset=UTF-8"
-					echo "Content-Transfer-Encoding: 8bit"
+					echo "Content-Transfer-Encoding: base64"
 					echo ""
-					cat "$html_file"
+					# base64 wraps at 76 chars, satisfying RFC 5321 998-char line limit
+					base64 < "$html_file"
 				} | "$sendmail_bin" -t -oi
 				return $?
 			fi
