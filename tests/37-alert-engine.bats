@@ -1429,6 +1429,7 @@ _create_test_bodies() {
 	run grep "CURL_CALL:" "$CURL_LOG"
 	assert_output --partial "--url"
 	assert_output --partial "smtps://smtp.example.com:465"
+	assert_output --partial "--ssl-reqd"
 	assert_output --partial "--mail-from"
 	assert_output --partial "alerts@example.com"
 	assert_output --partial "--mail-rcpt"
@@ -1483,6 +1484,71 @@ _create_test_bodies() {
 	echo "msg" > "$TEST_TMPDIR/msg_file"
 	run _alert_send_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
 	assert_failure
+	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS
+}
+
+@test "_alert_send_relay: smtp port 25 skips --ssl-reqd" {
+	_setup_mock_curl
+	SMTP_RELAY="smtp://relay.internal:25"
+	SMTP_FROM="alerts@example.com"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	echo "msg" > "$TEST_TMPDIR/msg_file"
+	_alert_send_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
+	[ -f "$CURL_LOG" ]
+	run grep "CURL_CALL:" "$CURL_LOG"
+	assert_output --partial "smtp://relay.internal:25"
+	refute_output --partial "--ssl-reqd"
+	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS
+}
+
+@test "_alert_send_relay: smtp port 587 includes --ssl-reqd" {
+	_setup_mock_curl
+	SMTP_RELAY="smtp://relay.example.com:587"
+	SMTP_FROM="alerts@example.com"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	echo "msg" > "$TEST_TMPDIR/msg_file"
+	_alert_send_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
+	[ -f "$CURL_LOG" ]
+	run grep "CURL_CALL:" "$CURL_LOG"
+	assert_output --partial "--ssl-reqd"
+	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS
+}
+
+@test "_alert_send_relay: auth-free relay omits --user" {
+	_setup_mock_curl
+	SMTP_RELAY="smtp://relay.internal:25"
+	SMTP_FROM="alerts@example.com"
+	unset SMTP_USER SMTP_PASS
+	echo "msg" > "$TEST_TMPDIR/msg_file"
+	_alert_send_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
+	[ -f "$CURL_LOG" ]
+	run grep "CURL_CALL:" "$CURL_LOG"
+	assert_output --partial "--mail-from"
+	refute_output --partial "--user"
+}
+
+@test "_alert_send_relay: curl failure includes stderr detail in log" {
+	mkdir -p "$TEST_TMPDIR/bin"
+	cat > "$TEST_TMPDIR/bin/curl" <<'MOCK'
+#!/bin/bash
+echo "curl: (67) Access denied" >&2
+exit 67
+MOCK
+	chmod +x "$TEST_TMPDIR/bin/curl"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	SMTP_RELAY="smtps://smtp.example.com:465"
+	SMTP_FROM="alerts@example.com"
+	SMTP_USER="user"
+	SMTP_PASS="pass"
+	echo "msg" > "$TEST_TMPDIR/msg_file"
+	run _alert_send_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
+	assert_failure
+	# elog writes to BFD_LOG_PATH
+	run cat "$BFD_LOG_PATH"
+	assert_output --partial "curl exit 67"
+	assert_output --partial "Access denied"
 	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS
 }
 

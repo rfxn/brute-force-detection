@@ -1,4 +1,12 @@
 2.0.1:
+[Fix] _alert_send_relay(): --ssl-reqd was applied unconditionally, breaking
+      smtp://host:25 plain connections for internal relays; now conditional on
+      URL scheme (smtps:// and smtp://:587 require TLS, smtp://:25 is plain)
+[Fix] _alert_send_relay(): SMTP credentials were required as hard error,
+      preventing auth-free internal relays; now optional (--user flag omitted
+      when SMTP_USER/SMTP_PASS are empty)
+[Fix] _alert_send_relay(): curl stderr was suppressed with 2>/dev/null; now
+      captured to temp file and included in elog error message on failure
 [New] _events_rule_patterns(): extract detection patterns from rule files by
       sourcing in subshell with pattern-capturing extract_hosts() override
 [Change] _alert_sanitize_logs(): accept optional detection patterns parameter;

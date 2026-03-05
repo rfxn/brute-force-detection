@@ -781,16 +781,15 @@ _alert_send_local() {
 
 # _alert_send_relay recip subject msg_file — send via authenticated SMTP relay
 # msg_file must be a complete RFC 822 message (headers + body).
+# TLS handling: smtps:// always uses implicit TLS; smtp://:587 requires STARTTLS;
+# smtp://:25 connects plaintext (for internal relays). Credentials are optional
+# to support auth-free internal relays.
 # Returns 0 on success, 1 on failure.
 _alert_send_relay() {
 	local recip="$1" subject="$2" msg_file="$3"
 
 	if [ -z "${SMTP_FROM:-}" ]; then
 		elog error "SMTP_FROM not set, cannot send relay alert to $recip."
-		return 1
-	fi
-	if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
-		elog error "SMTP_USER/SMTP_PASS not set, cannot send relay alert to $recip."
 		return 1
 	fi
 	local curl_bin
@@ -800,15 +799,36 @@ _alert_send_relay() {
 		return 1
 	fi
 
-	local rc=0
-	"$curl_bin" --url "$SMTP_RELAY" --ssl-reqd \
-		--mail-from "$SMTP_FROM" --mail-rcpt "$recip" \
-		--user "$SMTP_USER:$SMTP_PASS" \
-		--upload-file "$msg_file" 2>/dev/null || rc=$?
+	# build curl arguments
+	local -a curl_args=("--url" "$SMTP_RELAY")
+
+	# TLS: smtps:// and smtp://:587 require TLS; smtp://:25 is plain
+	case "$SMTP_RELAY" in
+		smtps://*|smtp://*:587|smtp://*:587/*) curl_args+=("--ssl-reqd") ;;
+		smtp://*:25|smtp://*:25/*) ;;  # plain — no TLS for internal relays
+		*) curl_args+=("--ssl-reqd") ;;  # default: require TLS for safety
+	esac
+
+	curl_args+=("--mail-from" "$SMTP_FROM" "--mail-rcpt" "$recip")
+
+	# credentials are optional — auth-free internal relays omit them
+	if [ -n "${SMTP_USER:-}" ] && [ -n "${SMTP_PASS:-}" ]; then
+		curl_args+=("--user" "$SMTP_USER:$SMTP_PASS")
+	fi
+
+	curl_args+=("--upload-file" "$msg_file")
+
+	local rc=0 curl_stderr
+	curl_stderr=$(mktemp "${TMPDIR:-/tmp}/bfd_curl_err.XXXXXX")
+	"$curl_bin" "${curl_args[@]}" 2>"$curl_stderr" || rc=$?
 	if [ "$rc" -ne 0 ]; then
-		elog error "SMTP relay to $recip failed (curl exit $rc)."
+		local _err_detail
+		_err_detail=$(head -5 "$curl_stderr" | tr '\n' ' ')
+		elog error "SMTP relay to $recip failed (curl exit $rc): $_err_detail"
+		rm -f "$curl_stderr"
 		return 1
 	fi
+	rm -f "$curl_stderr"
 	return 0
 }
 
