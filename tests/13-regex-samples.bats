@@ -243,11 +243,41 @@ teardown() {
 
 # --- cpanel ---
 
-@test "regex: cpanel - FAILED LOGIN" {
+@test "regex: cpanel - FAILED LOGIN (pre-76 format)" {
 	local result
 	result=$(echo "203.0.113.100 - admin [02/22/2024:10:15:03 -0000] FAILED LOGIN whostmgrd: ip - password" | \
 		extract_hosts "<HOST> -.* FAILED LOGIN")
 	[ "$result" = "203.0.113.100" ]
+}
+
+@test "regex: cpanel - FAILED LOGIN (76+ webmaild)" {
+	local result
+	result=$(echo '[2019-09-09 15:03:19 +0100] info [webmaild] 198.51.100.50 - user@example.com "POST /login/?login_only=1 HTTP/1.1" FAILED LOGIN webmaild: user password incorrect' | \
+		extract_hosts "\] <HOST> -.* FAILED LOGIN")
+	[ "$result" = "198.51.100.50" ]
+}
+
+@test "regex: cpanel - FAILED LOGIN (76+ cpaneld)" {
+	local result
+	result=$(echo '[2024-02-22 10:15:03 +0000] info [cpaneld] 203.0.113.20 - admin "POST /login/?login_only=1 HTTP/1.1" FAILED LOGIN cpaneld: invalid cpanel user admin' | \
+		extract_hosts "\] <HOST> -.* FAILED LOGIN")
+	[ "$result" = "203.0.113.20" ]
+}
+
+# --- interworx ---
+
+@test "regex: interworx - NodeWorx login failure" {
+	local result
+	result=$(echo "2019-07-15 10:30:45 NW 192.0.2.10 admin" | \
+		extract_hosts "^[0-9-]+ [0-9:]+ [NS]W <HOST>")
+	[ "$result" = "192.0.2.10" ]
+}
+
+@test "regex: interworx - SiteWorx login failure" {
+	local result
+	result=$(echo "2024-02-22 10:15:03 SW 203.0.113.55 user@example.com" | \
+		extract_hosts "^[0-9-]+ [0-9:]+ [NS]W <HOST>")
+	[ "$result" = "203.0.113.55" ]
 }
 
 # --- modsec ---

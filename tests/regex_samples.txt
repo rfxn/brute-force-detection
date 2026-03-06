@@ -281,7 +281,34 @@ Feb 22 10:15:03 myhost ipop3d[12345]: Login failed user=admin auth=admin host=[1
 # RULE: cpanel
 # PATTERN: <HOST> -.* FAILED LOGIN
 # EXPECT: 203.0.113.100
+# NOTE: Pre-cPanel 76 format (IP at line start)
 203.0.113.100 - admin [02/22/2024:10:15:03 -0000] FAILED LOGIN whostmgrd: ip - password
+
+# RULE: cpanel
+# PATTERN: \] <HOST> -.* FAILED LOGIN
+# EXPECT: 198.51.100.50
+# NOTE: cPanel 76+ format (IP after [service] field)
+[2019-09-09 15:03:19 +0100] info [webmaild] 198.51.100.50 - user@example.com "POST /login/?login_only=1 HTTP/1.1" FAILED LOGIN webmaild: user password incorrect
+
+# RULE: cpanel
+# PATTERN: \] <HOST> -.* FAILED LOGIN
+# EXPECT: 203.0.113.20
+# NOTE: cPanel 76+ format (cpaneld service)
+[2024-02-22 10:15:03 +0000] info [cpaneld] 203.0.113.20 - admin "POST /login/?login_only=1 HTTP/1.1" FAILED LOGIN cpaneld: invalid cpanel user admin
+
+# --- interworx ---
+
+# RULE: interworx
+# PATTERN: ^[0-9-]+ [0-9:]+ [NS]W <HOST>
+# EXPECT: 192.0.2.10
+# NOTE: NodeWorx (NW) login failure
+2019-07-15 10:30:45 NW 192.0.2.10 admin
+
+# RULE: interworx
+# PATTERN: ^[0-9-]+ [0-9:]+ [NS]W <HOST>
+# EXPECT: 203.0.113.55
+# NOTE: SiteWorx (SW) login failure
+2024-02-22 10:15:03 SW 203.0.113.55 user@example.com
 
 # --- modsec ---
 
