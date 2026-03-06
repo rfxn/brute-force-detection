@@ -83,3 +83,18 @@ teardown() {
 	eout "" "le" > /dev/null
 	[ "$(wc -l < "$BFD_LOG_PATH")" -eq 0 ]
 }
+
+@test "eout: l flag writes to log file" {
+	: > "$BFD_LOG_PATH"
+	eout "logonly message" "l" > /dev/null
+	[ "$(wc -l < "$BFD_LOG_PATH")" -eq 1 ]
+	grep -q "logonly message" "$BFD_LOG_PATH"
+}
+
+@test "eout: l flag does not write to syslog" {
+	: > "$BFD_LOG_PATH"
+	: > "$OUTPUT_SYSLOG_FILE"
+	OUTPUT_SYSLOG="1"
+	eout "logonly message" "l" > /dev/null
+	[ "$(wc -l < "$OUTPUT_SYSLOG_FILE")" -eq 0 ]
+}

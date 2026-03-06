@@ -153,6 +153,21 @@ run_validate_output() {
 	assert_failure
 }
 
+@test "validate_config: LOG_IDLE_SUPPRESS=0 passes" {
+	run run_validate 'LOG_IDLE_SUPPRESS="0"'
+	assert_success
+}
+
+@test "validate_config: LOG_IDLE_SUPPRESS=1 passes" {
+	run run_validate 'LOG_IDLE_SUPPRESS="1"'
+	assert_success
+}
+
+@test "validate_config: LOG_IDLE_SUPPRESS=2 rejects" {
+	run run_validate 'LOG_IDLE_SUPPRESS="2"'
+	assert_failure
+}
+
 @test "validate_config: TIMEOUT=0 rejects" {
 	run run_validate 'LOCK_FILE_TIMEOUT="0"'
 	assert_failure
