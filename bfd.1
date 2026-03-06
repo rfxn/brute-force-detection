@@ -153,10 +153,12 @@ or
 .B \-\-csv
 for structured output.
 .TP
-.BI \-a " \fR[" IP | STRING \fR]
-Attack pool report.
-Without arguments, shows top 25 attackers for today and this week
-with live pressure scores.
+.BI \-a ", " \-\-activity " \fR[" IP | STRING \fR]
+Threat activity report.
+Without arguments, shows an aggregate summary (unique IPs, total
+count, active bans for 24h and 7d windows), top 25 threat IPs for
+24h and 7d with live pressure scores, and a per-service breakdown
+with dual-interval columns (24h/7d count, unique IPs, top country).
 With a valid IP, shows an enriched report with ban status, history,
 events, pressure, and attack pool triggers.
 With a string, searches attack pool entries.
@@ -165,12 +167,22 @@ Combine with
 or
 .B \-\-csv
 for structured output.
+.IP
+.B Note:
+.B \-a
+reports on historical ban decisions and attack activity;
+.B \-e
+reports on real-time pressure scores and active events.
+Use
+.B \-a
+to review past threat patterns and
+.B \-e
+to assess current risk.
 .TP
 .BI \-e " \fR[" IP | CIDR "\fR] [" N \fR]
 Active events and pressure report.
-Without arguments, shows a pressure dashboard of all tracked IPs
-sorted by pressure descending, with event counts, services,
-and ban status.
+Without arguments, shows all tracked IPs sorted by pressure descending,
+with event counts, services, and ban status.
 With a valid IP, shows per-IP pressure detail including per-service
 breakdown with individual weights, event counts, and sub-scores.
 The optional
@@ -661,7 +673,8 @@ Currently active bans.
 Historical ban/unban records.
 .TP
 .I /usr/local/bfd/stats/attack.pool
-Daily attack pool (IP trigger log).
+Threat activity pool \(em enriched ban decision log with timestamp, IP,
+service, count, country, action, duration, ports, pressure, and trip type.
 .TP
 .I /usr/local/bfd/ignore.hosts
 User-managed IP ignore list.

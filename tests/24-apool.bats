@@ -15,6 +15,10 @@ bfd_load_function _apool_report
 bfd_load_function _apool_ban_status
 bfd_load_function _apool_service_summary_awk
 bfd_load_function _apool_service_summary
+bfd_load_function _apool_summary_awk
+bfd_load_function _apool_summary
+bfd_load_function _apool_service_dual_awk
+bfd_load_function _apool_service_dual
 bfd_load_function apool_list
 
 setup() {
@@ -50,7 +54,7 @@ teardown() {
 	assert_success
 	# sshd: 3 events, 2 unique IPs; dovecot: 1 event, 1 unique IP
 	# output is table-formatted; check the data content
-	assert_output --partial "Per-service breakdown"
+	assert_output --partial "Per-service threat breakdown"
 	assert_output --partial "UNIQUE_IPS"
 }
 
@@ -200,7 +204,7 @@ teardown() {
 	assert_success
 }
 
-@test "apool_list: pool with entries shows 24h and 7d reports" {
+@test "apool_list: pool with entries shows summary, 24h, 7d, then services" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
 	local now
 	now=$(date +"%s")
@@ -208,9 +212,19 @@ teardown() {
 	echo "$((now - 1)) 192.0.2.2 dovecot" >> "$APOOL_LIST"
 	run apool_list
 	assert_success
-	assert_output --partial "Top 25 brute force attackers (24h)"
-	assert_output --partial "Per-service breakdown"
-	assert_output --partial "Top 25 brute force attackers (7d)"
+	assert_output --partial "Threat Activity Summary"
+	assert_output --partial "Top 25 threat IPs (24h)"
+	assert_output --partial "Top 25 threat IPs (7d)"
+	assert_output --partial "Per-service threat breakdown"
+	# verify ordering: summary < 24h < 7d < services
+	local ln_sum ln_24h ln_7d ln_svc
+	ln_sum=$(echo "$output" | grep -n "Threat Activity Summary" | head -1 | cut -d: -f1)
+	ln_24h=$(echo "$output" | grep -n "Top 25 threat IPs (24h)" | head -1 | cut -d: -f1)
+	ln_7d=$(echo "$output" | grep -n "Top 25 threat IPs (7d)" | head -1 | cut -d: -f1)
+	ln_svc=$(echo "$output" | grep -n "Per-service threat breakdown" | head -1 | cut -d: -f1)
+	[ "$ln_sum" -lt "$ln_24h" ]
+	[ "$ln_24h" -lt "$ln_7d" ]
+	[ "$ln_7d" -lt "$ln_svc" ]
 }
 
 @test "apool_list: search filter shows filtered results" {
@@ -357,4 +371,168 @@ teardown() {
 	local line_count
 	line_count=$(wc -l < "$pool")
 	[ "$line_count" -eq 3 ]
+}
+
+# --- summary header ---
+
+@test "summary_awk: counts unique IPs and totals for 24h and 7d" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	# 3 entries in 24h window, 1 additional in 7d-only window
+	echo "$now 192.0.2.1 sshd 5 CN ban 600 22 15000 service" >> "$pool"
+	echo "$((now - 100)) 192.0.2.2 sshd 3 US ban 600 22 12000 service" >> "$pool"
+	echo "$((now - 200)) 192.0.2.1 dovecot 2 CN ban 600 143 8000 service" >> "$pool"
+	echo "$((now - 172800)) 192.0.2.3 sshd 10 RU ban 600 22 20000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_summary_awk "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	# 24h: 2 unique IPs (192.0.2.1, 192.0.2.2), total 10 (5+3+2)
+	# 7d: 3 unique IPs, total 20 (5+3+2+10)
+	IFS='|' read -r u24 t24 u7d t7d <<< "$output"
+	[ "$u24" -eq 2 ]
+	[ "$t24" -eq 10 ]
+	[ "$u7d" -eq 3 ]
+	[ "$t7d" -eq 20 ]
+}
+
+@test "summary: text output contains header and stats" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 CN ban 600 22 15000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_summary "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	assert_output --partial "Threat Activity Summary"
+	assert_output --partial "Unique IPs:"
+	assert_output --partial "Total Count:"
+	assert_output --partial "Active Bans:"
+}
+
+@test "summary: active bans count reflects bans.active" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$pool"
+	state_bans_active_append "$INSTALL_PATH" "$now" "0" "192.0.2.1" "sshd" "22"
+	state_bans_active_append "$INSTALL_PATH" "$now" "0" "192.0.2.2" "sshd" "22"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_summary "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	assert_output --partial "Active Bans:  2"
+}
+
+@test "summary: empty pool shows zeroes" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_summary "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	assert_output --partial "Unique IPs:   0 (24h) / 0 (7d)"
+	assert_output --partial "Total Count:  0 (24h) / 0 (7d)"
+	assert_output --partial "Active Bans:  0"
+}
+
+@test "apool_list: shows summary header before IP tables" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
+	run apool_list
+	assert_success
+	assert_output --partial "Threat Activity Summary"
+	# summary should appear before the first IP table
+	local summary_line ip_table_line
+	summary_line=$(echo "$output" | grep -n "Threat Activity Summary" | head -1 | cut -d: -f1)
+	ip_table_line=$(echo "$output" | grep -n "Top 25 threat IPs" | head -1 | cut -d: -f1)
+	[ "$summary_line" -lt "$ip_table_line" ]
+}
+
+# --- dual-interval per-service breakdown ---
+
+@test "service_dual_awk: dual-interval counts for single service" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	# 2 entries in 24h, 1 additional in 7d-only window
+	echo "$now 192.0.2.1 sshd 5 RU ban 600 22 15000 service" >> "$pool"
+	echo "$((now - 100)) 192.0.2.2 sshd 3 US ban 600 22 12000 service" >> "$pool"
+	echo "$((now - 172800)) 192.0.2.3 sshd 10 RU ban 600 22 20000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_service_dual_awk "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	# sshd: 24h count=8(5+3), 7d count=18(5+3+10), 24h IPs=2, 7d IPs=3, top_cc=RU
+	IFS='|' read -r svc c24 c7d u24 u7d top_cc <<< "$output"
+	[ "$svc" = "sshd" ]
+	[ "$c24" -eq 8 ]
+	[ "$c7d" -eq 18 ]
+	[ "$u24" -eq 2 ]
+	[ "$u7d" -eq 3 ]
+	[ "$top_cc" = "RU" ]
+}
+
+@test "service_dual_awk: multiple services with top country" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 RU ban 600 22 15000 service" >> "$pool"
+	echo "$now 192.0.2.2 dovecot 3 CN ban 600 143 12000 service" >> "$pool"
+	echo "$now 192.0.2.3 dovecot 2 CN ban 600 143 8000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_service_dual_awk "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	# dovecot should have top_cc=CN (both entries are CN)
+	local dovecot_line
+	dovecot_line=$(echo "$output" | grep "^dovecot|")
+	local dovecot_cc
+	dovecot_cc=$(echo "$dovecot_line" | awk -F'|' '{print $6}')
+	[ "$dovecot_cc" = "CN" ]
+}
+
+@test "service_dual: text output shows header and columns" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 RU ban 600 22 15000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_service_dual "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	assert_output --partial "Per-service threat breakdown (24h / 7d)"
+	assert_output --partial "24H_COUNT"
+	assert_output --partial "7D_COUNT"
+	assert_output --partial "24H_IPS"
+	assert_output --partial "7D_IPS"
+	assert_output --partial "TOP_COUNTRY"
+}
+
+@test "service_dual: empty pool produces no output" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_service_dual "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	refute_output --partial "Per-service"
+}
+
+@test "apool_list: dual-interval service view with TOP_COUNTRY" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 DE ban 600 22 15000 service" >> "$APOOL_LIST"
+	run apool_list
+	assert_success
+	assert_output --partial "Per-service threat breakdown (24h / 7d)"
+	assert_output --partial "TOP_COUNTRY"
+	assert_output --partial "DE"
 }

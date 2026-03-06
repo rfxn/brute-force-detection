@@ -1,5 +1,29 @@
 2.0.1:
 
+-- Threat Activity --
+
+[Change] --attackpool retained as silent alias; all user-facing text
+      (help, man page, README, bash completion) switched to --activity
+[Change] -e/--events descriptions updated from "pressure dashboard" to
+      "active events" across help, man page, and README
+[Change] bfd.1 man page: -a description updated for threat activity report,
+      --activity alias, dual-interval summary layout, -a vs -e usage note;
+      attack.pool FILES entry updated
+[Change] README.md: section 5.3 renamed to Threat Activity; expanded report
+      description with summary, dual-interval columns, -a vs -e comparison;
+      CLI help snippet and state files table updated
+[New] Expanded per-service threat breakdown: dual-interval columns (24h/7d)
+      for count, unique IPs, and top country; replaces single-interval view
+      in text, JSON, and CSV output
+[Change] Threat activity report section order: summary, 24h IPs, 7d IPs,
+      per-service breakdown (was: 24h, services, 7d); consistent across text,
+      JSON, and CSV output formats
+[New] Threat activity summary header: aggregate unique IPs (24h/7d), total
+      count (24h/7d), and active bans shown at top of -a/--activity report;
+      included in JSON (summary key) and CSV (# summary section)
+[New] --activity alias for -a/--attackpool; user-facing labels renamed from
+      "attack pool" / "brute force attackers" to "threat activity" / "threat IPs"
+
 -- Email --
 
 [Fix] HTML email: base64-encode HTML MIME part to comply with RFC 5321

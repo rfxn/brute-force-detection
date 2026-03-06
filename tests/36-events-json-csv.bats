@@ -16,6 +16,12 @@ bfd_load_function _apool_report_csv
 bfd_load_function _apool_service_summary_awk
 bfd_load_function _apool_service_summary_json
 bfd_load_function _apool_service_summary_csv
+bfd_load_function _apool_summary_awk
+bfd_load_function _apool_summary_json
+bfd_load_function _apool_summary_csv
+bfd_load_function _apool_service_dual_awk
+bfd_load_function _apool_service_dual_json
+bfd_load_function _apool_service_dual_csv
 bfd_load_function apool_list_json
 bfd_load_function apool_list_csv
 
@@ -368,16 +374,17 @@ teardown() {
 	assert_output --partial '"services":'
 }
 
-@test "apool_list_json: has last_24h, services, last_7d sections" {
+@test "apool_list_json: has summary, last_24h, last_7d, services sections" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
 	local now
 	now=$(date +"%s")
 	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
 	run apool_list_json
 	assert_success
+	assert_output --partial '"summary":'
 	assert_output --partial '"last_24h":'
-	assert_output --partial '"services":'
 	assert_output --partial '"last_7d":'
+	assert_output --partial '"services":'
 }
 
 @test "apool_list_json: search mode has search and results" {
@@ -391,16 +398,70 @@ teardown() {
 
 # --- apool_list_csv ---
 
-@test "apool_list_csv: sections labeled" {
+@test "apool_list_csv: sections labeled with summary" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
 	local now
 	now=$(date +"%s")
 	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
 	run apool_list_csv
 	assert_success
+	assert_output --partial "# summary"
 	assert_output --partial "# last_24h"
-	assert_output --partial "# services"
 	assert_output --partial "# last_7d"
+	assert_output --partial "# services"
+}
+
+# --- dual-interval service JSON/CSV ---
+
+@test "_apool_service_dual_json: expanded fields" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 RU ban 600 22 15000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_service_dual_json "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	assert_output --partial '"service":'
+	assert_output --partial '"count_24h":'
+	assert_output --partial '"count_7d":'
+	assert_output --partial '"unique_ips_24h":'
+	assert_output --partial '"unique_ips_7d":'
+	assert_output --partial '"top_country":'
+}
+
+@test "_apool_service_dual_csv: header and data" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 US ban 600 22 15000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_service_dual_csv "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	assert_output --partial "service,count_24h,count_7d,unique_ips_24h,unique_ips_7d,top_country"
+	assert_output --partial "sshd,"
+}
+
+@test "apool_list_json: summary has unique_ips and active_bans" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 US ban 600 22 15000 service" >> "$APOOL_LIST"
+	run apool_list_json
+	assert_success
+	assert_output --partial '"unique_ips_24h":'
+	assert_output --partial '"active_bans":'
+}
+
+@test "apool_list_csv: summary section has correct header" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
+	run apool_list_csv
+	assert_success
+	assert_output --partial "unique_ips_24h,unique_ips_7d,total_count_24h,total_count_7d,active_bans"
 }
 
 # --- events_cidr_json: temp file cleanup ---

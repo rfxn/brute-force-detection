@@ -614,11 +614,199 @@ _apool_service_summary() {
 	fi
 	local atmp
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.svcsum.XXXXXX")
-	echo "[+] Per-service breakdown" && echo
+	echo "[+] Per-service threat breakdown" && echo
 	echo "SERVICE|COUNT|UNIQUE_IPS" > "$atmp"
 	_apool_service_summary_awk "$source_file" "$cutoff" >> "$atmp"
 	format_table < "$atmp"
 	rm -f "$atmp"
+}
+
+# _apool_service_dual_awk source_file cutoff_24h cutoff_7d — dual-interval per-service AWK
+# Outputs pipe-delimited: service|count_24h|count_7d|uniq_24h|uniq_7d|top_cc
+# mawk-compatible: string-concatenated keys, no multi-dimensional arrays.
+_apool_service_dual_awk() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	awk -v c24="$cutoff_24h" -v c7d="$cutoff_7d" '{
+		ts = $1 + 0
+		if (ts < c7d) next
+		svc = $3; ip = $2
+		cnt = ($4+0 > 0) ? $4+0 : 1
+		cc = ($5 != "" && $5 != "--") ? $5 : ""
+		c7[svc] += cnt
+		k7 = svc " " ip
+		if (!(k7 in s7)) { s7[k7] = 1; u7[svc]++ }
+		if (cc != "") {
+			ck7 = svc " " cc
+			ccf7[ck7]++
+		}
+		if (ts >= c24) {
+			c24a[svc] += cnt
+			k24 = svc " " ip
+			if (!(k24 in s24)) { s24[k24] = 1; u24[svc]++ }
+		}
+	}
+	END {
+		for (svc in c7) {
+			# find top country for this service (7d window)
+			top_cc = "--"; top_n = 0
+			for (ck in ccf7) {
+				if (index(ck, svc " ") == 1) {
+					cc_name = substr(ck, length(svc) + 2)
+					if (ccf7[ck] > top_n) {
+						top_n = ccf7[ck]
+						top_cc = cc_name
+					}
+				}
+			}
+			print svc "|" c24a[svc]+0 "|" c7[svc]+0 "|" u24[svc]+0 "|" u7[svc]+0 "|" top_cc
+		}
+	}' "$source_file" | sort -t'|' -k3 -nr
+}
+
+# _apool_service_dual source_file cutoff_24h cutoff_7d — text per-service dual-interval breakdown
+_apool_service_dual() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	if [ ! -f "$source_file" ] || [ ! -s "$source_file" ]; then
+		return 0
+	fi
+	local atmp
+	atmp=$(mktemp "$INSTALL_PATH/tmp/.svcdual.XXXXXX")
+	echo "[+] Per-service threat breakdown (24h / 7d)" && echo
+	echo "SERVICE|24H_COUNT|7D_COUNT|24H_IPS|7D_IPS|TOP_COUNTRY" > "$atmp"
+	_apool_service_dual_awk "$source_file" "$cutoff_24h" "$cutoff_7d" >> "$atmp"
+	format_table < "$atmp"
+	rm -f "$atmp"
+}
+
+# _apool_service_dual_json source_file cutoff_24h cutoff_7d — JSON dual-interval services
+_apool_service_dual_json() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	echo "["
+	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
+		local first=1
+		_apool_service_dual_awk "$source_file" "$cutoff_24h" "$cutoff_7d" | \
+		while IFS='|' read -r svc c24 c7d u24 u7d top_cc; do
+			[ -z "$svc" ] && continue
+			if [ "$first" -eq 1 ]; then
+				first=0
+			else
+				echo ","
+			fi
+			printf '    {"service": "%s", "count_24h": %s, "count_7d": %s, "unique_ips_24h": %s, "unique_ips_7d": %s, "top_country": "%s"}' \
+				"$(_json_escape "$svc")" "$c24" "$c7d" "$u24" "$u7d" "$(_json_escape "$top_cc")"
+		done
+	fi
+	echo ""
+	echo "  ]"
+}
+
+# _apool_service_dual_csv source_file cutoff_24h cutoff_7d — CSV dual-interval services
+_apool_service_dual_csv() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	echo "service,count_24h,count_7d,unique_ips_24h,unique_ips_7d,top_country"
+	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
+		_apool_service_dual_awk "$source_file" "$cutoff_24h" "$cutoff_7d" | \
+		while IFS='|' read -r svc c24 c7d u24 u7d top_cc; do
+			[ -z "$svc" ] && continue
+			echo "$svc,$c24,$c7d,$u24,$u7d,$top_cc"
+		done
+	fi
+}
+
+# _apool_summary_awk source_file cutoff_24h cutoff_7d — single-pass AWK for summary stats
+# Outputs: uniq_24h|total_24h|uniq_7d|total_7d
+_apool_summary_awk() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	awk -v c24="$cutoff_24h" -v c7d="$cutoff_7d" '{
+		ts = $1 + 0
+		cnt = ($4+0 > 0) ? $4+0 : 1
+		if (ts >= c7d) {
+			t7 += cnt
+			if (!s7[$2]++) u7++
+			if (ts >= c24) {
+				t24 += cnt
+				if (!s24[$2]++) u24++
+			}
+		}
+	}
+	END {
+		print u24+0 "|" t24+0 "|" u7+0 "|" t7+0
+	}' "$source_file"
+}
+
+# _apool_summary source_file cutoff_24h cutoff_7d — text summary header
+_apool_summary() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	if [ ! -f "$source_file" ] || [ ! -s "$source_file" ]; then
+		echo "[+] Threat Activity Summary" && echo
+		echo "  Unique IPs:   0 (24h) / 0 (7d)"
+		echo "  Total Count:  0 (24h) / 0 (7d)"
+		echo "  Active Bans:  0"
+		return 0
+	fi
+	local stats
+	stats=$(_apool_summary_awk "$source_file" "$cutoff_24h" "$cutoff_7d")
+	local u24 t24 u7d t7d
+	IFS='|' read -r u24 t24 u7d t7d <<< "$stats"
+	local active_bans=0
+	local bans_active="$INSTALL_PATH/tmp/bans.active"
+	if [ -f "$bans_active" ] && [ -s "$bans_active" ]; then
+		active_bans=$(wc -l < "$bans_active")
+	fi
+	echo "[+] Threat Activity Summary" && echo
+	printf "  Unique IPs:   %s (24h) / %s (7d)\n" "$u24" "$u7d"
+	printf "  Total Count:  %s (24h) / %s (7d)\n" "$t24" "$t7d"
+	printf "  Active Bans:  %s\n" "$active_bans"
+}
+
+# _apool_summary_json source_file cutoff_24h cutoff_7d — JSON summary object (no braces)
+_apool_summary_json() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	local u24=0 t24=0 u7d=0 t7d=0 active_bans=0
+	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
+		local stats
+		stats=$(_apool_summary_awk "$source_file" "$cutoff_24h" "$cutoff_7d")
+		IFS='|' read -r u24 t24 u7d t7d <<< "$stats"
+	fi
+	local bans_active="$INSTALL_PATH/tmp/bans.active"
+	if [ -f "$bans_active" ] && [ -s "$bans_active" ]; then
+		active_bans=$(wc -l < "$bans_active")
+	fi
+	printf '{"unique_ips_24h": %s, "unique_ips_7d": %s, "total_count_24h": %s, "total_count_7d": %s, "active_bans": %s}' \
+		"$u24" "$u7d" "$t24" "$t7d" "$active_bans"
+}
+
+# _apool_summary_csv source_file cutoff_24h cutoff_7d — CSV summary
+_apool_summary_csv() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	local u24=0 t24=0 u7d=0 t7d=0 active_bans=0
+	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
+		local stats
+		stats=$(_apool_summary_awk "$source_file" "$cutoff_24h" "$cutoff_7d")
+		IFS='|' read -r u24 t24 u7d t7d <<< "$stats"
+	fi
+	local bans_active="$INSTALL_PATH/tmp/bans.active"
+	if [ -f "$bans_active" ] && [ -s "$bans_active" ]; then
+		active_bans=$(wc -l < "$bans_active")
+	fi
+	echo "unique_ips_24h,unique_ips_7d,total_count_24h,total_count_7d,active_bans"
+	echo "$u24,$u7d,$t24,$t7d,$active_bans"
 }
 
 apool_list() {
@@ -630,11 +818,13 @@ apool_list() {
 	if [ -n "$ahost" ]; then
 		_apool_report "$APOOL_LIST" "Matching entries for \"$ahost\" (7d)" "$ahost" "$cutoff_7d"
 	elif [ -f "$APOOL_LIST" ]; then
-		_apool_report "$APOOL_LIST" "Top 25 brute force attackers (24h)" "" "$cutoff_24h"
+		_apool_summary "$APOOL_LIST" "$cutoff_24h" "$cutoff_7d"
 		echo
-		_apool_service_summary "$APOOL_LIST" "$cutoff_24h"
+		_apool_report "$APOOL_LIST" "Top 25 threat IPs (24h)" "" "$cutoff_24h"
 		echo
-		_apool_report "$APOOL_LIST" "Top 25 brute force attackers (7d)" "" "$cutoff_7d"
+		_apool_report "$APOOL_LIST" "Top 25 threat IPs (7d)" "" "$cutoff_7d"
+		echo
+		_apool_service_dual "$APOOL_LIST" "$cutoff_24h" "$cutoff_7d"
 	fi
 }
 
@@ -786,12 +976,14 @@ apool_list_json() {
 		_apool_report_json "$APOOL_LIST" "$ahost" "$cutoff_7d"
 		echo "}"
 	elif [ -f "$APOOL_LIST" ]; then
-		printf '{"last_24h": '
+		printf '{"summary": '
+		_apool_summary_json "$APOOL_LIST" "$cutoff_24h" "$cutoff_7d"
+		printf ', "last_24h": '
 		_apool_report_json "$APOOL_LIST" "" "$cutoff_24h"
-		printf ', "services": '
-		_apool_service_summary_json "$APOOL_LIST" "$cutoff_24h"
 		printf ', "last_7d": '
 		_apool_report_json "$APOOL_LIST" "" "$cutoff_7d"
+		printf ', "services": '
+		_apool_service_dual_json "$APOOL_LIST" "$cutoff_24h" "$cutoff_7d"
 		echo "}"
 	else
 		echo "{}"
@@ -809,14 +1001,17 @@ apool_list_csv() {
 		echo "# search: $ahost"
 		_apool_report_csv "$APOOL_LIST" "$ahost" "$cutoff_7d"
 	elif [ -f "$APOOL_LIST" ]; then
+		echo "# summary"
+		_apool_summary_csv "$APOOL_LIST" "$cutoff_24h" "$cutoff_7d"
+		echo ""
 		echo "# last_24h"
 		_apool_report_csv "$APOOL_LIST" "" "$cutoff_24h"
 		echo ""
-		echo "# services"
-		_apool_service_summary_csv "$APOOL_LIST" "$cutoff_24h"
-		echo ""
 		echo "# last_7d"
 		_apool_report_csv "$APOOL_LIST" "" "$cutoff_7d"
+		echo ""
+		echo "# services"
+		_apool_service_dual_csv "$APOOL_LIST" "$cutoff_24h" "$cutoff_7d"
 	fi
 }
 
@@ -879,7 +1074,7 @@ watch() {
 usage_short() {
 	echo "usage bfd [-s|--standard] [-q|--quiet] [-d|--dryrun] [-w|--watch]"
 	echo "      [-b|--ban IP] [-u|--unban IP] [--flush-temp] [--flush-all]"
-	echo "      [-l|--list] [-a|--attackpool [IP]] [-e|--events [IP|CIDR] [N]]"
+	echo "      [-l|--list] [-a|--activity [IP|STR]] [-e|--events [IP|CIDR] [N]]"
 	echo "      [-S|--status] [-C|--config] [-R|--rules] [-c|--check]"
 	echo "      [-T|--test RULE] [--test-pattern PAT] [--test-alert email]"
 	echo "      [--scan [RULE]]"
@@ -899,8 +1094,8 @@ usage_short() {
 	echo ""
 	echo "Reporting:"
 	echo "  bfd -l              list active bans"
-	echo "  bfd -a [IP|STR]     top attackers / investigate IP"
-	echo "  bfd -e [IP|CIDR]    pressure dashboard / IP or subnet detail"
+	echo "  bfd -a [IP|STR]     threat activity / investigate IP"
+	echo "  bfd -e [IP|CIDR]    active events / IP or subnet pressure detail"
 	echo ""
 	echo "System:"
 	echo "  bfd -S [SERVICE]    operational status overview"
@@ -935,8 +1130,8 @@ usage() {
 	echo ""
 	echo "Reporting:                                      Supports: --json --csv"
 	echo "  -l, --list                  list active bans"
-	echo "  -a, --attackpool [IP|STR]   attack pool and IP investigation"
-	echo "  -e, --events [IP|CIDR] [N]  pressure dashboard, IP or subnet detail (N=log lines)"
+	echo "  -a, --activity [IP|STR]     threat activity and IP investigation"
+	echo "  -e, --events [IP|CIDR] [N]  active events, IP or subnet pressure detail (N=log lines)"
 	echo ""
 	echo "System:"
 	echo "  -S, --status [SERVICE]      operational status overview"
@@ -966,8 +1161,8 @@ usage() {
 	echo "Examples:"
 	echo "  bfd -s                      run detection and show results"
 	echo "  bfd -s -V                   verbose detection (show per-IP pressure)"
-	echo "  bfd -a 192.168.1.100        investigate an IP across all state"
-	echo "  bfd -e --json               pressure dashboard in JSON"
+	echo "  bfd -a 203.0.113.100        investigate an IP across all state"
+	echo "  bfd -e --json               active events in JSON"
 	echo "  bfd --scan sshd -d          dry-run full-log scan for sshd only"
 	echo "  bfd -b 10.0.0.5 sshd        manually ban IP for sshd service"
 	echo "  bfd -T sshd /var/log/auth.log  test sshd rule against a log file"
@@ -997,7 +1192,7 @@ case "${1:-}" in
 -q|--quiet)     exec >/dev/null; run ;;
 -d|--dryrun)    DRY_RUN=1; vhead; run ;;
 -w|--watch)     vhead; watch ;;
--a|--attackpool)
+-a|--attackpool|--activity)
 	vhead; pre
 	if [ -n "${2:-}" ] && validate_ip_any "$2" >/dev/null 2>&1; then
 		case "$OUTPUT_FORMAT" in
