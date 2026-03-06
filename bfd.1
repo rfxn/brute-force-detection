@@ -39,7 +39,7 @@ bfd \- brute force detection and IP banning
 .RB [ \-\-test\-pattern
 .IR PATTERN " [" FILE | \- ]]
 .RB [ \-\-test\-alert
-.IR email ]
+.IR TYPE ]
 .br
 .B bfd
 .B \-\-scan
@@ -228,17 +228,48 @@ Test a raw
 .I <HOST>
 pattern against a log file or stdin.
 .TP
-.BI \-\-test\-alert " email"
-Send a test email alert to verify the entire delivery pipeline.
+.BI \-\-test\-alert " TYPE"
+Send a test alert to verify the delivery pipeline for the specified channel.
+.I TYPE
+is one of:
+.BR email ", " slack ", " telegram ", " discord .
 Uses a synthetic ban entry (RFC 5737 test IP 192.0.2.1, sshd service)
 and calls the real rendering and delivery path.
-Requires
+.sp
+For
+.BR email :
+requires
 .B EMAIL_ALERTS=1
 and a valid
 .BR EMAIL_ADDRESS .
 Honors all email configuration:
 .BR EMAIL_FORMAT ", " SMTP_RELAY ", " EMAIL_REPUTATION_LINKS ,
 etc.
+.sp
+For
+.BR slack :
+requires
+.BR SLACK_ALERTS=1 ,
+.B curl
+in PATH, and the appropriate webhook URL or bot token/channel.
+.sp
+For
+.BR telegram :
+requires
+.BR TELEGRAM_ALERTS=1 ,
+.BR curl ,
+.BR TELEGRAM_BOT_TOKEN ,
+and
+.BR TELEGRAM_CHAT_ID .
+.sp
+For
+.BR discord :
+requires
+.BR DISCORD_ALERTS=1 ,
+.BR curl ,
+and
+.BR DISCORD_WEBHOOK_URL .
+.sp
 The subject line is prefixed with
 .B [TEST]
 to distinguish from real alerts.
@@ -376,6 +407,81 @@ SMTP authentication password.
 Stored in
 .B conf.bfd
 (permissions 640, root-owned).
+.SS Slack Alerts
+Deliver alert notifications to Slack channels.
+Requires
+.B curl
+in PATH.
+.TP
+.B SLACK_ALERTS
+Enable Slack alerts:
+.B 1
+to enable,
+.B 0
+to disable (default: 0).
+.TP
+.B SLACK_MODE
+Delivery mode:
+.B webhook
+(incoming webhook URL) or
+.B bot
+(Bot API with token + channel; supports file uploads).
+Default: webhook.
+.TP
+.B SLACK_WEBHOOK_URL
+Slack incoming webhook URL (required when
+.BR SLACK_MODE = webhook ).
+Create at
+.IR https://api.slack.com/messaging/webhooks .
+.TP
+.B SLACK_TOKEN
+Slack Bot API token, starting with
+.B xoxb-
+(required when
+.BR SLACK_MODE = bot ).
+.TP
+.B SLACK_CHANNEL
+Slack channel ID or
+.B #name
+(required when
+.BR SLACK_MODE = bot ).
+.SS Telegram Alerts
+Deliver alert notifications via Telegram Bot API.
+Requires
+.B curl
+in PATH.
+.TP
+.B TELEGRAM_ALERTS
+Enable Telegram alerts:
+.B 1
+to enable,
+.B 0
+to disable (default: 0).
+.TP
+.B TELEGRAM_BOT_TOKEN
+Telegram bot token from @BotFather (required when
+.BR TELEGRAM_ALERTS = 1 ).
+.TP
+.B TELEGRAM_CHAT_ID
+Telegram chat, group, or channel ID (required when
+.BR TELEGRAM_ALERTS = 1 ).
+.SS Discord Alerts
+Deliver alert notifications to Discord channels via webhooks.
+Requires
+.B curl
+in PATH.
+.TP
+.B DISCORD_ALERTS
+Enable Discord alerts:
+.B 1
+to enable,
+.B 0
+to disable (default: 0).
+.TP
+.B DISCORD_WEBHOOK_URL
+Discord webhook URL (required when
+.BR DISCORD_ALERTS = 1 ).
+Create at Server Settings > Integrations > Webhooks.
 .SS Banning
 .TP
 .B FIREWALL
@@ -484,8 +590,8 @@ Debug messages are stdout\-only and controlled by
 .B \-\-verbose
 rather than
 .BR LOG_LEVEL .
-.SH EMAIL TEMPLATES
-Alert emails are rendered from customizable template partials in the
+.SH ALERT TEMPLATES
+Alert messages are rendered from customizable template partials in the
 .B alert/
 directory under the BFD install path.
 Templates use
@@ -544,6 +650,28 @@ Available template variables include:
 .B {{REPUTATION_LINKS_TEXT}}\fR,
 and others.
 See the shipped template files for the full set.
+.SS Messaging Templates
+When messaging channels (Slack, Telegram, Discord) are enabled, additional
+templates are used for channel-specific formatting:
+.RS 4
+.nf
+slack.message.tpl     \(em Slack Block Kit JSON wrapper
+slack.entry.tpl       \(em per-ban Block Kit section
+telegram.message.tpl  \(em Telegram MarkdownV2 wrapper
+telegram.entry.tpl    \(em per-ban MarkdownV2 block
+discord.message.tpl   \(em Discord embed JSON wrapper
+discord.entry.tpl     \(em per-ban embed field
+.fi
+.RE
+.PP
+Entry templates are rendered once per ban and accumulated into
+.B {{ENTRY_BLOCKS}}
+(Slack, Telegram) or
+.B {{ENTRY_FIELDS}}
+(Discord) for inclusion in the outer message template.
+These templates can be customized via
+.B custom.d/
+like email templates.
 .SH PRESSURE MODEL
 BFD uses a three-tier pressure precedence system:
 .IP 1. 3

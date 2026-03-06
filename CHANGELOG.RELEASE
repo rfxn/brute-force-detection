@@ -87,6 +87,18 @@
       syslog entries; systemd SyslogIdentifier captures stdout, creating a
       second entry alongside the direct syslog write from elog
 
+-- Multi-Channel Alerting Documentation --
+
+[Change] bfd.1 man page: Slack, Telegram, Discord configuration sections;
+      --test-alert expanded with all channel types; Alert Templates section
+      with messaging template reference
+[Change] README.md: sections 3.11-3.13 for Slack, Telegram, Discord setup
+      with config tables and quick-start examples; messaging template table
+      in section 3.10
+[Change] bfd.bash-completion: --test-alert completions expanded with slack,
+      telegram, discord; config variable completions updated with messaging
+      and SMTP variables
+
 -- Multi-Channel Alerting --
 
 [New] Multi-channel alerting: Slack (webhook and Bot API), Telegram (Bot API),
