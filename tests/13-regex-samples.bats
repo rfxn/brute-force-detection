@@ -590,6 +590,52 @@ teardown() {
 	[ "$result" = "203.0.113.80" ]
 }
 
+# --- cockpit ---
+
+@test "regex: cockpit - pam auth failure" {
+	local result
+	result=$(echo "Feb 22 10:15:03 myhost cockpit-session: pam_unix(cockpit:auth): authentication failure; logname= uid=0 euid=0 tty= ruser= rhost=203.0.113.45 user=root" | \
+		extract_hosts "cockpit-session.*authentication failure.*rhost=<HOST>")
+	[ "$result" = "203.0.113.45" ]
+}
+
+@test "regex: cockpit - cockpit-ws auth failed" {
+	local result
+	result=$(echo "Feb 22 10:15:05 myhost cockpit-ws: authentication failed from 198.51.100.20" | \
+		extract_hosts "cockpit-ws.*authentication failed.*<HOST>")
+	[ "$result" = "198.51.100.20" ]
+}
+
+@test "regex: cockpit - pam_unix cockpit:auth" {
+	local result
+	result=$(echo "Feb 22 10:15:07 myhost cockpit-session: pam_unix(cockpit:auth): authentication failure; logname= uid=0 euid=0 tty= ruser= rhost=192.0.2.15 user=admin" | \
+		extract_hosts "pam_unix(cockpit:auth).*authentication failure.*rhost=<HOST>")
+	[ "$result" = "192.0.2.15" ]
+}
+
+# --- postscreen ---
+
+@test "regex: postscreen - PREGREET" {
+	local result
+	result=$(echo 'Feb 22 10:15:03 myhost postfix/postscreen[44350]: PREGREET 16 after 0.69 from [203.0.113.50]:38026: HELO bryozoann\r\n' | \
+		extract_hosts "postfix/postscreen.*PREGREET.*from \[<HOST>\]")
+	[ "$result" = "203.0.113.50" ]
+}
+
+@test "regex: postscreen - DNSBL rank" {
+	local result
+	result=$(echo "Feb 22 10:15:05 myhost postfix/postscreen[44350]: DNSBL rank 2 for [198.51.100.12]:38026" | \
+		extract_hosts "postfix/postscreen.*DNSBL rank [0-9]+ for \[<HOST>\]")
+	[ "$result" = "198.51.100.12" ]
+}
+
+@test "regex: postscreen - HANGUP" {
+	local result
+	result=$(echo "Feb 22 10:15:07 myhost postfix/postscreen[20412]: HANGUP after 0.85 from [203.0.113.17]:52066 in tests after SMTP handshake" | \
+		extract_hosts "postfix/postscreen.*HANGUP.*from \[<HOST>\]")
+	[ "$result" = "203.0.113.17" ]
+}
+
 # ============================================================
 # IPv6 PATTERNS — same rules, IPv6 source addresses
 # ============================================================

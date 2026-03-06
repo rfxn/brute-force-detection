@@ -648,6 +648,40 @@ Feb 22 10:15:05 myhost pveproxy[12346]: pam_unix(proxmox:auth): authentication f
 # NOTE: MongoDB 6.0+ JSON log format (client renamed to remote)
 {"t":{"$date":"2024-02-22T10:15:07.000+0000"},"s":"I","c":"ACCESS","id":20249,"ctx":"conn12348","msg":"Authentication failed","attr":{"mechanism":"SCRAM-SHA-256","speculative":false,"principalName":"admin","authenticationDatabase":"admin","remote":"198.51.100.12:62189","result":"AuthenticationFailed: SCRAM authentication failed"}}
 
+# --- cockpit ---
+
+# RULE: cockpit
+# PATTERN: cockpit-session.*authentication failure.*rhost=<HOST>
+# EXPECT: 203.0.113.45
+Feb 22 10:15:03 myhost cockpit-session: pam_unix(cockpit:auth): authentication failure; logname= uid=0 euid=0 tty= ruser= rhost=203.0.113.45 user=root
+
+# RULE: cockpit
+# PATTERN: cockpit-ws.*authentication failed.*<HOST>
+# EXPECT: 198.51.100.20
+Feb 22 10:15:05 myhost cockpit-ws: authentication failed from 198.51.100.20
+
+# RULE: cockpit
+# PATTERN: pam_unix(cockpit:auth).*authentication failure.*rhost=<HOST>
+# EXPECT: 192.0.2.15
+Feb 22 10:15:07 myhost cockpit-session: pam_unix(cockpit:auth): authentication failure; logname= uid=0 euid=0 tty= ruser= rhost=192.0.2.15 user=admin
+
+# --- postscreen ---
+
+# RULE: postscreen
+# PATTERN: postfix/postscreen.*PREGREET.*from \[<HOST>\]
+# EXPECT: 203.0.113.50
+Feb 22 10:15:03 myhost postfix/postscreen[44350]: PREGREET 16 after 0.69 from [203.0.113.50]:38026: HELO bryozoann\r\n
+
+# RULE: postscreen
+# PATTERN: postfix/postscreen.*DNSBL rank [0-9]+ for \[<HOST>\]
+# EXPECT: 198.51.100.12
+Feb 22 10:15:05 myhost postfix/postscreen[44350]: DNSBL rank 2 for [198.51.100.12]:38026
+
+# RULE: postscreen
+# PATTERN: postfix/postscreen.*HANGUP.*from \[<HOST>\]
+# EXPECT: 203.0.113.17
+Feb 22 10:15:07 myhost postfix/postscreen[20412]: HANGUP after 0.85 from [203.0.113.17]:52066 in tests after SMTP handshake
+
 # --- xrdp ---
 
 # RULE: xrdp

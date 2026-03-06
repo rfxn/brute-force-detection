@@ -2,6 +2,10 @@
 
 -- Rule Coverage Expansion --
 
+[New] cockpit rule: 3 patterns for Cockpit web console (pam_unix, cockpit-ws,
+      cockpit-session); weight=5/trip=10 (panel tier); port 9090
+[New] postscreen rule: 3 patterns for Postfix postscreen pre-filter (PREGREET,
+      DNSBL rank, HANGUP); weight=1/trip=40 (noisy tier); port 25
 [New] sshd rule: 4 new patterns for OpenSSH 7.6+/8.0+ (Connection closed by
       authenticating user, Disconnected from authenticating user, banner exchange,
       Unable to negotiate)

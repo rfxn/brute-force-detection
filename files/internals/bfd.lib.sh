@@ -73,6 +73,8 @@ _bfd_journal_register_all() {
 	tlog_journal_register "openvpn" "SYSLOG_IDENTIFIER=openvpn"
 	tlog_journal_register "exim_authfail" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
 	tlog_journal_register "exim_nxuser" "SYSLOG_IDENTIFIER=exim4 + SYSLOG_IDENTIFIER=exim"
+	tlog_journal_register "cockpit" "SYSLOG_IDENTIFIER=cockpit-ws"
+	tlog_journal_register "postscreen" "SYSLOG_IDENTIFIER=postfix/postscreen"
 	tlog_journal_register "xrdp" "SYSLOG_IDENTIFIER=xrdp-sesman"
 	tlog_journal_register "asterisk" "SYSLOG_IDENTIFIER=asterisk"
 	tlog_journal_register "asterisk.iax" "SYSLOG_IDENTIFIER=asterisk"

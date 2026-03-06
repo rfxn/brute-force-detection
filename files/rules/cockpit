@@ -1,0 +1,27 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="5"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/libexec/cockpit-ws"
+if [ ! -f "$PREREQ" ]; then
+	PREREQ="/usr/lib/cockpit/cockpit-ws"
+fi
+
+if [ -f "$PREREQ" ]; then
+	PORTS="9090"
+	LOG_FILE="$AUTH_LOG_PATH"
+	LOG_TAG="cockpit"
+
+	## Cockpit web console authentication failures
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"cockpit-session.*authentication failure.*rhost=<HOST>" \
+		"cockpit-ws.*authentication failed.*<HOST>" \
+		"pam_unix(cockpit:auth).*authentication failure.*rhost=<HOST>")
+fi

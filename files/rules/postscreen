@@ -1,0 +1,25 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="1"
+# PRESSURE_TRIP="40"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+# postscreen is a Postfix component — same binary, different LOG_TAG/cursor
+PREREQ="/usr/sbin/postfix"
+
+if [ -f "$PREREQ" ]; then
+	PORTS="25"
+	LOG_FILE="$MAIL_LOG_PATH"
+	LOG_TAG="postscreen"
+
+	## Postfix postscreen zombie/bot pre-filter
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"postfix/postscreen.*PREGREET.*from \[<HOST>\]" \
+		"postfix/postscreen.*DNSBL rank [0-9]+ for \[<HOST>\]" \
+		"postfix/postscreen.*HANGUP.*from \[<HOST>\]")
+fi
