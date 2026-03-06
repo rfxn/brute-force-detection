@@ -21,36 +21,36 @@ teardown() {
 }
 
 # ===================================================================
-# _tpl_resolve — unit tests
+# _alert_tpl_resolve — unit tests
 # ===================================================================
 
-@test "_tpl_resolve: returns base path when custom.d does not exist" {
-	_tpl_resolve "$ALERT_TEMPLATE_DIR" "text.header.tpl"
-	[ "$_TPL_RESOLVED" = "$ALERT_TEMPLATE_DIR/text.header.tpl" ]
+@test "_alert_tpl_resolve: returns base path when custom.d does not exist" {
+	_alert_tpl_resolve "$ALERT_TEMPLATE_DIR" "text.header.tpl"
+	[ "$_ALERT_TPL_RESOLVED" = "$ALERT_TEMPLATE_DIR/text.header.tpl" ]
 }
 
-@test "_tpl_resolve: returns base path when custom.d exists but file does not" {
+@test "_alert_tpl_resolve: returns base path when custom.d exists but file does not" {
 	mkdir -p "$ALERT_TEMPLATE_DIR/custom.d"
-	_tpl_resolve "$ALERT_TEMPLATE_DIR" "text.header.tpl"
-	[ "$_TPL_RESOLVED" = "$ALERT_TEMPLATE_DIR/text.header.tpl" ]
+	_alert_tpl_resolve "$ALERT_TEMPLATE_DIR" "text.header.tpl"
+	[ "$_ALERT_TPL_RESOLVED" = "$ALERT_TEMPLATE_DIR/text.header.tpl" ]
 }
 
-@test "_tpl_resolve: returns custom.d path when override file exists" {
+@test "_alert_tpl_resolve: returns custom.d path when override file exists" {
 	mkdir -p "$ALERT_TEMPLATE_DIR/custom.d"
 	echo "CUSTOM HEADER" > "$ALERT_TEMPLATE_DIR/custom.d/text.header.tpl"
-	_tpl_resolve "$ALERT_TEMPLATE_DIR" "text.header.tpl"
-	[ "$_TPL_RESOLVED" = "$ALERT_TEMPLATE_DIR/custom.d/text.header.tpl" ]
+	_alert_tpl_resolve "$ALERT_TEMPLATE_DIR" "text.header.tpl"
+	[ "$_ALERT_TPL_RESOLVED" = "$ALERT_TEMPLATE_DIR/custom.d/text.header.tpl" ]
 }
 
-@test "_tpl_resolve: per-file granularity (override one, default for others)" {
+@test "_alert_tpl_resolve: per-file granularity (override one, default for others)" {
 	mkdir -p "$ALERT_TEMPLATE_DIR/custom.d"
 	echo "CUSTOM" > "$ALERT_TEMPLATE_DIR/custom.d/html.entry.tpl"
 	# overridden file resolves to custom.d
-	_tpl_resolve "$ALERT_TEMPLATE_DIR" "html.entry.tpl"
-	[ "$_TPL_RESOLVED" = "$ALERT_TEMPLATE_DIR/custom.d/html.entry.tpl" ]
+	_alert_tpl_resolve "$ALERT_TEMPLATE_DIR" "html.entry.tpl"
+	[ "$_ALERT_TPL_RESOLVED" = "$ALERT_TEMPLATE_DIR/custom.d/html.entry.tpl" ]
 	# non-overridden file resolves to base
-	_tpl_resolve "$ALERT_TEMPLATE_DIR" "html.header.tpl"
-	[ "$_TPL_RESOLVED" = "$ALERT_TEMPLATE_DIR/html.header.tpl" ]
+	_alert_tpl_resolve "$ALERT_TEMPLATE_DIR" "html.header.tpl"
+	[ "$_ALERT_TPL_RESOLVED" = "$ALERT_TEMPLATE_DIR/html.header.tpl" ]
 }
 
 # ===================================================================

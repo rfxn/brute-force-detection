@@ -31,6 +31,9 @@ and IPv4/IPv6 support across 42 service rules.
   - [3.8 Country Weighting](#38-country-weighting)
   - [3.9 SMTP Relay](#39-smtp-relay)
   - [3.10 Email Templates](#310-email-templates)
+  - [3.11 Slack Alerts](#311-slack-alerts)
+  - [3.12 Telegram Alerts](#312-telegram-alerts)
+  - [3.13 Discord Alerts](#313-discord-alerts)
 - [4. Firewall Integration](#4-firewall-integration)
 - [5. General Usage](#5-general-usage)
   - [5.1 Dry Run](#51-dry-run)
@@ -423,6 +426,60 @@ To customize, edit the template files directly. On upgrade, `importconf` compare
 | `{{REPUTATION_LINKS_TEXT}}` | `AbuseIPDB: https://...` | Text-format reputation links |
 
 See the shipped template files for the complete variable reference.
+
+Messaging channels (Slack, Telegram, Discord) have their own template partials:
+
+| File | Description |
+|------|-------------|
+| `slack.message.tpl` | Slack Block Kit JSON wrapper |
+| `slack.entry.tpl` | Slack per-ban section |
+| `telegram.message.tpl` | Telegram MarkdownV2 wrapper |
+| `telegram.entry.tpl` | Telegram per-ban block |
+| `discord.message.tpl` | Discord embed JSON wrapper |
+| `discord.entry.tpl` | Discord per-ban embed field |
+
+### 3.11 Slack Alerts
+
+BFD can send alert notifications to Slack channels via incoming webhooks or the Bot API.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SLACK_ALERTS` | `0` | Enable Slack alerts (`1` = enabled) |
+| `SLACK_MODE` | `webhook` | Delivery mode: `webhook` or `bot` |
+| `SLACK_WEBHOOK_URL` | *(empty)* | Incoming webhook URL (webhook mode) |
+| `SLACK_TOKEN` | *(empty)* | Bot API token, `xoxb-...` (bot mode) |
+| `SLACK_CHANNEL` | *(empty)* | Channel ID or `#name` (bot mode) |
+
+**Webhook mode** is simpler — create a webhook at [Slack Incoming Webhooks](https://api.slack.com/messaging/webhooks) and paste the URL. **Bot mode** supports file uploads and uses the [Slack Web API](https://api.slack.com/methods/chat.postMessage).
+
+Requires `curl` in PATH. Test with `bfd --test-alert slack`.
+
+### 3.12 Telegram Alerts
+
+BFD can send alert notifications via the Telegram Bot API.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TELEGRAM_ALERTS` | `0` | Enable Telegram alerts (`1` = enabled) |
+| `TELEGRAM_BOT_TOKEN` | *(empty)* | Bot token from [@BotFather](https://t.me/BotFather) |
+| `TELEGRAM_CHAT_ID` | *(empty)* | Chat, group, or channel ID |
+
+Use `@userinfobot` or the `getUpdates` API endpoint to find your chat ID. Messages are sent using MarkdownV2 formatting.
+
+Requires `curl` in PATH. Test with `bfd --test-alert telegram`.
+
+### 3.13 Discord Alerts
+
+BFD can send alert notifications to Discord channels via webhooks.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DISCORD_ALERTS` | `0` | Enable Discord alerts (`1` = enabled) |
+| `DISCORD_WEBHOOK_URL` | *(empty)* | Webhook URL from Server Settings > Integrations |
+
+Alerts are rendered as Discord embeds with per-ban fields and a summary footer.
+
+Requires `curl` in PATH. Test with `bfd --test-alert discord`.
 
 ---
 

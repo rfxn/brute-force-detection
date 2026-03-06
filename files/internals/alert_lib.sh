@@ -1,74 +1,129 @@
 #!/bin/bash
+# alert_lib.sh — shared library for multi-channel transactional alerting
+# Provides channel registry, template engine, MIME builder, and multi-channel
+# delivery (email, Slack, Telegram, Discord).
+# Consumed by BFD and LMD via source inclusion.
 #
-# Brute Force Detection 2.0.1 - Alert Library
-###
-# Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
-# Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
+# Copyright (C) 2002-2026 R-fx Networks <proj@rfxn.com>
+#                         Ryan MacDonald <ryan@rfxn.com>
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
 #
-#    This program is free software; you can redistribute it and/or modify
-#    it under the terms of the GNU General Public License as published by
-#    the Free Software Foundation; either version 2 of the License, or
-#    (at your option) any later version.
-#
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU General Public License for more details.
-#
-#    You should have received a copy of the GNU General Public License
-#    along with this program; if not, write to the Free Software
-#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-###
-#
-# This file is sourced by bfd.lib.sh and provides the email alert subsystem:
-# template rendering engine, content formatting, and delivery mechanisms.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
 
-# shellcheck disable=SC2034  # version checked by health_check and show_config
-ALERT_LIB_VERSION="1.1.0"
+# Source guard — prevent double-sourcing
+[[ -n "${_ALERT_LIB_LOADED:-}" ]] && return 0 2>/dev/null
+_ALERT_LIB_LOADED=1
 
-# ---------------------------------------------------------------------------
-# IP Reputation Link Registry
-# ---------------------------------------------------------------------------
-# Parallel indexed arrays (bash 4.1 compatible — no declare -A).
-# Used by _alert_build_reputation_links() to generate text and HTML links.
+# shellcheck disable=SC2034
+ALERT_LIB_VERSION="1.0.0"
 
-_REPLINK_KEYS=("abuseipdb" "shodan" "virustotal" "ipinfo" "greynoise")
-_REPLINK_LABELS=("AbuseIPDB" "Shodan" "VirusTotal" "IPinfo" "GreyNoise")
-_REPLINK_URLS=(
-	"https://www.abuseipdb.com/check/"
-	"https://www.shodan.io/host/"
-	"https://www.virustotal.com/gui/ip-address/"
-	"https://ipinfo.io/"
-	"https://viz.greynoise.io/ip/"
-)
+# Channel registry — consuming projects populate via alert_channel_register()
+# Uses parallel indexed arrays instead of declare -A to avoid scope issues
+# when sourced from inside a function (e.g., BATS load, wrapper functions).
+# Simple array assignment creates globals; declare -A creates locals in functions.
+_ALERT_CHANNEL_NAMES=()
+_ALERT_CHANNEL_HANDLERS=()
+_ALERT_CHANNEL_ENABLED=()
+
+# Configurable defaults — consuming projects override via environment
+ALERT_CURL_TIMEOUT="${ALERT_CURL_TIMEOUT:-30}"
+ALERT_CURL_MAX_TIME="${ALERT_CURL_MAX_TIME:-120}"
+ALERT_TMPDIR="${ALERT_TMPDIR:-${TMPDIR:-/tmp}}"
 
 # ---------------------------------------------------------------------------
-# Unicode Regional Indicator Symbol Letter UTF-8 byte sequences (A-Z)
-# Used by _alert_country_flag() to render flag emoji from 2-letter CC.
-# U+1F1E6 (A) = F0 9F 87 A6 through U+1F1FF (Z) = F0 9F 87 BF
+# Channel Registry
 # ---------------------------------------------------------------------------
-_RI_BYTES=(
-	$'\xf0\x9f\x87\xa6' $'\xf0\x9f\x87\xa7' $'\xf0\x9f\x87\xa8'
-	$'\xf0\x9f\x87\xa9' $'\xf0\x9f\x87\xaa' $'\xf0\x9f\x87\xab'
-	$'\xf0\x9f\x87\xac' $'\xf0\x9f\x87\xad' $'\xf0\x9f\x87\xae'
-	$'\xf0\x9f\x87\xaf' $'\xf0\x9f\x87\xb0' $'\xf0\x9f\x87\xb1'
-	$'\xf0\x9f\x87\xb2' $'\xf0\x9f\x87\xb3' $'\xf0\x9f\x87\xb4'
-	$'\xf0\x9f\x87\xb5' $'\xf0\x9f\x87\xb6' $'\xf0\x9f\x87\xb7'
-	$'\xf0\x9f\x87\xb8' $'\xf0\x9f\x87\xb9' $'\xf0\x9f\x87\xba'
-	$'\xf0\x9f\x87\xbb' $'\xf0\x9f\x87\xbc' $'\xf0\x9f\x87\xbd'
-	$'\xf0\x9f\x87\xbe' $'\xf0\x9f\x87\xbf'
-)
+
+# _alert_channel_find name — locate channel index by name
+# Linear scan of _ALERT_CHANNEL_NAMES. Sets _ALERT_CHANNEL_IDX on success
+# (avoids subshell fork from stdout return, same pattern as _ALERT_TPL_RESOLVED).
+# Returns 0 if found, 1 if not found.
+_alert_channel_find() {
+	local name="$1"
+	local i
+	_ALERT_CHANNEL_IDX=-1
+	for i in "${!_ALERT_CHANNEL_NAMES[@]}"; do
+		if [ "${_ALERT_CHANNEL_NAMES[$i]}" = "$name" ]; then
+			_ALERT_CHANNEL_IDX=$i
+			return 0
+		fi
+	done
+	return 1
+}
+
+# alert_channel_register name handler_fn — register a delivery channel
+# Appends to parallel indexed arrays. Channel starts disabled (enabled=0).
+# Returns 1 if name is empty, handler_fn is empty, or name already registered.
+alert_channel_register() {
+	local name="$1" handler_fn="$2"
+	if [ -z "$name" ]; then
+		echo "alert_lib: channel name cannot be empty." >&2
+		return 1
+	fi
+	if [ -z "$handler_fn" ]; then
+		echo "alert_lib: handler function cannot be empty for channel '$name'." >&2
+		return 1
+	fi
+	if _alert_channel_find "$name"; then
+		echo "alert_lib: channel '$name' already registered." >&2
+		return 1
+	fi
+	_ALERT_CHANNEL_NAMES+=("$name")
+	_ALERT_CHANNEL_HANDLERS+=("$handler_fn")
+	_ALERT_CHANNEL_ENABLED+=("0")
+	return 0
+}
+
+# alert_channel_enable name — mark channel as active
+# Returns 1 if channel not registered.
+alert_channel_enable() {
+	local name="$1"
+	if ! _alert_channel_find "$name"; then
+		echo "alert_lib: channel '$name' not registered." >&2
+		return 1
+	fi
+	_ALERT_CHANNEL_ENABLED[_ALERT_CHANNEL_IDX]=1
+	return 0
+}
+
+# alert_channel_disable name — mark channel as inactive
+# Returns 1 if channel not registered.
+alert_channel_disable() {
+	local name="$1"
+	if ! _alert_channel_find "$name"; then
+		echo "alert_lib: channel '$name' not registered." >&2
+		return 1
+	fi
+	_ALERT_CHANNEL_ENABLED[_ALERT_CHANNEL_IDX]=0
+	return 0
+}
+
+# alert_channel_enabled name — check if channel is active
+# Returns 0 if enabled, 1 if disabled or not found.
+alert_channel_enabled() {
+	local name="$1"
+	if ! _alert_channel_find "$name"; then
+		return 1
+	fi
+	[ "${_ALERT_CHANNEL_ENABLED[_ALERT_CHANNEL_IDX]}" = "1" ]
+}
 
 # ---------------------------------------------------------------------------
 # Template Engine
 # ---------------------------------------------------------------------------
 
-# _tpl_render template_file — render template by replacing {{VAR}} tokens
+# _alert_tpl_render template_file — render template by replacing {{VAR}} tokens
 # with values from exported environment variables. Single-pass awk using
 # ENVIRON array. Unknown/unset tokens become empty strings.
 # Safe: no shell code execution, no eval, mawk-compatible.
 # Output goes to stdout.
-_tpl_render() {
+_alert_tpl_render() {
 	local template_file="$1"
 	if [ ! -f "$template_file" ]; then
 		return 1
@@ -84,24 +139,28 @@ _tpl_render() {
 	}' "$template_file"
 }
 
-# _tpl_resolve template_dir template_name — resolve template with custom.d/ override
+# _alert_tpl_resolve template_dir template_name — resolve template with custom.d/ override
 # If $template_dir/custom.d/$template_name exists, uses that path (user override).
 # Otherwise uses $template_dir/$template_name (shipped default).
-# Sets _TPL_RESOLVED (avoids subshell fork from stdout return).
-_tpl_resolve() {
+# Sets _ALERT_TPL_RESOLVED (avoids subshell fork from stdout return).
+_alert_tpl_resolve() {
 	local template_dir="$1" template_name="$2"
-	_TPL_RESOLVED="$template_dir/$template_name"
+	_ALERT_TPL_RESOLVED="$template_dir/$template_name"
 	if [ -f "$template_dir/custom.d/$template_name" ]; then
-		_TPL_RESOLVED="$template_dir/custom.d/$template_name"
+		_ALERT_TPL_RESOLVED="$template_dir/custom.d/$template_name"
 	fi
 }
 
-# _html_escape str — escape HTML special characters for safe embedding
+# ---------------------------------------------------------------------------
+# Escaping Functions
+# ---------------------------------------------------------------------------
+
+# _alert_html_escape str — escape HTML special characters for safe embedding
 # Handles: & < > " ' (& first to avoid double-escaping)
 # Uses sed for portable behavior across bash versions (bash 5.2 changed
 # & semantics in ${var//pat/rep} to act as a backreference).
 # Output goes to stdout.
-_html_escape() {
+_alert_html_escape() {
 	if [ -z "$1" ]; then
 		echo ""
 		return 0
@@ -114,589 +173,98 @@ _html_escape() {
 		-e "s/'/\\&#39;/g"
 }
 
-# ---------------------------------------------------------------------------
-# Content Helpers
-# ---------------------------------------------------------------------------
-
-# _alert_sanitize_logs log_file host loglines [patterns] — extract and redact log lines
-# Extracts up to $loglines lines matching $host from $log_file, redacts
-# passwords and authorization headers. Output goes to stdout.
-# If $patterns (newline-delimited detection patterns with <HOST> placeholders)
-# is provided, filters by rule patterns instead of blanket IP grep.
-# Returns 1 if log_file missing or empty match.
-_alert_sanitize_logs() {
-	local log_file="$1" host="$2" loglines="${3:-5}" patterns="${4:-}"
-	if [ -z "$log_file" ] || [ ! -f "$log_file" ]; then
-		return 1
-	fi
-	local lines
-	if [ -n "$patterns" ]; then
-		# escape IP dots for grep -E (IPv4); colons (IPv6) are safe
-		local escaped_ip
-		escaped_ip=$(echo "$host" | sed 's/[.]/\\./g')
-		# replace <HOST> in each pattern with the escaped IP, join with |
-		local filter="" _pat
-		while IFS= read -r _pat; do
-			[ -z "$_pat" ] && continue
-			_pat="${_pat//<HOST>/$escaped_ip}"
-			filter="${filter:+$filter|}$_pat"
-		done <<< "$patterns"
-		if [ -n "$filter" ]; then
-			lines=$(tail -n 5000 "$log_file" | grep -E "$filter" | tail -n "$loglines" | \
-				sed -e 's/\([Pp]ass[a-z]*\)[=:][[:space:]]*[^ ]*/\1=<REDACTED>/g' \
-				    -e 's/\([Aa]uthorization:[[:space:]]*\).*/\1<REDACTED>/')
-		else
-			# patterns were all empty — fall back to IP grep
-			lines=$(tail -n 5000 "$log_file" | grep -Fw "$host" | tail -n "$loglines" | \
-				sed -e 's/\([Pp]ass[a-z]*\)[=:][[:space:]]*[^ ]*/\1=<REDACTED>/g' \
-				    -e 's/\([Aa]uthorization:[[:space:]]*\).*/\1<REDACTED>/')
-		fi
-	else
-		lines=$(tail -n 5000 "$log_file" | grep -Fw "$host" | tail -n "$loglines" | \
-			sed -e 's/\([Pp]ass[a-z]*\)[=:][[:space:]]*[^ ]*/\1=<REDACTED>/g' \
-			    -e 's/\([Aa]uthorization:[[:space:]]*\).*/\1<REDACTED>/')
-	fi
-	if [ -z "$lines" ]; then
-		return 1
-	fi
-	echo "$lines"
+# _alert_json_escape str — escape special characters for safe JSON string embedding
+# Handles: \ " newline tab carriage-return (\ first to avoid double-escaping)
+# Uses ${var//} parameter expansion — no & in replacements, safe on all bash versions.
+# Output goes to stdout (no trailing newline).
+_alert_json_escape() {
+	local s="$1"
+	s="${s//\\/\\\\}"
+	s="${s//\"/\\\"}"
+	s="${s//$'\n'/\\n}"
+	s="${s//$'\t'/\\t}"
+	s="${s//$'\r'/\\r}"
+	printf '%s' "$s"
 }
 
-# _alert_country_flag cc — convert 2-letter country code to Unicode flag emoji
-# Uses pre-computed Regional Indicator Symbol byte sequences from _RI_BYTES[].
-# Returns empty string for invalid or empty input.
+# _alert_telegram_escape str — escape Telegram MarkdownV2 special characters
+# Handles: \ _ * [ ] ( ) ~ ` > # + - = | { } . ! (\ first to avoid double-escaping)
+# Character list per Telegram Bot API: https://core.telegram.org/bots/api#markdownv2-style
+# Uses sed for consistent escaping approach across all alert_lib escape functions.
 # Output goes to stdout.
-_alert_country_flag() {
-	local cc
-	cc=$(echo "$1" | tr '[:lower:]' '[:upper:]')
-	if [ ${#cc} -ne 2 ]; then
-		echo ""
+_alert_telegram_escape() {
+	if [ -z "$1" ]; then
+		printf ''
 		return 0
 	fi
-	# convert each letter to index (A=0, B=1, ... Z=25)
-	local i1 i2
-	i1=$(( $(printf '%d' "'${cc:0:1}") - 65 ))
-	i2=$(( $(printf '%d' "'${cc:1:1}") - 65 ))
-	if [ "$i1" -lt 0 ] || [ "$i1" -gt 25 ] || [ "$i2" -lt 0 ] || [ "$i2" -gt 25 ]; then
-		echo ""
-		return 0
-	fi
-	echo "${_RI_BYTES[$i1]}${_RI_BYTES[$i2]}"
+	# Escape backslash first, then all MarkdownV2 special chars via BRE character class.
+	# Class layout: ] first (BRE literal), [ next, remaining chars, - last (BRE literal).
+	printf '%s' "$1" | sed \
+		-e 's/\\/\\\\/g' \
+		-e 's/[][_*()~`>#+=|{}.!-]/\\&/g'
 }
 
-# _alert_build_reputation_links ip config_value — build text and HTML reputation links
-# Reads $config_value (comma-separated keys like "abuseipdb,ipinfo") and builds
-# link strings for the matching services. Sets two exported variables:
-#   REPUTATION_LINKS_TEXT — newline-separated "    Label: URL" lines
-#   REPUTATION_LINKS_HTML — HTML anchor tags separated by middot
-# Returns 1 if no valid keys found.
-_alert_build_reputation_links() {
-	local ip="$1" config_value="$2"
-	REPUTATION_LINKS_TEXT=""
-	REPUTATION_LINKS_HTML=""
-	export REPUTATION_LINKS_TEXT REPUTATION_LINKS_HTML
+# _alert_slack_escape str — escape Slack mrkdwn special characters
+# Handles: & < > → &amp; &lt; &gt; (& first to avoid double-escaping)
+# Uses sed because replacement strings contain & (bash 5.2 backreference issue).
+# Output goes to stdout.
+_alert_slack_escape() {
+	if [ -z "$1" ]; then
+		printf ''
+		return 0
+	fi
+	printf '%s' "$1" | sed \
+		-e 's/&/\&amp;/g' \
+		-e 's/</\&lt;/g' \
+		-e 's/>/\&gt;/g'
+}
 
-	if [ -z "$ip" ] || [ -z "$config_value" ]; then
+# ---------------------------------------------------------------------------
+# HTTP Utilities
+# ---------------------------------------------------------------------------
+
+# _alert_validate_url url — validate URL has http:// or https:// scheme
+# Returns 0 if valid, 1 otherwise.
+_alert_validate_url() {
+	case "${1:-}" in
+		http://*|https://*) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+# _alert_curl_post url [curl_flags...] — HTTP POST via curl with standard timeouts
+# Discovers curl via command -v. Adds -s, --connect-timeout, --max-time, -X POST.
+# Remaining arguments pass through as extra curl flags (caller provides -d/-H/-F).
+# Stdout: curl response body (caller captures via $()).
+# Stderr: error detail on failure.
+# Returns 0 on success, 1 on failure.
+_alert_curl_post() {
+	local url="$1"
+	shift
+	local curl_bin
+	curl_bin=$(command -v curl 2>/dev/null || true)
+	if [ -z "$curl_bin" ]; then
+		echo "alert_lib: curl not found, cannot POST to $url." >&2
 		return 1
 	fi
-
-	local text_lines="" html_parts="" found=0
-	# split config_value on comma
-	local IFS=','
-	# shellcheck disable=SC2086  # intentional word-splitting on comma-separated keys
-	set -- $config_value
-	unset IFS
-
-	local requested_key
-	for requested_key in "$@"; do
-		# trim whitespace
-		requested_key=$(echo "$requested_key" | tr -d '[:space:]')
-		[ -z "$requested_key" ] && continue
-		# look up in registry
-		local i
-		for i in "${!_REPLINK_KEYS[@]}"; do
-			if [ "${_REPLINK_KEYS[$i]}" = "$requested_key" ]; then
-				local label="${_REPLINK_LABELS[$i]}"
-				local url="${_REPLINK_URLS[$i]}${ip}"
-				if [ "$found" -gt 0 ]; then
-					text_lines="${text_lines}
-"
-					html_parts="${html_parts} &middot; "
-				fi
-				text_lines="${text_lines}    ${label}: ${url}"
-				local _link
-				# shellcheck disable=SC2089  # literal quotes are intentional HTML output
-				printf -v _link '<a href="%s" style="color:#0891b2;text-decoration:none;">%s</a>' "$url" "$label"
-				html_parts="${html_parts}${_link}"
-				found=$((found + 1))
-				break
-			fi
-		done
-	done
-
-	if [ "$found" -eq 0 ]; then
+	local rc=0 curl_stderr
+	curl_stderr=$(mktemp "${ALERT_TMPDIR}/alert_curl_err.XXXXXX")
+	"$curl_bin" -s --connect-timeout "$ALERT_CURL_TIMEOUT" --max-time "$ALERT_CURL_MAX_TIME" \
+		-X POST "$url" "$@" 2>"$curl_stderr" || rc=$?
+	if [ "$rc" -ne 0 ]; then
+		local _err_detail
+		_err_detail=$(head -5 "$curl_stderr" | tr '\n' ' ')
+		echo "alert_lib: POST to $url failed (curl exit $rc): $_err_detail" >&2
+		rm -f "$curl_stderr"
 		return 1
 	fi
-
-	REPUTATION_LINKS_TEXT="$text_lines"
-	REPUTATION_LINKS_HTML="$html_parts"
-	# shellcheck disable=SC2090  # variable contains HTML with literal quotes, not shell quoting
-	export REPUTATION_LINKS_TEXT REPUTATION_LINKS_HTML
+	rm -f "$curl_stderr"
 	return 0
 }
 
-# _alert_pressure_bar pct — build ASCII pressure bar from percentage
-# Bar is 20 chars wide. Fill proportional to pct, capped at 20 for display
-# but shows actual percentage value. Output: "[====        ] 85%"
-_alert_pressure_bar() {
-	local pct="${1:-0}"
-	local filled
-	if [ "$pct" -gt 100 ]; then
-		filled=20
-	else
-		filled=$(( pct * 20 / 100 ))
-	fi
-	local bar="" i
-	for (( i = 0; i < 20; i++ )); do
-		if [ "$i" -lt "$filled" ]; then
-			bar="${bar}="
-		else
-			bar="${bar} "
-		fi
-	done
-	echo "[${bar}] ${pct}%"
-}
-
-# _alert_pressure_color pct — return HTML hex color for pressure percentage
-# 0-69%: green (#16a34a), 70-99%: amber (#d97706), 100%+: red (#dc2626)
-_alert_pressure_color() {
-	local pct="${1:-0}"
-	if [ "$pct" -ge 100 ]; then
-		echo "#dc2626"
-	elif [ "$pct" -ge 70 ]; then
-		echo "#d97706"
-	else
-		echo "#16a34a"
-	fi
-}
-
-# _alert_ban_type_color action expiry — return HTML hex color for ban severity
-# escalated: amber (#d97706), permanent: red (#dc2626), temporary: teal (#0891b2)
-_alert_ban_type_color() {
-	local action="$1" expiry="$2"
-	if [ "$action" = "escalate" ]; then
-		echo "#d97706"
-	elif [ "$expiry" = "0" ]; then
-		echo "#dc2626"
-	else
-		echo "#0891b2"
-	fi
-}
-
 # ---------------------------------------------------------------------------
-# Data Preparation (Phase 3)
+# MIME Builder
 # ---------------------------------------------------------------------------
-
-# _alert_set_global_vars alert_count — export global template variables
-# Sets: HOSTNAME, TIMESTAMP, TIMESTAMP_ISO, TIME_ZONE, ALERT_COUNT, BFD_VERSION
-# Must be called once before rendering begins.
-_alert_set_global_vars() {
-	local alert_count="${1:-0}"
-	# HOSTNAME is typically already set by the shell; export to ensure ENVIRON visibility
-	export HOSTNAME="${HOSTNAME:-$(hostname)}"
-	export TIMESTAMP
-	TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
-	export TIMESTAMP_ISO
-	TIMESTAMP_ISO=$(date +"%Y-%m-%dT%H:%M:%S%z")
-	# TIME_ZONE set by internals.conf; fallback to date
-	export TIME_ZONE="${TIME_ZONE:-$(date +"%z")}"
-	export ALERT_COUNT="$alert_count"
-	# V is the version variable set in files/bfd; fall back to ALERT_LIB_VERSION
-	export BFD_VERSION="${V:-${BFD_VERSION:-$ALERT_LIB_VERSION}}"
-}
-
-# _alert_set_entry_vars pipe_line entry_num entry_total — parse alert line, export entry variables
-# Input: pipe-delimited line with 12 fields:
-#   host|mod|ports|pressure_scaled|expiry|action|recent|log_path|recipient|trip|half_life|weight
-# Sets all per-entry template variables into exported environment for _tpl_render.
-# Requires: format_duration(), pressure_format(), ip_to_country(), expand_command_template(),
-#   _alert_build_reputation_links(), _alert_pressure_bar(), _alert_pressure_color(),
-#   _alert_ban_type_color(), _alert_country_flag(), _html_escape(), _alert_sanitize_logs()
-#   (all from bfd.lib.sh or alert_lib.sh)
-_alert_set_entry_vars() {
-	local pipe_line="$1" entry_num="$2" entry_total="$3"
-	local loglines="${4:-5}"
-
-	# parse pipe-delimited fields
-	local host mod ports pressure_scaled expiry action recent lp recipient trip half_life weight
-	IFS='|' read -r host mod ports pressure_scaled expiry action recent lp recipient trip half_life weight <<< "$pipe_line"
-
-	export ENTRY_NUM="$entry_num"
-	export ENTRY_TOTAL="$entry_total"
-	export HOST="$host"
-
-	# host version: IPv6 contains ':'
-	if [[ "$host" == *:* ]]; then
-		export HOST_VERSION="IPv6"
-	else
-		export HOST_VERSION="IPv4"
-	fi
-
-	export SERVICE="$mod"
-
-	# port display
-	if [ "$ports" = "all" ]; then
-		export PORTS="all ports"
-	else
-		export PORTS="port $ports"
-	fi
-
-	# pressure formatting (pressure_scaled is in thousandths, e.g. 18400 = 18.4)
-	local p_fmt t_fmt
-	p_fmt=$(pressure_format "$pressure_scaled")
-	t_fmt=$(pressure_format $((trip * 1000)))
-	export PRESSURE="$p_fmt"
-	export PRESSURE_TRIP="$t_fmt"
-
-	# percentage of trip
-	local pct=0
-	if [ "$trip" -gt 0 ]; then
-		pct=$(( (pressure_scaled * 100) / (trip * 1000) ))
-	fi
-	export PRESSURE_PCT="$pct"
-	local pct_clamped="$pct"
-	if [ "$pct_clamped" -gt 100 ]; then
-		pct_clamped=100
-	fi
-	export PRESSURE_PCT_CLAMPED="$pct_clamped"
-
-	# pressure bar and colors
-	export PRESSURE_BAR
-	PRESSURE_BAR=$(_alert_pressure_bar "$pct")
-	export PRESSURE_COLOR
-	PRESSURE_COLOR=$(_alert_pressure_color "$pct")
-
-	export WEIGHT="${weight:-1}"
-
-	# half-life: format seconds to human-readable
-	export HALF_LIFE_FMT
-	HALF_LIFE_FMT=$(format_duration "${half_life:-300}")
-
-	# ban type
-	local ban_type ban_duration_detail=""
-	if [ "$action" = "escalate" ]; then
-		ban_type="Permanent (escalated)"
-	elif [ "$expiry" = "0" ]; then
-		ban_type="Permanent"
-	else
-		local duration=$(( expiry - $(date +"%s") ))
-		if [ "$duration" -lt 0 ]; then
-			duration=0
-		fi
-		ban_type="Temporary"
-		local dur_fmt
-		dur_fmt=$(format_duration "$duration")
-		local exp_str
-		exp_str=$(date -d "@${expiry}" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || echo "$expiry")
-		ban_duration_detail=" ($dur_fmt), expires $exp_str"
-	fi
-	export BAN_TYPE="$ban_type"
-	export BAN_DURATION_DETAIL="$ban_duration_detail"
-	export BAN_TYPE_COLOR
-	BAN_TYPE_COLOR=$(_alert_ban_type_color "$action" "$expiry")
-
-	# history and escalation lines (pre-computed with label or empty)
-	local esc_after="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}"
-	local esc_window="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
-	if [ "${esc_after:-0}" -gt 0 ] && [ "${recent:-0}" -gt 0 ]; then
-		local _esc_dur
-		_esc_dur=$(format_duration "$esc_window")
-		HISTORY_LINE="  History:     $recent previous ban(s) in $_esc_dur (permanent at $esc_after)"
-		export HISTORY_LINE
-		HISTORY_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 16px;color:#71717a;vertical-align:top;">History</td>\n<td style="padding:4px 16px;color:#09090b;">%s previous ban(s) in %s (permanent at %s)</td>\n</tr>' \
-			"$recent" "$_esc_dur" "$esc_after")
-		export HISTORY_ROW_HTML
-	else
-		export HISTORY_LINE=""
-		export HISTORY_ROW_HTML=""
-	fi
-
-	if [ "$action" = "escalate" ]; then
-		export ESCALATION_LINE="  Escalation:  permanent after $esc_after offenses"
-		export ESCALATION_ROW_HTML
-		ESCALATION_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 16px;color:#71717a;vertical-align:top;">Escalation</td>\n<td style="padding:4px 16px;color:#dc2626;font-weight:bold;">Permanent after %s offenses</td>\n</tr>' \
-			"$esc_after")
-	elif [ "${BAN_ESCALATION:-none}" != "none" ] && [ "${recent:-0}" -gt 0 ]; then
-		export ESCALATION_LINE="  Escalation:  ${BAN_ESCALATION}, step $((recent + 1))"
-		export ESCALATION_ROW_HTML
-		ESCALATION_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 16px;color:#71717a;vertical-align:top;">Escalation</td>\n<td style="padding:4px 16px;color:#09090b;">%s, step %s</td>\n</tr>' \
-			"${BAN_ESCALATION}" "$((recent + 1))")
-	else
-		export ESCALATION_LINE=""
-		export ESCALATION_ROW_HTML=""
-	fi
-
-	# ban command display
-	# expand_command_template uses globals ATTACK_HOST, MOD, PORTS (raw values)
-	local _saved_ports="$PORTS"
-	ATTACK_HOST="$host"
-	MOD="$mod"
-	PORTS="$ports"
-	local display_cmd
-	if [ "${_FW_BACKEND:-custom}" = "custom" ]; then
-		display_cmd=$(expand_command_template "${BAN_COMMAND_TEMPLATE:-}")
-	else
-		display_cmd="fw_ban $host ($_FW_BACKEND)"
-	fi
-	export BAN_COMMAND="$display_cmd"
-	# restore formatted PORTS for template rendering
-	PORTS="$_saved_ports"
-	export PORTS
-
-	# country lookup
-	local cc=""
-	if [ -n "${INSTALL_PATH:-}" ] && [ -f "${INSTALL_PATH}/ipcountry.dat" ]; then
-		cc=$(ip_to_country "$host" "$INSTALL_PATH/ipcountry.dat")
-	fi
-	export COUNTRY_CODE="${cc:---}"
-	export COUNTRY_FLAG
-	if [ -n "$cc" ]; then
-		COUNTRY_FLAG=$(_alert_country_flag "$cc")
-	else
-		COUNTRY_FLAG=""
-	fi
-
-	# reputation links
-	local rep_config="${EMAIL_REPUTATION_LINKS:-}"
-	if [ -n "$rep_config" ]; then
-		_alert_build_reputation_links "$host" "$rep_config"
-		export REPUTATION_SECTION_TEXT=""
-		export REPUTATION_SECTION_HTML=""
-		if [ -n "$REPUTATION_LINKS_TEXT" ]; then
-			REPUTATION_SECTION_TEXT="  Reputation:
-$REPUTATION_LINKS_TEXT"
-			export REPUTATION_SECTION_TEXT
-			local _esc_html="$REPUTATION_LINKS_HTML"
-			REPUTATION_SECTION_HTML=$(printf '<tr>\n<td style="padding:4px 16px 8px;color:#71717a;vertical-align:top;">Reputation</td>\n<td style="padding:4px 16px 8px;">%s</td>\n</tr>' "$_esc_html")
-			export REPUTATION_SECTION_HTML
-		fi
-	else
-		export REPUTATION_LINKS_TEXT="" REPUTATION_LINKS_HTML=""
-		export REPUTATION_SECTION_TEXT="" REPUTATION_SECTION_HTML=""
-	fi
-
-	# source logs — filter by rule detection patterns when available
-	export SOURCE_LOGS="" SOURCE_LOGS_HTML=""
-	export SOURCE_LOGS_SECTION_TEXT="" SOURCE_LOGS_SECTION_HTML=""
-	if [ -n "$lp" ] && [ -f "$lp" ]; then
-		local _patterns raw_logs
-		_patterns=$(_events_rule_patterns "$mod") || _patterns=""
-		raw_logs=$(_alert_sanitize_logs "$lp" "$host" "$loglines" "$_patterns") || true
-		if [ -n "$raw_logs" ]; then
-			export SOURCE_LOGS="$raw_logs"
-			# indent for text display
-			local indented_logs
-			indented_logs=$(echo "$raw_logs" | sed 's/^/    /')
-			# shellcheck disable=SC2089  # single quotes are literal output, not shell quoting
-			if [ "$entry_total" -gt 1 ]; then
-				SOURCE_LOGS_SECTION_TEXT="  Source logs from '${mod}' [${host}]:
-${indented_logs}"
-			else
-				SOURCE_LOGS_SECTION_TEXT="  Source logs from '${mod}':
-${indented_logs}"
-			fi
-			# shellcheck disable=SC2090  # variable contains literal quotes for template output
-			export SOURCE_LOGS_SECTION_TEXT
-
-			# HTML: escape log content
-			local html_logs
-			html_logs=$(_html_escape "$raw_logs")
-			export SOURCE_LOGS_HTML="$html_logs"
-			SOURCE_LOGS_SECTION_HTML=$(printf '<tr>\n<td colspan="2" style="padding:8px 16px;">\n<div style="background-color:#f4f4f5;border:1px solid #d4d4d8;border-radius:6px;padding:10px;font-family:&apos;Courier New&apos;,Courier,monospace;font-size:11px;color:#09090b;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;">%s</div>\n</td>\n</tr>' "$html_logs")
-			export SOURCE_LOGS_SECTION_HTML
-		fi
-	elif [ -z "$lp" ] || [ ! -f "${lp:-/dev/null}" ]; then
-		# journal-based logs: no log file path available
-		SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (logs via systemd journal)"
-		export SOURCE_LOGS_SECTION_TEXT
-		# shellcheck disable=SC2089  # variable contains HTML with literal quotes, not shell quoting
-		SOURCE_LOGS_SECTION_HTML='<tr><td colspan="2" style="padding:8px 16px;color:#71717a;font-style:italic;">Source logs not available (systemd journal)</td></tr>'
-		# shellcheck disable=SC2090  # variable contains HTML output
-		export SOURCE_LOGS_SECTION_HTML
-	fi
-}
-
-# _alert_compute_summary alerts_file — compute summary variables from alerts file
-# Single awk pass to compute: total bans, unique IPs, per-service counts,
-# per-country counts, ban type counts (temporary/escalated/permanent),
-# repeat offender count. Exports SUMMARY_* variables.
-_alert_compute_summary() {
-	local alerts_file="$1"
-	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
-		return 1
-	fi
-
-	# single awk pass: field layout host|mod|ports|pressure|expiry|action|recent|lp|recip|trip|hl|weight
-	local summary
-	summary=$(awk -F'|' '
-	{
-		total++
-		ips[$1]++
-		services[$2]++
-		if ($6 == "escalate") { escalated++ }
-		else if ($5 == "0") { permanent++ }
-		else { temporary++ }
-		if ($7 + 0 > 0) { repeats++ }
-	}
-	END {
-		unique = 0; for (i in ips) unique++
-		# build service string: "sshd(3), dovecot(2)"
-		svc = ""
-		for (s in services) {
-			if (svc != "") svc = svc ", "
-			svc = svc s "(" services[s] ")"
-		}
-		printf "%d\n%d\n%s\n%d\n%d\n%d\n%d\n",
-			total, unique, svc,
-			temporary + 0, escalated + 0, permanent + 0, repeats + 0
-	}' "$alerts_file")
-
-	local line_num=0
-	local s_total s_unique s_services s_temp s_esc s_perm s_repeats
-	while IFS= read -r _line; do
-		line_num=$((line_num + 1))
-		case $line_num in
-			1) s_total="$_line" ;;
-			2) s_unique="$_line" ;;
-			3) s_services="$_line" ;;
-			4) s_temp="$_line" ;;
-			5) s_esc="$_line" ;;
-			6) s_perm="$_line" ;;
-			7) s_repeats="$_line" ;;
-		esac
-	done <<< "$summary"
-
-	export SUMMARY_TOTAL_BANS="${s_total:-0}"
-	export SUMMARY_UNIQUE_IPS="${s_unique:-0}"
-	export SUMMARY_SERVICES="${s_services:-}"
-	export SUMMARY_TEMPORARY="${s_temp:-0}"
-	export SUMMARY_ESCALATED="${s_esc:-0}"
-	export SUMMARY_PERMANENT="${s_perm:-0}"
-	export SUMMARY_REPEAT_OFFENDERS="${s_repeats:-0}"
-
-	# repeat percentage
-	local repeat_pct=0
-	if [ "${s_total:-0}" -gt 0 ]; then
-		repeat_pct=$(( (${s_repeats:-0} * 100) / s_total ))
-	fi
-	export SUMMARY_REPEAT_PCT="$repeat_pct"
-
-	# country breakdown: need ip_to_country for each unique IP
-	local countries_str=""
-	if [ -n "${INSTALL_PATH:-}" ] && [ -f "${INSTALL_PATH}/ipcountry.dat" ]; then
-		# collect unique IPs and look up countries
-		local _ip _cc
-		local -a _cc_counts=()
-		local _cc_list=""
-		while IFS='|' read -r _ip _ _ _ _ _ _ _ _ _ _ _; do
-			[ -z "$_ip" ] && continue
-			_cc=$(ip_to_country "$_ip" "$INSTALL_PATH/ipcountry.dat")
-			_cc="${_cc:---}"
-			_cc_list="${_cc_list}${_cc}
-"
-		done < "$alerts_file"
-		# count and format
-		countries_str=$(echo "$_cc_list" | grep -v '^$' | sort | uniq -c | sort -rn | \
-			awk '{printf "%s(%d), ", $2, $1}' | sed 's/, $//')
-	fi
-	export SUMMARY_COUNTRIES="${countries_str:---}"
-}
-
-# ---------------------------------------------------------------------------
-# Rendering Pipeline (Phase 3)
-# ---------------------------------------------------------------------------
-
-# _alert_render_text alerts_file template_dir [loglines] — render full text email
-# Orchestrates: header → N×entry → [summary] → footer
-# Output goes to stdout.
-_alert_render_text() {
-	local alerts_file="$1" template_dir="$2" loglines="${3:-5}"
-	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
-		return 1
-	fi
-
-	local entry_total
-	entry_total=$(wc -l < "$alerts_file")
-
-	# global vars
-	_alert_set_global_vars "$entry_total"
-
-	# header
-	_tpl_resolve "$template_dir" "text.header.tpl"
-	_tpl_render "$_TPL_RESOLVED"
-
-	# entries
-	local n=0 line
-	while IFS= read -r line; do
-		[ -z "$line" ] && continue
-		n=$((n + 1))
-		_alert_set_entry_vars "$line" "$n" "$entry_total" "$loglines"
-		_tpl_resolve "$template_dir" "text.entry.tpl"
-		_tpl_render "$_TPL_RESOLVED"
-	done < "$alerts_file"
-
-	# summary (multi-ban only)
-	if [ "$entry_total" -gt 1 ]; then
-		_alert_compute_summary "$alerts_file"
-		_tpl_resolve "$template_dir" "text.summary.tpl"
-		_tpl_render "$_TPL_RESOLVED"
-	fi
-
-	# footer
-	_tpl_resolve "$template_dir" "text.footer.tpl"
-	_tpl_render "$_TPL_RESOLVED"
-}
-
-# _alert_render_html alerts_file template_dir [loglines] — render full HTML email
-# Same flow as text but with HTML partials and HTML-escaped values.
-# Output goes to stdout.
-_alert_render_html() {
-	local alerts_file="$1" template_dir="$2" loglines="${3:-5}"
-	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
-		return 1
-	fi
-
-	local entry_total
-	entry_total=$(wc -l < "$alerts_file")
-
-	# global vars
-	_alert_set_global_vars "$entry_total"
-
-	# header
-	_tpl_resolve "$template_dir" "html.header.tpl"
-	_tpl_render "$_TPL_RESOLVED"
-
-	# entries
-	local n=0 line
-	while IFS= read -r line; do
-		[ -z "$line" ] && continue
-		n=$((n + 1))
-		_alert_set_entry_vars "$line" "$n" "$entry_total" "$loglines"
-		_tpl_resolve "$template_dir" "html.entry.tpl"
-		_tpl_render "$_TPL_RESOLVED"
-	done < "$alerts_file"
-
-	# summary (multi-ban only)
-	if [ "$entry_total" -gt 1 ]; then
-		_alert_compute_summary "$alerts_file"
-		_tpl_resolve "$template_dir" "html.summary.tpl"
-		_tpl_render "$_TPL_RESOLVED"
-	fi
-
-	# footer
-	_tpl_resolve "$template_dir" "html.footer.tpl"
-	_tpl_render "$_TPL_RESOLVED"
-}
 
 # _alert_build_mime text_body html_body — construct multipart/alternative MIME message
 # Writes MIME headers and both text and HTML parts to stdout.
@@ -705,7 +273,7 @@ _alert_render_html() {
 _alert_build_mime() {
 	local text_body="$1" html_body="$2"
 	local boundary
-	boundary="BFD_$(date +%s)_$$"
+	boundary="ALERT_$(date +%s)_$$"
 
 	echo "MIME-Version: 1.0"
 	echo "Content-Type: multipart/alternative; boundary=\"$boundary\""
@@ -727,15 +295,15 @@ _alert_build_mime() {
 }
 
 # ---------------------------------------------------------------------------
-# Delivery Functions (Phase 4)
+# Email Delivery
 # ---------------------------------------------------------------------------
 
-# _alert_send_local recip subject text_file html_file format
+# _alert_email_local recip subject text_file html_file format
 # Send alert via local MTA (mail/sendmail). Format: text, html, or both.
 # Returns 0 on success, 1 on failure.
-_alert_send_local() {
+_alert_email_local() {
 	local recip="$1" subject="$2" text_file="$3" html_file="$4" format="${5:-text}"
-	local from="${SMTP_FROM:-root@$(hostname -f 2>/dev/null || hostname)}"
+	local from="${ALERT_SMTP_FROM:-root@$(hostname -f 2>/dev/null || hostname)}"
 	local sendmail_bin mail_bin
 	sendmail_bin=$(command -v sendmail 2>/dev/null || true)
 	mail_bin=$(command -v mail 2>/dev/null || true)
@@ -743,7 +311,7 @@ _alert_send_local() {
 	case "$format" in
 		text)
 			if [ -z "$mail_bin" ]; then
-				elog error "mail binary not found, cannot send alert to $recip."
+				echo "alert_lib: mail binary not found, cannot send alert to $recip." >&2
 				return 1
 			fi
 			"$mail_bin" -s "$subject" "$recip" < "$text_file"
@@ -764,9 +332,9 @@ _alert_send_local() {
 				return $?
 			fi
 			# sendmail not available — fall back to text via mail
-			elog warn "sendmail not found, falling back to text-only alert for $recip."
+			echo "alert_lib: warning: sendmail not found, falling back to text-only alert for $recip." >&2
 			if [ -z "$mail_bin" ]; then
-				elog error "mail binary not found, cannot send alert to $recip."
+				echo "alert_lib: mail binary not found, cannot send alert to $recip." >&2
 				return 1
 			fi
 			"$mail_bin" -s "$subject" "$recip" < "$text_file"
@@ -786,67 +354,67 @@ _alert_send_local() {
 				return $?
 			fi
 			# sendmail not available — fall back to text via mail
-			elog warn "sendmail not found, falling back to text-only alert for $recip."
+			echo "alert_lib: warning: sendmail not found, falling back to text-only alert for $recip." >&2
 			if [ -z "$mail_bin" ]; then
-				elog error "mail binary not found, cannot send alert to $recip."
+				echo "alert_lib: mail binary not found, cannot send alert to $recip." >&2
 				return 1
 			fi
 			"$mail_bin" -s "$subject" "$recip" < "$text_file"
 			return $?
 			;;
 		*)
-			elog error "unknown EMAIL_FORMAT '$format', cannot send alert."
+			echo "alert_lib: unknown format '$format', cannot send alert." >&2
 			return 1
 			;;
 	esac
 }
 
-# _alert_send_relay recip subject msg_file — send via authenticated SMTP relay
+# _alert_email_relay recip subject msg_file — send via authenticated SMTP relay
 # msg_file must be a complete RFC 822 message (headers + body).
 # TLS handling: smtps:// always uses implicit TLS; smtp://:587 requires STARTTLS;
 # smtp://:25 connects plaintext (for internal relays). Credentials are optional
 # to support auth-free internal relays.
 # Returns 0 on success, 1 on failure.
-_alert_send_relay() {
+_alert_email_relay() {
 	local recip="$1" subject="$2" msg_file="$3"
 
-	if [ -z "${SMTP_FROM:-}" ]; then
-		elog error "SMTP_FROM not set, cannot send relay alert to $recip."
+	if [ -z "${ALERT_SMTP_FROM:-}" ]; then
+		echo "alert_lib: ALERT_SMTP_FROM not set, cannot send relay alert to $recip." >&2
 		return 1
 	fi
 	local curl_bin
 	curl_bin=$(command -v curl 2>/dev/null || true)
 	if [ -z "$curl_bin" ]; then
-		elog error "curl not found, cannot send relay alert to $recip."
+		echo "alert_lib: curl not found, cannot send relay alert to $recip." >&2
 		return 1
 	fi
 
 	# build curl arguments
-	local -a curl_args=("--url" "$SMTP_RELAY")
+	local -a curl_args=("--url" "$ALERT_SMTP_RELAY")
 
 	# TLS: smtps:// and smtp://:587 require TLS; smtp://:25 is plain
-	case "$SMTP_RELAY" in
+	case "$ALERT_SMTP_RELAY" in
 		smtps://*|smtp://*:587|smtp://*:587/*) curl_args+=("--ssl-reqd") ;;
 		smtp://*:25|smtp://*:25/*) ;;  # plain — no TLS for internal relays
 		*) curl_args+=("--ssl-reqd") ;;  # default: require TLS for safety
 	esac
 
-	curl_args+=("--mail-from" "$SMTP_FROM" "--mail-rcpt" "$recip")
+	curl_args+=("--mail-from" "$ALERT_SMTP_FROM" "--mail-rcpt" "$recip")
 
 	# credentials are optional — auth-free internal relays omit them
-	if [ -n "${SMTP_USER:-}" ] && [ -n "${SMTP_PASS:-}" ]; then
-		curl_args+=("--user" "$SMTP_USER:$SMTP_PASS")
+	if [ -n "${ALERT_SMTP_USER:-}" ] && [ -n "${ALERT_SMTP_PASS:-}" ]; then
+		curl_args+=("--user" "$ALERT_SMTP_USER:$ALERT_SMTP_PASS")
 	fi
 
 	curl_args+=("--upload-file" "$msg_file")
 
 	local rc=0 curl_stderr
-	curl_stderr=$(mktemp "${TMPDIR:-/tmp}/bfd_curl_err.XXXXXX")
+	curl_stderr=$(mktemp "${ALERT_TMPDIR}/alert_curl_err.XXXXXX")
 	"$curl_bin" "${curl_args[@]}" 2>"$curl_stderr" || rc=$?
 	if [ "$rc" -ne 0 ]; then
 		local _err_detail
 		_err_detail=$(head -5 "$curl_stderr" | tr '\n' ' ')
-		elog error "SMTP relay to $recip failed (curl exit $rc): $_err_detail"
+		echo "alert_lib: SMTP relay to $recip failed (curl exit $rc): $_err_detail" >&2
 		rm -f "$curl_stderr"
 		return 1
 	fi
@@ -854,20 +422,20 @@ _alert_send_relay() {
 	return 0
 }
 
-# _alert_send recip subject text_file html_file format
-# Router: SMTP_RELAY set → relay path, else → local MTA.
+# _alert_deliver_email recip subject text_file html_file format
+# Router: ALERT_SMTP_RELAY set → relay path, else → local MTA.
 # Returns 0 on success, 1 on failure.
-_alert_send() {
+_alert_deliver_email() {
 	local recip="$1" subject="$2" text_file="$3" html_file="$4" format="${5:-text}"
 
-	if [ -n "${SMTP_RELAY:-}" ]; then
+	if [ -n "${ALERT_SMTP_RELAY:-}" ]; then
 		# relay path: always build full multipart MIME message
-		local from="${SMTP_FROM:-root@$(hostname -f 2>/dev/null || hostname)}"
+		local from="${ALERT_SMTP_FROM:-root@$(hostname -f 2>/dev/null || hostname)}"
 		local text_body html_body
 		text_body=$(cat "$text_file")
 		html_body=$(cat "$html_file")
 		local msg_file
-		msg_file=$(mktemp "${TMPDIR:-/tmp}/bfd_relay_msg.XXXXXX")
+		msg_file=$(mktemp "${ALERT_TMPDIR}/alert_relay_msg.XXXXXX")
 		{
 			echo "From: $from"
 			echo "To: $recip"
@@ -875,102 +443,639 @@ _alert_send() {
 			echo "Date: $(date -R 2>/dev/null || date)"
 			_alert_build_mime "$text_body" "$html_body"
 		} > "$msg_file"
-		_alert_send_relay "$recip" "$subject" "$msg_file"
+		_alert_email_relay "$recip" "$subject" "$msg_file"
 		local rc=$?
 		rm -f "$msg_file"
 		return $rc
 	fi
 
 	# local MTA path
-	_alert_send_local "$recip" "$subject" "$text_file" "$html_file" "$format"
+	_alert_email_local "$recip" "$subject" "$text_file" "$html_file" "$format"
 }
 
 # ---------------------------------------------------------------------------
-# Digest Mode (Phase 5)
+# Email Channel Handler
 # ---------------------------------------------------------------------------
 
-# _alert_spool_append alerts_file — append timestamped entries to digest spool
-# Prepends current epoch to each line of alerts_file and appends to
-# $ALERT_SPOOL_FILE under exclusive flock (10s timeout).
-# No-op if alerts_file is empty or missing.
-_alert_spool_append() {
-	local alerts_file="$1"
-	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
-		return 0
-	fi
-	local spool="${ALERT_SPOOL_FILE:-}"
-	if [ -z "$spool" ]; then
-		elog error "ALERT_SPOOL_FILE not set, cannot spool digest alerts."
+# _alert_handle_email subject text_file html_file [attachment]
+# Standardized handler wrapper for the email channel. Reads delivery config
+# from environment variables and delegates to _alert_deliver_email.
+# ALERT_EMAIL_TO: recipient address (default: root)
+# ALERT_EMAIL_FORMAT: text, html, or both (default: text)
+_alert_handle_email() {
+	local subject="$1" text_file="$2" html_file="$3"
+	local recip="${ALERT_EMAIL_TO:-root}"
+	local format="${ALERT_EMAIL_FORMAT:-text}"
+	_alert_deliver_email "$recip" "$subject" "$text_file" "$html_file" "$format"
+}
+
+# ---------------------------------------------------------------------------
+# Slack Delivery
+# ---------------------------------------------------------------------------
+
+# _alert_slack_webhook payload_file webhook_url — POST JSON to Slack incoming webhook
+# Returns 0 on success, 1 on failure.
+_alert_slack_webhook() {
+	local payload_file="$1" webhook_url="$2"
+	if [ -z "$webhook_url" ] || ! _alert_validate_url "$webhook_url"; then
+		echo "alert_lib: invalid or empty Slack webhook URL." >&2
 		return 1
 	fi
-	local now
+	local response
+	response=$(_alert_curl_post "$webhook_url" \
+		-H "Content-Type: application/json" -d @"$payload_file") || return 1
+	# Slack webhooks return "ok" on success, error string on failure
+	if [ "$response" != "ok" ]; then
+		echo "alert_lib: Slack webhook error: $response" >&2
+		return 1
+	fi
+	return 0
+}
+
+# _alert_slack_post_message payload_file token channel — POST to chat.postMessage API
+# Injects "channel" field into JSON payload, sends to Slack Web API.
+# Returns 0 on success, 1 on failure.
+_alert_slack_post_message() {
+	local payload_file="$1" token="$2" channel="$3"
+	if [ -z "$token" ]; then
+		echo "alert_lib: Slack token is required for bot mode." >&2
+		return 1
+	fi
+	if [ -z "$channel" ]; then
+		echo "alert_lib: Slack channel is required for bot mode." >&2
+		return 1
+	fi
+	# Inject "channel" field after opening brace
+	local modified_payload
+	modified_payload=$(mktemp "${ALERT_TMPDIR}/alert_slack_msg.XXXXXX")
+	sed "s/^{/{\"channel\":\"$channel\",/" "$payload_file" > "$modified_payload"
+	local response
+	response=$(_alert_curl_post "https://slack.com/api/chat.postMessage" \
+		-H "Authorization: Bearer $token" \
+		-H "Content-Type: application/json" \
+		-d @"$modified_payload") || { rm -f "$modified_payload"; return 1; }
+	rm -f "$modified_payload"
+	# Slack API returns {"ok":true,...} on success
+	case "$response" in
+		*'"ok":true'*) return 0 ;;
+	esac
+	local api_err
+	api_err=$(printf '%s' "$response" | sed -n 's/.*"error" *: *"\([^"]*\)".*/\1/p')
+	echo "alert_lib: Slack chat.postMessage error${api_err:+: $api_err}" >&2
+	return 1
+}
+
+# _alert_slack_upload file_path title token channels — 3-step Slack file upload
+# Step 1: files.getUploadURLExternal → get upload_url + file_id
+# Step 2: POST file to upload_url
+# Step 3: files.completeUploadExternal → finalize and share to channels
+# Extracted from LMD functions. Returns 0 on success, 1 on failure.
+_alert_slack_upload() {
+	local file_path="$1" title="$2" token="$3" channels="$4"
+	if [ ! -f "$file_path" ]; then
+		echo "alert_lib: file not found: $file_path" >&2
+		return 1
+	fi
+	if [ -z "$token" ]; then
+		echo "alert_lib: Slack token is required for file upload." >&2
+		return 1
+	fi
+	local fsize filename
+	fsize=$(wc -c < "$file_path")
+	fsize="${fsize##* }"  # trim whitespace (some wc implementations pad)
+	filename="${file_path##*/}"
+
+	# Step 1: get upload URL
+	local url_response upload_url file_id
+	url_response=$(_alert_curl_post "https://slack.com/api/files.getUploadURLExternal" \
+		-H "Authorization: Bearer $token" \
+		-d "filename=$filename" \
+		-d "length=$fsize") || return 1
+	case "$url_response" in
+		*'"ok":true'*) ;;
+		*)
+			local api_err
+			api_err=$(printf '%s' "$url_response" | sed -n 's/.*"error" *: *"\([^"]*\)".*/\1/p')
+			echo "alert_lib: Slack getUploadURLExternal error${api_err:+: $api_err}" >&2
+			return 1
+			;;
+	esac
+	upload_url=$(printf '%s' "$url_response" | sed -n 's/.*"upload_url" *: *"\([^"]*\)".*/\1/p')
+	file_id=$(printf '%s' "$url_response" | sed -n 's/.*"file_id" *: *"\([^"]*\)".*/\1/p')
+
+	# Step 2: upload file content
+	_alert_curl_post "$upload_url" -F "file=@$file_path" > /dev/null || {
+		echo "alert_lib: Slack file upload to presigned URL failed." >&2
+		return 1
+	}
+
+	# Step 3: complete upload and share to channels
+	local escaped_title complete_response
+	escaped_title=$(_alert_json_escape "$title")
+	complete_response=$(_alert_curl_post "https://slack.com/api/files.completeUploadExternal" \
+		-H "Authorization: Bearer $token" \
+		-H "Content-Type: application/json" \
+		-d "{\"files\":[{\"id\":\"$file_id\",\"title\":\"$escaped_title\"}],\"channels\":\"$channels\"}") || return 1
+	case "$complete_response" in
+		*'"ok":true'*) return 0 ;;
+	esac
+	local complete_err
+	complete_err=$(printf '%s' "$complete_response" | sed -n 's/.*"error" *: *"\([^"]*\)".*/\1/p')
+	echo "alert_lib: Slack completeUploadExternal error${complete_err:+: $complete_err}" >&2
+	return 1
+}
+
+# _alert_deliver_slack payload_file [attachment_file] — route Slack delivery
+# ALERT_SLACK_MODE: webhook (default) or bot.
+# webhook mode: uses ALERT_SLACK_WEBHOOK_URL
+# bot mode: uses ALERT_SLACK_TOKEN + ALERT_SLACK_CHANNEL
+# Returns 0 on success, 1 on failure.
+_alert_deliver_slack() {
+	local payload_file="$1" attachment="${2:-}"
+	local mode="${ALERT_SLACK_MODE:-webhook}"
+
+	case "$mode" in
+		webhook)
+			if [ -z "${ALERT_SLACK_WEBHOOK_URL:-}" ]; then
+				echo "alert_lib: ALERT_SLACK_WEBHOOK_URL not set." >&2
+				return 1
+			fi
+			if [ -n "$attachment" ]; then
+				echo "alert_lib: warning: Slack webhooks cannot upload files, attachment skipped." >&2
+			fi
+			_alert_slack_webhook "$payload_file" "$ALERT_SLACK_WEBHOOK_URL"
+			;;
+		bot)
+			if [ -z "${ALERT_SLACK_TOKEN:-}" ]; then
+				echo "alert_lib: ALERT_SLACK_TOKEN not set." >&2
+				return 1
+			fi
+			if [ -z "${ALERT_SLACK_CHANNEL:-}" ]; then
+				echo "alert_lib: ALERT_SLACK_CHANNEL not set." >&2
+				return 1
+			fi
+			_alert_slack_post_message "$payload_file" "$ALERT_SLACK_TOKEN" "$ALERT_SLACK_CHANNEL" || return 1
+			if [ -n "$attachment" ] && [ -f "$attachment" ]; then
+				_alert_slack_upload "$attachment" "${attachment##*/}" "$ALERT_SLACK_TOKEN" "$ALERT_SLACK_CHANNEL" || return 1
+			fi
+			return 0
+			;;
+		*)
+			echo "alert_lib: unknown ALERT_SLACK_MODE '$mode'." >&2
+			return 1
+			;;
+	esac
+}
+
+# ---------------------------------------------------------------------------
+# Slack Channel Handler
+# ---------------------------------------------------------------------------
+
+# _alert_handle_slack subject text_file html_file [attachment]
+# Standardized handler wrapper for the Slack channel. The rendered text_file
+# (from slack.text.tpl or slack.message.tpl) is the JSON payload for Slack.
+# Ignores subject and html_file (already baked into rendered template).
+_alert_handle_slack() {
+	local text_file="$2" attachment="${4:-}"
+	_alert_deliver_slack "$text_file" "$attachment"
+}
+
+# ---------------------------------------------------------------------------
+# Telegram Delivery
+# ---------------------------------------------------------------------------
+
+# _alert_telegram_api endpoint bot_token [curl_flags...] — shared Bot API helper
+# Uses curl -K (config file) to keep bot token out of the process listing.
+# Config file created with chmod 600, removed immediately after curl returns.
+# Stdout: API response body on success. Stderr: error detail on failure.
+# Returns 0 on success, 1 on failure.
+_alert_telegram_api() {
+	local endpoint="$1" bot_token="$2"
+	shift 2
+	local curl_bin
+	curl_bin=$(command -v curl 2>/dev/null || true)
+	if [ -z "$curl_bin" ]; then
+		echo "alert_lib: curl not found, cannot call Telegram API." >&2
+		return 1
+	fi
+	local cfg
+	cfg=$(mktemp "${ALERT_TMPDIR}/alert_tg_curl.XXXXXX")
+	chmod 600 "$cfg"
+	printf 'url = "https://api.telegram.org/bot%s/%s"\n' "$bot_token" "$endpoint" > "$cfg"
+	local rc=0 response
+	# 2>/dev/null on curl: -K config file interacts with stderr capture;
+	# API response JSON contains all diagnostic info needed
+	response=$("$curl_bin" -s --connect-timeout "$ALERT_CURL_TIMEOUT" \
+		--max-time "$ALERT_CURL_MAX_TIME" -K "$cfg" "$@" 2>/dev/null) || rc=$?
+	rm -f "$cfg"
+	if [ "$rc" -ne 0 ]; then
+		echo "alert_lib: Telegram API curl failed (exit $rc)." >&2
+		return 1
+	fi
+	# Check API response for success
+	case "$response" in
+		*'"ok":true'*)
+			printf '%s' "$response"
+			return 0
+			;;
+	esac
+	local api_err
+	api_err=$(printf '%s' "$response" | sed -n 's/.*"description" *: *"\([^"]*\)".*/\1/p')
+	echo "alert_lib: Telegram API error${api_err:+: $api_err}" >&2
+	return 1
+}
+
+# _alert_telegram_message text bot_token chat_id — send text via sendMessage
+# Uses MarkdownV2 parse mode. All parameters passed as form fields (-F).
+# Returns 0 on success, 1 on failure.
+_alert_telegram_message() {
+	local text="$1" bot_token="$2" chat_id="$3"
+	if [ -z "$bot_token" ]; then
+		echo "alert_lib: Telegram bot token is required." >&2
+		return 1
+	fi
+	if [ -z "$chat_id" ]; then
+		echo "alert_lib: Telegram chat_id is required." >&2
+		return 1
+	fi
+	if [ -z "$text" ]; then
+		echo "alert_lib: Telegram message text cannot be empty." >&2
+		return 1
+	fi
+	_alert_telegram_api "sendMessage" "$bot_token" \
+		-F "chat_id=$chat_id" \
+		-F "text=$text" \
+		-F "parse_mode=MarkdownV2" > /dev/null
+}
+
+# _alert_telegram_document file_path caption bot_token chat_id — send file via sendDocument
+# Extracted from LMD inline Telegram code. Caption conditionally included.
+# Returns 0 on success, 1 on failure.
+_alert_telegram_document() {
+	local file_path="$1" caption="$2" bot_token="$3" chat_id="$4"
+	if [ ! -f "$file_path" ]; then
+		echo "alert_lib: file not found: $file_path" >&2
+		return 1
+	fi
+	if [ -z "$bot_token" ]; then
+		echo "alert_lib: Telegram bot token is required." >&2
+		return 1
+	fi
+	if [ -z "$chat_id" ]; then
+		echo "alert_lib: Telegram chat_id is required." >&2
+		return 1
+	fi
+	if [ -n "$caption" ]; then
+		_alert_telegram_api "sendDocument" "$bot_token" \
+			-F "chat_id=$chat_id" \
+			-F "document=@$file_path" \
+			-F "caption=$caption" > /dev/null
+	else
+		_alert_telegram_api "sendDocument" "$bot_token" \
+			-F "chat_id=$chat_id" \
+			-F "document=@$file_path" > /dev/null
+	fi
+}
+
+# _alert_deliver_telegram payload_file [attachment_file] — route Telegram delivery
+# Reads payload_file content as message text. Sends message first, then optional
+# document attachment. Message failure stops before document attempt.
+# Nonexistent attachment file silently skipped (matches Slack pattern).
+# Returns 0 on success, 1 on failure.
+_alert_deliver_telegram() {
+	local payload_file="$1" attachment="${2:-}"
+	if [ -z "${ALERT_TELEGRAM_BOT_TOKEN:-}" ]; then
+		echo "alert_lib: ALERT_TELEGRAM_BOT_TOKEN not set." >&2
+		return 1
+	fi
+	if [ -z "${ALERT_TELEGRAM_CHAT_ID:-}" ]; then
+		echo "alert_lib: ALERT_TELEGRAM_CHAT_ID not set." >&2
+		return 1
+	fi
+	local text
+	text=$(cat "$payload_file")
+	_alert_telegram_message "$text" "$ALERT_TELEGRAM_BOT_TOKEN" "$ALERT_TELEGRAM_CHAT_ID" || return 1
+	if [ -n "$attachment" ] && [ -f "$attachment" ]; then
+		_alert_telegram_document "$attachment" "" "$ALERT_TELEGRAM_BOT_TOKEN" "$ALERT_TELEGRAM_CHAT_ID" || return 1
+	fi
+	return 0
+}
+
+# ---------------------------------------------------------------------------
+# Telegram Channel Handler
+# ---------------------------------------------------------------------------
+
+# _alert_handle_telegram subject text_file html_file [attachment]
+# Standardized handler wrapper for the Telegram channel. Passes text_file
+# as payload and attachment through to _alert_deliver_telegram.
+# Ignores subject and html_file (baked into rendered template).
+_alert_handle_telegram() {
+	local text_file="$2" attachment="${4:-}"
+	_alert_deliver_telegram "$text_file" "$attachment"
+}
+
+# ---------------------------------------------------------------------------
+# Discord Delivery
+# ---------------------------------------------------------------------------
+
+# _alert_discord_webhook payload_file webhook_url — POST JSON to Discord webhook
+# Discord returns HTTP 204 with empty body on success (no ?wait=true).
+# Returns 0 on success, 1 on failure.
+_alert_discord_webhook() {
+	local payload_file="$1" webhook_url="$2"
+	if [ -z "$webhook_url" ] || ! _alert_validate_url "$webhook_url"; then
+		echo "alert_lib: invalid or empty Discord webhook URL." >&2
+		return 1
+	fi
+	local response
+	response=$(_alert_curl_post "$webhook_url" \
+		-H "Content-Type: application/json" -d @"$payload_file") || return 1
+	# Discord webhooks return HTTP 204 (empty body) on success,
+	# or a message object with "id": when returning content
+	case "$response" in
+		""|*'"id":'*) return 0 ;;
+	esac
+	local api_err
+	api_err=$(printf '%s' "$response" | sed -n 's/.*"message" *: *"\([^"]*\)".*/\1/p')
+	echo "alert_lib: Discord webhook error${api_err:+: $api_err}" >&2
+	return 1
+}
+
+# _alert_discord_upload file_path payload_file webhook_url — multipart file upload
+# Single POST with payload_json + files[0] (unlike Slack's 3-step flow).
+# Returns 0 on success, 1 on failure.
+_alert_discord_upload() {
+	local file_path="$1" payload_file="$2" webhook_url="$3"
+	if [ ! -f "$file_path" ]; then
+		echo "alert_lib: file not found: $file_path" >&2
+		return 1
+	fi
+	if [ -z "$webhook_url" ] || ! _alert_validate_url "$webhook_url"; then
+		echo "alert_lib: invalid or empty Discord webhook URL." >&2
+		return 1
+	fi
+	local response
+	response=$(_alert_curl_post "$webhook_url" \
+		-F "payload_json=<$payload_file" -F "files[0]=@$file_path") || return 1
+	# Same success detection as webhook: empty body or message object
+	case "$response" in
+		""|*'"id":'*) return 0 ;;
+	esac
+	local api_err
+	api_err=$(printf '%s' "$response" | sed -n 's/.*"message" *: *"\([^"]*\)".*/\1/p')
+	echo "alert_lib: Discord upload error${api_err:+: $api_err}" >&2
+	return 1
+}
+
+# _alert_deliver_discord payload_file [attachment_file] — route Discord delivery
+# Uses ALERT_DISCORD_WEBHOOK_URL env var. If attachment exists, uses multipart
+# upload; otherwise plain JSON webhook POST.
+# Returns 0 on success, 1 on failure.
+_alert_deliver_discord() {
+	local payload_file="$1" attachment="${2:-}"
+	if [ -z "${ALERT_DISCORD_WEBHOOK_URL:-}" ]; then
+		echo "alert_lib: ALERT_DISCORD_WEBHOOK_URL not set." >&2
+		return 1
+	fi
+	if [ -n "$attachment" ] && [ -f "$attachment" ]; then
+		_alert_discord_upload "$attachment" "$payload_file" "$ALERT_DISCORD_WEBHOOK_URL"
+	else
+		_alert_discord_webhook "$payload_file" "$ALERT_DISCORD_WEBHOOK_URL"
+	fi
+}
+
+# ---------------------------------------------------------------------------
+# Discord Channel Handler
+# ---------------------------------------------------------------------------
+
+# _alert_handle_discord subject text_file html_file [attachment]
+# Standardized handler wrapper for the Discord channel. Passes text_file
+# as payload and attachment through to _alert_deliver_discord.
+# Ignores subject and html_file (baked into rendered template).
+_alert_handle_discord() {
+	local text_file="$2" attachment="${4:-}"
+	_alert_deliver_discord "$text_file" "$attachment"
+}
+
+# ---------------------------------------------------------------------------
+# Digest/Spool System
+# ---------------------------------------------------------------------------
+
+# _alert_spool_append data_file spool_file — append timestamped entries to digest spool
+# Prepends current epoch to each non-blank line of data_file and appends to
+# spool_file under exclusive flock (10s timeout).
+# No-op if data_file is empty or missing (not an error condition).
+# Returns 0 on success, 1 on failure.
+_alert_spool_append() {
+	local data_file="$1" spool_file="$2"
+	if [ ! -f "$data_file" ] || [ ! -s "$data_file" ]; then
+		return 0
+	fi
+	if [ -z "$spool_file" ]; then
+		echo "alert_lib: spool_file argument is required." >&2
+		return 1
+	fi
+	local flock_bin
+	flock_bin=$(command -v flock 2>/dev/null || true)
+	if [ -z "$flock_bin" ]; then
+		echo "alert_lib: flock not found, cannot append to spool." >&2
+		return 1
+	fi
+	local now lock_file
 	now=$(date +%s)
-	local lock_file="${spool}.lock"
+	lock_file="${spool_file}.lock"
 	(
-		flock -x -w 10 200 || { elog error "digest spool lock timeout, skipping append."; exit 1; }
+		"$flock_bin" -x -w 10 200 || {
+			echo "alert_lib: spool lock timeout, skipping append." >&2
+			exit 1
+		}
 		while IFS= read -r _line; do
 			[ -z "$_line" ] && continue
 			echo "${now}|${_line}"
-		done < "$alerts_file" >> "$spool"
+		done < "$data_file" >> "$spool_file"
 	) 200>"$lock_file"
 }
 
-# _alert_digest_check — flush spool if EMAIL_DIGEST_INTERVAL has expired
-# Returns immediately if EMAIL_DIGEST != "timed" or spool is empty/missing.
-# Reads first line's epoch for age check (optimistic, no lock needed).
+# _alert_digest_check spool_file interval flush_callback — flush spool if age >= interval
+# Reads first line's epoch for age check (optimistic, no lock needed — worst
+# case is delayed flush). If age >= interval seconds, calls _alert_digest_flush.
+# No-op if spool is empty, missing, or has no valid epoch.
+# Returns 0 on success (including no-op), propagates flush exit code on flush.
 _alert_digest_check() {
-	if [ "${EMAIL_DIGEST:-cycle}" != "timed" ]; then
-		return 0
+	local spool_file="$1" interval="$2" flush_callback="$3"
+	if [ -z "$spool_file" ]; then
+		echo "alert_lib: spool_file argument is required." >&2
+		return 1
 	fi
-	local spool="${ALERT_SPOOL_FILE:-}"
-	if [ -z "$spool" ] || [ ! -f "$spool" ] || [ ! -s "$spool" ]; then
+	if [ -z "$interval" ]; then
+		echo "alert_lib: interval argument is required." >&2
+		return 1
+	fi
+	if [ -z "$flush_callback" ]; then
+		echo "alert_lib: flush_callback argument is required." >&2
+		return 1
+	fi
+	if [ ! -f "$spool_file" ] || [ ! -s "$spool_file" ]; then
 		return 0
 	fi
 	local first_epoch
-	IFS='|' read -r first_epoch _ < "$spool"
+	IFS='|' read -r first_epoch _ < "$spool_file"
 	if [ -z "$first_epoch" ]; then
 		return 0
 	fi
-	local now interval
+	local now
 	now=$(date +%s)
-	interval="${EMAIL_DIGEST_INTERVAL:-900}"
 	if [ $((now - first_epoch)) -ge "$interval" ]; then
-		_alert_digest_flush_now
+		_alert_digest_flush "$spool_file" "$flush_callback"
+		return $?
 	fi
+	return 0
 }
 
-# _alert_digest_flush_now — force-send accumulated digest alerts
-# Under exclusive flock: strips epoch prefix, copies to temp flush file,
-# truncates spool. Releases lock before calling send_alerts() to avoid
-# holding flock during SMTP delivery. No-op if EMAIL_ALERTS!=1 or spool empty.
-_alert_digest_flush_now() {
-	if [ "${EMAIL_ALERTS:-0}" != "1" ]; then
+# _alert_digest_flush spool_file flush_callback — force-flush accumulated entries
+# Under exclusive flock: strips epoch prefix (cut -d'|' -f2-), copies to temp
+# flush file, truncates spool (preserves inode). Releases lock before calling
+# flush_callback to avoid holding flock during delivery.
+# Callback receives one argument: path to temp file with flushed entries.
+# No-op if spool is empty or missing.
+# Returns callback's exit code (0 on success, non-zero on failure).
+_alert_digest_flush() {
+	local spool_file="$1" flush_callback="$2"
+	if [ -z "$spool_file" ]; then
+		echo "alert_lib: spool_file argument is required." >&2
+		return 1
+	fi
+	if [ -z "$flush_callback" ]; then
+		echo "alert_lib: flush_callback argument is required." >&2
+		return 1
+	fi
+	if [ ! -f "$spool_file" ] || [ ! -s "$spool_file" ]; then
 		return 0
 	fi
-	local spool="${ALERT_SPOOL_FILE:-}"
-	if [ -z "$spool" ] || [ ! -f "$spool" ] || [ ! -s "$spool" ]; then
-		return 0
+	local flock_bin
+	flock_bin=$(command -v flock 2>/dev/null || true)
+	if [ -z "$flock_bin" ]; then
+		echo "alert_lib: flock not found, cannot flush digest." >&2
+		return 1
 	fi
-	local lock_file="${spool}.lock"
-	local flush_file
-	flush_file=$(mktemp "${spool}.flush.XXXXXX")
-	local flush_count=0
+	local lock_file flush_file
+	lock_file="${spool_file}.lock"
+	flush_file=$(mktemp "${ALERT_TMPDIR}/alert_digest_flush.XXXXXX")
 	(
-		flock -x -w 10 200 || { elog error "digest flush lock timeout, skipping flush."; exit 1; }
-		# re-check spool non-empty under lock
-		if [ ! -s "$spool" ]; then
+		"$flock_bin" -x -w 10 200 || {
+			echo "alert_lib: digest flush lock timeout." >&2
+			exit 1
+		}
+		# Re-check spool non-empty under lock (another process may have flushed)
+		if [ ! -s "$spool_file" ]; then
 			exit 0
 		fi
-		# strip epoch prefix (field 0) — send_alerts expects 12-field format
-		cut -d'|' -f2- "$spool" > "$flush_file"
-		# truncate spool
-		: > "$spool"
+		# Strip epoch prefix — callback expects original data format
+		cut -d'|' -f2- "$spool_file" > "$flush_file"
+		# Truncate spool (preserves inode for inotifywait/tail -f consumers)
+		: > "$spool_file"
 	) 200>"$lock_file"
-	# send outside lock to avoid holding flock during delivery
+	# Call callback OUTSIDE lock to avoid holding flock during delivery
+	local rc=0
 	if [ -s "$flush_file" ]; then
-		flush_count=$(wc -l < "$flush_file")
-		eout "digest flush: sending $flush_count accumulated alert(s)." le
-		send_alerts "$flush_file" "${EMAIL_SUBJECT:-BFD Alert}" "${EMAIL_LOGLINES:-5}"
+		"$flush_callback" "$flush_file" || rc=$?
 	fi
 	rm -f "$flush_file"
+	return $rc
 }
+
+# ---------------------------------------------------------------------------
+# Multi-Channel Dispatch
+# ---------------------------------------------------------------------------
+
+# alert_dispatch template_dir subject [channels] [attachment_file]
+# Render per-channel templates and dispatch to all enabled channels.
+# channels: comma-separated channel names or "all" (default: "all").
+# For each enabled channel, resolves $channel.text.tpl (falling back to
+# $channel.message.tpl) and $channel.html.tpl from template_dir, renders
+# via _alert_tpl_render, then calls the channel handler with:
+#   handler_fn subject text_file html_file [attachment]
+# Channels with no matching templates are skipped with a warning.
+# Returns 0 if all dispatched channels succeed, 1 if any fail.
+# Continues dispatching after individual channel failures.
+alert_dispatch() {
+	local template_dir="$1" subject="$2" channels="${3:-all}" attachment="${4:-}"
+	local rc=0
+	local i name handler enabled
+	local text_file html_file
+
+	for i in "${!_ALERT_CHANNEL_NAMES[@]}"; do
+		name="${_ALERT_CHANNEL_NAMES[$i]}"
+		handler="${_ALERT_CHANNEL_HANDLERS[$i]}"
+		enabled="${_ALERT_CHANNEL_ENABLED[$i]}"
+
+		# Skip disabled channels
+		[ "$enabled" = "1" ] || continue
+
+		# Filter by channel name (unless "all")
+		if [ "$channels" != "all" ]; then
+			case ",$channels," in
+				*",$name,"*) ;;
+				*) continue ;;
+			esac
+		fi
+
+		# Resolve text template: try $channel.text.tpl, fall back to $channel.message.tpl
+		text_file=""
+		_alert_tpl_resolve "$template_dir" "${name}.text.tpl"
+		if [ -f "$_ALERT_TPL_RESOLVED" ]; then
+			text_file=$(mktemp "${ALERT_TMPDIR}/alert_${name}_text.XXXXXX")
+			_alert_tpl_render "$_ALERT_TPL_RESOLVED" > "$text_file"
+		else
+			_alert_tpl_resolve "$template_dir" "${name}.message.tpl"
+			if [ -f "$_ALERT_TPL_RESOLVED" ]; then
+				text_file=$(mktemp "${ALERT_TMPDIR}/alert_${name}_text.XXXXXX")
+				_alert_tpl_render "$_ALERT_TPL_RESOLVED" > "$text_file"
+			fi
+		fi
+
+		# Resolve html template (optional)
+		html_file=""
+		_alert_tpl_resolve "$template_dir" "${name}.html.tpl"
+		if [ -f "$_ALERT_TPL_RESOLVED" ]; then
+			html_file=$(mktemp "${ALERT_TMPDIR}/alert_${name}_html.XXXXXX")
+			_alert_tpl_render "$_ALERT_TPL_RESOLVED" > "$html_file"
+		fi
+
+		# Skip channels with no templates
+		if [ -z "$text_file" ] && [ -z "$html_file" ]; then
+			echo "alert_lib: no templates found for channel '$name', skipping." >&2
+			continue
+		fi
+
+		# Create empty placeholders for missing variants so handlers get valid paths
+		if [ -z "$text_file" ]; then
+			text_file=$(mktemp "${ALERT_TMPDIR}/alert_${name}_text.XXXXXX")
+		fi
+		if [ -z "$html_file" ]; then
+			html_file=$(mktemp "${ALERT_TMPDIR}/alert_${name}_html.XXXXXX")
+		fi
+
+		# Call handler
+		if ! "$handler" "$subject" "$text_file" "$html_file" "$attachment"; then
+			echo "alert_lib: channel '$name' delivery failed." >&2
+			rc=1
+		fi
+
+		# Clean up rendered temp files
+		rm -f "$text_file" "$html_file"
+	done
+
+	return $rc
+}
+
+# ---------------------------------------------------------------------------
+# Built-in Channel Registration
+# ---------------------------------------------------------------------------
+
+# Register built-in channels — consumers enable via alert_channel_enable "<name>"
+# All built-in channels start disabled. Consuming projects enable the ones they need.
+alert_channel_register "email" "_alert_handle_email"
+alert_channel_register "slack" "_alert_handle_slack"
+alert_channel_register "telegram" "_alert_handle_telegram"
+alert_channel_register "discord" "_alert_handle_discord"

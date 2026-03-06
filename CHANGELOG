@@ -1,4 +1,36 @@
 2.0.1:
+[Change] bfd.1 man page: Slack, Telegram, Discord configuration sections;
+      --test-alert expanded with all channel types; Alert Templates section
+      with messaging template reference
+[Change] README.md: sections 3.11-3.13 for Slack, Telegram, Discord setup
+      with config tables and quick-start examples; messaging template table
+      in section 3.10
+[Change] bfd.bash-completion: --test-alert completions expanded with slack,
+      telegram, discord; config variable completions updated with messaging
+      and SMTP variables
+[New] Multi-channel alerting: Slack (webhook and Bot API), Telegram (Bot API),
+      and Discord (webhook) alert delivery via shared alert_lib channel
+      registry; configurable per-channel in conf.bfd
+[New] conf.bfd: SLACK_ALERTS, SLACK_MODE, SLACK_WEBHOOK_URL, SLACK_TOKEN,
+      SLACK_CHANNEL, TELEGRAM_ALERTS, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
+      DISCORD_ALERTS, DISCORD_WEBHOOK_URL with conservative defaults (disabled)
+[New] Messaging templates: Block Kit JSON (Slack), MarkdownV2 (Telegram),
+      embed JSON (Discord) with per-entry ban details and summary footer
+[New] --test-alert slack|telegram|discord: send test alerts to verify
+      messaging channel configuration and delivery pipeline
+[Change] Health check (-c): validates messaging channel config — curl
+      presence, required credentials/URLs per channel and mode
+[Change] show_config (-C): messaging variables added to whitelist
+[Change] Digest flush respects messaging channels — spool flushes when any
+      alert channel is enabled, not just EMAIL_ALERTS
+[Change] Alert subsystem refactored: generic primitives (template engine, MIME
+      builder, email delivery, digest/spool) replaced with shared alert_lib
+      v1.0.0; BFD-specific functions (content helpers, rendering pipeline,
+      data preparation) extracted to bfd_alert.sh
+[Change] Digest wrappers (_bfd_spool_append, _bfd_digest_check, _bfd_digest_flush)
+      bridge BFD config variables to shared alert_lib's explicit-argument API
+[Change] Email delivery variables (SMTP_*) mapped to shared library env vars
+      (ALERT_SMTP_*) via _bfd_alert_init() at config initialization
 [Change] --attackpool retained as silent alias; all user-facing text
       (help, man page, README, bash completion) switched to --activity
 [Change] -e/--events descriptions updated from "pressure dashboard" to
