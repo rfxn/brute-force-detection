@@ -2,6 +2,9 @@
 
 -- Rule Coverage Expansion --
 
+[Change] README.md and bfd.1 man page: rule count updated from 42 to 47;
+      rule catalog table expanded with cockpit, postscreen, gitea, nextcloud,
+      interworx
 [New] cpanel rule: cPanel 76+ log format pattern; webmail ports 2095,2096
 [New] interworx rule: NodeWorx/SiteWorx login failure pattern; weight=5/trip=10
       (panel tier); port 2443; log-file-detected PREREQ

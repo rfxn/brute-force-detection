@@ -5,7 +5,7 @@
 
 **Log-based brute force attack detection and IP banning for Linux servers** — pressure-based
 scoring that lets humans make mistakes while stopping bots cold, automatic ban lifecycle,
-and IPv4/IPv6 support across 42 service rules.
+and IPv4/IPv6 support across 47 service rules.
 
 > (C) 1999-2026, R-fx Networks &lt;proj@rfxn.com&gt;<br>
 > (C) 2026, Ryan MacDonald &lt;ryan@rfxn.com&gt;<br>
@@ -91,14 +91,14 @@ bfd -u 192.0.2.1      # unban an IP
 
 ## 1. Introduction
 
-Brute Force Detection (BFD) is a modular shell script for parsing application logs and detecting authentication failures. It ships with 42 service rules covering SSH, mail, FTP, web, database, control panel, DNS, VPN, and VoIP services. Each rule declares fail2ban-compatible `<HOST>` regex patterns; the engine handles log reading, IP extraction, IPv6 normalization, and validation.
+Brute Force Detection (BFD) is a modular shell script for parsing application logs and detecting authentication failures. It ships with 47 service rules covering SSH, mail, FTP, web, database, control panel, DNS, VPN, and VoIP services. Each rule declares fail2ban-compatible `<HOST>` regex patterns; the engine handles log reading, IP extraction, IPv6 normalization, and validation.
 
 Unlike traditional count-based tools that ban at a fixed failure count — forcing operators to choose between catching attackers fast or tolerating legitimate mistakes — BFD uses **exponential-decay pressure scoring**. Each failure adds pressure weighted by service severity, and pressure decays over time via a configurable half-life. A user who mistypes a password a few times over several minutes generates pressure that naturally fades, staying well below the trip point. A bot hammering the same service generates pressure faster than it can decay and trips the threshold almost immediately. The result is fewer false positives on real users with faster response to actual attacks.
 
 BFD uses a log tracking system so logs are only parsed from the point at which they were last read. This greatly assists in performance as we are not constantly reading the same log data. The log tracking system is compatible with syslog/logrotate style log rotations — it detects when rotations have occurred and grabs log tails from both the new log file and the rotated log file.
 
 **Detection**
-- 42 service rules with fail2ban-compatible `<HOST>` regex patterns
+- 47 service rules with fail2ban-compatible `<HOST>` regex patterns
 - Exponential-decay pressure scoring — human typos fade away, bot attacks trip instantly
 - Per-service severity weights (SSH=3, control panels=5, noisy services=1)
 - Per-rule and global cross-service pressure trip points
@@ -786,15 +786,15 @@ Use `bfd -c` to see which rules are active on your system.
 
 ### 6.1 Rule Catalog
 
-BFD ships with 42 rules:
+BFD ships with 47 rules:
 
 | Category | Rules |
 |----------|-------|
 | **SSH** | sshd, dropbear |
-| **Mail** | dovecot, courier, postfix, sendmail, exim_authfail, exim_nxuser, vpopmail, cyrus-imap |
+| **Mail** | dovecot, courier, postfix, postscreen, sendmail, exim_authfail, exim_nxuser, vpopmail, cyrus-imap |
 | **FTP** | vsftpd, vsftpd2, proftpd, pure-ftpd |
-| **Web** | apache-auth, nginx-http-auth, modsec, wordpress, roundcube, http_401, lighttpd, phpmyadmin |
-| **Panel** | cpanel, plesk, webmin, directadmin, gitlab, grafana, proxmox |
+| **Web** | apache-auth, nginx-http-auth, modsec, wordpress, roundcube, http_401, lighttpd, phpmyadmin, gitea, nextcloud |
+| **Panel** | cpanel, plesk, webmin, directadmin, interworx, cockpit, gitlab, grafana, proxmox |
 | **Auth** | pam_generic, xrdp |
 | **Database** | mysqld-auth, postgresql, mongodb |
 | **DNS** | named |
