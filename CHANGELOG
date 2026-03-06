@@ -1,4 +1,7 @@
 2.0.1:
+[New] LOG_IDLE_SUPPRESS config variable (default: 1) suppresses idle zero-event
+      run-complete messages from syslog; BFD log file always records every cycle
+[New] eout() "l" flag for log-file-only output (no syslog)
 [Fix] internals.conf: augment PATH with /sbin:/usr/sbin:/usr/local/bin:/usr/local/sbin
       to ensure firewall and utility binaries are discoverable under cron's minimal
       PATH; matches APF's internals.conf pattern

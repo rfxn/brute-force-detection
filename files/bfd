@@ -539,7 +539,11 @@ check() {
 	run_elapsed=$((run_end - run_start))
 	local _run_label="run"
 	[ "${_SCAN_MODE:-}" = "1" ] && _run_label="scan"
-	eout "$_run_label complete: $active_count active rules, $rules_count with events, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" le
+	local _log_flag="le"
+	if [ "${LOG_IDLE_SUPPRESS:-0}" = "1" ] && [ "$events_count" = "0" ]; then
+		_log_flag="l"
+	fi
+	eout "$_run_label complete: $active_count active rules, $rules_count with events, $events_count events parsed, $bans_count bans executed (${run_elapsed}s)" "$_log_flag"
 }
 
 _apool_report() {

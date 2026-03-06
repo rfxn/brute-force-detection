@@ -341,6 +341,7 @@ Log paths are auto-detected based on the distribution. Override in `conf.bfd` if
 | `SCAN_MAX_LINES` | `50000` | Max lines per log during scan mode; 0 = unlimited |
 | `SCAN_TIMEOUT` | `120` | Journal timeout per rule during scan in seconds |
 | `OUTPUT_SYSLOG` | `1` | Log to syslog (0 = off, 1 = on) |
+| `LOG_IDLE_SUPPRESS` | `1` | Suppress idle (0-event) run-complete messages from syslog (0 = off, 1 = on) |
 | `LOG_FORMAT` | `classic` | Log format: `classic` (syslog-style) or `json` (JSONL) |
 | `LOG_LEVEL` | `1` | Min severity: 0=debug, 1=info, 2=warn, 3=error |
 

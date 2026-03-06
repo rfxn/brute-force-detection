@@ -1229,3 +1229,31 @@ EOF
 	# 2 events * weight 5 = 10.0 >= trip 8 → ban
 	assert_output --partial "1 bans executed"
 }
+
+@test "LOG_IDLE_SUPPRESS: 0-event cycle with suppress=1 skips syslog" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	_setup_check_env "$rules_dir"
+	LOG_IDLE_SUPPRESS="1"
+	OUTPUT_SYSLOG="1"
+	: > "$OUTPUT_SYSLOG_FILE"
+	: > "$BFD_LOG_PATH"
+	check > /dev/null
+	# log file should have the run-complete message
+	grep -q "run complete:" "$BFD_LOG_PATH"
+	# syslog should NOT have it
+	[ "$(grep -c "run complete:" "$OUTPUT_SYSLOG_FILE")" -eq 0 ]
+}
+
+@test "LOG_IDLE_SUPPRESS: 0-event cycle with suppress=0 writes syslog" {
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	_setup_check_env "$rules_dir"
+	LOG_IDLE_SUPPRESS="0"
+	OUTPUT_SYSLOG="1"
+	: > "$OUTPUT_SYSLOG_FILE"
+	: > "$BFD_LOG_PATH"
+	check > /dev/null
+	grep -q "run complete:" "$BFD_LOG_PATH"
+	grep -q "run complete:" "$OUTPUT_SYSLOG_FILE"
+}

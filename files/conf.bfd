@@ -242,6 +242,11 @@ SCAN_TIMEOUT="120"
 # echo BFD log messages to syslog [0 = off, 1 = on]
 OUTPUT_SYSLOG="1"
 
+# suppress idle (0-event) run-complete messages from syslog [0 = off, 1 = on]
+# when enabled, zero-event cycles are still recorded in BFD_LOG_PATH
+# but do not echo to syslog; cycles with events always log to both
+LOG_IDLE_SUPPRESS="1"
+
 # log output format [classic = syslog-style, json = one JSON object per line]
 LOG_FORMAT="classic"
 

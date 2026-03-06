@@ -573,6 +573,15 @@ Override with
 .B OUTPUT_SYSLOG
 Echo BFD log messages to syslog: 0 or 1 (default: 1).
 .TP
+.B LOG_IDLE_SUPPRESS
+Suppress idle (zero\-event) run\-complete messages from syslog: 0 or 1
+(default: 1).
+When enabled, zero\-event cycles are still recorded in
+.B BFD_LOG_PATH
+but do not echo to syslog.
+Cycles with events always log to both regardless of this setting.
+Reduces syslog noise by ~8,640 lines/day in watch mode.
+.TP
 .B LOG_FORMAT
 Log output format (default: classic).
 .B classic
