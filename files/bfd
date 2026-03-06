@@ -722,9 +722,9 @@ apool_list() {
 		echo
 		_apool_report "$APOOL_LIST" "Top 25 threat IPs (24h)" "" "$cutoff_24h"
 		echo
-		_apool_service_summary "$APOOL_LIST" "$cutoff_24h"
-		echo
 		_apool_report "$APOOL_LIST" "Top 25 threat IPs (7d)" "" "$cutoff_7d"
+		echo
+		_apool_service_summary "$APOOL_LIST" "$cutoff_24h"
 	fi
 }
 
@@ -880,10 +880,10 @@ apool_list_json() {
 		_apool_summary_json "$APOOL_LIST" "$cutoff_24h" "$cutoff_7d"
 		printf ', "last_24h": '
 		_apool_report_json "$APOOL_LIST" "" "$cutoff_24h"
-		printf ', "services": '
-		_apool_service_summary_json "$APOOL_LIST" "$cutoff_24h"
 		printf ', "last_7d": '
 		_apool_report_json "$APOOL_LIST" "" "$cutoff_7d"
+		printf ', "services": '
+		_apool_service_summary_json "$APOOL_LIST" "$cutoff_24h"
 		echo "}"
 	else
 		echo "{}"
@@ -907,11 +907,11 @@ apool_list_csv() {
 		echo "# last_24h"
 		_apool_report_csv "$APOOL_LIST" "" "$cutoff_24h"
 		echo ""
-		echo "# services"
-		_apool_service_summary_csv "$APOOL_LIST" "$cutoff_24h"
-		echo ""
 		echo "# last_7d"
 		_apool_report_csv "$APOOL_LIST" "" "$cutoff_7d"
+		echo ""
+		echo "# services"
+		_apool_service_summary_csv "$APOOL_LIST" "$cutoff_24h"
 	fi
 }
 

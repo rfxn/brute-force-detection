@@ -2,6 +2,9 @@
 
 -- Threat Activity --
 
+[Change] Threat activity report section order: summary, 24h IPs, 7d IPs,
+      per-service breakdown (was: 24h, services, 7d); consistent across text,
+      JSON, and CSV output formats
 [New] Threat activity summary header: aggregate unique IPs (24h/7d), total
       count (24h/7d), and active bans shown at top of -a/--activity report;
       included in JSON (summary key) and CSV (# summary section)

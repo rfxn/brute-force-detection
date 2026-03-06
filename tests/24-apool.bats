@@ -202,7 +202,7 @@ teardown() {
 	assert_success
 }
 
-@test "apool_list: pool with entries shows 24h and 7d reports" {
+@test "apool_list: pool with entries shows summary, 24h, 7d, then services" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
 	local now
 	now=$(date +"%s")
@@ -210,9 +210,19 @@ teardown() {
 	echo "$((now - 1)) 192.0.2.2 dovecot" >> "$APOOL_LIST"
 	run apool_list
 	assert_success
+	assert_output --partial "Threat Activity Summary"
 	assert_output --partial "Top 25 threat IPs (24h)"
-	assert_output --partial "Per-service threat breakdown"
 	assert_output --partial "Top 25 threat IPs (7d)"
+	assert_output --partial "Per-service threat breakdown"
+	# verify ordering: summary < 24h < 7d < services
+	local ln_sum ln_24h ln_7d ln_svc
+	ln_sum=$(echo "$output" | grep -n "Threat Activity Summary" | head -1 | cut -d: -f1)
+	ln_24h=$(echo "$output" | grep -n "Top 25 threat IPs (24h)" | head -1 | cut -d: -f1)
+	ln_7d=$(echo "$output" | grep -n "Top 25 threat IPs (7d)" | head -1 | cut -d: -f1)
+	ln_svc=$(echo "$output" | grep -n "Per-service threat breakdown" | head -1 | cut -d: -f1)
+	[ "$ln_sum" -lt "$ln_24h" ]
+	[ "$ln_24h" -lt "$ln_7d" ]
+	[ "$ln_7d" -lt "$ln_svc" ]
 }
 
 @test "apool_list: search filter shows filtered results" {
