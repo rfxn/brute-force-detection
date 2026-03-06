@@ -87,6 +87,24 @@
       syslog entries; systemd SyslogIdentifier captures stdout, creating a
       second entry alongside the direct syslog write from elog
 
+-- Multi-Channel Alerting --
+
+[New] Multi-channel alerting: Slack (webhook and Bot API), Telegram (Bot API),
+      and Discord (webhook) alert delivery via shared alert_lib channel
+      registry; configurable per-channel in conf.bfd
+[New] conf.bfd: SLACK_ALERTS, SLACK_MODE, SLACK_WEBHOOK_URL, SLACK_TOKEN,
+      SLACK_CHANNEL, TELEGRAM_ALERTS, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
+      DISCORD_ALERTS, DISCORD_WEBHOOK_URL with conservative defaults (disabled)
+[New] Messaging templates: Block Kit JSON (Slack), MarkdownV2 (Telegram),
+      embed JSON (Discord) with per-entry ban details and summary footer
+[New] --test-alert slack|telegram|discord: send test alerts to verify
+      messaging channel configuration and delivery pipeline
+[Change] Health check (-c): validates messaging channel config — curl
+      presence, required credentials/URLs per channel and mode
+[Change] show_config (-C): messaging variables added to whitelist
+[Change] Digest flush respects messaging channels — spool flushes when any
+      alert channel is enabled, not just EMAIL_ALERTS
+
 -- Shared Alert Library Integration --
 
 [Change] Alert subsystem refactored: generic primitives (template engine, MIME

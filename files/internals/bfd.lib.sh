@@ -2377,43 +2377,43 @@ _hc_alerts() {
 	if [ "$EMAIL_ALERTS" != "1" ]; then
 		echo "[PASS] Email alerts: disabled"
 		_hc_pass=$((_hc_pass + 1))
-		return
-	fi
-	# mail command (local MTA)
-	if command -v mail >/dev/null 2>&1; then
-		echo "[PASS] Email alerts: enabled (mail command found)"
-		_hc_pass=$((_hc_pass + 1))
 	else
-		echo "[WARN] Email alerts: enabled but 'mail' command not found"
-		_hc_warn=$((_hc_warn + 1))
-	fi
-	# sendmail required for html/both formats
-	local _ef="${EMAIL_FORMAT:-text}"
-	if [ "$_ef" = "html" ] || [ "$_ef" = "both" ]; then
-		if command -v sendmail >/dev/null 2>&1; then
-			echo "[PASS] sendmail: found (required for EMAIL_FORMAT=$_ef)"
+		# mail command (local MTA)
+		if command -v mail >/dev/null 2>&1; then
+			echo "[PASS] Email alerts: enabled (mail command found)"
 			_hc_pass=$((_hc_pass + 1))
 		else
-			echo "[WARN] sendmail: not found (EMAIL_FORMAT=$_ef will fall back to text)"
+			echo "[WARN] Email alerts: enabled but 'mail' command not found"
 			_hc_warn=$((_hc_warn + 1))
 		fi
-	fi
-	# SMTP relay checks
-	if [ -n "${SMTP_RELAY:-}" ]; then
-		if command -v curl >/dev/null 2>&1; then
-			echo "[PASS] curl: found (required for SMTP relay)"
-			_hc_pass=$((_hc_pass + 1))
-		else
-			echo "[WARN] curl: not found (SMTP relay delivery will fail)"
-			_hc_warn=$((_hc_warn + 1))
+		# sendmail required for html/both formats
+		local _ef="${EMAIL_FORMAT:-text}"
+		if [ "$_ef" = "html" ] || [ "$_ef" = "both" ]; then
+			if command -v sendmail >/dev/null 2>&1; then
+				echo "[PASS] sendmail: found (required for EMAIL_FORMAT=$_ef)"
+				_hc_pass=$((_hc_pass + 1))
+			else
+				echo "[WARN] sendmail: not found (EMAIL_FORMAT=$_ef will fall back to text)"
+				_hc_warn=$((_hc_warn + 1))
+			fi
 		fi
-		if [ -z "${SMTP_FROM:-}" ]; then
-			echo "[WARN] SMTP_FROM: not set (required for SMTP relay)"
-			_hc_warn=$((_hc_warn + 1))
-		fi
-		if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
-			echo "[WARN] SMTP credentials: SMTP_USER/SMTP_PASS not set"
-			_hc_warn=$((_hc_warn + 1))
+		# SMTP relay checks
+		if [ -n "${SMTP_RELAY:-}" ]; then
+			if command -v curl >/dev/null 2>&1; then
+				echo "[PASS] curl: found (required for SMTP relay)"
+				_hc_pass=$((_hc_pass + 1))
+			else
+				echo "[WARN] curl: not found (SMTP relay delivery will fail)"
+				_hc_warn=$((_hc_warn + 1))
+			fi
+			if [ -z "${SMTP_FROM:-}" ]; then
+				echo "[WARN] SMTP_FROM: not set (required for SMTP relay)"
+				_hc_warn=$((_hc_warn + 1))
+			fi
+			if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASS:-}" ]; then
+				echo "[WARN] SMTP credentials: SMTP_USER/SMTP_PASS not set"
+				_hc_warn=$((_hc_warn + 1))
+			fi
 		fi
 	fi
 	# Alert template directory
@@ -2456,6 +2456,88 @@ _hc_alerts() {
 		else
 			echo "[WARN] Alert templates: $_atd (not found)"
 			_hc_warn=$((_hc_warn + 1))
+		fi
+	fi
+
+	# --- Slack health checks ---
+	if [ "${SLACK_ALERTS:-0}" = "1" ]; then
+		if command -v curl >/dev/null 2>&1; then
+			echo "[PASS] Slack alerts: enabled (curl found)"
+			_hc_pass=$((_hc_pass + 1))
+		else
+			echo "[FAIL] Slack alerts: enabled but curl not found"
+			_hc_fail=$((_hc_fail + 1))
+		fi
+		local _sm="${SLACK_MODE:-webhook}"
+		if [ "$_sm" = "webhook" ]; then
+			if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+				echo "[PASS] Slack webhook URL: configured"
+				_hc_pass=$((_hc_pass + 1))
+			else
+				echo "[FAIL] Slack webhook URL: SLACK_WEBHOOK_URL not set"
+				_hc_fail=$((_hc_fail + 1))
+			fi
+		elif [ "$_sm" = "bot" ]; then
+			if [ -n "${SLACK_TOKEN:-}" ]; then
+				echo "[PASS] Slack token: configured"
+				_hc_pass=$((_hc_pass + 1))
+			else
+				echo "[FAIL] Slack token: SLACK_TOKEN not set"
+				_hc_fail=$((_hc_fail + 1))
+			fi
+			if [ -n "${SLACK_CHANNEL:-}" ]; then
+				echo "[PASS] Slack channel: configured"
+				_hc_pass=$((_hc_pass + 1))
+			else
+				echo "[FAIL] Slack channel: SLACK_CHANNEL not set"
+				_hc_fail=$((_hc_fail + 1))
+			fi
+		else
+			echo "[WARN] Slack mode: unknown value '$_sm' (expected: webhook, bot)"
+			_hc_warn=$((_hc_warn + 1))
+		fi
+	fi
+
+	# --- Telegram health checks ---
+	if [ "${TELEGRAM_ALERTS:-0}" = "1" ]; then
+		if command -v curl >/dev/null 2>&1; then
+			echo "[PASS] Telegram alerts: enabled (curl found)"
+			_hc_pass=$((_hc_pass + 1))
+		else
+			echo "[FAIL] Telegram alerts: enabled but curl not found"
+			_hc_fail=$((_hc_fail + 1))
+		fi
+		if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+			echo "[PASS] Telegram bot token: configured"
+			_hc_pass=$((_hc_pass + 1))
+		else
+			echo "[FAIL] Telegram bot token: TELEGRAM_BOT_TOKEN not set"
+			_hc_fail=$((_hc_fail + 1))
+		fi
+		if [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
+			echo "[PASS] Telegram chat ID: configured"
+			_hc_pass=$((_hc_pass + 1))
+		else
+			echo "[FAIL] Telegram chat ID: TELEGRAM_CHAT_ID not set"
+			_hc_fail=$((_hc_fail + 1))
+		fi
+	fi
+
+	# --- Discord health checks ---
+	if [ "${DISCORD_ALERTS:-0}" = "1" ]; then
+		if command -v curl >/dev/null 2>&1; then
+			echo "[PASS] Discord alerts: enabled (curl found)"
+			_hc_pass=$((_hc_pass + 1))
+		else
+			echo "[FAIL] Discord alerts: enabled but curl not found"
+			_hc_fail=$((_hc_fail + 1))
+		fi
+		if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
+			echo "[PASS] Discord webhook URL: configured"
+			_hc_pass=$((_hc_pass + 1))
+		else
+			echo "[FAIL] Discord webhook URL: DISCORD_WEBHOOK_URL not set"
+			_hc_fail=$((_hc_fail + 1))
 		fi
 	fi
 }
@@ -2611,6 +2693,9 @@ send_alerts() {
 
 		rm -f "$recip_file" "$text_file" "$html_file"
 	done <<< "$recipients"
+
+	# --- Messaging delivery (per-batch, not per-recipient) ---
+	_bfd_dispatch_messaging "$alerts_file" "$subject" "$loglines" "$tpl_dir"
 }
 
 # --- Phase 18: CLI Evolution functions ---
@@ -2892,7 +2977,7 @@ show_service_status() {
 # show_config [var] — dump active config or single variable value
 show_config() {
 	local var="${1:-}"
-	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES EMAIL_FORMAT EMAIL_DIGEST EMAIL_DIGEST_INTERVAL EMAIL_REPUTATION_LINKS SMTP_RELAY SMTP_FROM ALERT_TEMPLATE_DIR LOG_FORMAT LOG_LEVEL LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT APOOL_RETENTION_DAYS APOOL_MAX_LINES PRESSURE_CONF"
+	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES EMAIL_FORMAT EMAIL_DIGEST EMAIL_DIGEST_INTERVAL EMAIL_REPUTATION_LINKS SMTP_RELAY SMTP_FROM SLACK_ALERTS SLACK_MODE SLACK_WEBHOOK_URL SLACK_TOKEN SLACK_CHANNEL TELEGRAM_ALERTS TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID DISCORD_ALERTS DISCORD_WEBHOOK_URL ALERT_TEMPLATE_DIR LOG_FORMAT LOG_LEVEL LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT APOOL_RETENTION_DAYS APOOL_MAX_LINES PRESSURE_CONF"
 	if [ -n "$var" ]; then
 		# validate against whitelist
 		local _found=0 _v
@@ -3396,11 +3481,14 @@ test_alert() {
 
 	case "$alert_type" in
 		email) test_alert_email "$install_path" ;;
+		slack) test_alert_messaging "$install_path" "slack" "SLACK_ALERTS" ;;
+		telegram) test_alert_messaging "$install_path" "telegram" "TELEGRAM_ALERTS" ;;
+		discord) test_alert_messaging "$install_path" "discord" "DISCORD_ALERTS" ;;
 		"")
-			echo "error: --test-alert requires a type (e.g., email)." >&2
+			echo "error: --test-alert requires a type (e.g., email, slack, telegram, discord)." >&2
 			echo >&2; usage >&2; return 1 ;;
 		*)
-			echo "error: unknown alert type '$alert_type' (available: email)." >&2
+			echo "error: unknown alert type '$alert_type' (available: email, slack, telegram, discord)." >&2
 			return 1 ;;
 	esac
 }
@@ -3481,6 +3569,67 @@ test_alert_email() {
 		return 0
 	else
 		echo "Test alert failed — check EMAIL_* and SMTP_* configuration (bfd -c)." >&2
+		rm -f "$alerts_file"
+		return 1
+	fi
+}
+
+# test_alert_messaging install_path channel enable_var — send a test alert to a messaging channel
+# Builds a synthetic alert entry, temporarily enables the target channel,
+# and dispatches via _bfd_dispatch_messaging. Other channels are temporarily disabled.
+test_alert_messaging() {
+	local install_path="$1" channel="$2" enable_var="$3"
+
+	# validate channel is configured
+	local _enabled="${!enable_var}"
+	if [ "${_enabled:-0}" != "1" ]; then
+		echo "error: ${enable_var} is not enabled (set ${enable_var}=\"1\" in conf.bfd)." >&2
+		return 1
+	fi
+
+	if ! command -v curl >/dev/null 2>&1; then
+		echo "error: curl is required for $channel alerts." >&2
+		return 1
+	fi
+
+	echo "Sending test $channel alert..."
+
+	# build synthetic alert entry (same as test_alert_email)
+	local test_ip="192.0.2.1"
+	local test_service="sshd"
+	local test_ports="22"
+	local test_pressure=21400
+	local test_trip=20000
+	local test_weight=3
+	local test_half_life="${PRESSURE_HALF_LIFE:-300}"
+	local test_recent=0
+	local test_log="${AUTH_LOG_PATH:-/var/log/secure}"
+	local test_recip="${EMAIL_ADDRESS:-root}"
+	local test_expiry test_action
+	if [ "${BAN_TTL:-600}" = "0" ]; then
+		test_expiry=0
+		test_action="permanent"
+	else
+		test_expiry=$(( $(date +%s) + ${BAN_TTL:-600} ))
+		test_action="temporary"
+	fi
+
+	local alerts_file
+	alerts_file=$(mktemp "$install_path/tmp/.test_alert.XXXXXX")
+	echo "${test_ip}|${test_service}|${test_ports}|${test_pressure}|${test_expiry}|${test_action}|${test_recent}|${test_log}|${test_recip}|${test_trip}|${test_half_life}|${test_weight}" > "$alerts_file"
+
+	local subject
+	subject="[TEST] BFD Alert ($(hostname))"
+	local tpl_dir="${ALERT_TEMPLATE_DIR:-$INSTALL_PATH/alert}"
+
+	if _bfd_dispatch_messaging "$alerts_file" "$subject" "${EMAIL_LOGLINES:-5}" "$tpl_dir"; then
+		echo "Test $channel alert sent successfully."
+		rm -f "$alerts_file"
+		return 0
+	else
+		local _uc
+		_uc=$(echo "$channel" | tr '[:lower:]' '[:upper:]')
+		echo "Test $channel alert failed — check ${_uc}_* configuration (bfd -c)." >&2
 		rm -f "$alerts_file"
 		return 1
 	fi

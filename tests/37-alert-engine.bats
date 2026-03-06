@@ -1989,3 +1989,325 @@ MOCK
 	[ ! -s "$ALERT_SPOOL_FILE" ]
 	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
 }
+
+# ===================================================================
+# _bfd_alert_init — channel registration & env mapping
+# ===================================================================
+
+@test "_bfd_alert_init: maps SLACK env vars" {
+	SLACK_MODE="bot"
+	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
+	SLACK_TOKEN="xoxb-test"
+	SLACK_CHANNEL="#alerts"
+	SLACK_ALERTS="1"
+	_bfd_alert_init
+	[ "$ALERT_SLACK_MODE" = "bot" ]
+	[ "$ALERT_SLACK_WEBHOOK_URL" = "https://hooks.slack.com/services/T/B/X" ]
+	[ "$ALERT_SLACK_TOKEN" = "xoxb-test" ]
+	[ "$ALERT_SLACK_CHANNEL" = "#alerts" ]
+	alert_channel_enabled "slack"
+	unset SLACK_MODE SLACK_WEBHOOK_URL SLACK_TOKEN SLACK_CHANNEL SLACK_ALERTS
+	unset ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
+}
+
+@test "_bfd_alert_init: maps TELEGRAM env vars" {
+	TELEGRAM_BOT_TOKEN="123456:ABC"
+	TELEGRAM_CHAT_ID="-100123"
+	TELEGRAM_ALERTS="1"
+	_bfd_alert_init
+	[ "$ALERT_TELEGRAM_BOT_TOKEN" = "123456:ABC" ]
+	[ "$ALERT_TELEGRAM_CHAT_ID" = "-100123" ]
+	alert_channel_enabled "telegram"
+	unset TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID TELEGRAM_ALERTS
+	unset ALERT_TELEGRAM_BOT_TOKEN ALERT_TELEGRAM_CHAT_ID
+}
+
+@test "_bfd_alert_init: maps DISCORD env vars" {
+	DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/123/abc"
+	DISCORD_ALERTS="1"
+	_bfd_alert_init
+	[ "$ALERT_DISCORD_WEBHOOK_URL" = "https://discord.com/api/webhooks/123/abc" ]
+	alert_channel_enabled "discord"
+	unset DISCORD_WEBHOOK_URL DISCORD_ALERTS
+	unset ALERT_DISCORD_WEBHOOK_URL
+}
+
+@test "_bfd_alert_init: disabled channels stay disabled" {
+	SLACK_ALERTS="0"
+	TELEGRAM_ALERTS="0"
+	DISCORD_ALERTS="0"
+	_bfd_alert_init
+	! alert_channel_enabled "slack"
+	! alert_channel_enabled "telegram"
+	! alert_channel_enabled "discord"
+	unset SLACK_ALERTS TELEGRAM_ALERTS DISCORD_ALERTS
+}
+
+@test "_bfd_alert_init: re-disables channels on reload" {
+	SLACK_ALERTS="1"
+	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
+	_bfd_alert_init
+	alert_channel_enabled "slack"
+	# simulate reload: user disables slack
+	SLACK_ALERTS="0"
+	_bfd_alert_init
+	! alert_channel_enabled "slack"
+	unset SLACK_ALERTS SLACK_WEBHOOK_URL ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
+}
+
+# ===================================================================
+# _bfd_dispatch_messaging — messaging dispatch
+# ===================================================================
+
+@test "_bfd_dispatch_messaging: no-op when no channels enabled" {
+	SLACK_ALERTS="0"
+	TELEGRAM_ALERTS="0"
+	DISCORD_ALERTS="0"
+	_bfd_alert_init
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$af"
+	local tpl_dir="$PROJECT_ROOT/files/alert"
+	run _bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
+	assert_success
+	unset SLACK_ALERTS TELEGRAM_ALERTS DISCORD_ALERTS
+}
+
+@test "_bfd_dispatch_messaging: no-op with empty alerts file" {
+	SLACK_ALERTS="1"
+	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
+	_bfd_alert_init
+	local af="$TEST_TMPDIR/alerts_empty"
+	: > "$af"
+	local tpl_dir="$PROJECT_ROOT/files/alert"
+	run _bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
+	assert_success
+	unset SLACK_ALERTS SLACK_WEBHOOK_URL ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
+}
+
+@test "_bfd_dispatch_messaging: renders slack entry template" {
+	# Mock curl to capture payload (Slack webhook returns literal "ok")
+	local curl_log="$TEST_TMPDIR/curl_calls"
+	curl() { echo "CURL_CALL: $*" >> "$curl_log"; echo 'ok'; return 0; }
+	export -f curl
+	SLACK_ALERTS="1"
+	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
+	_bfd_alert_init
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$af"
+	local tpl_dir="$PROJECT_ROOT/files/alert"
+	_bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
+	[ -f "$curl_log" ]
+	# curl was called with the webhook URL
+	run grep "CURL_CALL:" "$curl_log"
+	assert_output --partial "hooks.slack.com"
+	unset SLACK_ALERTS SLACK_WEBHOOK_URL ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
+	unset -f curl
+}
+
+@test "_bfd_dispatch_messaging: renders discord entry template" {
+	local curl_log="$TEST_TMPDIR/curl_calls"
+	curl() { echo "CURL_CALL: $*" >> "$curl_log"; return 0; }
+	export -f curl
+	DISCORD_ALERTS="1"
+	DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/123/abc"
+	_bfd_alert_init
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$af"
+	local tpl_dir="$PROJECT_ROOT/files/alert"
+	_bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
+	[ -f "$curl_log" ]
+	run grep "CURL_CALL:" "$curl_log"
+	assert_output --partial "discord.com"
+	unset DISCORD_ALERTS DISCORD_WEBHOOK_URL ALERT_DISCORD_WEBHOOK_URL
+	unset -f curl
+}
+
+@test "_bfd_dispatch_messaging: cleans up ENTRY_BLOCKS after dispatch" {
+	curl() { echo 'ok'; return 0; }
+	export -f curl
+	SLACK_ALERTS="1"
+	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
+	_bfd_alert_init
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$af"
+	local tpl_dir="$PROJECT_ROOT/files/alert"
+	_bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
+	# ENTRY_BLOCKS should be unset after dispatch (cleanup)
+	[ -z "${ENTRY_BLOCKS:-}" ]
+	unset SLACK_ALERTS SLACK_WEBHOOK_URL ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
+	unset -f curl
+}
+
+# ===================================================================
+# _bfd_digest_flush — messaging channel awareness
+# ===================================================================
+
+@test "_bfd_digest_flush: flushes when only messaging enabled (no email)" {
+	EMAIL_ALERTS="0"
+	SLACK_ALERTS="1"
+	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
+	TELEGRAM_ALERTS="0"
+	DISCORD_ALERTS="0"
+	_bfd_alert_init
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	EMAIL_SUBJECT="BFD Alert"
+	EMAIL_LOGLINES="5"
+	# mock curl for Slack webhook delivery
+	curl() { echo 'ok'; return 0; }
+	export -f curl
+	# mock mail (send_alerts callback may invoke it)
+	mail() { return 0; }
+	export -f mail
+	# pre-populate spool
+	local now
+	now=$(date +%s)
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	_bfd_digest_flush
+	# spool should be empty (flushed)
+	[ ! -s "$ALERT_SPOOL_FILE" ]
+	unset EMAIL_ALERTS SLACK_ALERTS SLACK_WEBHOOK_URL TELEGRAM_ALERTS DISCORD_ALERTS
+	unset ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
+	unset -f curl mail
+}
+
+@test "_bfd_digest_flush: does not flush when all channels disabled" {
+	EMAIL_ALERTS="0"
+	SLACK_ALERTS="0"
+	TELEGRAM_ALERTS="0"
+	DISCORD_ALERTS="0"
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	echo "1234567890|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	_bfd_digest_flush
+	# spool should NOT be empty (preserved for when re-enabled)
+	[ -s "$ALERT_SPOOL_FILE" ]
+	unset EMAIL_ALERTS SLACK_ALERTS TELEGRAM_ALERTS DISCORD_ALERTS
+}
+
+# ===================================================================
+# _hc_alerts — messaging health checks
+# ===================================================================
+
+@test "_hc_alerts: slack enabled with webhook shows PASS" {
+	EMAIL_ALERTS="0"
+	SLACK_ALERTS="1"
+	SLACK_MODE="webhook"
+	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
+	run _hc_alerts
+	assert_output --partial "[PASS] Slack alerts: enabled"
+	assert_output --partial "[PASS] Slack webhook URL: configured"
+	unset SLACK_ALERTS SLACK_MODE SLACK_WEBHOOK_URL
+}
+
+@test "_hc_alerts: slack enabled without webhook shows FAIL" {
+	EMAIL_ALERTS="0"
+	SLACK_ALERTS="1"
+	SLACK_MODE="webhook"
+	SLACK_WEBHOOK_URL=""
+	run _hc_alerts
+	assert_output --partial "[FAIL] Slack webhook URL: SLACK_WEBHOOK_URL not set"
+	unset SLACK_ALERTS SLACK_MODE SLACK_WEBHOOK_URL
+}
+
+@test "_hc_alerts: slack bot mode missing token shows FAIL" {
+	EMAIL_ALERTS="0"
+	SLACK_ALERTS="1"
+	SLACK_MODE="bot"
+	SLACK_TOKEN=""
+	SLACK_CHANNEL="#test"
+	run _hc_alerts
+	assert_output --partial "[FAIL] Slack token: SLACK_TOKEN not set"
+	unset SLACK_ALERTS SLACK_MODE SLACK_TOKEN SLACK_CHANNEL
+}
+
+@test "_hc_alerts: telegram enabled with config shows PASS" {
+	export EMAIL_ALERTS="0"
+	TELEGRAM_ALERTS="1"
+	TELEGRAM_BOT_TOKEN="123456:ABC"
+	TELEGRAM_CHAT_ID="-100123"
+	run _hc_alerts
+	assert_output --partial "[PASS] Telegram alerts: enabled"
+	assert_output --partial "[PASS] Telegram bot token: configured"
+	assert_output --partial "[PASS] Telegram chat ID: configured"
+	unset TELEGRAM_ALERTS TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+}
+
+@test "_hc_alerts: telegram missing token shows FAIL" {
+	export EMAIL_ALERTS="0"
+	TELEGRAM_ALERTS="1"
+	TELEGRAM_BOT_TOKEN=""
+	TELEGRAM_CHAT_ID="-100123"
+	run _hc_alerts
+	assert_output --partial "[FAIL] Telegram bot token: TELEGRAM_BOT_TOKEN not set"
+	unset TELEGRAM_ALERTS TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+}
+
+@test "_hc_alerts: discord enabled with webhook shows PASS" {
+	export EMAIL_ALERTS="0"
+	DISCORD_ALERTS="1"
+	DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/123/abc"
+	run _hc_alerts
+	assert_output --partial "[PASS] Discord alerts: enabled"
+	assert_output --partial "[PASS] Discord webhook URL: configured"
+	unset DISCORD_ALERTS DISCORD_WEBHOOK_URL
+}
+
+@test "_hc_alerts: discord missing webhook shows FAIL" {
+	export EMAIL_ALERTS="0"
+	DISCORD_ALERTS="1"
+	DISCORD_WEBHOOK_URL=""
+	run _hc_alerts
+	assert_output --partial "[FAIL] Discord webhook URL: DISCORD_WEBHOOK_URL not set"
+	unset DISCORD_ALERTS DISCORD_WEBHOOK_URL
+}
+
+# ===================================================================
+# show_config — messaging variables in whitelist
+# ===================================================================
+
+@test "show_config: SLACK_ALERTS is in whitelist" {
+	SLACK_ALERTS="1"
+	run show_config "SLACK_ALERTS"
+	assert_success
+	assert_output "1"
+	unset SLACK_ALERTS
+}
+
+@test "show_config: TELEGRAM_ALERTS is in whitelist" {
+	TELEGRAM_ALERTS="0"
+	run show_config "TELEGRAM_ALERTS"
+	assert_success
+	assert_output "0"
+	unset TELEGRAM_ALERTS
+}
+
+@test "show_config: DISCORD_ALERTS is in whitelist" {
+	DISCORD_ALERTS="0"
+	run show_config "DISCORD_ALERTS"
+	assert_success
+	assert_output "0"
+	unset DISCORD_ALERTS
+}
+
+@test "show_config: SLACK_WEBHOOK_URL is in whitelist" {
+	SLACK_WEBHOOK_URL=""
+	run show_config "SLACK_WEBHOOK_URL"
+	assert_success
+	unset SLACK_WEBHOOK_URL
+}
+
+# ===================================================================
+# test_alert — messaging type dispatch
+# ===================================================================
+
+@test "test_alert: unknown type shows error with messaging types" {
+	run test_alert "$INSTALL_PATH" "fax"
+	assert_failure
+	assert_output --partial "email, slack, telegram, discord"
+}
+
+@test "test_alert: empty type lists messaging types in hint" {
+	run test_alert "$INSTALL_PATH" ""
+	assert_failure
+	assert_output --partial "email, slack, telegram, discord"
+}

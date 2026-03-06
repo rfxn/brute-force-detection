@@ -73,6 +73,53 @@ SMTP_USER=""
 SMTP_PASS=""
 
 # =============================================
+# Slack Alerts
+# =============================================
+
+# enable Slack alerts [0 = disabled, 1 = enabled]
+SLACK_ALERTS="0"
+
+# delivery mode [webhook = incoming webhook, bot = Bot API + file uploads]
+SLACK_MODE="webhook"
+
+# webhook URL (required when SLACK_MODE="webhook")
+# create at: https://api.slack.com/messaging/webhooks
+SLACK_WEBHOOK_URL=""
+
+# Bot API token (required when SLACK_MODE="bot")
+# create at: https://api.slack.com/apps → Bot User OAuth Token (xoxb-...)
+SLACK_TOKEN=""
+
+# channel for Bot API posts (required when SLACK_MODE="bot")
+# use channel ID (e.g., C01ABCDEF) or #channel-name
+SLACK_CHANNEL=""
+
+# =============================================
+# Telegram Alerts
+# =============================================
+
+# enable Telegram alerts [0 = disabled, 1 = enabled]
+TELEGRAM_ALERTS="0"
+
+# bot token from @BotFather (required when TELEGRAM_ALERTS="1")
+TELEGRAM_BOT_TOKEN=""
+
+# chat/group/channel ID (required when TELEGRAM_ALERTS="1")
+# use @userinfobot or the getUpdates API to find your chat ID
+TELEGRAM_CHAT_ID=""
+
+# =============================================
+# Discord Alerts
+# =============================================
+
+# enable Discord alerts [0 = disabled, 1 = enabled]
+DISCORD_ALERTS="0"
+
+# webhook URL (required when DISCORD_ALERTS="1")
+# create at: Server Settings → Integrations → Webhooks
+DISCORD_WEBHOOK_URL=""
+
+# =============================================
 # Banning
 # =============================================
 

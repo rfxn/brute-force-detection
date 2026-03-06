@@ -653,7 +653,8 @@ _alert_render_html() {
 # ---------------------------------------------------------------------------
 
 # _bfd_alert_init — export BFD config variables as ALERT_* env vars for shared alert_lib
-# Maps BFD's SMTP_* variables to the shared library's ALERT_SMTP_* names.
+# Maps BFD's SMTP_* and messaging variables to the shared library's ALERT_* names.
+# Enables/disables channels in the shared lib's channel registry.
 # Called from config_init() after sourcing conf.bfd.
 _bfd_alert_init() {
 	# Map SMTP config for email delivery
@@ -663,6 +664,117 @@ _bfd_alert_init() {
 	export ALERT_SMTP_PASS="${SMTP_PASS:-}"
 	# Set temp dir for shared lib
 	export ALERT_TMPDIR="${TMPDIR:-/tmp}"
+
+	# Map Slack config
+	export ALERT_SLACK_MODE="${SLACK_MODE:-webhook}"
+	export ALERT_SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
+	export ALERT_SLACK_TOKEN="${SLACK_TOKEN:-}"
+	export ALERT_SLACK_CHANNEL="${SLACK_CHANNEL:-}"
+
+	# Map Telegram config
+	export ALERT_TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
+	export ALERT_TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}"
+
+	# Map Discord config
+	export ALERT_DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-}"
+
+	# Enable/disable channels in registry (email NOT registered — BFD handles email directly)
+	if [ "${SLACK_ALERTS:-0}" = "1" ]; then
+		alert_channel_enable "slack"
+	else
+		alert_channel_disable "slack"
+	fi
+	if [ "${TELEGRAM_ALERTS:-0}" = "1" ]; then
+		alert_channel_enable "telegram"
+	else
+		alert_channel_disable "telegram"
+	fi
+	if [ "${DISCORD_ALERTS:-0}" = "1" ]; then
+		alert_channel_enable "discord"
+	else
+		alert_channel_disable "discord"
+	fi
+}
+
+# ---------------------------------------------------------------------------
+# BFD Messaging Dispatch — multi-channel alerting via shared alert_lib
+# ---------------------------------------------------------------------------
+
+# _bfd_dispatch_messaging alerts_file subject loglines tpl_dir — dispatch to messaging channels
+# Sends alerts to enabled messaging channels (Slack, Telegram, Discord) via
+# the shared alert_lib channel registry. Email is NOT dispatched here (handled
+# by send_alerts() directly). Renders per-entry blocks using channel-specific
+# templates and exports ENTRY_BLOCKS/ENTRY_FIELDS as template variables for
+# the outer message template.
+# No-op if no messaging channel is enabled.
+_bfd_dispatch_messaging() {
+	local alerts_file="$1" subject="$2" loglines="${3:-5}" tpl_dir="$4"
+
+	# Early exit if no messaging channels enabled
+	if ! alert_channel_enabled "slack" && \
+	   ! alert_channel_enabled "telegram" && \
+	   ! alert_channel_enabled "discord"; then
+		return 0
+	fi
+
+	if [ ! -f "$alerts_file" ] || [ ! -s "$alerts_file" ]; then
+		return 0
+	fi
+
+	# Set global template variables (hostname, version, timestamp, etc.)
+	_alert_set_global_vars
+
+	# Build per-entry blocks for each enabled channel
+	local slack_blocks="" telegram_blocks="" discord_fields=""
+	local pipe_line
+	while IFS= read -r pipe_line; do
+		[ -z "$pipe_line" ] && continue
+
+		# Set per-entry template variables (HOST, MOD, PORTS, etc.)
+		_alert_set_entry_vars "$pipe_line" "$loglines"
+
+		if alert_channel_enabled "slack"; then
+			_alert_tpl_resolve "$tpl_dir" "slack.entry.tpl"
+			if [ -f "$_ALERT_TPL_RESOLVED" ]; then
+				local _se
+				_se=$(_alert_tpl_render "$_ALERT_TPL_RESOLVED")
+				slack_blocks="${slack_blocks}${_se}"
+			fi
+		fi
+
+		if alert_channel_enabled "telegram"; then
+			_alert_tpl_resolve "$tpl_dir" "telegram.entry.tpl"
+			if [ -f "$_ALERT_TPL_RESOLVED" ]; then
+				local _te
+				_te=$(_alert_tpl_render "$_ALERT_TPL_RESOLVED")
+				telegram_blocks="${telegram_blocks}${_te}"
+			fi
+		fi
+
+		if alert_channel_enabled "discord"; then
+			_alert_tpl_resolve "$tpl_dir" "discord.entry.tpl"
+			if [ -f "$_ALERT_TPL_RESOLVED" ]; then
+				local _de
+				_de=$(_alert_tpl_render "$_ALERT_TPL_RESOLVED")
+				discord_fields="${discord_fields}${_de}"
+			fi
+		fi
+	done < "$alerts_file"
+
+	# Compute summary for outer template
+	_alert_compute_summary "$alerts_file"
+
+	# Export accumulated entry blocks as template variables
+	export ENTRY_BLOCKS="${slack_blocks}${telegram_blocks}"
+	export ENTRY_FIELDS="$discord_fields"
+
+	# Dispatch to all enabled channels (excluding email)
+	alert_dispatch "$tpl_dir" "$subject" "slack,telegram,discord"
+	local rc=$?
+
+	# Clean up exported entry variables
+	unset ENTRY_BLOCKS ENTRY_FIELDS
+	return $rc
 }
 
 # ---------------------------------------------------------------------------
@@ -702,7 +814,10 @@ _bfd_digest_check() {
 # when alerting is disabled (entries accumulate until re-enabled).
 _bfd_digest_flush() {
 	# Check that at least one alert channel is enabled
-	if [ "${EMAIL_ALERTS:-0}" != "1" ]; then
+	if [ "${EMAIL_ALERTS:-0}" != "1" ] && \
+	   [ "${SLACK_ALERTS:-0}" != "1" ] && \
+	   [ "${TELEGRAM_ALERTS:-0}" != "1" ] && \
+	   [ "${DISCORD_ALERTS:-0}" != "1" ]; then
 		return 0
 	fi
 	local spool="${ALERT_SPOOL_FILE:-}"
