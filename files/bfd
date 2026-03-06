@@ -614,7 +614,7 @@ _apool_service_summary() {
 	fi
 	local atmp
 	atmp=$(mktemp "$INSTALL_PATH/tmp/.svcsum.XXXXXX")
-	echo "[+] Per-service breakdown" && echo
+	echo "[+] Per-service threat breakdown" && echo
 	echo "SERVICE|COUNT|UNIQUE_IPS" > "$atmp"
 	_apool_service_summary_awk "$source_file" "$cutoff" >> "$atmp"
 	format_table < "$atmp"
@@ -630,11 +630,11 @@ apool_list() {
 	if [ -n "$ahost" ]; then
 		_apool_report "$APOOL_LIST" "Matching entries for \"$ahost\" (7d)" "$ahost" "$cutoff_7d"
 	elif [ -f "$APOOL_LIST" ]; then
-		_apool_report "$APOOL_LIST" "Top 25 brute force attackers (24h)" "" "$cutoff_24h"
+		_apool_report "$APOOL_LIST" "Top 25 threat IPs (24h)" "" "$cutoff_24h"
 		echo
 		_apool_service_summary "$APOOL_LIST" "$cutoff_24h"
 		echo
-		_apool_report "$APOOL_LIST" "Top 25 brute force attackers (7d)" "" "$cutoff_7d"
+		_apool_report "$APOOL_LIST" "Top 25 threat IPs (7d)" "" "$cutoff_7d"
 	fi
 }
 
@@ -899,7 +899,7 @@ usage_short() {
 	echo ""
 	echo "Reporting:"
 	echo "  bfd -l              list active bans"
-	echo "  bfd -a [IP|STR]     top attackers / investigate IP"
+	echo "  bfd -a [IP|STR]     threat activity / investigate IP"
 	echo "  bfd -e [IP|CIDR]    pressure dashboard / IP or subnet detail"
 	echo ""
 	echo "System:"
@@ -935,7 +935,7 @@ usage() {
 	echo ""
 	echo "Reporting:                                      Supports: --json --csv"
 	echo "  -l, --list                  list active bans"
-	echo "  -a, --attackpool [IP|STR]   attack pool and IP investigation"
+	echo "  -a, --attackpool, --activity [IP|STR]  threat activity and IP investigation"
 	echo "  -e, --events [IP|CIDR] [N]  pressure dashboard, IP or subnet detail (N=log lines)"
 	echo ""
 	echo "System:"
@@ -997,7 +997,7 @@ case "${1:-}" in
 -q|--quiet)     exec >/dev/null; run ;;
 -d|--dryrun)    DRY_RUN=1; vhead; run ;;
 -w|--watch)     vhead; watch ;;
--a|--attackpool)
+-a|--attackpool|--activity)
 	vhead; pre
 	if [ -n "${2:-}" ] && validate_ip_any "$2" >/dev/null 2>&1; then
 		case "$OUTPUT_FORMAT" in

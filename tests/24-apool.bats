@@ -50,7 +50,7 @@ teardown() {
 	assert_success
 	# sshd: 3 events, 2 unique IPs; dovecot: 1 event, 1 unique IP
 	# output is table-formatted; check the data content
-	assert_output --partial "Per-service breakdown"
+	assert_output --partial "Per-service threat breakdown"
 	assert_output --partial "UNIQUE_IPS"
 }
 
@@ -208,9 +208,9 @@ teardown() {
 	echo "$((now - 1)) 192.0.2.2 dovecot" >> "$APOOL_LIST"
 	run apool_list
 	assert_success
-	assert_output --partial "Top 25 brute force attackers (24h)"
-	assert_output --partial "Per-service breakdown"
-	assert_output --partial "Top 25 brute force attackers (7d)"
+	assert_output --partial "Top 25 threat IPs (24h)"
+	assert_output --partial "Per-service threat breakdown"
+	assert_output --partial "Top 25 threat IPs (7d)"
 }
 
 @test "apool_list: search filter shows filtered results" {

@@ -1,4 +1,6 @@
 2.0.1:
+[New] --activity alias for -a/--attackpool; user-facing labels renamed from
+      "attack pool" / "brute force attackers" to "threat activity" / "threat IPs"
 [Fix] HTML email: base64-encode HTML MIME part to comply with RFC 5321
       998-character line limit; fixes Exim rejection of long inline-CSS lines
 [Change] EMAIL_LOGLINES default reduced from 50 to 5; events per-IP view

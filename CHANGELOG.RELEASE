@@ -1,5 +1,10 @@
 2.0.1:
 
+-- Threat Activity --
+
+[New] --activity alias for -a/--attackpool; user-facing labels renamed from
+      "attack pool" / "brute force attackers" to "threat activity" / "threat IPs"
+
 -- Email --
 
 [Fix] HTML email: base64-encode HTML MIME part to comply with RFC 5321
