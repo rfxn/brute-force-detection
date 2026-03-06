@@ -224,7 +224,9 @@ config_init() {
 	validate_config || return $?
 	detect_log_paths
 	fw_resolve_backend
-	fw_setup
+	if ! fw_setup; then
+		elog warn "firewall backend '$_FW_BACKEND' failed to initialize; bans will not work"
+	fi
 
 	# Initialize alert channel config mapping
 	_bfd_alert_init
