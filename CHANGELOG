@@ -8,6 +8,9 @@
       and audit.log; non-fatal on failure (app logging unaffected)
 [New] ELOG_LOG_DIR, ELOG_AUDIT_FILE, ELOG_LOG_MAX_LINES config variables in
       internals.conf with safe defaults
+[New] elog_event() structured audit events for block_added, block_removed,
+      config_loaded, config_error, and service_state; written as JSONL to
+      /var/log/bfd/audit.log with key=value metadata fields
 [New] LOG_IDLE_SUPPRESS config variable (default: 1) suppresses idle zero-event
       run-complete messages from syslog; BFD log file always records every cycle
 [New] eout() "l" flag for log-file-only output (no syslog)

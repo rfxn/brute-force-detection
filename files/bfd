@@ -258,7 +258,12 @@ config_init() {
 	return 0
 }
 
-config_init || { vhead; exit "$EXIT_CONFIG_ERROR"; }
+if ! config_init; then
+	elog_event "config_error" "error" "configuration initialization failed"
+	vhead
+	exit "$EXIT_CONFIG_ERROR"
+fi
+elog_event "config_loaded" "info" "configuration initialized"
 
 # warn if BAN_COMMAND binary not found (custom mode only)
 if [ "$_FW_BACKEND" = "custom" ]; then
@@ -1059,6 +1064,7 @@ run() {
 # shellcheck disable=SC2317 # called via trap
 cleanup_watch() {
 	eout "watch mode shutting down (pid=$$)" le
+	elog_event "service_state" "info" "watch mode shutting down"
 	# flush any accumulated digest alerts before shutdown
 	if [ "${EMAIL_ALERTS:-0}" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
 		_bfd_digest_flush
@@ -1071,6 +1077,7 @@ reload_watch() {
 	eout "watch mode reloading configuration (SIGHUP)" le
 	if ! config_init 1; then
 		elog error "reload aborted: configuration error, continuing with previous config"
+		elog_event "config_error" "error" "watch mode reload failed"
 		return 1
 	fi
 	# refresh local IPs (runtime state, not config)
@@ -1080,6 +1087,8 @@ reload_watch() {
 		hostname -I | tr ' ' '\n' > "$LO_HOSTS"
 	fi
 	eout "watch mode reload complete (WATCH_INTERVAL=${WATCH_INTERVAL}s)" le
+	elog_event "service_state" "info" "watch mode reload complete" \
+		"interval=$WATCH_INTERVAL"
 }
 
 watch() {
@@ -1094,6 +1103,8 @@ watch() {
 	pre
 	get_state
 	eout "watch mode started (interval=${WATCH_INTERVAL}s, pid=$$)" le
+	elog_event "service_state" "info" "watch mode started" \
+		"interval=$WATCH_INTERVAL"
 	export TLOG_FLOCK=1
 	while true; do
 		UTIME=$(date +"%s")

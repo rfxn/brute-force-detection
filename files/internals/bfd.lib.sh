@@ -1439,6 +1439,8 @@ execute_ban() {
 		return 0
 	fi
 	eout "{$mod} $host exceeded login failures; banning via $_FW_BACKEND." le
+	elog_event "block_added" "warn" "{$mod} banned $host via $_FW_BACKEND" \
+		"ip=$host" "mod=$mod" "backend=$_FW_BACKEND" "ports=${ports:-all}"
 	_execute_fw_with_retry "ban" "$host" "$mod" "$ports"
 }
 
@@ -1452,6 +1454,8 @@ execute_unban() {
 	MOD="$mod"
 	PORTS="$ports"
 	eout "{$mod} $host ban expired; executing unban via $_FW_BACKEND." le
+	elog_event "block_removed" "info" "{$mod} $host ban expired" \
+		"ip=$host" "mod=$mod" "backend=$_FW_BACKEND"
 	_execute_fw_with_retry "unban" "$host" "$mod" "$ports"
 }
 
