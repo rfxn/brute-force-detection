@@ -587,7 +587,7 @@ Feb 22 10:15:05 myhost openvpn[12345]: VERIFY ERROR: depth=0, error=certificate 
 Feb 22 10:15:07 myhost openvpn[12345]: TLS handshake failed from 198.51.100.1
 
 # RULE: openvpn
-# PATTERN: openvpn.*MULTI: bad source address from client.*\[<HOST>\]
+# PATTERN: openvpn.*MULTI: bad source address from client \[<HOST>
 # EXPECT: 203.0.113.80
 Feb 22 10:15:08 myhost openvpn[12345]: MULTI: bad source address from client [203.0.113.80:45678], packet dropped
 
@@ -692,12 +692,12 @@ Feb 22 10:15:05 myhost pveproxy[12346]: pam_unix(proxmox:auth): authentication f
 # RULE: nextcloud
 # PATTERN: Login failed:.*Remote IP: '<HOST>'
 # EXPECT: 203.0.113.50
-{"reqId":"abc123","level":2,"time":"2024-02-22T10:15:03+00:00","remoteAddr":"203.0.113.50","user":"--","app":"core","method":"POST","url":"/login","message":"Login failed: 'admin' (Remote IP: '203.0.113.50')","userAgent":"Mozilla/5.0","version":"29.0.0.1"}
+{"reqId":"abc123","level":2,"time":"2024-02-22T10:15:03+00:00","remoteAddr":"203.0.113.50","user":"--","app":"core","method":"POST","url":"/login","message":"Login failed: 'admin' (Remote IP: '203.0.113.50')","userAgent":"Mozilla/5.0","version":"29.0.1"}
 
 # RULE: nextcloud
 # PATTERN: Trusted domain error.*Remote IP: '<HOST>'
 # EXPECT: 192.0.2.30
-{"reqId":"def456","level":2,"time":"2024-02-22T10:15:05+00:00","remoteAddr":"192.0.2.30","user":"--","app":"core","method":"GET","url":"/","message":"Trusted domain error. - Loss of sync? (Remote IP: '192.0.2.30')","userAgent":"curl/7.68.0","version":"29.0.0.1"}
+{"reqId":"def456","level":2,"time":"2024-02-22T10:15:05+00:00","remoteAddr":"192.0.2.30","user":"--","app":"core","method":"GET","url":"/","message":"Trusted domain error. - Loss of sync? (Remote IP: '192.0.2.30')","userAgent":"curl/7.68.0","version":"29.0.1"}
 
 # --- cockpit ---
 
@@ -707,12 +707,12 @@ Feb 22 10:15:05 myhost pveproxy[12346]: pam_unix(proxmox:auth): authentication f
 Feb 22 10:15:03 myhost cockpit-session: pam_unix(cockpit:auth): authentication failure; logname= uid=0 euid=0 tty= ruser= rhost=203.0.113.45 user=root
 
 # RULE: cockpit
-# PATTERN: cockpit-ws.*authentication failed.*<HOST>
+# PATTERN: cockpit-ws.*authentication failed.* <HOST>
 # EXPECT: 198.51.100.20
 Feb 22 10:15:05 myhost cockpit-ws: authentication failed from 198.51.100.20
 
 # RULE: cockpit
-# PATTERN: pam_unix(cockpit:auth).*authentication failure.*rhost=<HOST>
+# PATTERN: pam_unix\(cockpit:auth\).*authentication failure.*rhost=<HOST>
 # EXPECT: 192.0.2.15
 Feb 22 10:15:07 myhost cockpit-session: pam_unix(cockpit:auth): authentication failure; logname= uid=0 euid=0 tty= ruser= rhost=192.0.2.15 user=admin
 

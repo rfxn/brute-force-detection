@@ -22,5 +22,5 @@ if [ -f "$PREREQ" ]; then
 		"openvpn.*TLS Auth Error.* <HOST>" \
 		"openvpn.*VERIFY ERROR.* <HOST>" \
 		"openvpn.*TLS handshake failed.* <HOST>" \
-		"openvpn.*MULTI: bad source address from client.*\[<HOST>\]")
+		"openvpn.*MULTI: bad source address from client \[<HOST>")
 fi

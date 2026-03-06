@@ -616,7 +616,7 @@ teardown() {
 @test "regex: openvpn - MULTI bad source address" {
 	local result
 	result=$(echo "Feb 22 10:15:08 myhost openvpn[12345]: MULTI: bad source address from client [203.0.113.80:45678], packet dropped" | \
-		extract_hosts "openvpn.*MULTI: bad source address from client.*\[<HOST>\]")
+		extract_hosts "openvpn.*MULTI: bad source address from client \[<HOST>")
 	[ "$result" = "203.0.113.80" ]
 }
 
@@ -664,14 +664,14 @@ teardown() {
 @test "regex: cockpit - cockpit-ws auth failed" {
 	local result
 	result=$(echo "Feb 22 10:15:05 myhost cockpit-ws: authentication failed from 198.51.100.20" | \
-		extract_hosts "cockpit-ws.*authentication failed.*<HOST>")
+		extract_hosts "cockpit-ws.*authentication failed.* <HOST>")
 	[ "$result" = "198.51.100.20" ]
 }
 
 @test "regex: cockpit - pam_unix cockpit:auth" {
 	local result
 	result=$(echo "Feb 22 10:15:07 myhost cockpit-session: pam_unix(cockpit:auth): authentication failure; logname= uid=0 euid=0 tty= ruser= rhost=192.0.2.15 user=admin" | \
-		extract_hosts "pam_unix(cockpit:auth).*authentication failure.*rhost=<HOST>")
+		extract_hosts "pam_unix\(cockpit:auth\).*authentication failure.*rhost=<HOST>")
 	[ "$result" = "192.0.2.15" ]
 }
 
