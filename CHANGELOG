@@ -1,4 +1,7 @@
 2.0.1:
+[New] Threat activity summary header: aggregate unique IPs (24h/7d), total
+      count (24h/7d), and active bans shown at top of -a/--activity report;
+      included in JSON (summary key) and CSV (# summary section)
 [New] --activity alias for -a/--attackpool; user-facing labels renamed from
       "attack pool" / "brute force attackers" to "threat activity" / "threat IPs"
 [Fix] HTML email: base64-encode HTML MIME part to comply with RFC 5321

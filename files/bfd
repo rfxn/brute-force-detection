@@ -621,6 +621,94 @@ _apool_service_summary() {
 	rm -f "$atmp"
 }
 
+# _apool_summary_awk source_file cutoff_24h cutoff_7d — single-pass AWK for summary stats
+# Outputs: uniq_24h|total_24h|uniq_7d|total_7d
+_apool_summary_awk() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	awk -v c24="$cutoff_24h" -v c7d="$cutoff_7d" '{
+		ts = $1 + 0
+		cnt = ($4+0 > 0) ? $4+0 : 1
+		if (ts >= c7d) {
+			t7 += cnt
+			if (!s7[$2]++) u7++
+			if (ts >= c24) {
+				t24 += cnt
+				if (!s24[$2]++) u24++
+			}
+		}
+	}
+	END {
+		print u24+0 "|" t24+0 "|" u7+0 "|" t7+0
+	}' "$source_file"
+}
+
+# _apool_summary source_file cutoff_24h cutoff_7d — text summary header
+_apool_summary() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	if [ ! -f "$source_file" ] || [ ! -s "$source_file" ]; then
+		echo "[+] Threat Activity Summary" && echo
+		echo "  Unique IPs:   0 (24h) / 0 (7d)"
+		echo "  Total Count:  0 (24h) / 0 (7d)"
+		echo "  Active Bans:  0"
+		return 0
+	fi
+	local stats
+	stats=$(_apool_summary_awk "$source_file" "$cutoff_24h" "$cutoff_7d")
+	local u24 t24 u7d t7d
+	IFS='|' read -r u24 t24 u7d t7d <<< "$stats"
+	local active_bans=0
+	local bans_active="$INSTALL_PATH/tmp/bans.active"
+	if [ -f "$bans_active" ] && [ -s "$bans_active" ]; then
+		active_bans=$(wc -l < "$bans_active")
+	fi
+	echo "[+] Threat Activity Summary" && echo
+	printf "  Unique IPs:   %s (24h) / %s (7d)\n" "$u24" "$u7d"
+	printf "  Total Count:  %s (24h) / %s (7d)\n" "$t24" "$t7d"
+	printf "  Active Bans:  %s\n" "$active_bans"
+}
+
+# _apool_summary_json source_file cutoff_24h cutoff_7d — JSON summary object (no braces)
+_apool_summary_json() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	local u24=0 t24=0 u7d=0 t7d=0 active_bans=0
+	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
+		local stats
+		stats=$(_apool_summary_awk "$source_file" "$cutoff_24h" "$cutoff_7d")
+		IFS='|' read -r u24 t24 u7d t7d <<< "$stats"
+	fi
+	local bans_active="$INSTALL_PATH/tmp/bans.active"
+	if [ -f "$bans_active" ] && [ -s "$bans_active" ]; then
+		active_bans=$(wc -l < "$bans_active")
+	fi
+	printf '{"unique_ips_24h": %s, "unique_ips_7d": %s, "total_count_24h": %s, "total_count_7d": %s, "active_bans": %s}' \
+		"$u24" "$u7d" "$t24" "$t7d" "$active_bans"
+}
+
+# _apool_summary_csv source_file cutoff_24h cutoff_7d — CSV summary
+_apool_summary_csv() {
+	local source_file="$1"
+	local cutoff_24h="$2"
+	local cutoff_7d="$3"
+	local u24=0 t24=0 u7d=0 t7d=0 active_bans=0
+	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
+		local stats
+		stats=$(_apool_summary_awk "$source_file" "$cutoff_24h" "$cutoff_7d")
+		IFS='|' read -r u24 t24 u7d t7d <<< "$stats"
+	fi
+	local bans_active="$INSTALL_PATH/tmp/bans.active"
+	if [ -f "$bans_active" ] && [ -s "$bans_active" ]; then
+		active_bans=$(wc -l < "$bans_active")
+	fi
+	echo "unique_ips_24h,unique_ips_7d,total_count_24h,total_count_7d,active_bans"
+	echo "$u24,$u7d,$t24,$t7d,$active_bans"
+}
+
 apool_list() {
 	local ahost="${1:-}"
 	local now cutoff_24h cutoff_7d
@@ -630,6 +718,8 @@ apool_list() {
 	if [ -n "$ahost" ]; then
 		_apool_report "$APOOL_LIST" "Matching entries for \"$ahost\" (7d)" "$ahost" "$cutoff_7d"
 	elif [ -f "$APOOL_LIST" ]; then
+		_apool_summary "$APOOL_LIST" "$cutoff_24h" "$cutoff_7d"
+		echo
 		_apool_report "$APOOL_LIST" "Top 25 threat IPs (24h)" "" "$cutoff_24h"
 		echo
 		_apool_service_summary "$APOOL_LIST" "$cutoff_24h"
@@ -786,7 +876,9 @@ apool_list_json() {
 		_apool_report_json "$APOOL_LIST" "$ahost" "$cutoff_7d"
 		echo "}"
 	elif [ -f "$APOOL_LIST" ]; then
-		printf '{"last_24h": '
+		printf '{"summary": '
+		_apool_summary_json "$APOOL_LIST" "$cutoff_24h" "$cutoff_7d"
+		printf ', "last_24h": '
 		_apool_report_json "$APOOL_LIST" "" "$cutoff_24h"
 		printf ', "services": '
 		_apool_service_summary_json "$APOOL_LIST" "$cutoff_24h"
@@ -809,6 +901,9 @@ apool_list_csv() {
 		echo "# search: $ahost"
 		_apool_report_csv "$APOOL_LIST" "$ahost" "$cutoff_7d"
 	elif [ -f "$APOOL_LIST" ]; then
+		echo "# summary"
+		_apool_summary_csv "$APOOL_LIST" "$cutoff_24h" "$cutoff_7d"
+		echo ""
 		echo "# last_24h"
 		_apool_report_csv "$APOOL_LIST" "" "$cutoff_24h"
 		echo ""

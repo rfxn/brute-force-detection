@@ -15,6 +15,8 @@ bfd_load_function _apool_report
 bfd_load_function _apool_ban_status
 bfd_load_function _apool_service_summary_awk
 bfd_load_function _apool_service_summary
+bfd_load_function _apool_summary_awk
+bfd_load_function _apool_summary
 bfd_load_function apool_list
 
 setup() {
@@ -357,4 +359,85 @@ teardown() {
 	local line_count
 	line_count=$(wc -l < "$pool")
 	[ "$line_count" -eq 3 ]
+}
+
+# --- summary header ---
+
+@test "summary_awk: counts unique IPs and totals for 24h and 7d" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	# 3 entries in 24h window, 1 additional in 7d-only window
+	echo "$now 192.0.2.1 sshd 5 CN ban 600 22 15000 service" >> "$pool"
+	echo "$((now - 100)) 192.0.2.2 sshd 3 US ban 600 22 12000 service" >> "$pool"
+	echo "$((now - 200)) 192.0.2.1 dovecot 2 CN ban 600 143 8000 service" >> "$pool"
+	echo "$((now - 172800)) 192.0.2.3 sshd 10 RU ban 600 22 20000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_summary_awk "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	# 24h: 2 unique IPs (192.0.2.1, 192.0.2.2), total 10 (5+3+2)
+	# 7d: 3 unique IPs, total 20 (5+3+2+10)
+	IFS='|' read -r u24 t24 u7d t7d <<< "$output"
+	[ "$u24" -eq 2 ]
+	[ "$t24" -eq 10 ]
+	[ "$u7d" -eq 3 ]
+	[ "$t7d" -eq 20 ]
+}
+
+@test "summary: text output contains header and stats" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 CN ban 600 22 15000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_summary "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	assert_output --partial "Threat Activity Summary"
+	assert_output --partial "Unique IPs:"
+	assert_output --partial "Total Count:"
+	assert_output --partial "Active Bans:"
+}
+
+@test "summary: active bans count reflects bans.active" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$pool"
+	state_bans_active_append "$INSTALL_PATH" "$now" "0" "192.0.2.1" "sshd" "22"
+	state_bans_active_append "$INSTALL_PATH" "$now" "0" "192.0.2.2" "sshd" "22"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_summary "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	assert_output --partial "Active Bans:  2"
+}
+
+@test "summary: empty pool shows zeroes" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_summary "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	assert_output --partial "Unique IPs:   0 (24h) / 0 (7d)"
+	assert_output --partial "Total Count:  0 (24h) / 0 (7d)"
+	assert_output --partial "Active Bans:  0"
+}
+
+@test "apool_list: shows summary header before IP tables" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd" >> "$APOOL_LIST"
+	run apool_list
+	assert_success
+	assert_output --partial "Threat Activity Summary"
+	# summary should appear before the first IP table
+	local summary_line ip_table_line
+	summary_line=$(echo "$output" | grep -n "Threat Activity Summary" | head -1 | cut -d: -f1)
+	ip_table_line=$(echo "$output" | grep -n "Top 25 threat IPs" | head -1 | cut -d: -f1)
+	[ "$summary_line" -lt "$ip_table_line" ]
 }
