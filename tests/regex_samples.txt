@@ -648,6 +648,30 @@ Feb 22 10:15:05 myhost pveproxy[12346]: pam_unix(proxmox:auth): authentication f
 # NOTE: MongoDB 6.0+ JSON log format (client renamed to remote)
 {"t":{"$date":"2024-02-22T10:15:07.000+0000"},"s":"I","c":"ACCESS","id":20249,"ctx":"conn12348","msg":"Authentication failed","attr":{"mechanism":"SCRAM-SHA-256","speculative":false,"principalName":"admin","authenticationDatabase":"admin","remote":"198.51.100.12:62189","result":"AuthenticationFailed: SCRAM authentication failed"}}
 
+# --- gitea ---
+
+# RULE: gitea
+# PATTERN: Failed authentication attempt for .* from <HOST>
+# EXPECT: 203.0.113.45
+2025/11/06 13:28:00 ...auth.go:222:SignInPost() [W] Failed authentication attempt for admin from 203.0.113.45:44774: user does not exist
+
+# RULE: gitea
+# PATTERN: invalid credentials from <HOST>
+# EXPECT: 198.51.100.12
+2024/03/15 10:22:33 ...context.go:204 [E] invalid credentials from 198.51.100.12
+
+# --- nextcloud ---
+
+# RULE: nextcloud
+# PATTERN: Login failed:.*Remote IP: '<HOST>'
+# EXPECT: 203.0.113.50
+{"reqId":"abc123","level":2,"time":"2024-02-22T10:15:03+00:00","remoteAddr":"203.0.113.50","user":"--","app":"core","method":"POST","url":"/login","message":"Login failed: 'admin' (Remote IP: '203.0.113.50')","userAgent":"Mozilla/5.0","version":"29.0.0.1"}
+
+# RULE: nextcloud
+# PATTERN: Trusted domain error.*Remote IP: '<HOST>'
+# EXPECT: 192.0.2.30
+{"reqId":"def456","level":2,"time":"2024-02-22T10:15:05+00:00","remoteAddr":"192.0.2.30","user":"--","app":"core","method":"GET","url":"/","message":"Trusted domain error. - Loss of sync? (Remote IP: '192.0.2.30')","userAgent":"curl/7.68.0","version":"29.0.0.1"}
+
 # --- cockpit ---
 
 # RULE: cockpit

@@ -1,4 +1,9 @@
 2.0.1:
+[New] gitea rule: 2 patterns for Gitea/Forgejo self-hosted Git (Failed
+      authentication attempt, invalid credentials); weight=2/trip=10; port 3000;
+      cascading PREREQ fallback for gitea and forgejo binary paths
+[New] nextcloud rule: 2 patterns for Nextcloud file sync (Login failed, Trusted
+      domain error); weight=2/trip=10; ports 80,443; log-file-detected PREREQ
 [New] cockpit rule: 3 patterns for Cockpit web console (pam_unix, cockpit-ws,
       cockpit-session); weight=5/trip=10 (panel tier); port 9090
 [New] postscreen rule: 3 patterns for Postfix postscreen pre-filter (PREGREET,

@@ -590,6 +590,38 @@ teardown() {
 	[ "$result" = "203.0.113.80" ]
 }
 
+# --- gitea ---
+
+@test "regex: gitea - Failed authentication attempt" {
+	local result
+	result=$(echo "2025/11/06 13:28:00 ...auth.go:222:SignInPost() [W] Failed authentication attempt for admin from 203.0.113.45:44774: user does not exist" | \
+		extract_hosts "Failed authentication attempt for .* from <HOST>")
+	[ "$result" = "203.0.113.45" ]
+}
+
+@test "regex: gitea - invalid credentials" {
+	local result
+	result=$(echo "2024/03/15 10:22:33 ...context.go:204 [E] invalid credentials from 198.51.100.12" | \
+		extract_hosts "invalid credentials from <HOST>")
+	[ "$result" = "198.51.100.12" ]
+}
+
+# --- nextcloud ---
+
+@test "regex: nextcloud - Login failed" {
+	local result
+	result=$(echo '{"reqId":"abc123","remoteAddr":"203.0.113.50","message":"Login failed: '"'"'admin'"'"' (Remote IP: '"'"'203.0.113.50'"'"')","version":"29.0.0.1"}' | \
+		extract_hosts "Login failed:.*Remote IP: '<HOST>'")
+	[ "$result" = "203.0.113.50" ]
+}
+
+@test "regex: nextcloud - Trusted domain error" {
+	local result
+	result=$(echo '{"reqId":"def456","remoteAddr":"192.0.2.30","message":"Trusted domain error. - Loss of sync? (Remote IP: '"'"'192.0.2.30'"'"')","version":"29.0.0.1"}' | \
+		extract_hosts "Trusted domain error.*Remote IP: '<HOST>'")
+	[ "$result" = "192.0.2.30" ]
+}
+
 # --- cockpit ---
 
 @test "regex: cockpit - pam auth failure" {
