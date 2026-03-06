@@ -46,6 +46,34 @@ teardown() {
 	[ "$result" = "198.51.100.1" ]
 }
 
+@test "regex: sshd - Connection closed by authenticating user" {
+	local result
+	result=$(echo "Feb 22 10:16:06 myhost sshd[12355]: Connection closed by authenticating user admin 203.0.113.45 port 44470 [preauth]" | \
+		extract_hosts "sshd.*Connection closed by authenticating user .* <HOST> port")
+	[ "$result" = "203.0.113.45" ]
+}
+
+@test "regex: sshd - Disconnected from authenticating user" {
+	local result
+	result=$(echo "Feb 22 10:16:07 myhost sshd[12356]: Disconnected from authenticating user root 198.51.100.30 port 26444 [preauth]" | \
+		extract_hosts "sshd.*Disconnected from authenticating user .* <HOST> port")
+	[ "$result" = "198.51.100.30" ]
+}
+
+@test "regex: sshd - banner exchange" {
+	local result
+	result=$(echo "Feb 22 10:16:08 myhost sshd[12357]: banner exchange: Connection from 192.0.2.15 port 44470: invalid format" | \
+		extract_hosts "sshd.*banner exchange: Connection from <HOST> port")
+	[ "$result" = "192.0.2.15" ]
+}
+
+@test "regex: sshd - Unable to negotiate" {
+	local result
+	result=$(echo "Feb 22 10:16:09 myhost sshd[12358]: Unable to negotiate with 203.0.113.60 port 55046: no matching key exchange method found. Their offer: diffie-hellman-group1-sha1" | \
+		extract_hosts "sshd.*Unable to negotiate with <HOST> port")
+	[ "$result" = "203.0.113.60" ]
+}
+
 # --- dovecot ---
 
 @test "regex: dovecot - pop3-login auth failed" {
@@ -70,6 +98,13 @@ teardown() {
 	[ -z "$result" ]
 }
 
+@test "regex: dovecot - managesieve-login auth failed" {
+	local result
+	result=$(echo "Feb 22 10:16:04 myhost dovecot: managesieve-login: Aborted login (auth failed, 1 attempts): user=<admin>, method=PLAIN, rip=203.0.113.70, lip=192.0.2.1" | \
+		extract_hosts "managesieve-login.*auth failed.*rip=<HOST>")
+	[ "$result" = "203.0.113.70" ]
+}
+
 # --- postfix ---
 
 @test "regex: postfix - SASL LOGIN auth failed" {
@@ -84,6 +119,20 @@ teardown() {
 	result=$(echo "Feb 22 10:15:05 myhost postfix/smtpd[9877]: warning: mail.example.com[198.51.100.40]: SASL PLAIN authentication failed: UGFzc3dvcmQ6" | \
 		extract_hosts "\[<HOST>\].*SASL.*authentication failed")
 	[ "$result" = "198.51.100.40" ]
+}
+
+@test "regex: postfix - lost connection after AUTH" {
+	local result
+	result=$(echo "Feb 22 10:15:06 myhost postfix/smtpd[12345]: lost connection after AUTH from unknown[203.0.113.45]" | \
+		extract_hosts "lost connection after AUTH from.*\[<HOST>\]")
+	[ "$result" = "203.0.113.45" ]
+}
+
+@test "regex: postfix - too many errors after AUTH" {
+	local result
+	result=$(echo "Feb 22 10:15:07 myhost postfix/smtpd[12346]: too many errors after AUTH from unknown[198.51.100.12]" | \
+		extract_hosts "too many errors after AUTH from.*\[<HOST>\]")
+	[ "$result" = "198.51.100.12" ]
 }
 
 # --- exim_authfail ---
@@ -271,6 +320,20 @@ teardown() {
 	result=$(echo '[Mon Dec 02 10:44:23 2013] [error] [client 192.0.2.5] user admin: authentication failure for "/admin": Password Mismatch' | \
 		extract_hosts "\[client <HOST>\].*authentication failure")
 	[ "$result" = "192.0.2.5" ]
+}
+
+@test "regex: apache-auth - AH01621 digest nonce stale" {
+	local result
+	result=$(echo '[Thu Feb 22 10:15:03.123456 2024] [auth_digest:error] [pid 12345] [client 203.0.113.10:54321] AH01621: user `admin'"'"': nonce stale - Loss of sync?' | \
+		extract_hosts "\[client <HOST>.*AH0162[012]")
+	[ "$result" = "203.0.113.10" ]
+}
+
+@test "regex: apache-auth - AH02572 AuthzDBD query failed" {
+	local result
+	result=$(echo '[Thu Feb 22 10:15:05.654321 2024] [authz_dbd:error] [pid 12346] [client 192.0.2.20:44100] AH02572: AuthzDBD query authorization failed for user `dbuser'"'"'' | \
+		extract_hosts "\[client <HOST>.*AH02572")
+	[ "$result" = "192.0.2.20" ]
 }
 
 # --- nginx-http-auth ---
@@ -493,6 +556,38 @@ teardown() {
 	result=$(echo '2026-02-22 10:15:07.789 UTC [12347] FATAL:  no pg_hba.conf entry for host "198.51.100.1", user "postgres", database "production", no encryption' | \
 		extract_hosts 'no pg_hba.conf entry for host "<HOST>"')
 	[ "$result" = "198.51.100.1" ]
+}
+
+@test "regex: postgresql - role does not exist" {
+	local result
+	result=$(echo '2026-02-22 10:15:07.789 UTC [12347] 203.0.113.30 FATAL:  role "nonexistent" does not exist' | \
+		extract_hosts "<HOST>.*FATAL.*role .* does not exist")
+	[ "$result" = "203.0.113.30" ]
+}
+
+# --- mongodb ---
+
+@test "regex: mongodb - JSON log client field (4.4+)" {
+	local result
+	result=$(echo '{"t":{"$date":"2024-02-22T10:15:06.000+0000"},"s":"I","c":"ACCESS","id":20249,"ctx":"conn12347","msg":"Authentication failed","attr":{"mechanism":"SCRAM-SHA-256","client":"203.0.113.10:45005","result":"AuthenticationFailed"}}' | \
+		extract_hosts '"Authentication failed".*"client":"<HOST>:')
+	[ "$result" = "203.0.113.10" ]
+}
+
+@test "regex: mongodb - JSON log remote field (6.0+)" {
+	local result
+	result=$(echo '{"t":{"$date":"2024-02-22T10:15:07.000+0000"},"s":"I","c":"ACCESS","id":20249,"ctx":"conn12348","msg":"Authentication failed","attr":{"mechanism":"SCRAM-SHA-256","remote":"198.51.100.12:62189","result":"AuthenticationFailed"}}' | \
+		extract_hosts '"Authentication failed".*"remote":"<HOST>:')
+	[ "$result" = "198.51.100.12" ]
+}
+
+# --- openvpn ---
+
+@test "regex: openvpn - MULTI bad source address" {
+	local result
+	result=$(echo "Feb 22 10:15:08 myhost openvpn[12345]: MULTI: bad source address from client [203.0.113.80:45678], packet dropped" | \
+		extract_hosts "openvpn.*MULTI: bad source address from client.*\[<HOST>\]")
+	[ "$result" = "203.0.113.80" ]
 }
 
 # ============================================================

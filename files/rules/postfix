@@ -18,5 +18,7 @@ if [ -f "$PREREQ" ]; then
 
 	## Postfix dictionary attacks
 	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
-		"\[<HOST>\].*SASL.*authentication failed")
+		"\[<HOST>\].*SASL.*authentication failed" \
+		"lost connection after AUTH from.*\[<HOST>\]" \
+		"too many errors after AUTH from.*\[<HOST>\]")
 fi

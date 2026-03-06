@@ -21,5 +21,6 @@ if [ -f "$PREREQ" ]; then
 	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"openvpn.*TLS Auth Error.* <HOST>" \
 		"openvpn.*VERIFY ERROR.* <HOST>" \
-		"openvpn.*TLS handshake failed.* <HOST>")
+		"openvpn.*TLS handshake failed.* <HOST>" \
+		"openvpn.*MULTI: bad source address from client.*\[<HOST>\]")
 fi

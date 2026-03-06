@@ -26,5 +26,7 @@ if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
 	## Apache HTTP authentication failures (2.4 + 2.2)
 	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"\[client <HOST>.*AH0161[78]" \
-		"\[client <HOST>\].*authentication failure")
+		"\[client <HOST>\].*authentication failure" \
+		"\[client <HOST>.*AH0162[012]" \
+		"\[client <HOST>.*AH02572")
 fi

@@ -1,4 +1,16 @@
 2.0.1:
+[New] sshd rule: 4 new patterns for OpenSSH 7.6+/8.0+ (Connection closed by
+      authenticating user, Disconnected from authenticating user, banner exchange,
+      Unable to negotiate)
+[New] postfix rule: 2 new patterns for connection-abuse detection (lost connection
+      after AUTH, too many errors after AUTH)
+[New] dovecot rule: ManageSieve auth failure pattern (managesieve-login), port 4190
+[New] apache-auth rule: 2 new patterns for digest auth (AH01620/AH01621/AH01622)
+      and AuthzDBD failures (AH02572)
+[New] mongodb rule: 2 new patterns for MongoDB 4.4+ JSON structured log format
+      (client field) and 6.0+ (remote field rename)
+[New] postgresql rule: user enumeration pattern (role does not exist)
+[New] openvpn rule: address-spoofing detection pattern (MULTI: bad source address)
 [Change] elog_lib.sh upgraded to canonical v1.0.0 from elog_lib upstream: adds
       elog_init() log directory/file setup, elog_event() structured JSONL audit
       events, output module registry with source-filtered dispatch, periodic

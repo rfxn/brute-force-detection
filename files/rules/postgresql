@@ -31,7 +31,9 @@ if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
 	## PostgreSQL authentication failures
 	# Pattern 1: no pg_hba.conf entry — IP embedded in message
 	# Pattern 2: password authentication failed — requires %h or %r in log_line_prefix
+	# Pattern 3: role does not exist — user enumeration probes
 	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		'no pg_hba.conf entry for host "<HOST>"' \
-		"<HOST>.*FATAL.*password authentication failed")
+		"<HOST>.*FATAL.*password authentication failed" \
+		"<HOST>.*FATAL.*role .* does not exist")
 fi

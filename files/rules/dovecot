@@ -12,7 +12,7 @@
 PREREQ="/usr/sbin/dovecot"
 
 if [ -f "$PREREQ" ]; then
-	PORTS="110,143,993,995"
+	PORTS="110,143,993,995,4190"
 	LOG_FILE="$MAIL_LOG_PATH"
 	if [ ! -f "$LOG_FILE" ]; then
 		LOG_FILE="$AUTH_LOG_PATH"
@@ -26,5 +26,6 @@ if [ -f "$PREREQ" ]; then
 		"imap-login.*auth failed.*rip=<HOST>" \
 		"pop3-login.*Disconnected.*rip=<HOST>" \
 		"imap-login.*Disconnected.*rip=<HOST>" \
-		"submission-login.*auth failed.*rip=<HOST>")
+		"submission-login.*auth failed.*rip=<HOST>" \
+		"managesieve-login.*auth failed.*rip=<HOST>")
 fi

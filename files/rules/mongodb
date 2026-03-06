@@ -19,5 +19,7 @@ if [ -f "$PREREQ" ]; then
 	## MONGODB
 	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
 		"authentication failed.*from client <HOST>" \
-		"Failed to authenticate.*from client <HOST>")
+		"Failed to authenticate.*from client <HOST>" \
+		'"Authentication failed".*"client":"<HOST>:' \
+		'"Authentication failed".*"remote":"<HOST>:')
 fi
