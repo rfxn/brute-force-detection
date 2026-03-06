@@ -38,10 +38,16 @@ if [ -f "$_internals_dir/elog_lib.sh" ]; then
 	. "$_internals_dir/elog_lib.sh"
 fi
 
-# Source alert library (template engine, formatting, delivery)
+# Source shared alert library (template engine, MIME, delivery, channel registry)
 if [ -f "$_internals_dir/alert_lib.sh" ]; then
 	# shellcheck disable=SC1091
 	. "$_internals_dir/alert_lib.sh"
+fi
+
+# Source BFD-specific alert functions (content helpers, rendering, digest wrappers)
+if [ -f "$_internals_dir/bfd_alert.sh" ]; then
+	# shellcheck disable=SC1091
+	. "$_internals_dir/bfd_alert.sh"
 fi
 unset _internals_dir
 
@@ -2573,7 +2579,7 @@ send_alerts() {
 			_alert_render_text "$recip_file" "$tpl_dir" "$loglines" > "$text_file"
 		fi
 
-		if _alert_send "$recip" "$mail_subject" "$text_file" "$html_file" "$format"; then
+		if _alert_deliver_email "$recip" "$mail_subject" "$text_file" "$html_file" "$format"; then
 			elog info "alert email sent to $recip ($alert_count ban(s), format=$format)."
 		else
 			elog error "alert email to $recip failed."

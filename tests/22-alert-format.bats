@@ -597,7 +597,7 @@ RULEEOF
 }
 
 @test "pipeline: scan mode force-flushes digest spool" {
-	bfd_load_function _alert_digest_flush_now "$PROJECT_ROOT/files/internals/alert_lib.sh"
+	bfd_load_function _bfd_digest_flush "$PROJECT_ROOT/files/internals/bfd_alert.sh"
 	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_ALERTS="1"
@@ -611,7 +611,7 @@ RULEEOF
 	local now
 	now=$(date +%s)
 	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
-	_alert_digest_flush_now
+	_bfd_digest_flush
 	# mail should have been called
 	[ -f "$mail_log" ]
 	# spool should be empty

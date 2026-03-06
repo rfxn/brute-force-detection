@@ -1,4 +1,12 @@
 2.0.1:
+[Change] Alert subsystem refactored: generic primitives (template engine, MIME
+      builder, email delivery, digest/spool) replaced with shared alert_lib
+      v1.0.0; BFD-specific functions (content helpers, rendering pipeline,
+      data preparation) extracted to bfd_alert.sh
+[Change] Digest wrappers (_bfd_spool_append, _bfd_digest_check, _bfd_digest_flush)
+      bridge BFD config variables to shared alert_lib's explicit-argument API
+[Change] Email delivery variables (SMTP_*) mapped to shared library env vars
+      (ALERT_SMTP_*) via _bfd_alert_init() at config initialization
 [Change] --attackpool retained as silent alias; all user-facing text
       (help, man page, README, bash completion) switched to --activity
 [Change] -e/--events descriptions updated from "pressure dashboard" to

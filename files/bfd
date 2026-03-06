@@ -122,6 +122,8 @@ config_init() {
 		unset TRIG TRIG_WINDOW TRIG_GLOBAL
 		unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
 		unset APOOL_RETENTION_DAYS APOOL_MAX_LINES
+		# alert_lib mapped env vars (set by _bfd_alert_init)
+		unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
 		# internals.conf variables
 		unset RULES_PATH TLOG_PATH TLOG_BASERUN
 		unset ALERT_TEMPLATE_DIR ALERT_SPOOL_FILE IGNORE_HOST_FILES LOCK_FILE
@@ -217,6 +219,9 @@ config_init() {
 	detect_log_paths
 	fw_resolve_backend
 	fw_setup
+
+	# Initialize alert channel config mapping
+	_bfd_alert_init
 
 	# Re-register journal filters on reload (F-057)
 	if [ "$_reload" = "1" ]; then
@@ -505,14 +510,14 @@ check() {
 	# send batched alert emails (or spool for digest)
 	if [ "$EMAIL_ALERTS" = "1" ] && [ -s "$alerts_file" ]; then
 		if [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
-			_alert_spool_append "$alerts_file"
+			_bfd_spool_append "$alerts_file"
 		else
 			send_alerts "$alerts_file" "$EMAIL_SUBJECT" "${EMAIL_LOGLINES:-5}"
 		fi
 	fi
 	# check digest spool for timed flush (handles pre-existing entries too)
 	if [ "$EMAIL_ALERTS" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
-		_alert_digest_check
+		_bfd_digest_check
 	fi
 	rm -f "$alerts_file"
 
@@ -1027,7 +1032,7 @@ cleanup_watch() {
 	eout "watch mode shutting down (pid=$$)" le
 	# flush any accumulated digest alerts before shutdown
 	if [ "${EMAIL_ALERTS:-0}" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
-		_alert_digest_flush_now
+		_bfd_digest_flush
 	fi
 	_cleanup_common
 }
@@ -1337,7 +1342,7 @@ case "${1:-}" in
 	check
 	# force-flush digest spool after scan (one-shot operation)
 	if [ "${EMAIL_ALERTS:-0}" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
-		_alert_digest_flush_now
+		_bfd_digest_flush
 	fi
 	_SCAN_MODE=""
 	if [ "$DRY_RUN" != "1" ] && [ -n "$_SCAN_LOG_PAIRS" ]; then
