@@ -35,7 +35,7 @@ and IPv4/IPv6 support across 42 service rules.
 - [5. General Usage](#5-general-usage)
   - [5.1 Dry Run](#51-dry-run)
   - [5.2 Health Check](#52-health-check)
-  - [5.3 Attack Pool](#53-attack-pool)
+  - [5.3 Threat Activity](#53-threat-activity)
   - [5.4 Watch Mode](#54-watch-mode)
   - [5.5 Flush Bans](#55-flush-bans)
   - [5.6 Structured Output](#56-structured-output)
@@ -117,7 +117,7 @@ BFD uses a log tracking system so logs are only parsed from the point at which t
 - Health check mode for non-destructive diagnostics (`bfd -c`)
 - Dry-run mode for testing rules without banning (`bfd -d`)
 - Verbose mode for detailed per-rule and per-ban output (`bfd --verbose`)
-- Attack pool reporting with per-service breakdown and ban status (`bfd -a`)
+- Threat activity reporting with summary, dual-interval service breakdown, and ban status (`bfd -a`)
 - Per-run statistics logging (rules checked, events parsed, bans executed)
 - Batched email alerts with enriched context (ban type, duration, history) and per-rule routing
 - Man page (`man bfd`) and bash tab completion installed automatically
@@ -511,7 +511,7 @@ Ban Management:
 
 Reporting:                                      Supports: --json --csv
   -l, --list                  list active bans
-  -a, --attackpool [IP|STR]   attack pool and IP investigation
+  -a, --attackpool, --activity [IP|STR]  threat activity and IP investigation
   -e, --events [IP|CIDR]      pressure dashboard, IP or subnet detail
 
 System:
@@ -572,19 +572,23 @@ bfd -c
 
 Output uses `[PASS]`, `[WARN]`, `[FAIL]`, and `[SKIP]` (inactive rules) indicators with a final summary.
 
-### 5.3 Attack Pool
+### 5.3 Threat Activity
 
-The **`-a|--attackpool`** option displays the top brute force attackers with per-service breakdown and ban status for each IP:
+The **`-a|--attackpool|--activity`** option displays a threat activity report with aggregate summary, top threat IPs, and per-service breakdown:
 
 ```bash
-bfd -a           # show top attackers
+bfd -a           # show threat activity report
+bfd --activity   # same as above
 bfd -a 192.0.2   # search for a specific string
 ```
 
 The report includes:
-- **Top 25 attackers today** — event count, IP, first/last seen, services, and ban status (active bans show `BANNED(perm)` or `BANNED(Xm)`, previous bans show `prev:N`)
-- **Per-service breakdown** — event count and unique IP count per service
-- **Top 25 attackers this week** — same format, aggregated from the weekly pool
+- **Threat Activity Summary** — unique IPs and total count for 24h and 7d windows, plus active bans
+- **Top 25 threat IPs (24h)** — event count, IP, pressure, country, first/last seen, services, ban status (active bans show `BANNED(perm)` or `BANNED(Xm)`, previous bans show `prev:N`)
+- **Top 25 threat IPs (7d)** — same format, 7-day window
+- **Per-service threat breakdown (24h / 7d)** — dual-interval count, unique IPs, and top country per service
+
+> **`-a` vs `-e`:** The `-a` (threat activity) report shows historical ban decisions and attack patterns over 24h/7d windows. The `-e` (events/pressure) report shows real-time pressure scores and active events for currently tracked IPs. Use `-a` to review past activity and `-e` to assess current risk.
 
 ### 5.4 Watch Mode
 
@@ -648,7 +652,7 @@ bfd -l --json          # active bans as JSON
 bfd -l --csv           # active bans as CSV
 bfd -e --json          # events dashboard as JSON
 bfd -e 192.0.2.1 --csv # per-IP events as CSV
-bfd -a --json          # attack pool as JSON
+bfd -a --json          # threat activity as JSON
 bfd -a 192.0.2.1 --csv # IP report as CSV
 ```
 
@@ -800,9 +804,9 @@ bfd -b 192.0.2.1 sshd     # manually ban with a service label
 | `bans.active` | Currently active bans (timestamp, expiry, IP, service, ports) |
 | `bans.history` | Append-only log of all ban/unban events |
 | `events.dat` | Per-IP failure events with pressure weights (timestamp, IP, service, weight) |
-| `attack.pool` | Persistent attack pool — all detected events for reporting |
+| `attack.pool` | Threat activity pool — enriched ban decision log for reporting |
 
-The `bfd -a` attack pool report integrates with ban state — each IP shows whether it is currently banned, its ban type (permanent or time remaining), and historical ban count.
+The `bfd -a` threat activity report integrates with ban state — each IP shows whether it is currently banned, its ban type (permanent or time remaining), and historical ban count.
 
 ---
 
