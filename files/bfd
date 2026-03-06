@@ -122,6 +122,8 @@ config_init() {
 		unset TRIG TRIG_WINDOW TRIG_GLOBAL
 		unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
 		unset APOOL_RETENTION_DAYS APOOL_MAX_LINES
+		# elog_lib canonical vars
+		unset ELOG_LOG_DIR ELOG_AUDIT_FILE ELOG_LOG_MAX_LINES
 		# messaging config vars (new in conf.bfd)
 		unset SLACK_ALERTS SLACK_MODE SLACK_WEBHOOK_URL SLACK_TOKEN SLACK_CHANNEL
 		unset TELEGRAM_ALERTS TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
@@ -182,6 +184,21 @@ config_init() {
 	ELOG_FORMAT="${LOG_FORMAT:-classic}"
 	# shellcheck disable=SC2034
 	ELOG_LEVEL="${LOG_LEVEL:-1}"
+
+	# Structured logging: directory and audit trail (elog_lib canonical)
+	ELOG_LOG_DIR="${ELOG_LOG_DIR:-/var/log/bfd}"
+	# shellcheck disable=SC2034
+	ELOG_AUDIT_FILE="${ELOG_AUDIT_FILE:-${ELOG_LOG_DIR}/audit.log}"
+	# shellcheck disable=SC2034
+	ELOG_LOG_MAX_LINES="${ELOG_LOG_MAX_LINES:-50000}"
+
+	# Initialize log environment (creates dirs, files, enables output modules)
+	if ! elog_init; then
+		elog warn "elog_init: log directory setup failed; structured event logging may be unavailable"
+	fi
+	# Always enable syslog_file module — eout() dynamically sets ELOG_SYSLOG_FILE
+	# per call; handler checks var at write time (empty = skip)
+	elog_output_enable "syslog_file" 2>/dev/null || true
 
 	# Backward compat mapping (old v1.5 names -> new names)
 	PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
