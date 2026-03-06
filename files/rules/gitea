@@ -1,0 +1,41 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+# supports Gitea and Forgejo (compatible fork)
+PREREQ="/usr/local/bin/gitea"
+if [ ! -f "$PREREQ" ]; then
+	PREREQ="/usr/bin/gitea"
+fi
+if [ ! -f "$PREREQ" ]; then
+	PREREQ="/usr/bin/forgejo"
+fi
+if [ ! -f "$PREREQ" ]; then
+	PREREQ="/usr/local/bin/forgejo"
+fi
+
+if [ -f "$PREREQ" ]; then
+	PORTS="3000"
+
+	# detect log file path (Gitea or Forgejo)
+	if [ -f "/var/lib/gitea/log/gitea.log" ]; then
+		LOG_FILE="/var/lib/gitea/log/gitea.log"
+	elif [ -f "/var/lib/forgejo/log/forgejo.log" ]; then
+		LOG_FILE="/var/lib/forgejo/log/forgejo.log"
+	else
+		LOG_FILE="/var/lib/gitea/log/gitea.log"
+	fi
+	LOG_TAG="gitea"
+
+	## Gitea / Forgejo authentication failures
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"Failed authentication attempt for .* from <HOST>" \
+		"invalid credentials from <HOST>")
+fi

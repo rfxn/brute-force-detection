@@ -25,5 +25,9 @@ if [ -f "$PREREQ" ]; then
 		"sshd.*Did not receive identification string from <HOST>" \
 		"sshd.*refused connect from <HOST>" \
 		"sshd.*maximum authentication attempts exceeded.* from <HOST>" \
-		"sshd.*pam_unix.*authentication failure.*rhost=<HOST>")
+		"sshd.*pam_unix.*authentication failure.*rhost=<HOST>" \
+		"sshd.*Connection closed by authenticating user .* <HOST> port" \
+		"sshd.*Disconnected from authenticating user .* <HOST> port" \
+		"sshd.*banner exchange: Connection from <HOST> port" \
+		"sshd.*Unable to negotiate with <HOST> port")
 fi

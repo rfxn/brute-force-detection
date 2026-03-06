@@ -12,11 +12,12 @@
 PREREQ="/usr/local/cpanel/logs/login_log"
 
 if [ -f "$PREREQ" ]; then
-	PORTS="2082,2083,2086,2087"
+	PORTS="2082,2083,2086,2087,2095,2096"
 	LOG_FILE="/usr/local/cpanel/logs/login_log"
 	LOG_TAG="cpanel"
 
-	## whm, cpanel, webmaild
+	## whm, cpanel, webmaild (pre-76 and 76+ log formats)
 	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
-		"<HOST> -.* FAILED LOGIN")
+		"<HOST> -.* FAILED LOGIN" \
+		"\] <HOST> -.* FAILED LOGIN")
 fi

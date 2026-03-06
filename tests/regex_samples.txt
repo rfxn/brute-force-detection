@@ -63,6 +63,26 @@ Feb 22 10:16:04 myhost sshd[12353]: error: maximum authentication attempts excee
 # EXPECT: 198.51.100.20
 Feb 22 10:16:05 myhost sshd[12354]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=198.51.100.20 user=root
 
+# RULE: sshd
+# PATTERN: sshd.*Connection closed by authenticating user .* <HOST> port
+# EXPECT: 203.0.113.45
+Feb 22 10:16:06 myhost sshd[12355]: Connection closed by authenticating user admin 203.0.113.45 port 44470 [preauth]
+
+# RULE: sshd
+# PATTERN: sshd.*Disconnected from authenticating user .* <HOST> port
+# EXPECT: 198.51.100.30
+Feb 22 10:16:07 myhost sshd[12356]: Disconnected from authenticating user root 198.51.100.30 port 26444 [preauth]
+
+# RULE: sshd
+# PATTERN: sshd.*banner exchange: Connection from <HOST> port
+# EXPECT: 192.0.2.15
+Feb 22 10:16:08 myhost sshd[12357]: banner exchange: Connection from 192.0.2.15 port 44470: invalid format
+
+# RULE: sshd
+# PATTERN: sshd.*Unable to negotiate with <HOST> port
+# EXPECT: 203.0.113.60
+Feb 22 10:16:09 myhost sshd[12358]: Unable to negotiate with 203.0.113.60 port 55046: no matching key exchange method found. Their offer: diffie-hellman-group1-sha1
+
 # --- dovecot ---
 
 # RULE: dovecot
@@ -96,6 +116,11 @@ Feb 22 10:16:02 myhost dovecot: imap-login: Disconnected (auth failed, 1 attempt
 # EXPECT: 192.0.2.10
 Feb 22 10:16:03 myhost dovecot: submission-login: Aborted login (auth failed, 1 attempts): user=<spammer>, method=PLAIN, rip=192.0.2.10, lip=192.0.2.1
 
+# RULE: dovecot
+# PATTERN: managesieve-login.*auth failed.*rip=<HOST>
+# EXPECT: 203.0.113.70
+Feb 22 10:16:04 myhost dovecot: managesieve-login: Aborted login (auth failed, 1 attempts): user=<admin>, method=PLAIN, rip=203.0.113.70, lip=192.0.2.1
+
 # --- postfix ---
 
 # RULE: postfix
@@ -113,6 +138,16 @@ Feb 22 10:15:05 myhost postfix/smtpd[9877]: warning: mail.example.com[198.51.100
 # EXPECT: 2001:db8::abcd
 # NOTE: IPv6 address
 Feb 22 10:15:03 myhost postfix/smtpd[9876]: warning: unknown[2001:db8::abcd]: SASL LOGIN authentication failed: authentication failure
+
+# RULE: postfix
+# PATTERN: lost connection after AUTH from.*\[<HOST>\]
+# EXPECT: 203.0.113.45
+Feb 22 10:15:06 myhost postfix/smtpd[12345]: lost connection after AUTH from unknown[203.0.113.45]
+
+# RULE: postfix
+# PATTERN: too many errors after AUTH from.*\[<HOST>\]
+# EXPECT: 198.51.100.12
+Feb 22 10:15:07 myhost postfix/smtpd[12346]: too many errors after AUTH from unknown[198.51.100.12]
 
 # --- exim_authfail ---
 
@@ -246,7 +281,34 @@ Feb 22 10:15:03 myhost ipop3d[12345]: Login failed user=admin auth=admin host=[1
 # RULE: cpanel
 # PATTERN: <HOST> -.* FAILED LOGIN
 # EXPECT: 203.0.113.100
+# NOTE: Pre-cPanel 76 format (IP at line start)
 203.0.113.100 - admin [02/22/2024:10:15:03 -0000] FAILED LOGIN whostmgrd: ip - password
+
+# RULE: cpanel
+# PATTERN: \] <HOST> -.* FAILED LOGIN
+# EXPECT: 198.51.100.50
+# NOTE: cPanel 76+ format (IP after [service] field)
+[2019-09-09 15:03:19 +0100] info [webmaild] 198.51.100.50 - user@example.com "POST /login/?login_only=1 HTTP/1.1" FAILED LOGIN webmaild: user password incorrect
+
+# RULE: cpanel
+# PATTERN: \] <HOST> -.* FAILED LOGIN
+# EXPECT: 203.0.113.20
+# NOTE: cPanel 76+ format (cpaneld service)
+[2024-02-22 10:15:03 +0000] info [cpaneld] 203.0.113.20 - admin "POST /login/?login_only=1 HTTP/1.1" FAILED LOGIN cpaneld: invalid cpanel user admin
+
+# --- interworx ---
+
+# RULE: interworx
+# PATTERN: ^[0-9-]+ [0-9:]+ [NS]W <HOST>
+# EXPECT: 192.0.2.10
+# NOTE: NodeWorx (NW) login failure
+2019-07-15 10:30:45 NW 192.0.2.10 admin
+
+# RULE: interworx
+# PATTERN: ^[0-9-]+ [0-9:]+ [NS]W <HOST>
+# EXPECT: 203.0.113.55
+# NOTE: SiteWorx (SW) login failure
+2024-02-22 10:15:03 SW 203.0.113.55 user@example.com
 
 # --- modsec ---
 
@@ -309,6 +371,16 @@ Feb 22 10:15:03 myhost ipop3d[12345]: Login failed user=admin auth=admin host=[1
 # PATTERN: \[client <HOST>.*AH0161[78]
 # EXPECT: 198.51.100.1
 [Tue Sep 08 13:34:46.224312 2015] [auth_basic:error] [pid 2043:tid 140302748706560] [client 198.51.100.1:53340] AH01617: user mfoley: authentication failure for "/admin/": Password Mismatch
+
+# RULE: apache-auth
+# PATTERN: \[client <HOST>.*AH0162[012]
+# EXPECT: 203.0.113.10
+[Thu Feb 22 10:15:03.123456 2024] [auth_digest:error] [pid 12345] [client 203.0.113.10:54321] AH01621: user `admin': nonce stale - Loss of sync?
+
+# RULE: apache-auth
+# PATTERN: \[client <HOST>.*AH02572
+# EXPECT: 192.0.2.20
+[Thu Feb 22 10:15:05.654321 2024] [authz_dbd:error] [pid 12346] [client 192.0.2.20:44100] AH02572: AuthzDBD query authorization failed for user `dbuser'
 
 # --- nginx-http-auth ---
 
@@ -491,6 +563,12 @@ Feb 22 10:15:03 ns1 named[12345]: client @0x7f 2001:db8::abcd#54321 (example.com
 # NOTE: IPv6 address
 2026-02-22 10:15:03.123 UTC [12345] FATAL:  no pg_hba.conf entry for host "2001:db8::db", user "admin", database "testdb"
 
+# RULE: postgresql
+# PATTERN: <HOST>.*FATAL.*role .* does not exist
+# EXPECT: 203.0.113.30
+# NOTE: User enumeration probe — non-existent database role
+2026-02-22 10:15:07.789 UTC [12347] 203.0.113.30 FATAL:  role "nonexistent" does not exist
+
 # --- openvpn ---
 
 # RULE: openvpn
@@ -507,6 +585,11 @@ Feb 22 10:15:05 myhost openvpn[12345]: VERIFY ERROR: depth=0, error=certificate 
 # PATTERN: openvpn.*TLS handshake failed.* <HOST>
 # EXPECT: 198.51.100.1
 Feb 22 10:15:07 myhost openvpn[12345]: TLS handshake failed from 198.51.100.1
+
+# RULE: openvpn
+# PATTERN: openvpn.*MULTI: bad source address from client \[<HOST>
+# EXPECT: 203.0.113.80
+Feb 22 10:15:08 myhost openvpn[12345]: MULTI: bad source address from client [203.0.113.80:45678], packet dropped
 
 # --- phpmyadmin ---
 
@@ -579,6 +662,76 @@ Feb 22 10:15:05 myhost pveproxy[12346]: pam_unix(proxmox:auth): authentication f
 # PATTERN: Failed to authenticate.*from client <HOST>
 # EXPECT: 192.0.2.5
 2024-02-22T10:15:05.000+0000 I ACCESS   [conn12346] Failed to authenticate admin@admin from client 192.0.2.5
+
+# RULE: mongodb
+# PATTERN: "Authentication failed".*"client":"<HOST>:
+# EXPECT: 203.0.113.10
+# NOTE: MongoDB 4.4+ JSON structured log format
+{"t":{"$date":"2024-02-22T10:15:06.000+0000"},"s":"I","c":"ACCESS","id":20249,"ctx":"conn12347","msg":"Authentication failed","attr":{"mechanism":"SCRAM-SHA-256","speculative":false,"principalName":"admin","authenticationDatabase":"admin","client":"203.0.113.10:45005","result":"AuthenticationFailed: SCRAM authentication failed"}}
+
+# RULE: mongodb
+# PATTERN: "Authentication failed".*"remote":"<HOST>:
+# EXPECT: 198.51.100.12
+# NOTE: MongoDB 6.0+ JSON log format (client renamed to remote)
+{"t":{"$date":"2024-02-22T10:15:07.000+0000"},"s":"I","c":"ACCESS","id":20249,"ctx":"conn12348","msg":"Authentication failed","attr":{"mechanism":"SCRAM-SHA-256","speculative":false,"principalName":"admin","authenticationDatabase":"admin","remote":"198.51.100.12:62189","result":"AuthenticationFailed: SCRAM authentication failed"}}
+
+# --- gitea ---
+
+# RULE: gitea
+# PATTERN: Failed authentication attempt for .* from <HOST>
+# EXPECT: 203.0.113.45
+2025/11/06 13:28:00 ...auth.go:222:SignInPost() [W] Failed authentication attempt for admin from 203.0.113.45:44774: user does not exist
+
+# RULE: gitea
+# PATTERN: invalid credentials from <HOST>
+# EXPECT: 198.51.100.12
+2024/03/15 10:22:33 ...context.go:204 [E] invalid credentials from 198.51.100.12
+
+# --- nextcloud ---
+
+# RULE: nextcloud
+# PATTERN: Login failed:.*Remote IP: '<HOST>'
+# EXPECT: 203.0.113.50
+{"reqId":"abc123","level":2,"time":"2024-02-22T10:15:03+00:00","remoteAddr":"203.0.113.50","user":"--","app":"core","method":"POST","url":"/login","message":"Login failed: 'admin' (Remote IP: '203.0.113.50')","userAgent":"Mozilla/5.0","version":"29.0.1"}
+
+# RULE: nextcloud
+# PATTERN: Trusted domain error.*Remote IP: '<HOST>'
+# EXPECT: 192.0.2.30
+{"reqId":"def456","level":2,"time":"2024-02-22T10:15:05+00:00","remoteAddr":"192.0.2.30","user":"--","app":"core","method":"GET","url":"/","message":"Trusted domain error. - Loss of sync? (Remote IP: '192.0.2.30')","userAgent":"curl/7.68.0","version":"29.0.1"}
+
+# --- cockpit ---
+
+# RULE: cockpit
+# PATTERN: cockpit-session.*authentication failure.*rhost=<HOST>
+# EXPECT: 203.0.113.45
+Feb 22 10:15:03 myhost cockpit-session: pam_unix(cockpit:auth): authentication failure; logname= uid=0 euid=0 tty= ruser= rhost=203.0.113.45 user=root
+
+# RULE: cockpit
+# PATTERN: cockpit-ws.*authentication failed.* <HOST>
+# EXPECT: 198.51.100.20
+Feb 22 10:15:05 myhost cockpit-ws: authentication failed from 198.51.100.20
+
+# RULE: cockpit
+# PATTERN: pam_unix\(cockpit:auth\).*authentication failure.*rhost=<HOST>
+# EXPECT: 192.0.2.15
+Feb 22 10:15:07 myhost cockpit-session: pam_unix(cockpit:auth): authentication failure; logname= uid=0 euid=0 tty= ruser= rhost=192.0.2.15 user=admin
+
+# --- postscreen ---
+
+# RULE: postscreen
+# PATTERN: postfix/postscreen.*PREGREET.*from \[<HOST>\]
+# EXPECT: 203.0.113.50
+Feb 22 10:15:03 myhost postfix/postscreen[44350]: PREGREET 16 after 0.69 from [203.0.113.50]:38026: HELO bryozoann\r\n
+
+# RULE: postscreen
+# PATTERN: postfix/postscreen.*DNSBL rank [0-9]+ for \[<HOST>\]
+# EXPECT: 198.51.100.12
+Feb 22 10:15:05 myhost postfix/postscreen[44350]: DNSBL rank 2 for [198.51.100.12]:38026
+
+# RULE: postscreen
+# PATTERN: postfix/postscreen.*HANGUP.*from \[<HOST>\]
+# EXPECT: 203.0.113.17
+Feb 22 10:15:07 myhost postfix/postscreen[20412]: HANGUP after 0.85 from [203.0.113.17]:52066 in tests after SMTP handshake
 
 # --- xrdp ---
 
