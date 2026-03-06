@@ -62,6 +62,13 @@ bfd_common_setup() {
 	ELOG_LEVEL="1"
 	ELOG_VERBOSE="0"
 	ELOG_FORMAT="classic"
+	ELOG_LOG_DIR="$TEST_TMPDIR"
+	ELOG_AUDIT_FILE="$TEST_TMPDIR/audit.log"
+	touch "$ELOG_AUDIT_FILE"
+	ELOG_LOG_MAX_LINES="0"
+	# Enable syslog_file module unconditionally — eout() dynamically sets
+	# ELOG_SYSLOG_FILE per call; handler checks var at write time (empty = skip)
+	elog_output_enable "syslog_file" 2>/dev/null || true
 }
 
 # bfd_standard_setup: full test environment (common + state + config defaults)

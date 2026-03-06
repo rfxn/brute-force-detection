@@ -1,4 +1,16 @@
 2.0.1:
+[Change] elog_lib.sh upgraded to canonical v1.0.0 from elog_lib upstream: adds
+      elog_init() log directory/file setup, elog_event() structured JSONL audit
+      events, output module registry with source-filtered dispatch, periodic
+      inode-preserving log truncation, elog_critical() wrapper, and logrotate
+      snippet generator; existing elog() API fully backward-compatible
+[New] elog_init() called in config_init() to initialize /var/log/bfd/ directory
+      and audit.log; non-fatal on failure (app logging unaffected)
+[New] ELOG_LOG_DIR, ELOG_AUDIT_FILE, ELOG_LOG_MAX_LINES config variables in
+      internals.conf with safe defaults
+[New] elog_event() structured audit events for block_added, block_removed,
+      config_loaded, config_error, and service_state; written as JSONL to
+      /var/log/bfd/audit.log with key=value metadata fields
 [New] LOG_IDLE_SUPPRESS config variable (default: 1) suppresses idle zero-event
       run-complete messages from syslog; BFD log file always records every cycle
 [New] eout() "l" flag for log-file-only output (no syslog)

@@ -122,6 +122,8 @@ config_init() {
 		unset TRIG TRIG_WINDOW TRIG_GLOBAL
 		unset BAN_DURATION BAN_PERMANENT_AFTER BAN_PERMANENT_WINDOW
 		unset APOOL_RETENTION_DAYS APOOL_MAX_LINES
+		# elog_lib canonical vars
+		unset ELOG_LOG_DIR ELOG_AUDIT_FILE ELOG_LOG_MAX_LINES
 		# messaging config vars (new in conf.bfd)
 		unset SLACK_ALERTS SLACK_MODE SLACK_WEBHOOK_URL SLACK_TOKEN SLACK_CHANNEL
 		unset TELEGRAM_ALERTS TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
@@ -183,6 +185,21 @@ config_init() {
 	# shellcheck disable=SC2034
 	ELOG_LEVEL="${LOG_LEVEL:-1}"
 
+	# Structured logging: directory and audit trail (elog_lib canonical)
+	ELOG_LOG_DIR="${ELOG_LOG_DIR:-/var/log/bfd}"
+	# shellcheck disable=SC2034
+	ELOG_AUDIT_FILE="${ELOG_AUDIT_FILE:-${ELOG_LOG_DIR}/audit.log}"
+	# shellcheck disable=SC2034
+	ELOG_LOG_MAX_LINES="${ELOG_LOG_MAX_LINES:-50000}"
+
+	# Initialize log environment (creates dirs, files, enables output modules)
+	if ! elog_init; then
+		elog warn "elog_init: log directory setup failed; structured event logging may be unavailable"
+	fi
+	# Always enable syslog_file module — eout() dynamically sets ELOG_SYSLOG_FILE
+	# per call; handler checks var at write time (empty = skip)
+	elog_output_enable "syslog_file" 2>/dev/null || true
+
 	# Backward compat mapping (old v1.5 names -> new names)
 	PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
 	PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
@@ -241,7 +258,12 @@ config_init() {
 	return 0
 }
 
-config_init || { vhead; exit "$EXIT_CONFIG_ERROR"; }
+if ! config_init; then
+	elog_event "config_error" "error" "configuration initialization failed"
+	vhead
+	exit "$EXIT_CONFIG_ERROR"
+fi
+elog_event "config_loaded" "info" "configuration initialized"
 
 # warn if BAN_COMMAND binary not found (custom mode only)
 if [ "$_FW_BACKEND" = "custom" ]; then
@@ -1042,6 +1064,7 @@ run() {
 # shellcheck disable=SC2317 # called via trap
 cleanup_watch() {
 	eout "watch mode shutting down (pid=$$)" le
+	elog_event "service_state" "info" "watch mode shutting down"
 	# flush any accumulated digest alerts before shutdown
 	if [ "${EMAIL_ALERTS:-0}" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
 		_bfd_digest_flush
@@ -1054,6 +1077,7 @@ reload_watch() {
 	eout "watch mode reloading configuration (SIGHUP)" le
 	if ! config_init 1; then
 		elog error "reload aborted: configuration error, continuing with previous config"
+		elog_event "config_error" "error" "watch mode reload failed"
 		return 1
 	fi
 	# refresh local IPs (runtime state, not config)
@@ -1063,6 +1087,8 @@ reload_watch() {
 		hostname -I | tr ' ' '\n' > "$LO_HOSTS"
 	fi
 	eout "watch mode reload complete (WATCH_INTERVAL=${WATCH_INTERVAL}s)" le
+	elog_event "service_state" "info" "watch mode reload complete" \
+		"interval=$WATCH_INTERVAL"
 }
 
 watch() {
@@ -1077,6 +1103,8 @@ watch() {
 	pre
 	get_state
 	eout "watch mode started (interval=${WATCH_INTERVAL}s, pid=$$)" le
+	elog_event "service_state" "info" "watch mode started" \
+		"interval=$WATCH_INTERVAL"
 	export TLOG_FLOCK=1
 	while true; do
 		UTIME=$(date +"%s")
