@@ -153,7 +153,7 @@ or
 .B \-\-csv
 for structured output.
 .TP
-.BI \-a ", " \-\-attackpool ", " \-\-activity " \fR[" IP | STRING \fR]
+.BI \-a ", " \-\-activity " \fR[" IP | STRING \fR]
 Threat activity report.
 Without arguments, shows an aggregate summary (unique IPs, total
 count, active bans for 24h and 7d windows), top 25 threat IPs for
@@ -181,9 +181,8 @@ to assess current risk.
 .TP
 .BI \-e " \fR[" IP | CIDR "\fR] [" N \fR]
 Active events and pressure report.
-Without arguments, shows a pressure dashboard of all tracked IPs
-sorted by pressure descending, with event counts, services,
-and ban status.
+Without arguments, shows all tracked IPs sorted by pressure descending,
+with event counts, services, and ban status.
 With a valid IP, shows per-IP pressure detail including per-service
 breakdown with individual weights, event counts, and sub-scores.
 The optional

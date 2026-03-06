@@ -11,7 +11,7 @@ _bfd_completions() {
 
 	# Flag lists
 	local short_flags="-s -q -d -w -a -e -c -l -u -b -S -C -R -T -v -h -V"
-	local long_flags="--standard --quiet --dryrun --watch --attackpool --activity --events --check --list --unban --ban --status --config --rules --test --test-pattern --test-alert --scan --max-lines= --scan-timeout= --flush-temp --flush-all --json --csv --verbose --version --help"
+	local long_flags="--standard --quiet --dryrun --watch --activity --events --check --list --unban --ban --status --config --rules --test --test-pattern --test-alert --scan --max-lines= --scan-timeout= --flush-temp --flush-all --json --csv --verbose --version --help"
 
 	# Context-sensitive completions
 	case "$prev" in

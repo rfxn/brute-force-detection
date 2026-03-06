@@ -40,7 +40,7 @@ and IPv4/IPv6 support across 42 service rules.
   - [5.5 Flush Bans](#55-flush-bans)
   - [5.6 Structured Output](#56-structured-output)
   - [5.7 Scan Mode](#57-scan-mode)
-  - [5.8 Events Dashboard](#58-events-dashboard)
+  - [5.8 Events and Pressure](#58-events-and-pressure)
 - [6. Rule Engine](#6-rule-engine)
   - [6.1 Rule Catalog](#61-rule-catalog)
   - [6.2 Rule Customization](#62-rule-customization)
@@ -511,8 +511,8 @@ Ban Management:
 
 Reporting:                                      Supports: --json --csv
   -l, --list                  list active bans
-  -a, --attackpool, --activity [IP|STR]  threat activity and IP investigation
-  -e, --events [IP|CIDR]      pressure dashboard, IP or subnet detail
+  -a, --activity [IP|STR]     threat activity and IP investigation
+  -e, --events [IP|CIDR]      active events, IP or subnet pressure detail
 
 System:
   -S, --status [SERVICE]      operational status overview
@@ -574,7 +574,7 @@ Output uses `[PASS]`, `[WARN]`, `[FAIL]`, and `[SKIP]` (inactive rules) indicato
 
 ### 5.3 Threat Activity
 
-The **`-a|--attackpool|--activity`** option displays a threat activity report with aggregate summary, top threat IPs, and per-service breakdown:
+The **`-a|--activity`** option displays a threat activity report with aggregate summary, top threat IPs, and per-service breakdown:
 
 ```bash
 bfd -a           # show threat activity report
@@ -650,7 +650,7 @@ Use `--json` or `--csv` with `-l`, `-e`, or `-a` for machine-readable output:
 ```bash
 bfd -l --json          # active bans as JSON
 bfd -l --csv           # active bans as CSV
-bfd -e --json          # events dashboard as JSON
+bfd -e --json          # active events as JSON
 bfd -e 192.0.2.1 --csv # per-IP events as CSV
 bfd -a --json          # threat activity as JSON
 bfd -a 192.0.2.1 --csv # IP report as CSV
@@ -692,26 +692,26 @@ After a non-dry-run scan, tlog cursors are advanced to the current log position 
 
 **Lock behavior:** Scan acquires the same global lock as normal runs. If watch mode is running, stop it first (`systemctl stop bfd-watch`), run the scan, then restart.
 
-### 5.8 Events Dashboard
+### 5.8 Events and Pressure
 
 The `--events` command provides real-time visibility into the pressure model:
 
 ```bash
-bfd --events                  # pressure dashboard — all tracked IPs
+bfd --events                  # all tracked IPs sorted by pressure
 bfd --events 192.0.2.1        # per-IP detail — service breakdown
 bfd --events 192.0.2.0/24     # CIDR report — subnet-scoped view
 ```
 
-**Dashboard mode** (no argument) shows all IPs with active pressure events, sorted by pressure score descending. Columns: IP, pressure/trip, event count, services, first/last seen, ban status.
+**Summary mode** (no argument) shows all IPs with active pressure events, sorted by pressure score descending. Columns: IP, pressure/trip, event count, services, first/last seen, ban status.
 
 **IP mode** shows overall pressure with half-life context, a per-service breakdown table (service, weight, events, pressure), first/last timestamps, and ban status.
 
-**CIDR mode** filters the dashboard to a subnet (IPv4, mask 8-32) and includes a summary line with match count, total events, and banned count.
+**CIDR mode** filters to a subnet (IPv4, mask 8-32) and includes a summary line with match count, total events, and banned count.
 
 All three modes support `--json` and `--csv`:
 
 ```bash
-bfd --events --json           # dashboard as JSON array
+bfd --events --json           # active events as JSON array
 bfd --events 192.0.2.1 --json # per-IP as single JSON object
 bfd --events 10.0.0.0/8 --csv # CIDR as CSV
 ```

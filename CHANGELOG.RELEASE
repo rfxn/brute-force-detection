@@ -2,6 +2,10 @@
 
 -- Threat Activity --
 
+[Change] --attackpool retained as silent alias; all user-facing text
+      (help, man page, README, bash completion) switched to --activity
+[Change] -e/--events descriptions updated from "pressure dashboard" to
+      "active events" across help, man page, and README
 [Change] bfd.1 man page: -a description updated for threat activity report,
       --activity alias, dual-interval summary layout, -a vs -e usage note;
       attack.pool FILES entry updated
