@@ -17,6 +17,8 @@ bfd_load_function _apool_service_summary_awk
 bfd_load_function _apool_service_summary
 bfd_load_function _apool_summary_awk
 bfd_load_function _apool_summary
+bfd_load_function _apool_service_dual_awk
+bfd_load_function _apool_service_dual
 bfd_load_function apool_list
 
 setup() {
@@ -450,4 +452,87 @@ teardown() {
 	summary_line=$(echo "$output" | grep -n "Threat Activity Summary" | head -1 | cut -d: -f1)
 	ip_table_line=$(echo "$output" | grep -n "Top 25 threat IPs" | head -1 | cut -d: -f1)
 	[ "$summary_line" -lt "$ip_table_line" ]
+}
+
+# --- dual-interval per-service breakdown ---
+
+@test "service_dual_awk: dual-interval counts for single service" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	# 2 entries in 24h, 1 additional in 7d-only window
+	echo "$now 192.0.2.1 sshd 5 RU ban 600 22 15000 service" >> "$pool"
+	echo "$((now - 100)) 192.0.2.2 sshd 3 US ban 600 22 12000 service" >> "$pool"
+	echo "$((now - 172800)) 192.0.2.3 sshd 10 RU ban 600 22 20000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_service_dual_awk "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	# sshd: 24h count=8(5+3), 7d count=18(5+3+10), 24h IPs=2, 7d IPs=3, top_cc=RU
+	IFS='|' read -r svc c24 c7d u24 u7d top_cc <<< "$output"
+	[ "$svc" = "sshd" ]
+	[ "$c24" -eq 8 ]
+	[ "$c7d" -eq 18 ]
+	[ "$u24" -eq 2 ]
+	[ "$u7d" -eq 3 ]
+	[ "$top_cc" = "RU" ]
+}
+
+@test "service_dual_awk: multiple services with top country" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 RU ban 600 22 15000 service" >> "$pool"
+	echo "$now 192.0.2.2 dovecot 3 CN ban 600 143 12000 service" >> "$pool"
+	echo "$now 192.0.2.3 dovecot 2 CN ban 600 143 8000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_service_dual_awk "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	# dovecot should have top_cc=CN (both entries are CN)
+	local dovecot_line
+	dovecot_line=$(echo "$output" | grep "^dovecot|")
+	local dovecot_cc
+	dovecot_cc=$(echo "$dovecot_line" | awk -F'|' '{print $6}')
+	[ "$dovecot_cc" = "CN" ]
+}
+
+@test "service_dual: text output shows header and columns" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 RU ban 600 22 15000 service" >> "$pool"
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_service_dual "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	assert_output --partial "Per-service threat breakdown (24h / 7d)"
+	assert_output --partial "24H_COUNT"
+	assert_output --partial "7D_COUNT"
+	assert_output --partial "24H_IPS"
+	assert_output --partial "7D_IPS"
+	assert_output --partial "TOP_COUNTRY"
+}
+
+@test "service_dual: empty pool produces no output" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local cutoff_24h=$((now - 86400))
+	local cutoff_7d=$((now - 604800))
+	run _apool_service_dual "$pool" "$cutoff_24h" "$cutoff_7d"
+	assert_success
+	refute_output --partial "Per-service"
+}
+
+@test "apool_list: dual-interval service view with TOP_COUNTRY" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	echo "$now 192.0.2.1 sshd 5 DE ban 600 22 15000 service" >> "$APOOL_LIST"
+	run apool_list
+	assert_success
+	assert_output --partial "Per-service threat breakdown (24h / 7d)"
+	assert_output --partial "TOP_COUNTRY"
+	assert_output --partial "DE"
 }

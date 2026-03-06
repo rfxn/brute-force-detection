@@ -2,6 +2,9 @@
 
 -- Threat Activity --
 
+[New] Expanded per-service threat breakdown: dual-interval columns (24h/7d)
+      for count, unique IPs, and top country; replaces single-interval view
+      in text, JSON, and CSV output
 [Change] Threat activity report section order: summary, 24h IPs, 7d IPs,
       per-service breakdown (was: 24h, services, 7d); consistent across text,
       JSON, and CSV output formats
