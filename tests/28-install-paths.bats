@@ -198,13 +198,13 @@ teardown() {
 }
 
 @test "install-paths: install.sh has man page install section" {
-	run grep -c 'man1/bfd.1' "$PROJECT_ROOT/install.sh"
+	run grep -c 'pkg_man_install' "$PROJECT_ROOT/install.sh"
 	assert_success
 	[ "$output" -ge 1 ]
 }
 
 @test "install-paths: uninstall.sh removes man page" {
-	run grep -c 'man1/bfd.1' "$PROJECT_ROOT/uninstall.sh"
+	run grep -c 'pkg_uninstall_man' "$PROJECT_ROOT/uninstall.sh"
 	assert_success
 	[ "$output" -ge 1 ]
 }

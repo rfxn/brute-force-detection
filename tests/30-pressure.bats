@@ -51,12 +51,6 @@ teardown() {
 	assert_output "4.0"
 }
 
-@test "pressure_format: 15000 → 15.0" {
-	run pressure_format 15000
-	assert_success
-	assert_output "15.0"
-}
-
 # ============================================================
 # pressure_compute() — empty / missing events
 # ============================================================

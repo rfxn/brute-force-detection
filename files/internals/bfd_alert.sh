@@ -726,12 +726,16 @@ _bfd_dispatch_messaging() {
 
 	# Build per-entry blocks for each enabled channel
 	local slack_blocks="" telegram_blocks="" discord_fields=""
+	local entry_total
+	entry_total=$(wc -l < "$alerts_file")
+	local entry_num=0
 	local pipe_line
 	while IFS= read -r pipe_line; do
 		[ -z "$pipe_line" ] && continue
+		entry_num=$((entry_num + 1))
 
 		# Set per-entry template variables (HOST, MOD, PORTS, etc.)
-		_alert_set_entry_vars "$pipe_line" "$loglines"
+		_alert_set_entry_vars "$pipe_line" "$entry_num" "$entry_total" "$loglines"
 
 		if alert_channel_enabled "slack"; then
 			_alert_tpl_resolve "$tpl_dir" "slack.entry.tpl"

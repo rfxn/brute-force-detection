@@ -1,5 +1,68 @@
 2.0.1:
 
+-- Test Suite Optimization --
+
+[Change] firewall-backend tests: converted 4 APF/CSF ban/unban subshell tests
+      to direct function calls, eliminating redundant bfd.lib.sh re-sourcing
+[Change] watch-mode tests: replaced fixed sleeps (sleep 0.5/1/2) with log-based
+      polling loops (sleep 0.1 with grep checks), reducing worst-case wait time
+[Change] config-validation tests: consolidated run_validate/run_validate_output
+      into single _run_validate_impl helper with mode parameter
+[Fix] removed 3 redundant valid-IP tests and 1 redundant invalid-IP test in
+      01-validate-ip.bats (zero coverage loss)
+[Fix] removed redundant pressure_format 15000 test in 30-pressure.bats (same
+      code path as 1000 test)
+
+-- QA Integration Fixes --
+
+[Fix] bfd_alert.sh: _bfd_dispatch_messaging now passes entry_num and
+      entry_total to _alert_set_entry_vars, matching the correct 4-argument
+      call pattern used by _alert_render_text/_alert_render_html
+[Fix] bfd: elog_output_enable "stdout" added after elog_init so eout()
+      echoes to stdout as expected by the eout() contract
+[Change] bfd: inline comments clarified on elog_output_enable suppression
+      explaining why 2>/dev/null || true is safe
+[Change] vendored elog_lib.sh updated from v1.0.0 to v1.0.2 (ELOG_AUDIT_FILE
+      expansion fix for non-root)
+[Change] vendored alert_lib.sh updated from v1.0.0 to v1.0.3 (sed injection
+      fix in _alert_slack_post_message, QA fixes)
+[Change] vendored pkg_lib.sh updated from v1.0.0 to v1.0.1 (pkg_sed_replace
+      delimiter escaping fix, QA fixes)
+
+-- pkg_lib Integration Fixes --
+
+[Fix] install.sh: PKG_BACKUP_SYMLINK set to "bfd.bk.last" before sourcing
+      pkg_lib so backup symlink matches importconf expectations; upgrade
+      detection uses pkg_backup_exists/pkg_backup_path instead of direct
+      directory test
+[Fix] importconf: BK_LAST variable with fallback to legacy symlink path;
+      all backup references use $BK_LAST for correct path resolution when
+      invoked by install.sh via pkg_backup_path()
+[Fix] install.sh: systemd unit sed replacement uses _pkg_systemd_unit_dir()
+      auto-detected path instead of hardcoded /etc/systemd/system/; prevents
+      sed targeting wrong directory on RHEL/Debian where units install to
+      /usr/lib/systemd/system/ or /lib/systemd/system/
+[Fix] install.sh/uninstall.sh: legacy /etc/systemd/system/ units cleaned on
+      upgrade and uninstall to prevent systemd priority conflict with units
+      in auto-detected directory
+[Fix] uninstall.sh: backup glob widened to match both old (.bk.*) and new
+      pkg_lib (.TIMESTAMP) naming formats
+
+-- pkg_lib Integration --
+
+[New] pkg_lib.sh v1.0.0 integrated as shared packaging/installer library at
+      files/internals/pkg_lib.sh; provides standardized backup, file operations,
+      service lifecycle, cron management, man page, and uninstall primitives
+[Change] install.sh refactored to use pkg_lib functions: pkg_backup, pkg_copy_tree,
+      pkg_set_perms, pkg_create_dirs, pkg_symlink, pkg_logrotate_install,
+      pkg_man_install (now gzips man pages), pkg_bash_completion, pkg_cron_install,
+      pkg_cron_preserve_schedule/pkg_cron_restore_schedule, pkg_service_install_multi,
+      pkg_sed_replace, pkg_header/pkg_section/pkg_success/pkg_item for output
+[Change] uninstall.sh refactored to use pkg_lib functions: pkg_uninstall_confirm,
+      pkg_service_uninstall, pkg_uninstall_man, pkg_uninstall_completion,
+      pkg_uninstall_logrotate, pkg_uninstall_cron, pkg_uninstall_files
+[New] pkg.manifest project metadata file for pkg_gen.sh template generation
+
 -- Rule Coverage Expansion --
 
 [Change] README.md and bfd.1 man page: rule count updated from 42 to 47;

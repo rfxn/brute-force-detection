@@ -188,11 +188,8 @@ SCRIPT
 	local log="$MOCK_DIR/apf.log"
 	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/apf"
 	chmod +x "$MOCK_DIR/apf"
-	run bash -c "
-		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
-		_FW_APF_BIN='$MOCK_DIR/apf'
-		_fw_apf_ban '192.0.2.1' 'sshd'
-	"
+	_FW_APF_BIN="$MOCK_DIR/apf"
+	run _fw_apf_ban "192.0.2.1" "sshd"
 	assert_success
 	run cat "$log"
 	assert_output "-d 192.0.2.1 {bfd.sshd}"
@@ -202,11 +199,8 @@ SCRIPT
 	local log="$MOCK_DIR/apf.log"
 	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/apf"
 	chmod +x "$MOCK_DIR/apf"
-	run bash -c "
-		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
-		_FW_APF_BIN='$MOCK_DIR/apf'
-		_fw_apf_unban '192.0.2.1'
-	"
+	_FW_APF_BIN="$MOCK_DIR/apf"
+	run _fw_apf_unban "192.0.2.1"
 	assert_success
 	run cat "$log"
 	assert_output "-u 192.0.2.1"
@@ -226,11 +220,8 @@ SCRIPT
 	local log="$MOCK_DIR/csf.log"
 	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/csf"
 	chmod +x "$MOCK_DIR/csf"
-	run bash -c "
-		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
-		_FW_CSF_BIN='$MOCK_DIR/csf'
-		_fw_csf_ban '192.0.2.1' 'sshd'
-	"
+	_FW_CSF_BIN="$MOCK_DIR/csf"
+	run _fw_csf_ban "192.0.2.1" "sshd"
 	assert_success
 	run cat "$log"
 	assert_output "-d 192.0.2.1 bfd.sshd"
@@ -240,11 +231,8 @@ SCRIPT
 	local log="$MOCK_DIR/csf.log"
 	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/csf"
 	chmod +x "$MOCK_DIR/csf"
-	run bash -c "
-		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
-		_FW_CSF_BIN='$MOCK_DIR/csf'
-		_fw_csf_unban '192.0.2.1'
-	"
+	_FW_CSF_BIN="$MOCK_DIR/csf"
+	run _fw_csf_unban "192.0.2.1"
 	assert_success
 	run cat "$log"
 	assert_output "-dr 192.0.2.1"

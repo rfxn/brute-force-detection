@@ -27,24 +27,6 @@ load 'helpers/bfd-common'
 	assert_output "255.255.255.255"
 }
 
-@test "validate_ip: valid 203.0.113.1" {
-	run validate_ip "203.0.113.1"
-	assert_success
-	assert_output "203.0.113.1"
-}
-
-@test "validate_ip: valid 192.0.2.1" {
-	run validate_ip "192.0.2.1"
-	assert_success
-	assert_output "192.0.2.1"
-}
-
-@test "validate_ip: valid 198.51.100.255" {
-	run validate_ip "198.51.100.255"
-	assert_success
-	assert_output "198.51.100.255"
-}
-
 # --- validate_ip: invalid IPs (out of range) ---
 
 @test "validate_ip: invalid 256.1.1.1" {
@@ -55,12 +37,6 @@ load 'helpers/bfd-common'
 
 @test "validate_ip: invalid 1.2.3.999" {
 	run validate_ip "1.2.3.999"
-	assert_failure
-	assert_output ""
-}
-
-@test "validate_ip: invalid 999.999.999.999" {
-	run validate_ip "999.999.999.999"
 	assert_failure
 	assert_output ""
 }

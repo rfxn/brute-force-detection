@@ -366,10 +366,10 @@ INTEOF
 	bash "$inst/bfd" --watch &
 	_WATCH_PID=$!
 
-	# wait for lock file to appear (up to 5s)
+	# wait for lock file to appear (up to 5s, polling every 0.1s)
 	local _tries=0
-	while [ ! -d "$inst/lock.utime.lk" ] && [ "$_tries" -lt 10 ]; do
-		sleep 0.5
+	while [ ! -d "$inst/lock.utime.lk" ] && [ "$_tries" -lt 50 ]; do
+		sleep 0.1
 		_tries=$((_tries + 1))
 	done
 }
@@ -390,15 +390,24 @@ INTEOF
 
 @test "watch: logs start message" {
 	_start_watch
-	# give it a moment to write
-	sleep 1
+	# wait for start message to appear in log (up to 3s)
+	local _waited=0
+	while [ "$_waited" -lt 30 ] && ! grep -q "watch mode started" "$_WATCH_INST/tmp/bfd.log" 2>/dev/null; do
+		sleep 0.1
+		_waited=$((_waited + 1))
+	done
 	run grep "watch mode started" "$_WATCH_INST/tmp/bfd.log"
 	assert_success
 }
 
 @test "watch: SIGTERM causes graceful shutdown" {
 	_start_watch
-	sleep 1
+	# wait for start message before sending signal (up to 3s)
+	local _waited=0
+	while [ "$_waited" -lt 30 ] && ! grep -q "watch mode started" "$_WATCH_INST/tmp/bfd.log" 2>/dev/null; do
+		sleep 0.1
+		_waited=$((_waited + 1))
+	done
 	kill -TERM "$_WATCH_PID"
 	wait "$_WATCH_PID" 2>/dev/null || true
 	_WATCH_PID=""
@@ -414,9 +423,19 @@ INTEOF
 
 @test "watch: SIGHUP causes config reload" {
 	_start_watch
-	sleep 1
+	# wait for start message before sending signal (up to 3s)
+	local _waited=0
+	while [ "$_waited" -lt 30 ] && ! grep -q "watch mode started" "$_WATCH_INST/tmp/bfd.log" 2>/dev/null; do
+		sleep 0.1
+		_waited=$((_waited + 1))
+	done
 	kill -HUP "$_WATCH_PID"
-	sleep 2
+	# wait for reload complete message (up to 5s)
+	_waited=0
+	while [ "$_waited" -lt 50 ] && ! grep -q "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log" 2>/dev/null; do
+		sleep 0.1
+		_waited=$((_waited + 1))
+	done
 
 	run grep "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log"
 	assert_success
