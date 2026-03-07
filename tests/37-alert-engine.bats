@@ -1442,7 +1442,7 @@ _create_test_bodies() {
 	assert_output --partial "alerts@example.com"
 	assert_output --partial "--mail-rcpt"
 	assert_output --partial "root"
-	assert_output --partial "--user"
+	assert_output --partial "-K"
 	assert_output --partial "--upload-file"
 	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
 }

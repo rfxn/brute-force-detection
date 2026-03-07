@@ -21,7 +21,7 @@
 _ALERT_LIB_LOADED=1
 
 # shellcheck disable=SC2034
-ALERT_LIB_VERSION="1.0.0"
+ALERT_LIB_VERSION="1.0.3"
 
 # Channel registry — consuming projects populate via alert_channel_register()
 # Uses parallel indexed arrays instead of declare -A to avoid scope issues
@@ -232,6 +232,21 @@ _alert_validate_url() {
 	esac
 }
 
+# _alert_redact_url url — redact embedded tokens from webhook URLs
+# Slack webhooks: https://hooks.slack.com/services/T.../B.../TOKEN → .../[REDACTED]
+# Discord webhooks: https://discord.com/api/webhooks/ID/TOKEN → .../[REDACTED]
+# Non-secret URLs passed through unchanged.
+_alert_redact_url() {
+	local url="$1"
+	if [[ "$url" == *"hooks.slack.com/services/"* ]]; then
+		printf '%s' "${url%/*}/[REDACTED]"
+	elif [[ "$url" == *"discord.com/api/webhooks/"* ]] || [[ "$url" == *"discordapp.com/api/webhooks/"* ]]; then
+		printf '%s' "${url%/*}/[REDACTED]"
+	else
+		printf '%s' "$url"
+	fi
+}
+
 # _alert_curl_post url [curl_flags...] — HTTP POST via curl with standard timeouts
 # Discovers curl via command -v. Adds -s, --connect-timeout, --max-time, -X POST.
 # Remaining arguments pass through as extra curl flags (caller provides -d/-H/-F).
@@ -244,7 +259,7 @@ _alert_curl_post() {
 	local curl_bin
 	curl_bin=$(command -v curl 2>/dev/null || true)
 	if [ -z "$curl_bin" ]; then
-		echo "alert_lib: curl not found, cannot POST to $url." >&2
+		echo "alert_lib: curl not found, cannot POST to $(_alert_redact_url "$url")." >&2
 		return 1
 	fi
 	local rc=0 curl_stderr
@@ -254,7 +269,7 @@ _alert_curl_post() {
 	if [ "$rc" -ne 0 ]; then
 		local _err_detail
 		_err_detail=$(head -5 "$curl_stderr" | tr '\n' ' ')
-		echo "alert_lib: POST to $url failed (curl exit $rc): $_err_detail" >&2
+		echo "alert_lib: POST to $(_alert_redact_url "$url") failed (curl exit $rc): $_err_detail" >&2
 		rm -f "$curl_stderr"
 		return 1
 	fi
@@ -269,11 +284,13 @@ _alert_curl_post() {
 # _alert_build_mime text_body html_body — construct multipart/alternative MIME message
 # Writes MIME headers and both text and HTML parts to stdout.
 # Caller is responsible for adding Subject/To/From headers before this output.
-# The boundary uses epoch+PID for uniqueness (sufficient for email context).
+# The boundary uses epoch + random suffix for uniqueness.
 _alert_build_mime() {
 	local text_body="$1" html_body="$2"
 	local boundary
-	boundary="ALERT_$(date +%s)_$$"
+	# Use /dev/urandom for unpredictable boundary suffix; fall back to PID
+	# if /dev/urandom is unavailable (sufficient for per-message uniqueness)
+	boundary="ALERT_$(date +%s)_$(tr -dc 'A-Za-z0-9' < /dev/urandom 2>/dev/null | head -c 8 || echo "$$")"
 
 	echo "MIME-Version: 1.0"
 	echo "Content-Type: multipart/alternative; boundary=\"$boundary\""
@@ -310,12 +327,31 @@ _alert_email_local() {
 
 	case "$format" in
 		text)
-			if [ -z "$mail_bin" ]; then
-				echo "alert_lib: mail binary not found, cannot send alert to $recip." >&2
-				return 1
+			if [ -n "$mail_bin" ]; then
+				"$mail_bin" -s "$subject" "$recip" < "$text_file"
+				return $?
 			fi
-			"$mail_bin" -s "$subject" "$recip" < "$text_file"
-			return $?
+			# mail not available — fall back to sendmail
+			if [ -n "$sendmail_bin" ]; then
+				local _tmpmail
+				_tmpmail=$(mktemp "${ALERT_TMPDIR}/alert_text_msg.XXXXXX")
+				{
+					echo "From: $from"
+					echo "To: $recip"
+					echo "Subject: $subject"
+					if [ -n "${ALERT_EMAIL_REPLY_TO:-}" ]; then
+						echo "Reply-To: $ALERT_EMAIL_REPLY_TO"
+					fi
+					echo ""
+					cat "$text_file"
+				} > "$_tmpmail"
+				"$sendmail_bin" -t -oi < "$_tmpmail"
+				local _rc=$?
+				rm -f "$_tmpmail"
+				return $_rc
+			fi
+			echo "alert_lib: mail binary not found, cannot send alert to $recip." >&2
+			return 1
 			;;
 		html)
 			if [ -n "$sendmail_bin" ]; then
@@ -323,6 +359,9 @@ _alert_email_local() {
 					echo "From: $from"
 					echo "To: $recip"
 					echo "Subject: $subject"
+					if [ -n "${ALERT_EMAIL_REPLY_TO:-}" ]; then
+						echo "Reply-To: $ALERT_EMAIL_REPLY_TO"
+					fi
 					echo "Content-Type: text/html; charset=UTF-8"
 					echo "Content-Transfer-Encoding: base64"
 					echo ""
@@ -349,6 +388,9 @@ _alert_email_local() {
 					echo "From: $from"
 					echo "To: $recip"
 					echo "Subject: $subject"
+					if [ -n "${ALERT_EMAIL_REPLY_TO:-}" ]; then
+						echo "Reply-To: $ALERT_EMAIL_REPLY_TO"
+					fi
 					_alert_build_mime "$text_body" "$html_body"
 				} | "$sendmail_bin" -t -oi
 				return $?
@@ -390,7 +432,7 @@ _alert_email_relay() {
 	fi
 
 	# build curl arguments
-	local -a curl_args=("--url" "$ALERT_SMTP_RELAY")
+	local -a curl_args=("-s" "--url" "$ALERT_SMTP_RELAY")
 
 	# TLS: smtps:// and smtp://:587 require TLS; smtp://:25 is plain
 	case "$ALERT_SMTP_RELAY" in
@@ -401,9 +443,14 @@ _alert_email_relay() {
 
 	curl_args+=("--mail-from" "$ALERT_SMTP_FROM" "--mail-rcpt" "$recip")
 
-	# credentials are optional — auth-free internal relays omit them
+	# credentials via -K config file to keep them out of process listing
+	# (same pattern as _alert_telegram_api)
+	local smtp_cfg=""
 	if [ -n "${ALERT_SMTP_USER:-}" ] && [ -n "${ALERT_SMTP_PASS:-}" ]; then
-		curl_args+=("--user" "$ALERT_SMTP_USER:$ALERT_SMTP_PASS")
+		smtp_cfg=$(mktemp "${ALERT_TMPDIR}/alert_smtp_auth.XXXXXX")
+		chmod 600 "$smtp_cfg"
+		printf 'user = "%s:%s"\n' "$ALERT_SMTP_USER" "$ALERT_SMTP_PASS" > "$smtp_cfg"
+		curl_args+=("-K" "$smtp_cfg")
 	fi
 
 	curl_args+=("--upload-file" "$msg_file")
@@ -415,18 +462,26 @@ _alert_email_relay() {
 		local _err_detail
 		_err_detail=$(head -5 "$curl_stderr" | tr '\n' ' ')
 		echo "alert_lib: SMTP relay to $recip failed (curl exit $rc): $_err_detail" >&2
-		rm -f "$curl_stderr"
+		rm -f "$curl_stderr" "$smtp_cfg"
 		return 1
 	fi
-	rm -f "$curl_stderr"
+	rm -f "$curl_stderr" "$smtp_cfg"
 	return 0
 }
 
 # _alert_deliver_email recip subject text_file html_file format
-# Router: ALERT_SMTP_RELAY set → relay path, else → local MTA.
+# Router: ALERT_SMTP_RELAY set -> relay path, else -> local MTA.
+# NOTE: The relay path always builds a full multipart/alternative MIME message
+# regardless of the format parameter. The format parameter only affects the
+# local MTA path (_alert_email_local). This is by design — relay delivery
+# constructs RFC 822 messages via _alert_build_mime which requires both parts.
 # Returns 0 on success, 1 on failure.
 _alert_deliver_email() {
 	local recip="$1" subject="$2" text_file="$3" html_file="$4" format="${5:-text}"
+
+	# Strip CR/LF to prevent email header injection
+	subject="${subject//$'\r'/}"
+	subject="${subject//$'\n'/}"
 
 	if [ -n "${ALERT_SMTP_RELAY:-}" ]; then
 		# relay path: always build full multipart MIME message
@@ -440,6 +495,9 @@ _alert_deliver_email() {
 			echo "From: $from"
 			echo "To: $recip"
 			echo "Subject: $subject"
+			if [ -n "${ALERT_EMAIL_REPLY_TO:-}" ]; then
+				echo "Reply-To: $ALERT_EMAIL_REPLY_TO"
+			fi
 			echo "Date: $(date -R 2>/dev/null || date)"
 			_alert_build_mime "$text_body" "$html_body"
 		} > "$msg_file"
@@ -506,9 +564,12 @@ _alert_slack_post_message() {
 		return 1
 	fi
 	# Inject "channel" field after opening brace
+	# Uses awk instead of sed to avoid delimiter collision if channel
+	# contains / or & (sed s/// treats both as special characters)
 	local modified_payload
 	modified_payload=$(mktemp "${ALERT_TMPDIR}/alert_slack_msg.XXXXXX")
-	sed "s/^{/{\"channel\":\"$channel\",/" "$payload_file" > "$modified_payload"
+	awk -v ch="$channel" 'NR==1 && /^\{/ { print "{\"channel\":\"" ch "\"," substr($0,2); next } { print }' \
+		"$payload_file" > "$modified_payload"
 	local response
 	response=$(_alert_curl_post "https://slack.com/api/chat.postMessage" \
 		-H "Authorization: Bearer $token" \
@@ -975,6 +1036,11 @@ _alert_digest_flush() {
 		# Truncate spool (preserves inode for inotifywait/tail -f consumers)
 		: > "$spool_file"
 	) 200>"$lock_file"
+	local sub_rc=$?
+	if [ "$sub_rc" -ne 0 ]; then
+		rm -f "$flush_file"
+		return "$sub_rc"
+	fi
 	# Call callback OUTSIDE lock to avoid holding flock during delivery
 	local rc=0
 	if [ -s "$flush_file" ]; then

@@ -198,7 +198,11 @@ config_init() {
 	fi
 	# Always enable syslog_file module — eout() dynamically sets ELOG_SYSLOG_FILE
 	# per call; handler checks var at write time (empty = skip)
+	# safe: "already enabled" stderr if elog_init() already enabled this module; no-op
 	elog_output_enable "syslog_file" 2>/dev/null || true
+	# Enable stdout module — eout() contract expects bare eout() to echo to stdout;
+	# safe: stdout module pre-registered at elog_lib load, stderr if already enabled
+	elog_output_enable "stdout" 2>/dev/null || true  # safe: no-op if already active
 
 	# Backward compat mapping (old v1.5 names -> new names)
 	PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"

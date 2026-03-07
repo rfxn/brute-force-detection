@@ -1,5 +1,21 @@
 2.0.1:
 
+-- QA Integration Fixes --
+
+[Fix] bfd_alert.sh: _bfd_dispatch_messaging now passes entry_num and
+      entry_total to _alert_set_entry_vars, matching the correct 4-argument
+      call pattern used by _alert_render_text/_alert_render_html
+[Fix] bfd: elog_output_enable "stdout" added after elog_init so eout()
+      echoes to stdout as expected by the eout() contract
+[Change] bfd: inline comments clarified on elog_output_enable suppression
+      explaining why 2>/dev/null || true is safe
+[Change] vendored elog_lib.sh updated from v1.0.0 to v1.0.2 (ELOG_AUDIT_FILE
+      expansion fix for non-root)
+[Change] vendored alert_lib.sh updated from v1.0.0 to v1.0.3 (sed injection
+      fix in _alert_slack_post_message, QA fixes)
+[Change] vendored pkg_lib.sh updated from v1.0.0 to v1.0.1 (pkg_sed_replace
+      delimiter escaping fix, QA fixes)
+
 -- pkg_lib Integration Fixes --
 
 [Fix] install.sh: PKG_BACKUP_SYMLINK set to "bfd.bk.last" before sourcing
