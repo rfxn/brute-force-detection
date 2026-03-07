@@ -46,6 +46,9 @@ NV=$(awk '/^# Brute Force Detection/ {print $5; exit}' "$new_conf")
 # awk extracts raw text (no shell expansion), preserving $ATTACK_HOST etc.
 merge_conf() {
 	local old_source="$1" new_target="$2"
+	# preserve original permissions — awk redirect creates .tmp with umask
+	local _orig_mode
+	_orig_mode=$(stat -c '%a' "$new_target")
 	awk -v old_conf="$old_source" '
 BEGIN {
 	# read old config: store last uncommented assignment per variable
@@ -70,6 +73,7 @@ BEGIN {
 	}
 	print
 }' "$new_target" > "$new_target.tmp" && mv -f "$new_target.tmp" "$new_target"
+	chmod "$_orig_mode" "$new_target"
 }
 
 # build combined old source: concatenate old conf.bfd + old internals.conf

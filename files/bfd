@@ -796,10 +796,15 @@ _apool_summary() {
 	local cutoff_24h="$2"
 	local cutoff_7d="$3"
 	if [ ! -f "$source_file" ] || [ ! -s "$source_file" ]; then
+		local active_bans=0
+		local bans_active="$INSTALL_PATH/tmp/bans.active"
+		if [ -f "$bans_active" ] && [ -s "$bans_active" ]; then
+			active_bans=$(wc -l < "$bans_active")
+		fi
 		echo "[+] Threat Activity Summary" && echo
 		echo "  Unique IPs:   0 (24h) / 0 (7d)"
 		echo "  Total Count:  0 (24h) / 0 (7d)"
-		echo "  Active Bans:  0"
+		printf "  Active Bans:  %s\n" "$active_bans"
 		return 0
 	fi
 	local stats
@@ -1176,6 +1181,7 @@ usage() {
 	echo "  -q, --quiet                 run detection cycle silently"
 	echo "  -d, --dryrun                run detection without banning"
 	echo "  -w, --watch                 run continuous watch mode (foreground)"
+	echo "                              send SIGHUP to reload config without restart"
 	echo ""
 	echo "Ban Management:"
 	echo "  -b, --ban IP [SERVICE]      manually ban an IP (permanent)"
@@ -1248,7 +1254,7 @@ case "${1:-}" in
 -d|--dryrun)    DRY_RUN=1; vhead; run ;;
 -w|--watch)     vhead; watch ;;
 -a|--attackpool|--activity)
-	vhead; pre
+	[ "$OUTPUT_FORMAT" = "table" ] && vhead; pre
 	if [ -n "${2:-}" ] && validate_ip_any "$2" >/dev/null 2>&1; then
 		case "$OUTPUT_FORMAT" in
 			json) search_ip_json "$INSTALL_PATH" "$2" ;;
@@ -1264,7 +1270,7 @@ case "${1:-}" in
 	fi
 	;;
 -e|--events)
-	vhead; pre
+	[ "$OUTPUT_FORMAT" = "table" ] && vhead; pre
 	if [ -n "${2:-}" ] && validate_ip_any "$2" >/dev/null 2>&1; then
 		case "$OUTPUT_FORMAT" in
 			json) events_ip_json "$INSTALL_PATH" "$2" "${3:-}" ;;
@@ -1287,7 +1293,7 @@ case "${1:-}" in
 	;;
 -c|--check)     vhead; pre; health_check "$INSTALL_PATH" ;;
 -l|--list)
-	vhead; pre
+	[ "$OUTPUT_FORMAT" = "table" ] && vhead; pre
 	case "$OUTPUT_FORMAT" in
 		json) list_bans_json "$INSTALL_PATH" ;;
 		csv)  list_bans_csv "$INSTALL_PATH" ;;

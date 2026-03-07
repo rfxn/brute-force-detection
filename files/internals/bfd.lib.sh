@@ -3693,29 +3693,31 @@ _json_array_from_csv() {
 # list_bans_json install_path — JSON formatted active ban list
 list_bans_json() {
 	local install_path="$1"
-	echo "["
 	local raw
-	if raw=$(_list_bans_data "$install_path"); then
-		local first=1
-		local ts expiry host mod ports
-		while IFS='|' read -r ts expiry host mod ports; do
-			local banned_fmt expiry_fmt
-			banned_fmt=$(_fmt_ts_iso "$ts")
-			if [ "$expiry" = "0" ]; then
-				expiry_fmt="permanent"
-			else
-				expiry_fmt=$(_fmt_ts_iso "$expiry")
-			fi
-			if [ "$first" -eq 1 ]; then
-				first=0
-			else
-				echo ","
-			fi
-			printf '  {"ip": "%s", "service": "%s", "ports": "%s", "banned": "%s", "expires": "%s"}' \
-				"$(_json_escape "$host")" "$(_json_escape "$mod")" "$(_json_escape "$ports")" \
-				"$banned_fmt" "$expiry_fmt"
-		done <<< "$raw"
+	if ! raw=$(_list_bans_data "$install_path"); then
+		echo "[]"
+		return 0
 	fi
+	echo "["
+	local first=1
+	local ts expiry host mod ports
+	while IFS='|' read -r ts expiry host mod ports; do
+		local banned_fmt expiry_fmt
+		banned_fmt=$(_fmt_ts_iso "$ts")
+		if [ "$expiry" = "0" ]; then
+			expiry_fmt="permanent"
+		else
+			expiry_fmt=$(_fmt_ts_iso "$expiry")
+		fi
+		if [ "$first" -eq 1 ]; then
+			first=0
+		else
+			echo ","
+		fi
+		printf '  {"ip": "%s", "service": "%s", "ports": "%s", "banned": "%s", "expires": "%s"}' \
+			"$(_json_escape "$host")" "$(_json_escape "$mod")" "$(_json_escape "$ports")" \
+			"$banned_fmt" "$expiry_fmt"
+	done <<< "$raw"
 	echo ""
 	echo "]"
 }
