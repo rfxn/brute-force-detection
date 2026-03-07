@@ -255,6 +255,7 @@ postinfo(){
 	case "${_WATCH_STATE:-}" in
 		enabled)
 			pkg_item "Watch mode" "enabled and started (~10s detection latency)"
+			pkg_item "Config reload" "kill -HUP \$(cat /var/run/bfd-watch.pid)"
 			pkg_item "Cron fallback" "active (skipped while watch runs)"
 			if [ "${_IS_UPGRADE:-0}" = "1" ]; then
 				echo ""
@@ -278,6 +279,7 @@ postinfo(){
 			;;
 		restarted)
 			pkg_item "Watch mode" "restarted with updated installation"
+			pkg_item "Config reload" "kill -HUP \$(cat /var/run/bfd-watch.pid)"
 			pkg_item "Cron fallback" "active (skipped while watch runs)"
 			;;
 		timer-active)

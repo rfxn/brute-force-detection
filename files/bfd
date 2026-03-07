@@ -1176,6 +1176,7 @@ usage() {
 	echo "  -q, --quiet                 run detection cycle silently"
 	echo "  -d, --dryrun                run detection without banning"
 	echo "  -w, --watch                 run continuous watch mode (foreground)"
+	echo "                              send SIGHUP to reload config without restart"
 	echo ""
 	echo "Ban Management:"
 	echo "  -b, --ban IP [SERVICE]      manually ban an IP (permanent)"

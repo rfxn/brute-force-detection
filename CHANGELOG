@@ -7,6 +7,9 @@
       world-readable (644) instead of 640
 [Fix] tests/Dockerfile: add missing COPY directives for README, CHANGELOG,
       COPYING.GPL, logrotate.d.bfd, bfd.timer required by install.sh
+[Change] usage(): SIGHUP config reload hint added under -w/--watch entry
+[Change] install.sh postinfo(): config reload command shown in post-install
+      banner when watch mode is enabled or restarted
 
 -- Alert Pressure Clarity --
 
