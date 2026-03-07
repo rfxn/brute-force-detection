@@ -255,6 +255,8 @@ pressure = SUM { weight * 2^(-(now - event_time) / half_life) }
 - **Bot attack** — 7 failures in 1 second: pressure = 3×7 = 21.0 → exceeds 15 → **BAN**
 - **Human typos** — 5 failures over 4 minutes: earlier events decay, total ≈ 11.1 → below 15 → **NO BAN**
 
+> **Quick reference:** `PRESSURE_TRIP / weight` = minimum rapid failures for a ban. Default: 20 / 3 (sshd) = 7 rapid failures. Spread-out failures need more attempts (older ones decay).
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PRESSURE_TRIP` | `20` | Accumulated pressure needed to trigger a ban; per-rule overrides in rule files or `pressure.conf` |
@@ -420,6 +422,7 @@ To customize, edit the template files directly. On upgrade, `importconf` compare
 | `{{HOST}}` | `192.0.2.1` | Banned IP address |
 | `{{SERVICE}}` | `sshd` | Service name |
 | `{{PRESSURE}}` | `21.4` | Pressure score |
+| `{{FAIL_COUNT}}` | `7` | Failed login attempts detected this cycle |
 | `{{BAN_TYPE}}` | `Temporary` | Ban type (Temporary/Permanent/Escalated) |
 | `{{BAN_DURATION}}` | `10m` | Human-readable duration |
 | `{{COUNTRY_CODE}}` | `CN` | 2-letter country code |

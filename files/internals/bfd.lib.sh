@@ -2149,7 +2149,7 @@ check_distributed() {
 				"$unique_count" "--" "$ban_action" "$_dist_duration" "all" \
 				"0" "subnet"
 			if [ "$EMAIL_ALERTS" = "1" ] && [ "$DRY_RUN" != "1" ]; then
-				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}||${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}|1" >> "$alerts_file"
+				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}||${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}|1|0" >> "$alerts_file"
 			fi
 		fi
 	done < <(count_subnet_attackers "$install_path" "$window" "$now" \
@@ -2687,8 +2687,8 @@ send_alerts() {
 		# set backward-compat globals for single-ban case
 		# (needed by custom hooks or external integrations that read these after send_alerts)
 		if [ "$alert_count" -eq 1 ]; then
-			local _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt
-			IFS='|' read -r _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt < "$recip_file"
+			local _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt _fc
+			IFS='|' read -r _host _mod _ports _count _expiry _action _recent _lp _recip _trig _tw _wt _fc < "$recip_file"
 			ATTACK_HOST="$_host"
 			MOD="$_mod"
 			# backward compat: _count is pressure_scaled (e.g., 18400);
@@ -3511,7 +3511,7 @@ test_alert() {
 }
 
 # test_alert_email install_path — send a test email alert through the full pipeline
-# Builds a synthetic 12-field alert entry using RFC 5737 test IP and calls
+# Builds a synthetic 13-field alert entry using RFC 5737 test IP and calls
 # send_alerts() directly (bypasses digest spool).
 test_alert_email() {
 	local install_path="$1"
@@ -3574,7 +3574,8 @@ test_alert_email() {
 
 	local alerts_file
 	alerts_file=$(mktemp "$install_path/tmp/.test_alert.XXXXXX")
-	echo "${test_ip}|${test_service}|${test_ports}|${test_pressure}|${test_expiry}|${test_action}|${test_recent}|${test_log}|${test_recip}|${test_trip}|${test_half_life}|${test_weight}" > "$alerts_file"
+	local test_fail_count=7
+	echo "${test_ip}|${test_service}|${test_ports}|${test_pressure}|${test_expiry}|${test_action}|${test_recent}|${test_log}|${test_recip}|${test_trip}|${test_half_life}|${test_weight}|${test_fail_count}" > "$alerts_file"
 
 	local subject="${EMAIL_SUBJECT:-[BFD] brute force attempt on \$HOSTNAME}"
 	subject="${subject//\$HOSTNAME/$(hostname)}"
@@ -3622,6 +3623,7 @@ test_alert_messaging() {
 	local test_recent=0
 	local test_log="${AUTH_LOG_PATH:-/var/log/secure}"
 	local test_recip="${EMAIL_ADDRESS:-root}"
+	local test_fail_count=7
 	local test_expiry test_action
 	if [ "${BAN_TTL:-600}" = "0" ]; then
 		test_expiry=0
@@ -3633,7 +3635,7 @@ test_alert_messaging() {
 
 	local alerts_file
 	alerts_file=$(mktemp "$install_path/tmp/.test_alert.XXXXXX")
-	echo "${test_ip}|${test_service}|${test_ports}|${test_pressure}|${test_expiry}|${test_action}|${test_recent}|${test_log}|${test_recip}|${test_trip}|${test_half_life}|${test_weight}" > "$alerts_file"
+	echo "${test_ip}|${test_service}|${test_ports}|${test_pressure}|${test_expiry}|${test_action}|${test_recent}|${test_log}|${test_recip}|${test_trip}|${test_half_life}|${test_weight}|${test_fail_count}" > "$alerts_file"
 
 	local subject
 	subject="[TEST] BFD Alert ($(hostname))"

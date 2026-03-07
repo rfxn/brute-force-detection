@@ -266,8 +266,8 @@ _alert_set_global_vars() {
 }
 
 # _alert_set_entry_vars pipe_line entry_num entry_total — parse alert line, export entry variables
-# Input: pipe-delimited line with 12 fields:
-#   host|mod|ports|pressure_scaled|expiry|action|recent|log_path|recipient|trip|half_life|weight
+# Input: pipe-delimited line with 13 fields (field 13 optional for backward compat):
+#   host|mod|ports|pressure_scaled|expiry|action|recent|log_path|recipient|trip|half_life|weight|fail_count
 # Sets all per-entry template variables into exported environment for _alert_tpl_render.
 # Requires: format_duration(), pressure_format(), ip_to_country(), expand_command_template(),
 #   _alert_build_reputation_links(), _alert_pressure_bar(), _alert_pressure_color(),
@@ -277,9 +277,9 @@ _alert_set_entry_vars() {
 	local pipe_line="$1" entry_num="$2" entry_total="$3"
 	local loglines="${4:-5}"
 
-	# parse pipe-delimited fields
-	local host mod ports pressure_scaled expiry action recent lp recipient trip half_life weight
-	IFS='|' read -r host mod ports pressure_scaled expiry action recent lp recipient trip half_life weight <<< "$pipe_line"
+	# parse pipe-delimited fields (13 fields; field 13 = fail_count, optional for backward compat)
+	local host mod ports pressure_scaled expiry action recent lp recipient trip half_life weight fail_count
+	IFS='|' read -r host mod ports pressure_scaled expiry action recent lp recipient trip half_life weight fail_count <<< "$pipe_line"
 
 	export ENTRY_NUM="$entry_num"
 	export ENTRY_TOTAL="$entry_total"
@@ -327,6 +327,16 @@ _alert_set_entry_vars() {
 	PRESSURE_COLOR=$(_alert_pressure_color "$pct")
 
 	export WEIGHT="${weight:-1}"
+
+	# failure count (field 13): actual failures detected this cycle
+	# fallback for 12-field lines: ceil(pressure / weight)
+	local _fc="${fail_count:-0}"
+	if [ "$_fc" -le 0 ] && [ "$pressure_scaled" -gt 0 ]; then
+		local _w="${weight:-1}"
+		[ "$_w" -le 0 ] && _w=1
+		_fc=$(( (pressure_scaled + (_w * 1000) - 1) / (_w * 1000) ))
+	fi
+	export FAIL_COUNT="$_fc"
 
 	# half-life: format seconds to human-readable
 	export HALF_LIFE_FMT

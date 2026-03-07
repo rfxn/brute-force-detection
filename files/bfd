@@ -272,8 +272,6 @@ if ! config_init; then
 	vhead
 	exit "$EXIT_CONFIG_ERROR"
 fi
-elog_event "config_loaded" "info" "configuration initialized"
-
 # warn if BAN_COMMAND binary not found (custom mode only)
 if [ "$_FW_BACKEND" = "custom" ]; then
 	_ban_cmd_bin=$(echo "$BAN_COMMAND_TEMPLATE" | awk '{print $1}')
@@ -528,7 +526,7 @@ check() {
 						# collect alert data for batched delivery
 						if [ "$EMAIL_ALERTS" = "1" ] && [ "$SKIP_ALERT" != "1" ] && [ "$DRY_RUN" != "1" ]; then
 							local eff_recipient="${RULE_EMAIL:-$EMAIL_ADDRESS}"
-							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${pressure_scaled}|${ban_expiry}|${ban_action}|${recent_bans}|${LOG_FILE}|${eff_recipient}|${eff_trip}|${PRESSURE_HALF_LIFE}|${scoring_weight}" >> "$alerts_file"
+							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${pressure_scaled}|${ban_expiry}|${ban_action}|${recent_bans}|${LOG_FILE}|${eff_recipient}|${eff_trip}|${PRESSURE_HALF_LIFE}|${scoring_weight}|${_host_count}" >> "$alerts_file"
 						fi
 					fi
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD" \
@@ -1098,6 +1096,7 @@ reload_watch() {
 	eout "watch mode reload complete (WATCH_INTERVAL=${WATCH_INTERVAL}s)" le
 	elog_event "service_state" "info" "watch mode reload complete" \
 		"interval=$WATCH_INTERVAL"
+	elog_event "config_loaded" "info" "configuration reloaded"
 }
 
 watch() {
@@ -1115,6 +1114,7 @@ watch() {
 	eout "watch mode started (interval=${WATCH_INTERVAL}s, pid=$$)" le
 	elog_event "service_state" "info" "watch mode started" \
 		"interval=$WATCH_INTERVAL"
+	elog_event "config_loaded" "info" "configuration initialized"
 	export TLOG_FLOCK=1
 	while true; do
 		UTIME=$(date +"%s")
