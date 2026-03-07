@@ -1,5 +1,8 @@
 2.0.1:
 
+[Fix] bfd: move config_loaded audit event to watch mode only (startup and
+      SIGHUP reload); eliminates per-invocation audit/syslog noise from cron
+
 -- Test Suite Optimization --
 
 [Change] firewall-backend tests: converted 4 APF/CSF ban/unban subshell tests
