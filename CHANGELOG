@@ -5,6 +5,8 @@
 [Fix] importconf: merge_conf() preserves original file permissions after awk
       rewrite; .tmp file inherited umask (022) making conf.bfd/internals.conf
       world-readable (644) instead of 640
+[Fix] tests/Dockerfile: add missing COPY directives for README, CHANGELOG,
+      COPYING.GPL, logrotate.d.bfd, bfd.timer required by install.sh
 
 -- Alert Pressure Clarity --
 
