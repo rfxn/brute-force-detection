@@ -1,5 +1,20 @@
 2.0.1:
 
+-- pkg_lib Integration --
+
+[New] pkg_lib.sh v1.0.0 integrated as shared packaging/installer library at
+      files/internals/pkg_lib.sh; provides standardized backup, file operations,
+      service lifecycle, cron management, man page, and uninstall primitives
+[Change] install.sh refactored to use pkg_lib functions: pkg_backup, pkg_copy_tree,
+      pkg_set_perms, pkg_create_dirs, pkg_symlink, pkg_logrotate_install,
+      pkg_man_install (now gzips man pages), pkg_bash_completion, pkg_cron_install,
+      pkg_cron_preserve_schedule/pkg_cron_restore_schedule, pkg_service_install_multi,
+      pkg_sed_replace, pkg_header/pkg_section/pkg_success/pkg_item for output
+[Change] uninstall.sh refactored to use pkg_lib functions: pkg_uninstall_confirm,
+      pkg_service_uninstall, pkg_uninstall_man, pkg_uninstall_completion,
+      pkg_uninstall_logrotate, pkg_uninstall_cron, pkg_uninstall_files
+[New] pkg.manifest project metadata file for pkg_gen.sh template generation
+
 -- Rule Coverage Expansion --
 
 [Change] README.md and bfd.1 man page: rule count updated from 42 to 47;

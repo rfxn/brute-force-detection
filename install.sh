@@ -31,142 +31,125 @@ if [ "$(id -u)" -ne 0 ]; then
 	exit 1
 fi
 
-backup(){
-if [ -d "$INSPATH" ]; then
-        DVAL=$(date +"%d%m%Y-%s")
-	echo "Backing up to $INSPATH.bk.$DVAL"
-	mv "$INSPATH" "$INSPATH.bk.$DVAL"
-	rm -f "$INSPATH.bk.last"
-	ln -s "$INSPATH.bk.$DVAL" "$INSPATH.bk.last"
-	# shellcheck disable=SC2034
-	OBK=1
-fi
-}
+# Source pkg_lib for standardized installer primitives
+# shellcheck disable=SC1091
+. ./files/internals/pkg_lib.sh
 
-install(){
-        rm -rf "$INSPATH"
-        mkdir "$INSPATH"
-        chmod 750 "$INSPATH"
-        mkdir -p "$INSPATH/tmp"
-        mkdir -p "$INSPATH/stats"
-	cp logrotate.d.bfd /etc/logrotate.d/bfd
-        cp -R files/* "$INSPATH"
-	cp README CHANGELOG COPYING.GPL "$INSPATH"
-	rm -f /etc/cron.daily/bfd
-	cp cron.daily /etc/cron.daily/bfd
-	chmod 755 /etc/cron.daily/bfd
-        find "$INSPATH" -maxdepth 1 -type f -exec chmod 640 {} +
-        chmod 750 "$INSPATH/tlog"
-        chmod 750 "$INSPATH/bfd"
-	chmod 750 "$INSPATH/update-ipcountry.sh"
-	chmod 750 "$INSPATH/internals"
-	find "$INSPATH/internals" -maxdepth 1 -type f -exec chmod 640 {} +
-	chmod 750 "$INSPATH/rules"
-	chmod 640 "$INSPATH"/rules/*
-	chmod 750 "$INSPATH/tmp"
-	chmod 750 "$INSPATH/stats"
-	chmod 750 "$INSPATH/alert"
-	chmod 640 "$INSPATH"/alert/*
-	# custom template override directory (preserved across upgrades via importconf)
+install_files(){
+	# Remove stale install directory (backup already taken by caller)
+	rm -rf "$INSPATH"
+
+	# Copy source tree and documentation
+	pkg_copy_tree "./files" "$INSPATH"
+	/usr/bin/cp README CHANGELOG COPYING.GPL "$INSPATH"
+
+	# Create runtime directories
+	pkg_create_dirs "750" "$INSPATH/tmp" "$INSPATH/stats"
+
+	# Set permissions: 750 dirs, 640 files, then executable overrides
+	pkg_set_perms "$INSPATH" "750" "640" \
+		"bfd" "tlog" "update-ipcountry.sh"
+
+	# Custom template override directory (preserved across upgrades via importconf)
 	[ -d "$INSPATH/alert/custom.d" ] || mkdir -p "$INSPATH/alert/custom.d"
 	chmod 750 "$INSPATH/alert/custom.d"
-	mkdir -p "$(dirname "$BINPATH")"
-        ln -fs "$INSPATH/bfd" "$BINPATH"
+
+	# Install uninstall.sh into install path
 	if [ -f "uninstall.sh" ]; then
-		cp uninstall.sh "$INSPATH/"
+		/usr/bin/cp uninstall.sh "$INSPATH/"
 		chmod 750 "$INSPATH/uninstall.sh"
 	fi
-	# install man page
-	if [ -f "bfd.1" ] && [ -d /usr/share/man/man1 ]; then
-		cp bfd.1 /usr/share/man/man1/bfd.1
-		chmod 644 /usr/share/man/man1/bfd.1
+
+	# CLI symlink
+	mkdir -p "$(dirname "$BINPATH")"
+	pkg_symlink "$INSPATH/bfd" "$BINPATH"
+
+	# Logrotate configuration
+	pkg_logrotate_install "logrotate.d.bfd" "bfd"
+
+	# Man page (gzipped, with optional path substitution)
+	if [ -f "bfd.1" ]; then
+		if [ "$INSPATH" != "/usr/local/bfd" ]; then
+			pkg_man_install "bfd.1" "1" "bfd" "/usr/local/bfd|$INSPATH"
+		else
+			pkg_man_install "bfd.1" "1" "bfd"
+		fi
 	fi
-	# install bash tab completion
-	if [ -f "bfd.bash-completion" ] && [ -d /etc/bash_completion.d ]; then
-		cp bfd.bash-completion /etc/bash_completion.d/bfd
-		chmod 644 /etc/bash_completion.d/bfd
+
+	# Bash tab completion
+	if [ -f "bfd.bash-completion" ]; then
+		pkg_bash_completion "bfd.bash-completion" "bfd"
+		# path replacement for completion file if custom install path
+		if [ "$INSPATH" != "/usr/local/bfd" ] && [ -f /etc/bash_completion.d/bfd ]; then
+			pkg_sed_replace "/usr/local/bfd" "$INSPATH" /etc/bash_completion.d/bfd
+		fi
 	fi
-	# save existing cron schedule before overwriting (F-078)
+
+	# Cron: preserve user's existing schedule before overwriting (F-078)
 	local _old_cron_sched=""
 	if [ "${_IS_UPGRADE:-0}" = "1" ] && [ -f /etc/cron.d/bfd ]; then
-		_old_cron_sched=$(awk '/^[^#]/ && NF>=6 {print $1,$2,$3,$4,$5; exit}' /etc/cron.d/bfd)
+		pkg_cron_preserve_schedule /etc/cron.d/bfd _old_cron_sched || true
 	fi
+	# cron.daily rotation script
+	pkg_cron_install "cron.daily" "/etc/cron.daily/bfd"
+	# cron.d periodic scan entry
 	if [ -f "cron" ]; then
-		cp cron /etc/cron.d/bfd
-		chmod 644 /etc/cron.d/bfd
+		pkg_cron_install "cron" "/etc/cron.d/bfd"
 	fi
-	# install systemd units if systemd is available
-	if command -v systemctl >/dev/null 2>&1; then
+
+	# Service units: systemd or SysVinit
+	pkg_detect_init
+	if [ "$_PKG_INIT_SYSTEM" = "systemd" ]; then
 		if [ -f "bfd.service" ] && [ -f "bfd.timer" ]; then
-			cp bfd.service /etc/systemd/system/bfd.service
-			cp bfd.timer /etc/systemd/system/bfd.timer
-			chmod 644 /etc/systemd/system/bfd.service /etc/systemd/system/bfd.timer
+			pkg_service_install_multi "bfd" \
+				"bfd.service" "bfd.timer"
 			if [ -f "bfd-watch.service" ]; then
-				cp bfd-watch.service /etc/systemd/system/bfd-watch.service
-				chmod 644 /etc/systemd/system/bfd-watch.service
+				pkg_service_install "bfd-watch" "bfd-watch.service"
 			fi
 		fi
 	else
 		# SysVinit: install init script for watch mode
 		if [ -f "bfd-watch.init" ]; then
-			local _initdir=""
-			if [ -d "/etc/rc.d/init.d" ]; then
-				_initdir="/etc/rc.d/init.d"
-			elif [ -d "/etc/init.d" ]; then
-				_initdir="/etc/init.d"
-			fi
-			if [ -n "$_initdir" ]; then
-				cp bfd-watch.init "$_initdir/bfd-watch"
-				chmod 755 "$_initdir/bfd-watch"
-			fi
+			pkg_service_install "bfd-watch" "bfd-watch.init"
 		fi
 	fi
+
 	# tlog: replace default BASERUN for cursor storage security
 	sed -i "s|BASERUN=\"\${BASERUN:-/tmp}\"|BASERUN=\"\${BASERUN:-$INSPATH/tmp}\"|" "$INSPATH/tlog"
-	# replace default paths when installing to a custom location
+
+	# Replace default paths when installing to a custom location
 	if [ "$INSPATH" != "/usr/local/bfd" ]; then
-		sed -i "s|/usr/local/bfd|$INSPATH|g" \
+		pkg_sed_replace "/usr/local/bfd" "$INSPATH" \
 			"$INSPATH/bfd" "$INSPATH/internals/bfd.lib.sh" \
 			"$INSPATH/internals/internals.conf" \
 			"$INSPATH/exclude.files" \
 			"$INSPATH/update-ipcountry.sh" /etc/cron.daily/bfd
-		if [ -f /usr/share/man/man1/bfd.1 ]; then
-			sed -i "s|/usr/local/bfd|$INSPATH|g" /usr/share/man/man1/bfd.1
-		fi
-		if [ -f /etc/bash_completion.d/bfd ]; then
-			sed -i "s|/usr/local/bfd|$INSPATH|g" /etc/bash_completion.d/bfd
-		fi
 	fi
 	if [ "$BINPATH" != "/usr/local/sbin/bfd" ]; then
-		sed -i "s|/usr/local/sbin/bfd|$BINPATH|g" /etc/cron.d/bfd
-		if command -v systemctl >/dev/null 2>&1; then
-			sed -i "s|/usr/local/sbin/bfd|$BINPATH|g" \
+		pkg_sed_replace "/usr/local/sbin/bfd" "$BINPATH" /etc/cron.d/bfd
+		if [ "$_PKG_INIT_SYSTEM" = "systemd" ]; then
+			pkg_sed_replace "/usr/local/sbin/bfd" "$BINPATH" \
 				/etc/systemd/system/bfd.service \
 				/etc/systemd/system/bfd.timer \
-				/etc/systemd/system/bfd-watch.service 2>/dev/null || true
+				/etc/systemd/system/bfd-watch.service
 		fi
 		# update init script if installed
 		local _idir
 		for _idir in /etc/rc.d/init.d /etc/init.d; do
 			if [ -f "$_idir/bfd-watch" ]; then
-				sed -i "s|/usr/local/sbin/bfd|$BINPATH|g" "$_idir/bfd-watch"
+				pkg_sed_replace "/usr/local/sbin/bfd" "$BINPATH" "$_idir/bfd-watch"
 			fi
 		done
 	fi
-	# restore user-customized cron schedule after all sed operations (F-078)
+
+	# Restore user-customized cron schedule after all sed operations (F-078)
 	if [ -n "${_old_cron_sched:-}" ] && [ -f /etc/cron.d/bfd ]; then
-		local _new_cron_sched
-		_new_cron_sched=$(awk '/^[^#]/ && NF>=6 {print $1,$2,$3,$4,$5; exit}' /etc/cron.d/bfd)
-		if [ "$_old_cron_sched" != "$_new_cron_sched" ]; then
-			# escape * for sed regex (common in cron schedules)
-			local _sed_safe
-			_sed_safe=$(printf '%s\n' "$_new_cron_sched" | sed 's/\*/\\*/g')
-			sed -i "s|^${_sed_safe}|${_old_cron_sched}|" /etc/cron.d/bfd
-		fi
+		pkg_cron_restore_schedule /etc/cron.d/bfd "$_old_cron_sched" || true
 	fi
+
 	# daemon-reload after sed so systemd sees final paths
-	if command -v systemctl >/dev/null 2>&1; then
-		systemctl daemon-reload 2>/dev/null || true
+	if [ "$_PKG_INIT_SYSTEM" = "systemd" ]; then
+		systemctl daemon-reload 2>/dev/null || true  # safe: refresh unit cache
 	fi
 }
 
@@ -255,14 +238,13 @@ _enable_services(){
 
 postinfo(){
 	echo ""
-	echo "BFD $VER installed"
-	echo "  Install path:  $INSPATH"
-	echo "  Config path:   $INSPATH/conf.bfd"
-	echo "  Executable:    $BINPATH"
+	pkg_item "Install path" "$INSPATH"
+	pkg_item "Config path" "$INSPATH/conf.bfd"
+	pkg_item "Executable" "$BINPATH"
 	case "${_WATCH_STATE:-}" in
 		enabled)
-			echo "  Watch mode:    enabled and started (~10s detection latency)"
-			echo "  Cron fallback: active (skipped while watch runs)"
+			pkg_item "Watch mode" "enabled and started (~10s detection latency)"
+			pkg_item "Cron fallback" "active (skipped while watch runs)"
 			if [ "${_IS_UPGRADE:-0}" = "1" ]; then
 				echo ""
 				echo "  NOTE: Watch mode is new in BFD 2.x and has been enabled for"
@@ -284,42 +266,45 @@ postinfo(){
 			fi
 			;;
 		restarted)
-			echo "  Watch mode:    restarted with updated installation"
-			echo "  Cron fallback: active (skipped while watch runs)"
+			pkg_item "Watch mode" "restarted with updated installation"
+			pkg_item "Cron fallback" "active (skipped while watch runs)"
 			;;
 		timer-active)
-			echo "  Timer mode:    active (bfd.timer)"
-			echo "  Cron fallback: active"
+			pkg_item "Timer mode" "active (bfd.timer)"
+			pkg_item "Cron fallback" "active"
 			echo ""
 			echo "  Tip: switch to watch mode for ~10s latency:"
 			echo "    systemctl disable bfd.timer"
 			echo "    systemctl enable --now bfd-watch.service"
 			;;
 		cron-only)
-			echo "  Watch mode:    not available (no init system detected)"
-			echo "  Cron fallback: active (~2m detection latency)"
+			pkg_item "Watch mode" "not available (no init system detected)"
+			pkg_item "Cron fallback" "active (~2m detection latency)"
 			;;
 		*)
-			echo "  Cron fallback: active (~2m detection latency)"
+			pkg_item "Cron fallback" "active (~2m detection latency)"
 			;;
 	esac
 }
 
 if [ -d "$INSPATH" ]; then
 	_IS_UPGRADE=1
-	echo "BFD $VER upgrade"
+	pkg_header "BFD" "$VER" "upgrade"
 	_stop_services
-	backup
-	echo "Installing files"
-	install
-	echo "Importing configuration"
+	pkg_section "Backing up existing installation"
+	pkg_backup "$INSPATH"
+	pkg_section "Installing files"
+	install_files
+	pkg_section "Importing configuration"
 	./importconf
 	_enable_services
 	postinfo
+	pkg_success "BFD ${VER} upgrade complete"
 else
-	echo "BFD $VER install"
-	echo "Installing files"
-	install
+	pkg_header "BFD" "$VER" "install"
+	pkg_section "Installing files"
+	install_files
 	_enable_services
 	postinfo
+	pkg_success "BFD ${VER} installation complete"
 fi

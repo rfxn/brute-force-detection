@@ -28,39 +28,30 @@ if [ "$(id -u)" -ne 0 ]; then
 	exit 1
 fi
 
+# Source pkg_lib for standardized uninstall primitives
+if [ -f "$INSPATH/internals/pkg_lib.sh" ]; then
+	# shellcheck disable=SC1091
+	. "$INSPATH/internals/pkg_lib.sh"
+elif [ -f "files/internals/pkg_lib.sh" ]; then
+	# shellcheck disable=SC1091
+	. ./files/internals/pkg_lib.sh
+fi
+
 uninstall(){
-echo "Remove $APPN from this system; are you sure ?"
-echo "Press any key to continue or ^C to abort."
-read -r _
+pkg_uninstall_confirm "$APPN" || exit 0
 
 if [ -d "$INSPATH" ]; then
-	# clean up SysVinit init script if present
-	local _initdir
-	for _initdir in /etc/rc.d/init.d /etc/init.d; do
-		if [ -f "$_initdir/bfd-watch" ]; then
-			"$_initdir/bfd-watch" stop 2>/dev/null || true
-			if command -v chkconfig >/dev/null 2>&1; then
-				chkconfig --del bfd-watch 2>/dev/null || true
-			elif command -v update-rc.d >/dev/null 2>&1; then
-				update-rc.d -f bfd-watch remove 2>/dev/null || true
-			fi
-			rm -f "$_initdir/bfd-watch"
-		fi
-	done
+	# Remove services (systemd units, SysV init scripts, chkconfig/update-rc.d)
+	pkg_service_uninstall "bfd"
+	pkg_service_uninstall "bfd-watch"
+	# Additional SysV state files
 	rm -f /var/run/bfd-watch.pid /var/lock/subsys/bfd-watch
-	# clean up systemd units if present
-	if command -v systemctl >/dev/null 2>&1; then
-		systemctl stop bfd.service 2>/dev/null || true
-		systemctl disable bfd.service 2>/dev/null || true
-		systemctl stop bfd.timer 2>/dev/null || true
-		systemctl disable bfd.timer 2>/dev/null || true
-		systemctl stop bfd-watch.service 2>/dev/null || true
-		systemctl disable bfd-watch.service 2>/dev/null || true
-		rm -f /etc/systemd/system/bfd.service /etc/systemd/system/bfd.timer /etc/systemd/system/bfd-watch.service
-		systemctl daemon-reload 2>/dev/null || true
-	fi
-	rm -f /usr/share/man/man1/bfd.1
-	rm -f /etc/bash_completion.d/bfd
+
+	# Remove man page, bash completion, logrotate
+	pkg_uninstall_man "1" "bfd"
+	pkg_uninstall_completion "bfd"
+	pkg_uninstall_logrotate "bfd"
+
 	# Remove custom log path if configured (grep+sed, no eval/source)
 	local _custom_log=""
 	if [ -f "$INSPATH/conf.bfd" ]; then
@@ -70,8 +61,12 @@ if [ -d "$INSPATH" ]; then
 	if [ -n "$_custom_log" ] && [ "$_custom_log" != "/var/log/bfd_log" ]; then
 		rm -f "$_custom_log"
 	fi
-	rm -rf "$INSPATH".bk.* "$INSPATH" "$BINPATH" /etc/cron.d/bfd /etc/cron.daily/bfd /etc/logrotate.d/bfd /var/log/bfd_log
-	echo "$APPN has been uninstalled."
+
+	# Remove cron files, install directory, symlink, backups, default log
+	pkg_uninstall_cron /etc/cron.d/bfd /etc/cron.daily/bfd
+	pkg_uninstall_files "$INSPATH".bk.* "$INSPATH" "$BINPATH" /var/log/bfd_log
+
+	pkg_success "$APPN has been uninstalled."
 else
 	echo "$APPN does not appear to be installed."
 fi
