@@ -33,6 +33,8 @@ fi
 
 # Source pkg_lib for standardized installer primitives
 # shellcheck disable=SC1091
+# shellcheck disable=SC2034 # consumed by pkg_lib.sh pkg_backup()
+PKG_BACKUP_SYMLINK="bfd.bk.last"
 . ./files/internals/pkg_lib.sh
 
 install_files(){
@@ -100,12 +102,21 @@ install_files(){
 	# Service units: systemd or SysVinit
 	pkg_detect_init
 	if [ "$_PKG_INIT_SYSTEM" = "systemd" ]; then
+		local _unit_dir
+		_unit_dir=$(_pkg_systemd_unit_dir)
 		if [ -f "bfd.service" ] && [ -f "bfd.timer" ]; then
 			pkg_service_install_multi "bfd" \
 				"bfd.service" "bfd.timer"
 			if [ -f "bfd-watch.service" ]; then
 				pkg_service_install "bfd-watch" "bfd-watch.service"
 			fi
+		fi
+		# Clean legacy /etc/systemd/system/ units from pre-pkg_lib installs
+		# to prevent systemd priority conflict with auto-detected unit dir
+		if [ "${_IS_UPGRADE:-0}" = "1" ]; then
+			rm -f /etc/systemd/system/bfd.service \
+			      /etc/systemd/system/bfd.timer \
+			      /etc/systemd/system/bfd-watch.service 2>/dev/null  # safe: may not exist
 		fi
 	else
 		# SysVinit: install init script for watch mode
@@ -129,9 +140,9 @@ install_files(){
 		pkg_sed_replace "/usr/local/sbin/bfd" "$BINPATH" /etc/cron.d/bfd
 		if [ "$_PKG_INIT_SYSTEM" = "systemd" ]; then
 			pkg_sed_replace "/usr/local/sbin/bfd" "$BINPATH" \
-				/etc/systemd/system/bfd.service \
-				/etc/systemd/system/bfd.timer \
-				/etc/systemd/system/bfd-watch.service
+				"${_unit_dir}/bfd.service" \
+				"${_unit_dir}/bfd.timer" \
+				"${_unit_dir}/bfd-watch.service"
 		fi
 		# update init script if installed
 		local _idir
@@ -296,7 +307,7 @@ if [ -d "$INSPATH" ]; then
 	pkg_section "Installing files"
 	install_files
 	pkg_section "Importing configuration"
-	./importconf
+	BK_LAST=$(pkg_backup_path "$INSPATH") ./importconf
 	_enable_services
 	postinfo
 	pkg_success "BFD ${VER} upgrade complete"

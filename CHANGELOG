@@ -1,4 +1,24 @@
 2.0.1:
+
+-- pkg_lib Integration Fixes --
+
+[Fix] install.sh: PKG_BACKUP_SYMLINK set to "bfd.bk.last" before sourcing
+      pkg_lib so backup symlink matches importconf expectations; upgrade
+      detection uses pkg_backup_exists/pkg_backup_path instead of direct
+      directory test
+[Fix] importconf: BK_LAST variable with fallback to legacy symlink path;
+      all backup references use $BK_LAST for correct path resolution when
+      invoked by install.sh via pkg_backup_path()
+[Fix] install.sh: systemd unit sed replacement uses _pkg_systemd_unit_dir()
+      auto-detected path instead of hardcoded /etc/systemd/system/; prevents
+      sed targeting wrong directory on RHEL/Debian where units install to
+      /usr/lib/systemd/system/ or /lib/systemd/system/
+[Fix] install.sh/uninstall.sh: legacy /etc/systemd/system/ units cleaned on
+      upgrade and uninstall to prevent systemd priority conflict with units
+      in auto-detected directory
+[Fix] uninstall.sh: backup glob widened to match both old (.bk.*) and new
+      pkg_lib (.TIMESTAMP) naming formats
+
 [New] pkg_lib.sh v1.0.0 integrated as shared packaging/installer library at
       files/internals/pkg_lib.sh; provides standardized backup, file operations,
       service lifecycle, cron management, man page, and uninstall primitives

@@ -44,6 +44,10 @@ if [ -d "$INSPATH" ]; then
 	# Remove services (systemd units, SysV init scripts, chkconfig/update-rc.d)
 	pkg_service_uninstall "bfd"
 	pkg_service_uninstall "bfd-watch"
+	# Remove legacy /etc/systemd/system/ units from pre-pkg_lib installs
+	rm -f /etc/systemd/system/bfd.service \
+	      /etc/systemd/system/bfd.timer \
+	      /etc/systemd/system/bfd-watch.service 2>/dev/null  # safe: may not exist
 	# Additional SysV state files
 	rm -f /var/run/bfd-watch.pid /var/lock/subsys/bfd-watch
 
@@ -64,7 +68,7 @@ if [ -d "$INSPATH" ]; then
 
 	# Remove cron files, install directory, symlink, backups, default log
 	pkg_uninstall_cron /etc/cron.d/bfd /etc/cron.daily/bfd
-	pkg_uninstall_files "$INSPATH".bk.* "$INSPATH" "$BINPATH" /var/log/bfd_log
+	pkg_uninstall_files "$INSPATH".bk.* "$INSPATH".[0-9]* "$INSPATH" "$BINPATH" /var/log/bfd_log
 
 	pkg_success "$APPN has been uninstalled."
 else

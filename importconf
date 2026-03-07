@@ -23,11 +23,15 @@
 INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
 LOG_IDLE_SUPPRESS="${LOG_IDLE_SUPPRESS:-1}"
 
-if [ ! -d "$INSTALL_PATH.bk.last" ]; then
+# BK_LAST is set by install.sh via pkg_backup_path(); fall back to legacy
+# symlink name for manual invocation or pre-pkg_lib upgrades
+BK_LAST=${BK_LAST:-"${INSTALL_PATH}.bk.last"}
+
+if [ ! -d "$BK_LAST" ]; then
 	exit 0
 fi
 
-old_conf="$INSTALL_PATH.bk.last/conf.bfd"
+old_conf="$BK_LAST/conf.bfd"
 new_conf="$INSTALL_PATH/conf.bfd"
 
 if [ ! -f "$old_conf" ] || [ ! -f "$new_conf" ]; then
@@ -75,10 +79,10 @@ old_combined=$(mktemp "$INSTALL_PATH/tmp/.importconf.XXXXXX")
 trap 'rm -f "$old_combined" "$INSTALL_PATH/conf.bfd.tmp" "$INSTALL_PATH/internals/internals.conf.tmp" "$INSTALL_PATH/thresholds.conf.tmp" "$INSTALL_PATH/pressure.conf.tmp"' EXIT INT TERM
 cat "$old_conf" > "$old_combined"
 # support both new (internals/) and old (flat) backup layouts
-if [ -f "$INSTALL_PATH.bk.last/internals/internals.conf" ]; then
-	cat "$INSTALL_PATH.bk.last/internals/internals.conf" >> "$old_combined"
-elif [ -f "$INSTALL_PATH.bk.last/internals.conf" ]; then
-	cat "$INSTALL_PATH.bk.last/internals.conf" >> "$old_combined"
+if [ -f "$BK_LAST/internals/internals.conf" ]; then
+	cat "$BK_LAST/internals/internals.conf" >> "$old_combined"
+elif [ -f "$BK_LAST/internals.conf" ]; then
+	cat "$BK_LAST/internals.conf" >> "$old_combined"
 fi
 
 # merge conf.bfd
@@ -175,11 +179,11 @@ fi
 
 # migrate per-rule overrides to pressure.conf
 new_press="$INSTALL_PATH/pressure.conf"
-if [ -f "$INSTALL_PATH.bk.last/pressure.conf" ]; then
+if [ -f "$BK_LAST/pressure.conf" ]; then
 	# already has pressure.conf — preserve it
-	cp -f "$INSTALL_PATH.bk.last/pressure.conf" "$new_press"
+	cp -f "$BK_LAST/pressure.conf" "$new_press"
 	echo "  Preserved pressure.conf from previous install."
-elif [ -f "$INSTALL_PATH.bk.last/thresholds.conf" ]; then
+elif [ -f "$BK_LAST/thresholds.conf" ]; then
 	# translate thresholds.conf TRIG entries → pressure.conf PRESSURE_TRIP entries
 	_migrated=0
 	while IFS=: read -r _rule_name _rest; do
@@ -223,14 +227,14 @@ elif [ -f "$INSTALL_PATH.bk.last/thresholds.conf" ]; then
 				sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:RULE_EMAIL=${_email}|" "$new_press"
 			fi
 		fi
-	done < "$INSTALL_PATH.bk.last/thresholds.conf"
+	done < "$BK_LAST/thresholds.conf"
 	if [ "$_migrated" -gt 0 ]; then
 		echo "  Migrated $_migrated per-rule thresholds from thresholds.conf to pressure.conf."
 	fi
-elif [ -f "$new_press" ] && [ -d "$INSTALL_PATH.bk.last/rules" ]; then
+elif [ -f "$new_press" ] && [ -d "$BK_LAST/rules" ]; then
 	# pre-thresholds upgrade: extract uncommented TRIG/PRESSURE values from old rules
 	_migrated=0
-	for _rule_file in "$INSTALL_PATH.bk.last/rules"/*; do
+	for _rule_file in "$BK_LAST/rules"/*; do
 		[ ! -f "$_rule_file" ] && continue
 		_rule_name=$(basename "$_rule_file")
 		_old_trig=$(grep -E '^TRIG="[0-9]+"' "$_rule_file" 2>/dev/null | head -1)
@@ -260,27 +264,27 @@ elif [ -f "$new_press" ] && [ -d "$INSTALL_PATH.bk.last/rules" ]; then
 fi
 
 # preserve user's country pressure multiplier customizations
-if [ -f "$INSTALL_PATH.bk.last/pressure-country.conf" ]; then
-	cp -f "$INSTALL_PATH.bk.last/pressure-country.conf" "$INSTALL_PATH/pressure-country.conf"
+if [ -f "$BK_LAST/pressure-country.conf" ]; then
+	cp -f "$BK_LAST/pressure-country.conf" "$INSTALL_PATH/pressure-country.conf"
 	echo "  Preserved pressure-country.conf from previous install."
 fi
 
 # preserve user's ignore lists
-cp -f "$INSTALL_PATH.bk.last/ignore.hosts" "$INSTALL_PATH" 2>/dev/null
+cp -f "$BK_LAST/ignore.hosts" "$INSTALL_PATH" 2>/dev/null
 
 # preserve ban tracking state
-cp -f "$INSTALL_PATH.bk.last/tmp/bans.active" "$INSTALL_PATH/tmp/" 2>/dev/null
-cp -f "$INSTALL_PATH.bk.last/tmp/bans.history"* "$INSTALL_PATH/tmp/" 2>/dev/null
-cp -f "$INSTALL_PATH.bk.last/tmp/events.dat" "$INSTALL_PATH/tmp/" 2>/dev/null
-cp -f "$INSTALL_PATH.bk.last/stats/"* "$INSTALL_PATH/stats/" 2>/dev/null
+cp -f "$BK_LAST/tmp/bans.active" "$INSTALL_PATH/tmp/" 2>/dev/null
+cp -f "$BK_LAST/tmp/bans.history"* "$INSTALL_PATH/tmp/" 2>/dev/null
+cp -f "$BK_LAST/tmp/events.dat" "$INSTALL_PATH/tmp/" 2>/dev/null
+cp -f "$BK_LAST/stats/"* "$INSTALL_PATH/stats/" 2>/dev/null
 
 # preserve journal cursor/timestamp state
-cp -f "$INSTALL_PATH.bk.last/tmp/"*.cursor "$INSTALL_PATH/tmp/" 2>/dev/null
-cp -f "$INSTALL_PATH.bk.last/tmp/"*.jts "$INSTALL_PATH/tmp/" 2>/dev/null
+cp -f "$BK_LAST/tmp/"*.cursor "$INSTALL_PATH/tmp/" 2>/dev/null
+cp -f "$BK_LAST/tmp/"*.jts "$INSTALL_PATH/tmp/" 2>/dev/null
 
 # preserve tlog byte-offset tracking state
 # (files named by LOG_TAG: sshd, dovecot, postfix, etc. — no dots in name)
-for _f in "$INSTALL_PATH.bk.last/tmp/"*; do
+for _f in "$BK_LAST/tmp/"*; do
 	[ -f "$_f" ] || continue
 	_bn="${_f##*/}"
 	# skip dotfiles, extension files, and already-preserved patterns
@@ -291,11 +295,11 @@ for _f in "$INSTALL_PATH.bk.last/tmp/"*; do
 done
 
 # preserve custom.d/ template overrides from backup
-if [ -d "$INSTALL_PATH.bk.last/alert/custom.d" ] && [ -d "$INSTALL_PATH/alert" ]; then
+if [ -d "$BK_LAST/alert/custom.d" ] && [ -d "$INSTALL_PATH/alert" ]; then
 	mkdir -p "$INSTALL_PATH/alert/custom.d"
 	chmod 750 "$INSTALL_PATH/alert/custom.d"
 	_custom_tpl=0
-	for _old_custom in "$INSTALL_PATH.bk.last/alert/custom.d"/*.tpl; do
+	for _old_custom in "$BK_LAST/alert/custom.d"/*.tpl; do
 		[ -f "$_old_custom" ] || continue
 		_tpl_name="${_old_custom##*/}"
 		cp -f "$_old_custom" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
@@ -309,9 +313,9 @@ fi
 
 # one-time migration: move user-modified templates from alert/ to alert/custom.d/
 # (pre-custom.d installs stored customizations in-place; migrate on first upgrade)
-if [ -d "$INSTALL_PATH.bk.last/alert" ] && [ ! -d "$INSTALL_PATH.bk.last/alert/custom.d" ]; then
+if [ -d "$BK_LAST/alert" ] && [ ! -d "$BK_LAST/alert/custom.d" ]; then
 	_migrated_tpl=0
-	for _old_tpl in "$INSTALL_PATH.bk.last/alert"/*.tpl; do
+	for _old_tpl in "$BK_LAST/alert"/*.tpl; do
 		[ -f "$_old_tpl" ] || continue
 		_tpl_name="${_old_tpl##*/}"
 		_new_tpl="$INSTALL_PATH/alert/$_tpl_name"
@@ -331,14 +335,14 @@ if [ -d "$INSTALL_PATH.bk.last/alert" ] && [ ! -d "$INSTALL_PATH.bk.last/alert/c
 fi
 
 # preserve legacy alert.bfd for users upgrading from pre-2.0.1 with custom templates
-if [ -f "$INSTALL_PATH.bk.last/alert.bfd" ] && [ ! -d "$INSTALL_PATH.bk.last/alert" ]; then
-	cp -f "$INSTALL_PATH.bk.last/alert.bfd" "$INSTALL_PATH/alert.bfd" 2>/dev/null || true
+if [ -f "$BK_LAST/alert.bfd" ] && [ ! -d "$BK_LAST/alert" ]; then
+	cp -f "$BK_LAST/alert.bfd" "$INSTALL_PATH/alert.bfd" 2>/dev/null || true
 fi
 
 # preserve custom rule files from backup (user-added rules not in shipped set)
-if [ -d "$INSTALL_PATH.bk.last/rules" ]; then
+if [ -d "$BK_LAST/rules" ]; then
 	_custom_rules=0
-	for _old_rule in "$INSTALL_PATH.bk.last/rules"/*; do
+	for _old_rule in "$BK_LAST/rules"/*; do
 		[ -f "$_old_rule" ] || continue
 		_rule_name="${_old_rule##*/}"
 		# skip rules that exist in the new install (shipped rules — use new version)
@@ -353,8 +357,8 @@ if [ -d "$INSTALL_PATH.bk.last/rules" ]; then
 fi
 
 # preserve user's custom exclude.files entries
-if [ -f "$INSTALL_PATH.bk.last/exclude.files" ]; then
-	cp -f "$INSTALL_PATH.bk.last/exclude.files" "$INSTALL_PATH/exclude.files"
+if [ -f "$BK_LAST/exclude.files" ]; then
+	cp -f "$BK_LAST/exclude.files" "$INSTALL_PATH/exclude.files"
 fi
 
 echo "  Imported config and state from BFD $OV to $NV."
