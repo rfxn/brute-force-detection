@@ -2,6 +2,12 @@
 
 -- UAT Fixes --
 
+[Fix] CLI: suppress version banner (vhead) for --json and --csv output in -l,
+      -e, and -a handlers; structured data is no longer corrupted by banner text
+[Fix] _apool_summary: read bans.active in the empty-attack-pool early-return
+      path so Active Bans count is correct even when attack.pool is empty
+[Fix] list_bans_json: output compact "[]" when no active bans instead of
+      multi-line "[\n\n]"; matches events_dashboard_json empty format
 [Fix] importconf: merge_conf() preserves original file permissions after awk
       rewrite; .tmp file inherited umask (022) making conf.bfd/internals.conf
       world-readable (644) instead of 640
