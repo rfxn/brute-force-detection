@@ -1,5 +1,8 @@
 2.0.1:
 
+[Change] update vendored tlog_lib.sh 2.0.2 to 2.0.3; adds inline error
+      suppression comments and corrupt-archive stderr handling
+
 [Fix] bfd: move config_loaded audit event to watch mode only (startup and
       SIGHUP reload); eliminates per-invocation audit/syslog noise from cron
 

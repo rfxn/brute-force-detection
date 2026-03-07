@@ -21,7 +21,7 @@
 _TLOG_LIB_LOADED=1
 
 # shellcheck disable=SC2034
-TLOG_LIB_VERSION="2.0.2"
+TLOG_LIB_VERSION="2.0.3"
 
 # Journal filter registry — consuming projects populate via tlog_journal_register()
 # Uses parallel indexed arrays instead of declare -A to avoid scope issues
@@ -85,7 +85,7 @@ _tlog_parse_cursor() {
 		return 0
 	fi
 
-	read -r raw_value < "$cursor_file" 2>/dev/null || true
+	read -r raw_value < "$cursor_file" 2>/dev/null || true  # read exits 1 on EOF; not an error
 
 	# Empty content → first run
 	if [[ -z "$raw_value" ]]; then
@@ -204,9 +204,10 @@ _tlog_is_compressed() {
 _tlog_cat_file() {
 	local file="$1"
 	case "$file" in
-		*.gz)  gzip -dc "$file" ;;
-		*.xz)  xz -dc "$file" ;;
-		*.bz2) bzip2 -dc "$file" ;;
+		# suppress corrupt-archive stderr; exit code propagates to caller
+		*.gz)  gzip -dc "$file" 2>/dev/null ;;
+		*.xz)  xz -dc "$file" 2>/dev/null ;;
+		*.bz2) bzip2 -dc "$file" 2>/dev/null ;;
 		*.zst) zstd -dc "$file" 2>/dev/null ;;
 		*.lz4) lz4 -dc "$file" 2>/dev/null ;;
 		*)     cat "$file" ;;
@@ -442,7 +443,7 @@ tlog_read() {
 
 	# Rotation: newsize < size
 	elif [[ "$newsize" -lt "$size" ]]; then
-		rtfile=$(_tlog_find_rotated "$file") || true
+		rtfile=$(_tlog_find_rotated "$file") || true  # exit 1 = not found; [[ -n "$rtfile" ]] guards use
 		if [[ -n "$rtfile" ]]; then
 			_tlog_handle_rotation "$rtfile" "$size" "$mode" "$tlog_name" "$baserun"
 		fi
@@ -583,6 +584,7 @@ tlog_advance_cursors() {
 # $jfilter intentionally unquoted: multi-token filters require word-splitting.
 _tlog_journal_get_cursor() {
 	local jfilter="$1"
+	# suppress journalctl informational stderr; only stdout entries needed
 	# shellcheck disable=SC2086
 	journalctl $jfilter -n 0 --show-cursor 2>/dev/null \
 		| grep -E '^-- cursor:' | sed 's/^-- cursor: //'
@@ -653,7 +655,7 @@ tlog_journal_read() {
 	# Read stored cursor
 	stored_cursor=""
 	if [[ -f "$cursor_file" ]]; then
-		read -r stored_cursor < "$cursor_file" 2>/dev/null || true
+		read -r stored_cursor < "$cursor_file" 2>/dev/null || true  # read exits 1 on EOF; not an error
 	fi
 
 	# Validate cursor format — allowlist covers real systemd cursor tokens
@@ -667,7 +669,7 @@ tlog_journal_read() {
 	# Read stored journal timestamp
 	stored_jts=""
 	if [[ -f "$jts_file" ]]; then
-		read -r stored_jts < "$jts_file" 2>/dev/null || true
+		read -r stored_jts < "$jts_file" 2>/dev/null || true  # read exits 1 on EOF; not an error
 	fi
 
 	# Validate timestamp is numeric
@@ -698,17 +700,17 @@ tlog_journal_read() {
 	if [[ -n "$stored_cursor" ]]; then
 		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
-		if ! output_data=$(journalctl $jfilter --after-cursor="$stored_cursor" --no-pager 2>/dev/null); then
+		if ! output_data=$(journalctl $jfilter --after-cursor="$stored_cursor" --no-pager 2>/dev/null); then  # suppress journalctl informational stderr
 			if [[ -n "$stored_jts" ]]; then
 				# $jfilter intentionally unquoted: multi-token filters require word-splitting
 				# shellcheck disable=SC2086
-				output_data=$(journalctl $jfilter --since="@${stored_jts}" --no-pager 2>/dev/null) || true
+				output_data=$(journalctl $jfilter --since="@${stored_jts}" --no-pager 2>/dev/null) || true  # non-zero when no entries; empty output handled below
 			fi
 		fi
 	elif [[ -n "$stored_jts" ]]; then
 		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
-		output_data=$(journalctl $jfilter --since="@${stored_jts}" --no-pager 2>/dev/null) || true
+		output_data=$(journalctl $jfilter --since="@${stored_jts}" --no-pager 2>/dev/null) || true  # non-zero when no entries; empty output handled below
 	fi
 
 	# Output if any data
@@ -777,11 +779,11 @@ tlog_journal_read_full() {
 	if [[ "$scan_timeout" -gt 0 ]] && command -v timeout >/dev/null 2>&1; then
 		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
-		timeout "$scan_timeout" journalctl $jfilter "${cmd_args[@]}" 2>/dev/null
+		timeout "$scan_timeout" journalctl $jfilter "${cmd_args[@]}" 2>/dev/null  # suppress journalctl informational stderr
 	else
 		# $jfilter intentionally unquoted: multi-token filters require word-splitting
 		# shellcheck disable=SC2086
-		journalctl $jfilter "${cmd_args[@]}" 2>/dev/null
+		journalctl $jfilter "${cmd_args[@]}" 2>/dev/null  # suppress journalctl informational stderr
 	fi
 
 	return 0
