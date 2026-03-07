@@ -652,6 +652,7 @@ Available template variables include:
 .B {{HOST}}\fR,
 .B {{SERVICE}}\fR,
 .B {{PRESSURE}}\fR,
+.B {{FAIL_COUNT}}\fR,
 .B {{BAN_TYPE}}\fR,
 .B {{BAN_DURATION}}\fR,
 .B {{COUNTRY_CODE}}\fR,
@@ -706,6 +707,12 @@ value used when neither rule file nor pressure.conf sets a value.
 Pressure formula:
 pressure = SUM { weight * 2^(\-(now \- event_time) / half_life) }.
 A ban fires when pressure >= PRESSURE_TRIP.
+.PP
+In practical terms, PRESSURE_TRIP divided by weight gives the minimum number of
+rapid failures needed to trigger a ban.
+With the default trip of 20 and sshd weight of 3, at least 7 rapid failures are
+needed.
+Failures spread over time require more attempts because older events decay.
 .SH FIREWALL INTEGRATION
 The
 .B FIREWALL

@@ -22,6 +22,10 @@
 # Example (SSH, weight=3, trip=15, half-life=300s):
 #   Bot: 7 failures in 1s  -> pressure = 3*7 = 21.0 -> BAN
 #   Human: 5 typos over 4m -> pressure decays to ~11.1 -> NO BAN
+#
+# Quick ref: trip / weight = minimum rapid failures for a ban.
+# Default: 20 / 3 (sshd) = 7 rapid failures triggers a ban.
+# Spread-out failures need more attempts (older ones decay).
 
 # pressure trip point — accumulated pressure needed to trigger a ban
 # per-rule overrides: edit rules/ files or pressure.conf
