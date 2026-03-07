@@ -36,7 +36,7 @@
 <tr>
 <td style="padding:4px 16px;color:#71717a;vertical-align:top;">Pressure</td>
 <td style="padding:4px 16px;color:#09090b;">
-{{PRESSURE}}/{{PRESSURE_TRIP}} &mdash; weight {{WEIGHT}}, half-life {{HALF_LIFE_FMT}}
+{{PRESSURE}}/{{PRESSURE_TRIP}} &mdash; {{FAIL_COUNT}} failed logins, weight {{WEIGHT}}, half-life {{HALF_LIFE_FMT}}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:4px;">
 <tr>
 <td style="background-color:#e4e4e7;border-radius:3px;padding:0;">

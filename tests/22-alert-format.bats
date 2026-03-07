@@ -208,7 +208,7 @@ MOCK
 
 @test "send_alerts: single entry sends one mail with unchanged subject" {
 	local af="$TEST_TMPDIR/alerts_one"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	export MAIL_LOG="$mail_log"
 	_setup_mock_mail_log
@@ -222,8 +222,8 @@ MOCK
 
 @test "send_alerts: multiple entries same recipient sends one mail with ban count" {
 	local af="$TEST_TMPDIR/alerts_multi"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2" >> "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2|5" >> "$af"
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	export MAIL_LOG="$mail_log"
 	_setup_mock_mail_log
@@ -240,8 +240,8 @@ MOCK
 
 @test "send_alerts: different recipients get separate emails" {
 	local af="$TEST_TMPDIR/alerts_diff"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|admin@example.com|5|300|3" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|security@example.com|10|300|2" >> "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|admin@example.com|5|300|3|5" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|security@example.com|10|300|2|5" >> "$af"
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	export MAIL_LOG="$mail_log"
 	_setup_mock_mail_log
@@ -255,7 +255,7 @@ MOCK
 
 @test "send_alerts: RULE_EMAIL override routes to different recipient" {
 	local af="$TEST_TMPDIR/alerts_rule_email"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|special@example.com|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|special@example.com|5|300|3|5" > "$af"
 	local mail_log="$TEST_TMPDIR/mail_calls"
 	export MAIL_LOG="$mail_log"
 	_setup_mock_mail_log
@@ -266,7 +266,7 @@ MOCK
 
 @test "send_alerts: single-ban backward compat sets ATTACK_HOST global" {
 	local af="$TEST_TMPDIR/alerts_compat"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	_setup_mock_mail_silent
 	send_alerts "$af" "$EMAIL_SUBJECT" "50"
 	[ "$ATTACK_HOST" = "192.0.2.1" ]
@@ -277,7 +277,7 @@ MOCK
 
 @test "send_alerts: ATTACK_COUNT minimum is 1 even for low pressure" {
 	local af="$TEST_TMPDIR/alerts_lowpressure"
-	echo "192.0.2.1|sshd|22|500|0|ban|0|/dev/null|root|5|300|1" > "$af"
+	echo "192.0.2.1|sshd|22|500|0|ban|0|/dev/null|root|5|300|1|5" > "$af"
 	_setup_mock_mail_silent
 	send_alerts "$af" "$EMAIL_SUBJECT" "50"
 	# 500/1000 = 0 -> clamped to 1
@@ -287,7 +287,7 @@ MOCK
 @test "send_alerts: invalid template dir returns error" {
 	ALERT_TEMPLATE_DIR="$TEST_TMPDIR/nonexistent"
 	local af="$TEST_TMPDIR/alerts_one"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	_setup_mock_mail_silent
 	run send_alerts "$af" "$EMAIL_SUBJECT" "50"
 	assert_failure
@@ -468,12 +468,12 @@ EOF
 	check >/dev/null 2>&1
 	# mail should NOT have been called — alerts go to spool
 	[ ! -f "$mail_log" ]
-	# spool should have content: epoch prefix + 12 pipe-delimited fields = 13 total
+	# spool should have content: epoch prefix + 13 pipe-delimited fields = 14 total
 	[ -f "$ALERT_SPOOL_FILE" ]
 	[ -s "$ALERT_SPOOL_FILE" ]
 	local field_count
 	field_count=$(head -1 "$ALERT_SPOOL_FILE" | awk -F'|' '{print NF}')
-	[ "$field_count" -eq 13 ]
+	[ "$field_count" -eq 14 ]
 }
 
 @test "pipeline: digest accumulation across two check() cycles" {
@@ -588,7 +588,7 @@ RULEEOF
 	local now old_epoch
 	now=$(date +%s)
 	old_epoch=$((now - 1000))
-	echo "${old_epoch}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${old_epoch}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	check >/dev/null 2>&1
 	# mail should have been called (digest flushed)
 	[ -f "$mail_log" ]
@@ -610,7 +610,7 @@ RULEEOF
 	# pre-populate spool (simulates accumulated alerts during scan)
 	local now
 	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	_bfd_digest_flush
 	# mail should have been called
 	[ -f "$mail_log" ]

@@ -61,7 +61,7 @@ teardown() {
 	mkdir -p "$ALERT_TEMPLATE_DIR/custom.d"
 	echo "CUSTOM TEXT HEADER for {{HOSTNAME}}" > "$ALERT_TEMPLATE_DIR/custom.d/text.header.tpl"
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	run _alert_render_text "$af" "$ALERT_TEMPLATE_DIR" "50"
 	assert_success
 	# custom header rendered
@@ -72,7 +72,7 @@ teardown() {
 	mkdir -p "$ALERT_TEMPLATE_DIR/custom.d"
 	echo "<div class=\"custom-entry\">{{HOST}} {{BAN_TYPE}}</div>" > "$ALERT_TEMPLATE_DIR/custom.d/html.entry.tpl"
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	run _alert_render_html "$af" "$ALERT_TEMPLATE_DIR" "50"
 	assert_success
 	# custom entry rendered (has our custom class)
@@ -84,7 +84,7 @@ teardown() {
 @test "_alert_render_text: works normally when custom.d is empty directory" {
 	mkdir -p "$ALERT_TEMPLATE_DIR/custom.d"
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	run _alert_render_text "$af" "$ALERT_TEMPLATE_DIR" "50"
 	assert_success
 	# shipped templates render normally
@@ -96,7 +96,7 @@ teardown() {
 	# override only the footer
 	echo "<p>Custom footer {{BFD_VERSION}}</p>" > "$ALERT_TEMPLATE_DIR/custom.d/html.footer.tpl"
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	run _alert_render_html "$af" "$ALERT_TEMPLATE_DIR" "50"
 	assert_success
 	# shipped header (not overridden)

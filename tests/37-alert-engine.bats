@@ -903,7 +903,7 @@ EOF
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
 	UTIME="1000"
-	local line="192.0.2.1|sshd|22|15000|0|ban|0|/dev/null|root|10|300|3"
+	local line="192.0.2.1|sshd|22|15000|0|ban|0|/dev/null|root|10|300|3|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ "$HOST" = "192.0.2.1" ]
 	[ "$HOST_VERSION" = "IPv4" ]
@@ -921,7 +921,7 @@ EOF
 	BAN_ESCALATE_AFTER="0"
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
-	local line="2001:db8::1|sshd|22|5000|0|ban|0||root|10|300|1"
+	local line="2001:db8::1|sshd|22|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ "$HOST_VERSION" = "IPv6" ]
 	[ "$HOST" = "2001:db8::1" ]
@@ -933,7 +933,7 @@ EOF
 	BAN_ESCALATE_AFTER="0"
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
-	local line="192.0.2.1|sshd|all|5000|0|ban|0||root|10|300|1"
+	local line="192.0.2.1|sshd|all|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ "$PORTS" = "all ports" ]
 }
@@ -945,7 +945,7 @@ EOF
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
 	# 15000 scaled / (10 * 1000) = 150%
-	local line="192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1"
+	local line="192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ "$PRESSURE_PCT" = "150" ]
 	[ "$PRESSURE_PCT_CLAMPED" = "100" ]
@@ -957,7 +957,7 @@ EOF
 	BAN_ESCALATE_AFTER="5"
 	BAN_ESCALATION="linear"
 	EMAIL_REPUTATION_LINKS=""
-	local line="192.0.2.1|sshd|22|15000|0|escalate|5||root|10|300|1"
+	local line="192.0.2.1|sshd|22|15000|0|escalate|5||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ "$BAN_TYPE" = "Permanent (escalated)" ]
 	[ "$BAN_TYPE_COLOR" = "#d97706" ]
@@ -973,7 +973,7 @@ EOF
 	EMAIL_REPUTATION_LINKS=""
 	# expiry far in the future
 	local future_expiry=$(($(date +%s) + 600))
-	local line="192.0.2.1|sshd|22|15000|${future_expiry}|ban|0||root|10|300|1"
+	local line="192.0.2.1|sshd|22|15000|${future_expiry}|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ "$BAN_TYPE" = "Temporary" ]
 	[[ "$BAN_DURATION_DETAIL" == *"expires"* ]]
@@ -987,7 +987,7 @@ EOF
 	BAN_ESCALATE_WINDOW="86400"
 	BAN_ESCALATION="linear"
 	EMAIL_REPUTATION_LINKS=""
-	local line="192.0.2.1|sshd|22|15000|0|ban|3||root|10|300|1"
+	local line="192.0.2.1|sshd|22|15000|0|ban|3||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 2
 	[[ "$HISTORY_LINE" == *"3 previous ban(s)"* ]]
 	[[ "$HISTORY_LINE" == *"permanent at 5"* ]]
@@ -1000,7 +1000,7 @@ EOF
 	BAN_ESCALATE_AFTER="5"
 	BAN_ESCALATION="linear"
 	EMAIL_REPUTATION_LINKS=""
-	local line="192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1"
+	local line="192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ -z "$HISTORY_LINE" ]
 	[ -z "$HISTORY_ROW_HTML" ]
@@ -1012,7 +1012,7 @@ EOF
 	BAN_ESCALATE_AFTER="0"
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
-	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1"
+	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[[ "$BAN_COMMAND" == *"fw_ban 192.0.2.1"* ]]
 	[[ "$BAN_COMMAND" == *"iptables"* ]]
@@ -1024,7 +1024,7 @@ EOF
 	BAN_ESCALATE_AFTER="0"
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS="abuseipdb,ipinfo"
-	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1"
+	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[[ "$REPUTATION_SECTION_TEXT" == *"Reputation:"* ]]
 	[[ "$REPUTATION_SECTION_TEXT" == *"AbuseIPDB"* ]]
@@ -1037,7 +1037,7 @@ EOF
 	BAN_ESCALATE_AFTER="0"
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
-	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1"
+	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ -z "$REPUTATION_SECTION_TEXT" ]
 	[ -z "$REPUTATION_SECTION_HTML" ]
@@ -1050,7 +1050,7 @@ EOF
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
 	# empty log path = journal
-	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1"
+	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"systemd journal"* ]]
 	[[ "$SOURCE_LOGS_SECTION_HTML" == *"systemd journal"* ]]
@@ -1064,7 +1064,7 @@ EOF
 	EMAIL_REPUTATION_LINKS=""
 	local logfile="$TEST_TMPDIR/auth.log"
 	echo "Jan  1 00:00:01 host sshd: Failed password from 192.0.2.1" > "$logfile"
-	local line="192.0.2.1|sshd|22|5000|0|ban|0|${logfile}|root|10|300|1"
+	local line="192.0.2.1|sshd|22|5000|0|ban|0|${logfile}|root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Source logs from"* ]]
 	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Failed password"* ]]
@@ -1080,10 +1080,45 @@ EOF
 	# no ipcountry.dat available
 	local _old_ip="${INSTALL_PATH:-}"
 	INSTALL_PATH="$TEST_TMPDIR/nonexistent"
-	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1"
+	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ "$COUNTRY_CODE" = "--" ]
 	INSTALL_PATH="$_old_ip"
+}
+
+@test "_alert_set_entry_vars: FAIL_COUNT from 13th field" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local line="192.0.2.1|sshd|22|15000|0|ban|0|/dev/null|root|10|300|3|7"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$FAIL_COUNT" = "7" ]
+}
+
+@test "_alert_set_entry_vars: FAIL_COUNT fallback for 12-field line" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	# 12-field line (no 13th field) — should compute ceil(15000 / (3*1000)) = 5
+	local line="192.0.2.1|sshd|22|15000|0|ban|0|/dev/null|root|10|300|3"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$FAIL_COUNT" = "5" ]
+}
+
+@test "_alert_set_entry_vars: FAIL_COUNT fallback rounds up" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	# 12-field line — ceil(21400 / (3*1000)) = ceil(7.13) = 8
+	local line="192.0.2.1|sshd|22|21400|0|ban|0|/dev/null|root|10|300|3"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$FAIL_COUNT" = "8" ]
 }
 
 # ===================================================================
@@ -1092,7 +1127,7 @@ EOF
 
 @test "_alert_compute_summary: basic single entry" {
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5" > "$af"
 	_alert_compute_summary "$af"
 	[ "$SUMMARY_TOTAL_BANS" = "1" ]
 	[ "$SUMMARY_UNIQUE_IPS" = "1" ]
@@ -1106,10 +1141,10 @@ EOF
 @test "_alert_compute_summary: multiple entries with mixed types" {
 	local af="$TEST_TMPDIR/alerts"
 	cat > "$af" <<'EOF'
-192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1
-198.51.100.5|dovecot|143|8000|1709553600|ban|2||root|10|300|1
-203.0.113.10|sshd|22|12000|0|escalate|5||root|10|300|1
-192.0.2.1|postfix|25|6000|1709553600|ban|0||root|10|300|1
+192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5
+198.51.100.5|dovecot|143|8000|1709553600|ban|2||root|10|300|1|5
+203.0.113.10|sshd|22|12000|0|escalate|5||root|10|300|1|5
+192.0.2.1|postfix|25|6000|1709553600|ban|0||root|10|300|1|5
 EOF
 	_alert_compute_summary "$af"
 	[ "$SUMMARY_TOTAL_BANS" = "4" ]
@@ -1147,7 +1182,7 @@ EOF
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|3|5" > "$af"
 	run _alert_render_text "$af" "${PROJECT_ROOT}/files/alert"
 	assert_success
 	# header
@@ -1160,6 +1195,8 @@ EOF
 	# footer
 	assert_output --partial "BFD (Brute Force Detection) 2.0.1"
 	assert_output --partial "rfxn.com/projects/brute-force-detection"
+	# failure count in pressure line
+	assert_output --partial "5 failed logins"
 	# no summary for single entry
 	refute_output --partial "Summary"
 }
@@ -1173,8 +1210,8 @@ EOF
 	EMAIL_REPUTATION_LINKS=""
 	local af="$TEST_TMPDIR/alerts"
 	cat > "$af" <<'EOF'
-192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1
-198.51.100.5|dovecot|143|8000|0|ban|0||root|10|300|1
+192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1|5
+198.51.100.5|dovecot|143|8000|0|ban|0||root|10|300|1|5
 EOF
 	run _alert_render_text "$af" "${PROJECT_ROOT}/files/alert"
 	assert_success
@@ -1204,7 +1241,7 @@ EOF
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|3|5" > "$af"
 	run _alert_render_html "$af" "${PROJECT_ROOT}/files/alert"
 	assert_success
 	assert_output --partial "<!DOCTYPE html>"
@@ -1224,8 +1261,8 @@ EOF
 	EMAIL_REPUTATION_LINKS=""
 	local af="$TEST_TMPDIR/alerts"
 	cat > "$af" <<'EOF'
-192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1
-198.51.100.5|dovecot|143|8000|0|ban|0||root|10|300|1
+192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1|5
+198.51.100.5|dovecot|143|8000|0|ban|0||root|10|300|1|5
 EOF
 	run _alert_render_html "$af" "${PROJECT_ROOT}/files/alert"
 	assert_success
@@ -1242,7 +1279,7 @@ EOF
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1" > "$af"
+	echo "192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1|5" > "$af"
 	run _alert_render_html "$af" "${PROJECT_ROOT}/files/alert"
 	assert_success
 	# pressure bar should contain color and percentage width
@@ -1631,7 +1668,7 @@ MOCK
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_FORMAT="text"
 	local af="$TEST_TMPDIR/alerts_one"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	send_alerts "$af" "BFD Alert" "50"
 	[ -f "$MAIL_LOG" ]
 	run grep "MAIL_CALL:" "$MAIL_LOG"
@@ -1643,8 +1680,8 @@ MOCK
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_FORMAT="text"
 	local af="$TEST_TMPDIR/alerts_multi"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2" >> "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2|5" >> "$af"
 	send_alerts "$af" "BFD Alert" "50"
 	run grep "MAIL_CALL:" "$MAIL_LOG"
 	assert_output --partial "(2 bans)"
@@ -1655,8 +1692,8 @@ MOCK
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_FORMAT="text"
 	local af="$TEST_TMPDIR/alerts_multi_recip"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|admin@example.com|5|300|3" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|ops@example.com|10|300|2" >> "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|admin@example.com|5|300|3|5" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|ops@example.com|10|300|2|5" >> "$af"
 	send_alerts "$af" "BFD Alert" "50"
 	local call_count
 	call_count=$(grep -c "MAIL_CALL:" "$MAIL_LOG")
@@ -1668,7 +1705,7 @@ MOCK
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_FORMAT="both"
 	local af="$TEST_TMPDIR/alerts_both"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	send_alerts "$af" "BFD Alert" "50"
 	[ -f "$SENDMAIL_LOG" ]
 	run grep "multipart/alternative" "$SENDMAIL_LOG"
@@ -1698,8 +1735,8 @@ _setup_mock_send_alerts() {
 	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
 	local af="$TEST_TMPDIR/alerts"
 	cat > "$af" <<'EOF'
-192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1
-198.51.100.5|dovecot|143|8000|0|ban|0||root|10|300|2
+192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5
+198.51.100.5|dovecot|143|8000|0|ban|0||root|10|300|2|5
 EOF
 	_bfd_spool_append "$af"
 	[ -f "$ALERT_SPOOL_FILE" ]
@@ -1725,9 +1762,9 @@ EOF
 @test "_bfd_spool_append: appends to existing spool" {
 	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
 	# pre-populate with one line
-	echo "1000000000|203.0.113.1|postfix|25|3000|0|ban|0||root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "1000000000|203.0.113.1|postfix|25|3000|0|ban|0||root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5" > "$af"
 	_bfd_spool_append "$af"
 	local count
 	count=$(wc -l < "$ALERT_SPOOL_FILE")
@@ -1741,7 +1778,7 @@ EOF
 @test "_bfd_digest_check: no-op when EMAIL_DIGEST=cycle" {
 	EMAIL_DIGEST="cycle"
 	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	echo "1000000000|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "1000000000|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	_setup_mock_send_alerts
 	_bfd_digest_check
 	[ ! -f "$DIGEST_CALLS_LOG" ]
@@ -1775,7 +1812,7 @@ EOF
 	local now
 	now=$(date +%s)
 	local old_epoch=$((now - 100))
-	echo "${old_epoch}|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${old_epoch}|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	_setup_mock_send_alerts
 	_bfd_digest_check
 	# should NOT have flushed
@@ -1796,7 +1833,7 @@ EOF
 	local now
 	now=$(date +%s)
 	local old_epoch=$((now - 1000))
-	echo "${old_epoch}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${old_epoch}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	_setup_mock_send_alerts
 	_bfd_digest_check
 	# should have flushed
@@ -1820,8 +1857,8 @@ EOF
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	local now
 	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
-	echo "${now}|198.51.100.5|dovecot|143|8000|0|ban|0|/dev/null|root|10|300|2" >> "$ALERT_SPOOL_FILE"
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
+	echo "${now}|198.51.100.5|dovecot|143|8000|0|ban|0|/dev/null|root|10|300|2|5" >> "$ALERT_SPOOL_FILE"
 	_setup_mock_send_alerts
 	_bfd_digest_flush
 	# should have sent
@@ -1841,16 +1878,16 @@ EOF
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	local now
 	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	_setup_mock_send_alerts
 	_bfd_digest_flush
-	# check that flush file had 12 fields (not 13)
+	# check that flush file had 13 fields (epoch stripped, fail_count preserved)
 	local flush_file
 	flush_file=$(ls "$DIGEST_FLUSH_DIR"/flush_*.dat 2>/dev/null | head -1)
 	[ -n "$flush_file" ]
 	local field_count
 	field_count=$(head -1 "$flush_file" | awk -F'|' '{print NF}')
-	[ "$field_count" -eq 12 ]
+	[ "$field_count" -eq 13 ]
 }
 
 @test "_bfd_digest_flush: no-op when EMAIL_ALERTS=0" {
@@ -1858,7 +1895,7 @@ EOF
 	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
 	local now
 	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	_setup_mock_send_alerts
 	_bfd_digest_flush
 	[ ! -f "$DIGEST_CALLS_LOG" ]
@@ -1883,7 +1920,7 @@ EOF
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	local now
 	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	_setup_mock_send_alerts
 	_bfd_digest_flush
 	_bfd_digest_flush
@@ -1902,7 +1939,7 @@ EOF
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_FORMAT="both"
 	local af="$TEST_TMPDIR/alerts_mime"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	send_alerts "$af" "BFD Alert" "50"
 	[ -f "$SENDMAIL_LOG" ]
 	# MIME boundary present
@@ -1940,7 +1977,7 @@ MOCK
 	SMTP_PASS="pass"
 	_bfd_alert_init
 	local af="$TEST_TMPDIR/alerts_relay"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	send_alerts "$af" "BFD Alert" "50"
 	# curl was called
 	[ -f "$CURL_LOG" ]
@@ -1979,7 +2016,7 @@ MOCK
 	_bfd_alert_init
 	local now
 	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	_bfd_digest_flush
 	# curl should have been called with relay URL
 	[ -f "$CURL_LOG" ]
@@ -2065,7 +2102,7 @@ MOCK
 	DISCORD_ALERTS="0"
 	_bfd_alert_init
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$af"
 	local tpl_dir="$PROJECT_ROOT/files/alert"
 	run _bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
 	assert_success
@@ -2093,7 +2130,7 @@ MOCK
 	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
 	_bfd_alert_init
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$af"
 	local tpl_dir="$PROJECT_ROOT/files/alert"
 	_bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
 	[ -f "$curl_log" ]
@@ -2112,7 +2149,7 @@ MOCK
 	DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/123/abc"
 	_bfd_alert_init
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$af"
 	local tpl_dir="$PROJECT_ROOT/files/alert"
 	_bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
 	[ -f "$curl_log" ]
@@ -2129,7 +2166,7 @@ MOCK
 	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
 	_bfd_alert_init
 	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$af"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$af"
 	local tpl_dir="$PROJECT_ROOT/files/alert"
 	_bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
 	# ENTRY_BLOCKS should be unset after dispatch (cleanup)
@@ -2162,7 +2199,7 @@ MOCK
 	# pre-populate spool
 	local now
 	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	_bfd_digest_flush
 	# spool should be empty (flushed)
 	[ ! -s "$ALERT_SPOOL_FILE" ]
@@ -2177,7 +2214,7 @@ MOCK
 	TELEGRAM_ALERTS="0"
 	DISCORD_ALERTS="0"
 	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	echo "1234567890|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "1234567890|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	_bfd_digest_flush
 	# spool should NOT be empty (preserved for when re-enabled)
 	[ -s "$ALERT_SPOOL_FILE" ]

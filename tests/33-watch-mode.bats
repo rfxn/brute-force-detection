@@ -457,7 +457,7 @@ INTEOF
 	# populate spool
 	local now
 	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	# mock mail to track calls
 	mkdir -p "$TEST_TMPDIR/bin"
 	cat > "$TEST_TMPDIR/bin/mail" <<'MOCK'
@@ -487,7 +487,7 @@ MOCK
 	# populate spool
 	local now
 	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1" > "$ALERT_SPOOL_FILE"
+	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
 	# mock mail to track calls
 	mkdir -p "$TEST_TMPDIR/bin"
 	cat > "$TEST_TMPDIR/bin/mail" <<'MOCK'
