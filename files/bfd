@@ -176,9 +176,12 @@ config_init() {
 	LOG_SOURCE="${LOG_SOURCE:-auto}"
 	export LOG_SOURCE
 
-	# ELOG config derived from conf.bfd values (F-002 fix)
+	# ELOG config derived from conf.bfd values — consumed by sourced elog_lib.sh
+	# shellcheck disable=SC2034
 	ELOG_LOG_FILE="$BFD_LOG_PATH"
+	# shellcheck disable=SC2034
 	ELOG_SYSLOG_FILE=""
+	# shellcheck disable=SC2034
 	[ "${OUTPUT_SYSLOG:-0}" = "1" ] && ELOG_SYSLOG_FILE="$OUTPUT_SYSLOG_FILE"
 	# shellcheck disable=SC2034
 	ELOG_FORMAT="${LOG_FORMAT:-classic}"
@@ -235,10 +238,12 @@ config_init() {
 	_THRESH_RULE_EMAIL=()
 	_load_thresholds "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
 
-	# BAN_COMMAND templates
+	# BAN_COMMAND templates — UNBAN_* consumed by sourced bfd.lib.sh
 	BAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND")
+	# shellcheck disable=SC2034
 	UNBAN_COMMAND_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND")
 	BAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "BAN_COMMAND_V6")
+	# shellcheck disable=SC2034
 	UNBAN_COMMAND_V6_TEMPLATE=$(extract_command_template "$CNF" "UNBAN_COMMAND_V6")
 
 	# Validate and set up
@@ -1103,6 +1108,7 @@ watch() {
 	trap reload_watch HUP
 	# suppress stdout in daemon mode — elog writes directly to syslog/log files;
 	# systemd SyslogIdentifier would re-log stdout causing duplicate entries
+	# shellcheck disable=SC2034
 	ELOG_STDOUT="never"
 	pre
 	get_state
