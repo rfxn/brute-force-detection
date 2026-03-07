@@ -1,5 +1,11 @@
 2.0.1:
 
+-- UAT Fixes --
+
+[Fix] importconf: merge_conf() preserves original file permissions after awk
+      rewrite; .tmp file inherited umask (022) making conf.bfd/internals.conf
+      world-readable (644) instead of 640
+
 -- Alert Pressure Clarity --
 
 [New] alert templates show failure count alongside pressure score: "N failed
