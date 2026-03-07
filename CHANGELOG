@@ -1,5 +1,18 @@
 2.0.1:
 
+-- Test Suite Optimization --
+
+[Change] firewall-backend tests: converted 4 APF/CSF ban/unban subshell tests
+      to direct function calls, eliminating redundant bfd.lib.sh re-sourcing
+[Change] watch-mode tests: replaced fixed sleeps (sleep 0.5/1/2) with log-based
+      polling loops (sleep 0.1 with grep checks), reducing worst-case wait time
+[Change] config-validation tests: consolidated run_validate/run_validate_output
+      into single _run_validate_impl helper with mode parameter
+[Fix] removed 3 redundant valid-IP tests and 1 redundant invalid-IP test in
+      01-validate-ip.bats (zero coverage loss)
+[Fix] removed redundant pressure_format 15000 test in 30-pressure.bats (same
+      code path as 1000 test)
+
 -- QA Integration Fixes --
 
 [Fix] bfd_alert.sh: _bfd_dispatch_messaging now passes entry_num and

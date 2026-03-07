@@ -16,49 +16,59 @@ teardown() {
 }
 
 # helper: set all config to valid defaults, then override one field
-run_validate() {
-	(
-		PRESSURE_TRIP="15"
-		PRESSURE_HALF_LIFE="300"
-		PRESSURE_TRIP_GLOBAL="0"
-		BAN_TTL="300"
-		BAN_ESCALATE_AFTER="5"
-		BAN_ESCALATE_WINDOW="86400"
-		UNBAN_COMMAND_TEMPLATE=""
-		EMAIL_ALERTS="0"
-		EMAIL_ADDRESS="root@localhost"
-		LOCK_FILE_TIMEOUT="300"
-		BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
-		FIREWALL="custom"
-		INSTALL_PATH="$TEST_TMPDIR"
-		LOG_FORMAT="classic"
-		LOG_LEVEL="1"
-		eval "$1"
-		validate_config
-	) >/dev/null 2>&1
+# Usage: run_validate 'OVERRIDE_EXPR'           — suppresses output
+#        run_validate_output 'OVERRIDE_EXPR'     — captures stdout+stderr
+_run_validate_impl() {
+	local mode="$1" override="$2"
+	if [ "$mode" = "capture" ]; then
+		(
+			PRESSURE_TRIP="15"
+			PRESSURE_HALF_LIFE="300"
+			PRESSURE_TRIP_GLOBAL="0"
+			BAN_TTL="300"
+			BAN_ESCALATE_AFTER="5"
+			BAN_ESCALATE_WINDOW="86400"
+			UNBAN_COMMAND_TEMPLATE=""
+			EMAIL_ALERTS="0"
+			EMAIL_ADDRESS="root@localhost"
+			LOCK_FILE_TIMEOUT="300"
+			BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
+			FIREWALL="custom"
+			INSTALL_PATH="$TEST_TMPDIR"
+			LOG_FORMAT="classic"
+			LOG_LEVEL="1"
+			eval "$override"
+			validate_config
+		) 2>&1
+	else
+		(
+			PRESSURE_TRIP="15"
+			PRESSURE_HALF_LIFE="300"
+			PRESSURE_TRIP_GLOBAL="0"
+			BAN_TTL="300"
+			BAN_ESCALATE_AFTER="5"
+			BAN_ESCALATE_WINDOW="86400"
+			UNBAN_COMMAND_TEMPLATE=""
+			EMAIL_ALERTS="0"
+			EMAIL_ADDRESS="root@localhost"
+			LOCK_FILE_TIMEOUT="300"
+			BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
+			FIREWALL="custom"
+			INSTALL_PATH="$TEST_TMPDIR"
+			LOG_FORMAT="classic"
+			LOG_LEVEL="1"
+			eval "$override"
+			validate_config
+		) >/dev/null 2>&1
+	fi
 }
 
-# helper: capture stdout+stderr for warning checks
+run_validate() {
+	_run_validate_impl "suppress" "$1"
+}
+
 run_validate_output() {
-	(
-		PRESSURE_TRIP="15"
-		PRESSURE_HALF_LIFE="300"
-		PRESSURE_TRIP_GLOBAL="0"
-		BAN_TTL="300"
-		BAN_ESCALATE_AFTER="5"
-		BAN_ESCALATE_WINDOW="86400"
-		UNBAN_COMMAND_TEMPLATE=""
-		EMAIL_ALERTS="0"
-		EMAIL_ADDRESS="root@localhost"
-		LOCK_FILE_TIMEOUT="300"
-		BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
-		FIREWALL="custom"
-		INSTALL_PATH="$TEST_TMPDIR"
-		LOG_FORMAT="classic"
-		LOG_LEVEL="1"
-		eval "$1"
-		validate_config
-	) 2>&1
+	_run_validate_impl "capture" "$1"
 }
 
 @test "validate_config: valid config passes" {
