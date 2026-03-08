@@ -35,6 +35,22 @@
       backed events_list functions: events_dashboard, events_ip, events_cidr
       (and JSON/CSV variants), _events_pressure_awk, _events_dashboard_awk,
       _events_cidr_awk, _events_ip_data (587 lines); removed 50 associated tests
+[Fix] events_list_json: emit compact "[]" for empty state instead of printing
+      "[" then "]" on separate lines
+[Fix] --sort= validation: unknown sort modes warn and fallback to 'count'
+[Change] README: update events.dat references to pressure.dat
+[New] importconf test: events.dat to pressure.dat migration path verified
+
+-- UAT Test Suite --
+
+[New] UAT scenario test suite: 66 tests across 10 categories — ban lifecycle,
+      ban escalation/TTL, detection pressure, scan mode, config health, ignore
+      lists, activity investigation, watch mode, CLI UX, output quality
+[New] UAT helper (tests/helpers/uat-bfd.bash): idempotent BFD install with
+      Docker-safe config, state reset, tlog cursor management, log injection
+[New] Makefile UAT target with --init and --stop-timeout for clean container exit
+[Change] Dockerfile: add python3 for JSON validation
+[Change] batsman submodule updated to v1.1.0 (UAT helpers)
 
 -- UAT Fixes --
 
