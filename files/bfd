@@ -961,7 +961,7 @@ _apool_awk() {
 			ip)   sort -t'|' -k2 -V ;;
 			*)    sort -t'|' -k1 -nr ;;
 		esac
-	} | if [ "$limit" -gt 0 ] 2>/dev/null; then head -n "$limit"; else cat; fi
+	} | if [ "$limit" -gt 0 ] 2>/dev/null; then head -n "$limit"; else cat; fi  # suppress non-numeric $limit comparison error (defaults to unlimited)
 }
 
 # _apool_report_json source_file [search] [cutoff] — JSON array of attack pool entries
@@ -1312,6 +1312,12 @@ for _arg in "$@"; do
 	esac
 done
 set -- "${_bfd_args[@]+"${_bfd_args[@]}"}"
+# Validate --sort= value
+case "$_EVENTS_SORT" in
+	count|time|ip) ;;
+	*) echo "warning: unknown sort mode '$_EVENTS_SORT', using 'count'" >&2
+	   _EVENTS_SORT="count" ;;
+esac
 # Compute _EVENTS_CUTOFF from window selection
 case "$_EVENTS_WINDOW" in
 	7d)  _EVENTS_CUTOFF=$(( $(date +%s) - 604800 )) ;;

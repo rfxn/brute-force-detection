@@ -361,6 +361,36 @@ NEWEOF
 	assert_output "192.0.2.1"
 }
 
+@test "importconf: events.dat in backup migrated to pressure.dat" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last/tmp" "$inst/tmp"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# old backup has events.dat (pre-rename), no pressure.dat
+	echo "1700000000 192.0.2.4 sshd 3" > "$inst.bk.last/tmp/events.dat"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# events.dat should be migrated to pressure.dat
+	[ -f "$inst/tmp/pressure.dat" ]
+	run cat "$inst/tmp/pressure.dat"
+	assert_output "1700000000 192.0.2.4 sshd 3"
+}
+
 # --- pressure.conf / thresholds.conf migration ---
 
 @test "importconf: pre-thresholds upgrade migrates old rule TRIG to pressure.conf" {

@@ -3236,8 +3236,6 @@ search_ip() {
 			evt_svcs="${evt_svcs}${_svc}(${_cnt}) "
 		done <<< "$data"
 		echo "  Failures (24h): $evt_count across $evt_svcs"
-	elif [ "$pool_failures" -gt 0 ] 2>/dev/null; then
-		echo "  Failures (24h): 0"
 	else
 		echo "  Failures (24h): 0"
 	fi
@@ -4071,8 +4069,7 @@ events_list_json() {
 		return 0
 	fi
 
-	local has_data=0
-	echo "["
+	local first=1
 	local cnt ip first_ts last_ts svcs cc
 	while IFS='|' read -r cnt ip first_ts last_ts svcs cc; do
 		[ -z "$cnt" ] && continue
@@ -4081,18 +4078,20 @@ events_list_json() {
 		last_fmt=$(_fmt_ts_iso "$last_ts")
 		ban_status=$(_apool_ban_status "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
-		if [ "$has_data" -eq 1 ]; then
+		if [ "$first" -eq 1 ]; then
+			echo "["
+			first=0
+		else
 			echo ","
 		fi
-		has_data=1
 		printf '  {"ip": "%s", "count": %s, "services": %s, "country": "%s", "first_seen": "%s", "last_seen": "%s", "status": "%s"}' \
 			"$(_json_escape "$ip")" "$cnt" \
 			"$(_json_array_from_csv "$svcs")" "$(_json_escape "${cc:---}")" \
 			"$first_fmt" "$last_fmt" "$(_json_escape "$ban_status")"
 	done < <(_apool_awk "$pool_file" "" "$cutoff" "$sort_mode" "0")
 
-	if [ "$has_data" -eq 0 ]; then
-		echo "]"
+	if [ "$first" -eq 1 ]; then
+		echo "[]"
 	else
 		echo ""
 		echo "]"
