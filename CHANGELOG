@@ -8,6 +8,14 @@
       tests/Dockerfile instead of working-directory, matching Dockerfile
       COPY paths that reference project-root files
 
+  -- Enhancements --
+
+[New] bfd -R --active: optional filter to show only active rules
+[Change] bfd -R / bfd -R RULE: log source column now shows journal tag
+      when using systemd journal, indicates dual-source availability
+      (file+journal) when both are eligible, and shows (not found) when
+      the configured log file is missing
+
   -- New Features --
 
 [New] Pressure-to-response scoring model: exponential-decay scoring replaces
