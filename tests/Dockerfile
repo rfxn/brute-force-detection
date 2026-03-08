@@ -3,6 +3,7 @@ FROM ${BASE_IMAGE}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     iproute2 \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy BFD source and tests — files/ at /opt/files/ so PROJECT_ROOT=/opt
