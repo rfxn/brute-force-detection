@@ -31,6 +31,10 @@
 [Change] README.md: rewrote section 5.8 (Events and Investigation) for new
       event history behavior; updated -a vs -e callout and attack.pool
       description in state files table
+[Change] Remove dead pressure-based events functions superseded by attack.pool-
+      backed events_list functions: events_dashboard, events_ip, events_cidr
+      (and JSON/CSV variants), _events_pressure_awk, _events_dashboard_awk,
+      _events_cidr_awk, _events_ip_data (587 lines); removed 50 associated tests
 
 -- UAT Fixes --
 

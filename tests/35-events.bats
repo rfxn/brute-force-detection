@@ -1,14 +1,14 @@
 #!/usr/bin/env bats
 #
-# Tests for --events CLI command: validate_cidr(), events_dashboard(),
-# events_ip(), events_cidr()
+# Tests for shared event helpers: validate_cidr(), _pressure_aggregate_all(),
+# _events_rule_log_file(), _resolve_trip(), _resolve_min_trip(), search_ip()
 #
 
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
-# Source _apool_ban_status from bfd (needed by events functions)
+# Source _apool_ban_status from bfd (needed by search_ip)
 bfd_load_function _apool_ban_status
 
 setup() {
@@ -78,215 +78,6 @@ teardown() {
 	assert_failure
 }
 
-# --- events_dashboard ---
-
-@test "events_dashboard: shows IPs sorted by pressure" {
-	local now
-	now=$(date +"%s")
-	# IP with more events (higher pressure)
-	local i
-	for i in $(seq 1 10); do
-		state_pressure_append "$INSTALL_PATH" "$((now - i))" "192.0.2.10" "sshd" "1" "3"
-	done
-	# IP with fewer events (lower pressure)
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.20" "sshd" "1" "1"
-	run events_dashboard "$INSTALL_PATH"
-	assert_success
-	assert_output --partial "192.0.2.10"
-	assert_output --partial "192.0.2.20"
-	# higher pressure IP should appear first (before lower pressure IP in output)
-	local line_10 line_20
-	line_10=$(echo "$output" | grep -n "192.0.2.10" | head -1 | cut -d: -f1)
-	line_20=$(echo "$output" | grep -n "192.0.2.20" | head -1 | cut -d: -f1)
-	[ "$line_10" -lt "$line_20" ]
-}
-
-@test "events_dashboard: header row present" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	run events_dashboard "$INSTALL_PATH"
-	assert_success
-	assert_output --partial "PRESSURE"
-}
-
-@test "events_dashboard: empty events shows message" {
-	run events_dashboard "$INSTALL_PATH"
-	assert_success
-	assert_output --partial "No active events"
-}
-
-@test "events_dashboard: banned IP shows BANNED status" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.30" "sshd" "1" "1"
-	state_bans_active_append "$INSTALL_PATH" "$now" "0" "192.0.2.30" "sshd" "22"
-	run events_dashboard "$INSTALL_PATH"
-	assert_success
-	assert_output --partial "BANNED"
-}
-
-@test "events_dashboard: multiple services shown comma-separated" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.40" "sshd" "1" "1"
-	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.40" "dovecot" "1" "1"
-	run events_dashboard "$INSTALL_PATH"
-	assert_success
-	assert_output --partial "sshd"
-	assert_output --partial "dovecot"
-}
-
-@test "events_dashboard: correct event count per IP" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.50" "sshd" "3" "1"
-	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.50" "sshd" "2" "1"
-	run events_dashboard "$INSTALL_PATH"
-	assert_success
-	# 5 total events
-	assert_output --partial "5"
-}
-
-# --- events_ip ---
-
-@test "events_ip: shows overall pressure score" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "5" "3"
-	run events_ip "$INSTALL_PATH" "192.0.2.10"
-	assert_success
-	assert_output --partial "Pressure:"
-	assert_output --partial "/${GLOB_PRESSURE_TRIP}"
-}
-
-@test "events_ip: shows per-service breakdown" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "3"
-	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "2" "2"
-	run events_ip "$INSTALL_PATH" "192.0.2.10"
-	assert_success
-	assert_output --partial "sshd"
-	assert_output --partial "dovecot"
-	assert_output --partial "SERVICE"
-}
-
-@test "events_ip: shows first/last seen timestamps" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 100))" "192.0.2.10" "sshd" "1" "1"
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	run events_ip "$INSTALL_PATH" "192.0.2.10"
-	assert_success
-	assert_output --partial "First seen:"
-	assert_output --partial "Last seen:"
-}
-
-@test "events_ip: shows ban status" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_bans_active_append "$INSTALL_PATH" "$now" "0" "192.0.2.10" "sshd" "22"
-	run events_ip "$INSTALL_PATH" "192.0.2.10"
-	assert_success
-	assert_output --partial "BANNED"
-}
-
-@test "events_ip: no events shows message" {
-	run events_ip "$INSTALL_PATH" "192.0.2.99"
-	assert_success
-	assert_output --partial "No active events"
-}
-
-@test "events_ip: multiple services listed separately" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "2" "3"
-	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "1" "2"
-	state_pressure_append "$INSTALL_PATH" "$((now - 3))" "192.0.2.10" "postfix" "1" "1"
-	run events_ip "$INSTALL_PATH" "192.0.2.10"
-	assert_success
-	assert_output --partial "sshd"
-	assert_output --partial "dovecot"
-	assert_output --partial "postfix"
-}
-
-# --- events_cidr ---
-
-@test "events_cidr: finds IPs in /24 range" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.20" "sshd" "1" "1"
-	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
-	assert_success
-	assert_output --partial "192.0.2.10"
-	assert_output --partial "192.0.2.20"
-}
-
-@test "events_cidr: excludes IPs outside range" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "sshd" "1" "1"
-	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
-	assert_success
-	assert_output --partial "192.0.2.10"
-	refute_output --partial "198.51.100.5"
-}
-
-@test "events_cidr: shows pressure column" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "5" "3"
-	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
-	assert_success
-	assert_output --partial "PRESSURE"
-}
-
-@test "events_cidr: shows BANNED status for banned IPs" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_bans_active_append "$INSTALL_PATH" "$now" "0" "192.0.2.10" "sshd" "22"
-	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
-	assert_success
-	assert_output --partial "BANNED"
-}
-
-@test "events_cidr: empty events shows message" {
-	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
-	assert_success
-	assert_output --partial "No events found"
-}
-
-@test "events_cidr: no matching IPs shows message" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "198.51.100.5" "sshd" "1" "1"
-	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
-	assert_success
-	assert_output --partial "No events found for 192.0.2.0/24"
-}
-
-@test "events_cidr: summary line with totals" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "1"
-	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.20" "sshd" "2" "1"
-	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
-	assert_success
-	assert_output --partial "2 IPs"
-	assert_output --partial "5 failures"
-}
-
-@test "events_cidr: invalid CIDR shows error" {
-	run events_cidr "$INSTALL_PATH" "not-a-cidr"
-	assert_failure
-	assert_output --partial "error:"
-}
-
 # --- _pressure_aggregate_all ---
 
 @test "_pressure_aggregate_all: returns scaled pressure for all IPs" {
@@ -302,34 +93,6 @@ teardown() {
 	assert_line --index 0 --regexp '^[0-9]+ 192\.0\.2\.10$'
 	# second line should be the lower-pressure IP
 	assert_line --index 1 --regexp '^[0-9]+ 198\.51\.100\.5$'
-}
-
-# --- _events_pressure_awk ---
-
-@test "_events_pressure_awk: dashboard mode returns all IPs" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "dovecot" "1" "1"
-	local events_file="$INSTALL_PATH/tmp/pressure.dat"
-	run _events_pressure_awk "$events_file" "$now" "300" "20"
-	assert_success
-	# should contain both IPs
-	assert_output --partial "192.0.2.10"
-	assert_output --partial "198.51.100.5"
-}
-
-@test "_events_pressure_awk: CIDR mode filters by subnet" {
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "dovecot" "1" "1"
-	local events_file="$INSTALL_PATH/tmp/pressure.dat"
-	run _events_pressure_awk "$events_file" "$now" "300" "20" "192.0.2.0" "24"
-	assert_success
-	# should contain only the subnet-matching IP
-	assert_output --partial "192.0.2.10"
-	refute_output --partial "198.51.100.5"
 }
 
 # --- _events_rule_log_file ---
@@ -354,104 +117,6 @@ RULE
 	mkdir -p "$RULES_PATH"
 	run _events_rule_log_file "nonexistent"
 	assert_failure
-}
-
-# --- events_ip: log sample ---
-
-@test "events_ip: shows log sample section" {
-	RULES_PATH="$INSTALL_PATH/rules"
-	mkdir -p "$RULES_PATH"
-	local logfile="$TEST_TMPDIR/auth.log"
-	cat > "$logfile" <<EOF
-Mar  4 10:00:01 server sshd[1234]: Failed password for root from 192.0.2.10 port 22 ssh2
-Mar  4 10:00:02 server sshd[1235]: Invalid user admin from 192.0.2.10 port 22 ssh2
-EOF
-	cat > "$RULES_PATH/sshd" <<RULE
-PREREQ=""
-LOG_FILE="$logfile"
-LOG_TAG="sshd"
-RULE
-	chown root "$RULES_PATH/sshd"
-	chmod 644 "$RULES_PATH/sshd"
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "2" "1"
-	run events_ip "$INSTALL_PATH" "192.0.2.10"
-	assert_success
-	assert_output --partial "Recent log activity:"
-	assert_output --partial "Failed password"
-	assert_output --partial "192.0.2.10"
-}
-
-@test "events_ip: no log file shows fallback message" {
-	RULES_PATH="$INSTALL_PATH/rules"
-	mkdir -p "$RULES_PATH"
-	# rule points to nonexistent log
-	cat > "$RULES_PATH/sshd" <<RULE
-PREREQ=""
-LOG_FILE="/nonexistent/log/file.log"
-LOG_TAG="sshd"
-RULE
-	chown root "$RULES_PATH/sshd"
-	chmod 644 "$RULES_PATH/sshd"
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	run events_ip "$INSTALL_PATH" "192.0.2.10"
-	assert_success
-	assert_output --partial "(no matching log entries found)"
-}
-
-@test "events_ip: log sample redacts credentials" {
-	RULES_PATH="$INSTALL_PATH/rules"
-	mkdir -p "$RULES_PATH"
-	local logfile="$TEST_TMPDIR/auth.log"
-	cat > "$logfile" <<EOF
-Mar  4 10:00:01 server sshd[1234]: password=secret123 from 192.0.2.10
-EOF
-	cat > "$RULES_PATH/sshd" <<RULE
-PREREQ=""
-LOG_FILE="$logfile"
-LOG_TAG="sshd"
-RULE
-	chown root "$RULES_PATH/sshd"
-	chmod 644 "$RULES_PATH/sshd"
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	run events_ip "$INSTALL_PATH" "192.0.2.10"
-	assert_success
-	assert_output --partial "<REDACTED>"
-	refute_output --partial "secret123"
-}
-
-@test "events_ip_json: log_sample array present" {
-	RULES_PATH="$INSTALL_PATH/rules"
-	mkdir -p "$RULES_PATH"
-	local logfile="$TEST_TMPDIR/auth.log"
-	cat > "$logfile" <<EOF
-Mar  4 10:00:01 server sshd[1234]: Failed password for root from 192.0.2.10 port 22 ssh2
-EOF
-	cat > "$RULES_PATH/sshd" <<RULE
-PREREQ=""
-LOG_FILE="$logfile"
-LOG_TAG="sshd"
-RULE
-	chown root "$RULES_PATH/sshd"
-	chmod 644 "$RULES_PATH/sshd"
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	run events_ip_json "$INSTALL_PATH" "192.0.2.10"
-	assert_success
-	assert_output --partial '"log_sample":'
-	assert_output --partial "Failed password"
-}
-
-@test "events_ip_json: empty events returns log_sample key" {
-	run events_ip_json "$INSTALL_PATH" "192.0.2.10"
-	assert_success
-	assert_output --partial '"log_sample": []'
 }
 
 # --- Per-rule pressure trip threshold display ---
@@ -493,30 +158,6 @@ RULE
 	run _resolve_min_trip "foo,bar"
 	assert_success
 	assert_output "42"
-}
-
-@test "events_dashboard: shows per-rule trip when _PRESS_TRIP set" {
-	_PRESS_TRIP=([sshd]="15")
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	run events_dashboard "$INSTALL_PATH"
-	assert_success
-	assert_output --partial "/15"
-	refute_output --partial "/20"
-}
-
-@test "events_ip: per-service table shows per-service trip" {
-	_PRESS_TRIP=([sshd]="12" [dovecot]="30")
-	local now
-	now=$(date +"%s")
-	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "1" "1"
-	run events_ip "$INSTALL_PATH" "192.0.2.10"
-	assert_success
-	# per-service lines should show their own trips
-	assert_output --partial "/12"
-	assert_output --partial "/30"
 }
 
 @test "search_ip: per-service pressure shows per-rule trip" {
