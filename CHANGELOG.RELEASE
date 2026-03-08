@@ -5,6 +5,8 @@
 [Change] Rename events.dat to pressure.dat; honest naming for the pressure
       scoring workspace which is pruned every ~10 half-lives (~50 min) and
       serves only the exponential-decay pressure model
+[New] Write observed (sub-trip) auth failure events to attack.pool with
+      ACTION=observed; all detected IPs now recorded, not just ban-triggering
 
 -- UAT Fixes --
 
