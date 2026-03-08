@@ -7,6 +7,9 @@
 [Fix] CI: UAT job Docker build uses project-root context with -f
       tests/Dockerfile instead of working-directory, matching Dockerfile
       COPY paths that reference project-root files
+[Fix] tests/35-events.bats: add bfd_require_bash42 guard to 5 tests
+      that use _PRESS_TRIP with string keys, fixing CentOS 6 failures
+      where bash 4.1 treats associative syntax as arithmetic indices
 
   -- Enhancements --
 
