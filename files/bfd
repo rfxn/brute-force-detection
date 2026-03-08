@@ -886,34 +886,82 @@ apool_list() {
 
 # --- Structured output for attack pool ---
 
-# _apool_awk source_file [search] [cutoff] — shared aggregation pipeline for attack pool
+# _apool_awk source_file [search] [cutoff] [sort_mode] [limit] [cidr_addr] [cidr_mask]
+# Shared aggregation pipeline for attack pool.
 # Outputs pipe-delimited: cnt|ip|first_ts|last_ts|rules_csv|country_code
 # cutoff: epoch timestamp — entries older than cutoff are skipped (0 = no filter)
+# sort_mode: count (default), time (last_seen desc), ip (version sort asc)
+# limit: max rows (default 25, 0 = unlimited)
+# cidr_addr/cidr_mask: optional CIDR filter (IPv4 only, mask 8-32)
 _apool_awk() {
 	local source_file="$1"
 	local search="${2:-}"
 	local cutoff="${3:-0}"
-	if [ -n "$search" ]; then
-		grep -F "$search" "$source_file"
-	else
-		cat "$source_file"
-	fi | awk -v cutoff="$cutoff" '{
-		ts = $1 + 0
-		if (cutoff > 0 && ts < cutoff) next
-		ip = $2; rule = $3
-		cnt = ($4+0 > 0) ? $4+0 : 1
-		cc_val = ($5 != "" && $5 != "--") ? $5 : ""
-		count[ip] += cnt
-		if (cc_val != "" && cc[ip] == "") cc[ip] = cc_val
-		if (!(ip in first) || ts < first[ip]) first[ip] = ts
-		if (!(ip in last) || ts > last[ip]) last[ip] = ts
-		if (rules[ip] == "") rules[ip] = rule
-		else if (index("," rules[ip] ",", "," rule ",") == 0) rules[ip] = rules[ip] "," rule
-	}
-	END {
-		for (ip in count)
-			print count[ip] "|" ip "|" first[ip] "|" last[ip] "|" rules[ip] "|" cc[ip]
-	}' | sort -t'|' -k1 -nr | head -n 25
+	local sort_mode="${4:-count}"
+	local limit="${5:-25}"
+	local cidr_addr="${6:-}" cidr_mask="${7:-}"
+	local cidr_mode=0
+	[ -n "$cidr_addr" ] && [ -n "$cidr_mask" ] && cidr_mode=1
+	{
+		if [ -n "$search" ]; then
+			grep -F "$search" "$source_file"
+		else
+			cat "$source_file"
+		fi | awk -v cutoff="$cutoff" -v cidr_mode="$cidr_mode" \
+			-v taddr="$cidr_addr" -v tmask="$cidr_mask" '
+		function pow2(n,    r, i) {
+			r = 1; for (i = 0; i < n; i++) r = r * 2; return r
+		}
+		function ipv4_subnet(ip, m,    parts, n, o1, o2, o3, o4, sh, divisor) {
+			n = split(ip, parts, ".")
+			if (n != 4) return ""
+			o1 = parts[1]+0; o2 = parts[2]+0; o3 = parts[3]+0; o4 = parts[4]+0
+			if (m >= 24) {
+				sh = 32 - m; divisor = pow2(sh)
+				o4 = int(o4 / divisor) * divisor
+				return o1 "." o2 "." o3 "." o4
+			} else if (m >= 16) {
+				sh = 24 - m; divisor = pow2(sh)
+				o3 = int(o3 / divisor) * divisor
+				return o1 "." o2 "." o3 ".0"
+			} else if (m >= 8) {
+				sh = 16 - m; divisor = pow2(sh)
+				o2 = int(o2 / divisor) * divisor
+				return o1 "." o2 ".0.0"
+			}
+			return ""
+		}
+		BEGIN {
+			if (cidr_mode) target_net = ipv4_subnet(taddr, tmask)
+		}
+		{
+			ts = $1 + 0
+			if (cutoff > 0 && ts < cutoff) next
+			ip = $2; rule = $3
+			if (cidr_mode) {
+				if (index(ip, ":") > 0) next
+				if (ipv4_subnet(ip, tmask) != target_net) next
+			}
+			cnt = ($4+0 > 0) ? $4+0 : 1
+			cc_val = ($5 != "" && $5 != "--") ? $5 : ""
+			count[ip] += cnt
+			if (cc_val != "" && cc[ip] == "") cc[ip] = cc_val
+			if (!(ip in first) || ts < first[ip]) first[ip] = ts
+			if (!(ip in last) || ts > last[ip]) last[ip] = ts
+			if (rules[ip] == "") rules[ip] = rule
+			else if (index("," rules[ip] ",", "," rule ",") == 0) rules[ip] = rules[ip] "," rule
+		}
+		END {
+			for (ip in count)
+				print count[ip] "|" ip "|" first[ip] "|" last[ip] "|" rules[ip] "|" cc[ip]
+		}'
+	} | {
+		case "$sort_mode" in
+			time) sort -t'|' -k4 -nr ;;
+			ip)   sort -t'|' -k2 -V ;;
+			*)    sort -t'|' -k1 -nr ;;
+		esac
+	} | if [ "$limit" -gt 0 ] 2>/dev/null; then head -n "$limit"; else cat; fi
 }
 
 # _apool_report_json source_file [search] [cutoff] — JSON array of attack pool entries

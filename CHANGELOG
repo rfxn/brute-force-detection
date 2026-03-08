@@ -7,6 +7,13 @@
       serves only the exponential-decay pressure model
 [New] Write observed (sub-trip) auth failure events to attack.pool with
       ACTION=observed; all detected IPs now recorded, not just ban-triggering
+[New] events_list, events_list_ip, events_list_cidr functions backed by
+      attack.pool; dashboard shows all IPs with sortable/filterable event
+      history, IP detail shows durable failure counts + live pressure + log
+      sample, CIDR search scans full retention window
+[Change] _apool_awk: add sort_mode (count/time/ip), limit (0=unlimited),
+      and CIDR filter params; backward compatible — defaults match prior
+      behavior (count desc, limit 25, no CIDR)
 
 -- UAT Fixes --
 
