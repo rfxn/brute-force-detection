@@ -9,6 +9,8 @@
       in bash -n and shellcheck checks
 [Fix] Add shellcheck SC2034 directives in bfd_alert.sh for positional-parse and
       global-consumer variables exposed by CI lint addition
+[New] CI: UAT job runs acceptance tests on Debian 12 after lint; builds Docker
+      images with GHA cache, uploads TAP results as artifact (14-day retention)
 
 -- Library Sync --
 
