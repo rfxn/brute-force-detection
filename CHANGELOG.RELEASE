@@ -205,6 +205,8 @@
 [Fix] Miscellaneous: POSIX == to = in test brackets; sed -r to sed -E;
       WATCH_INTERVAL default syntax; UNBAN_COMMAND warning gated on
       FIREWALL="custom"; firewalld examples removed --permanent flag
+[Fix] haproxy rule: remove redundant inline KERNEL_LOG_PATH default to match
+      convention used by all other rules referencing KERNEL_LOG_PATH
 
   -- Changes --
 
@@ -281,3 +283,5 @@
       for test isolation; alert-validation BFD sourcing block extracted to
       _bfd_alert_render helper; hardcoded temp path replaced with mktemp;
       dead uat_bfd_setup_alert_capture helper removed
+[Change] Jellyfin test cleanup moved from individual test bodies to teardown()
+      so cleanup runs even when assertions fail

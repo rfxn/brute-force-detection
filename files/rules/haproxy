@@ -21,7 +21,7 @@ if [ -f "$PREREQ" ]; then
 	if [ -f "/var/log/haproxy.log" ]; then
 		LOG_FILE="/var/log/haproxy.log"
 	else
-		LOG_FILE="${KERNEL_LOG_PATH:-/var/log/syslog}"
+		LOG_FILE="$KERNEL_LOG_PATH"
 	fi
 	LOG_TAG="haproxy"
 

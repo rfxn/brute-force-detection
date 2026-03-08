@@ -47,6 +47,8 @@ teardown() {
 	# clean up mock PREREQ binaries
 	rm -f /usr/sbin/sogod /usr/bin/freeswitch /usr/sbin/ejabberdctl \
 		/usr/sbin/pdns_server /usr/bin/jellyfin
+	# clean up jellyfin log directory (created outside TEST_TMPDIR)
+	rm -rf /var/log/jellyfin
 	bfd_teardown
 }
 
@@ -221,7 +223,6 @@ EOF
 	assert_success
 	assert_output --partial "203.0.113.50"
 	assert_output --partial "1 matches"
-	rm -rf /var/log/jellyfin
 }
 
 @test "jellyfin: multiple failures aggregate correctly" {
@@ -235,7 +236,6 @@ EOF
 	run test_rule "$INSTALL_PATH" "jellyfin" "$log"
 	assert_success
 	assert_output --partial "3 matches, 2 unique IPs"
-	rm -rf /var/log/jellyfin
 }
 
 @test "jellyfin: successful auth not matched" {
@@ -245,7 +245,6 @@ EOF
 	run test_rule "$INSTALL_PATH" "jellyfin" "$log"
 	assert_success
 	assert_output --partial "0 matches"
-	rm -rf /var/log/jellyfin
 }
 
 # --- powerdns ---
