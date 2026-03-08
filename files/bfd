@@ -1221,7 +1221,7 @@ usage_short() {
 	echo "  bfd --test-alert email  send test email alert"
 	echo "  bfd --scan [RULE]   full-log scan (all or specific rule)"
 	echo ""
-	echo "Output modifiers:    --json  --csv  -V (verbose)"
+	echo "Output modifiers:    --json  --csv  --sort=  --24h  --7d  --30d  -V"
 	echo ""
 	echo "Run 'bfd -h' for full option list, or 'man bfd' for documentation."
 }
@@ -1245,7 +1245,7 @@ usage() {
 	echo "Reporting:                                      Supports: --json --csv"
 	echo "  -l, --list                  list active bans"
 	echo "  -a, --activity [IP|STR]     threat activity and IP investigation"
-	echo "  -e, --events [IP|CIDR] [N]  active events, IP or subnet pressure detail (N=log lines)"
+	echo "  -e, --events [IP|CIDR] [N]  event history, IP or subnet detail (N=log lines)"
 	echo ""
 	echo "System:"
 	echo "  -S, --status [SERVICE]      operational status overview"
@@ -1266,6 +1266,10 @@ usage() {
 	echo "Output Modifiers:"
 	echo "  --json                      JSON output (with -l, -e, -a)"
 	echo "  --csv                       CSV output (with -l, -e, -a)"
+	echo "  --sort=MODE                 sort events: count (default), time, ip"
+	echo "  --24h                       events from last 24 hours (default)"
+	echo "  --7d                        events from last 7 days"
+	echo "  --30d                       events from last 30 days"
 	echo "  -V, --verbose               detailed output (with -s, -d, -c, -S, --scan)"
 	echo ""
 	echo "General:"
@@ -1276,17 +1280,21 @@ usage() {
 	echo "  bfd -s                      run detection and show results"
 	echo "  bfd -s -V                   verbose detection (show per-IP pressure)"
 	echo "  bfd -a 203.0.113.100        investigate an IP across all state"
-	echo "  bfd -e --json               active events in JSON"
+	echo "  bfd -e --json               event history in JSON"
+	echo "  bfd -e --7d --sort=time     events from last 7 days, newest first"
 	echo "  bfd --scan sshd -d          dry-run full-log scan for sshd only"
 	echo "  bfd -b 10.0.0.5 sshd        manually ban IP for sshd service"
 	echo "  bfd -T sshd /var/log/auth.log  test sshd rule against a log file"
 }
 
-# Pre-process global modifier flags (--json, --csv, --verbose, --max-lines=, --scan-timeout=)
+# Pre-process global modifier flags (--json, --csv, --verbose, --max-lines=, --scan-timeout=,
+# --sort=, --24h, --7d, --30d)
 VERBOSE=0
 OUTPUT_FORMAT="table"
 _CLI_SCAN_MAX_LINES=""
 _CLI_SCAN_TIMEOUT=""
+_EVENTS_SORT="count"
+_EVENTS_WINDOW="24h"
 declare -a _bfd_args=()
 # shellcheck disable=SC2034
 for _arg in "$@"; do
@@ -1296,10 +1304,20 @@ for _arg in "$@"; do
 		--verbose|-V) VERBOSE=1; ELOG_VERBOSE=1 ;;
 		--max-lines=*) _CLI_SCAN_MAX_LINES="${_arg#--max-lines=}" ;;
 		--scan-timeout=*) _CLI_SCAN_TIMEOUT="${_arg#--scan-timeout=}" ;;
+		--sort=*) _EVENTS_SORT="${_arg#--sort=}" ;;
+		--24h) _EVENTS_WINDOW="24h" ;;
+		--7d)  _EVENTS_WINDOW="7d" ;;
+		--30d) _EVENTS_WINDOW="30d" ;;
 		*)      _bfd_args+=("$_arg") ;;
 	esac
 done
 set -- "${_bfd_args[@]+"${_bfd_args[@]}"}"
+# Compute _EVENTS_CUTOFF from window selection
+case "$_EVENTS_WINDOW" in
+	7d)  _EVENTS_CUTOFF=$(( $(date +%s) - 604800 )) ;;
+	30d) _EVENTS_CUTOFF=$(( $(date +%s) - 2592000 )) ;;
+	*)   _EVENTS_CUTOFF=$(( $(date +%s) - 86400 )) ;;
+esac
 
 case "${1:-}" in
 -s|--standard)  vhead; run ;;
@@ -1326,21 +1344,21 @@ case "${1:-}" in
 	[ "$OUTPUT_FORMAT" = "table" ] && vhead; pre
 	if [ -n "${2:-}" ] && validate_ip_any "$2" >/dev/null 2>&1; then
 		case "$OUTPUT_FORMAT" in
-			json) events_ip_json "$INSTALL_PATH" "$2" "${3:-}" ;;
-			csv)  events_ip_csv "$INSTALL_PATH" "$2" ;;
-			*)    events_ip "$INSTALL_PATH" "$2" "${3:-}" ;;
+			json) events_list_ip_json "$INSTALL_PATH" "$2" "${3:-}" ;;
+			csv)  events_list_ip_csv "$INSTALL_PATH" "$2" ;;
+			*)    events_list_ip "$INSTALL_PATH" "$2" "${3:-}" ;;
 		esac
 	elif [ -n "${2:-}" ] && [[ "$2" == */* ]]; then
 		case "$OUTPUT_FORMAT" in
-			json) events_cidr_json "$INSTALL_PATH" "$2" || exit "$?" ;;
-			csv)  events_cidr_csv "$INSTALL_PATH" "$2" || exit "$?" ;;
-			*)    events_cidr "$INSTALL_PATH" "$2" || exit "$?" ;;
+			json) events_list_cidr_json "$INSTALL_PATH" "$2" "$_EVENTS_SORT" || exit "$?" ;;
+			csv)  events_list_cidr_csv "$INSTALL_PATH" "$2" "$_EVENTS_SORT" || exit "$?" ;;
+			*)    events_list_cidr "$INSTALL_PATH" "$2" "$_EVENTS_SORT" || exit "$?" ;;
 		esac
 	else
 		case "$OUTPUT_FORMAT" in
-			json) events_dashboard_json "$INSTALL_PATH" ;;
-			csv)  events_dashboard_csv "$INSTALL_PATH" ;;
-			*)    events_dashboard "$INSTALL_PATH" ;;
+			json) events_list_json "$INSTALL_PATH" "$_EVENTS_SORT" ;;
+			csv)  events_list_csv "$INSTALL_PATH" "$_EVENTS_SORT" ;;
+			*)    events_list "$INSTALL_PATH" "$_EVENTS_SORT" ;;
 		esac
 	fi
 	;;

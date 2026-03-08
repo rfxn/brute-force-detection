@@ -14,6 +14,12 @@
 [Change] _apool_awk: add sort_mode (count/time/ip), limit (0=unlimited),
       and CIDR filter params; backward compatible — defaults match prior
       behavior (count desc, limit 25, no CIDR)
+[Change] Rewire -e|--events CLI to call events_list functions backed by
+      attack.pool; event history now persists across pressure decay cycles
+[New] Pre-parse flags --sort=count|time|ip, --24h, --7d, --30d for event
+      list sorting and time window filtering
+[Change] usage()/usage_short(): updated -e description and added new event
+      modifier flags to output modifier sections
 
 -- UAT Fixes --
 

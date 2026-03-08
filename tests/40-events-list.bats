@@ -202,6 +202,21 @@ _seed_pool() {
 	assert_output --partial "dovecot"
 }
 
+@test "events_list: sort_mode=time sorts by last_seen" {
+	local now pool
+	now=$(date +"%s")
+	pool="$INSTALL_PATH/stats/attack.pool"
+	echo "$((now - 500)) 192.0.2.10 sshd 50 RU ban 600 22 50000 service" >> "$pool"
+	echo "$((now - 10)) 192.0.2.20 sshd 1 US observed 0 22 1000 -" >> "$pool"
+	run events_list "$INSTALL_PATH" "time"
+	assert_success
+	# .20 has more recent activity, should be first despite lower count
+	local line_10 line_20
+	line_10=$(echo "$output" | grep -n "192.0.2.10" | head -1 | cut -d: -f1)
+	line_20=$(echo "$output" | grep -n "192.0.2.20" | head -1 | cut -d: -f1)
+	[ "$line_20" -lt "$line_10" ]
+}
+
 # --- events_list_ip ---
 
 @test "events_list_ip: shows total failures from attack.pool" {

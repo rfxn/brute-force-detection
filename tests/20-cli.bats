@@ -596,3 +596,29 @@ teardown() {
 	[ "$perms" = "640" ]
 }
 
+# --- usage text ---
+
+bfd_load_function usage
+bfd_load_function usage_short
+
+@test "usage: --sort= documented in help output" {
+	run usage
+	assert_success
+	assert_output --partial "--sort=MODE"
+}
+
+@test "usage: --24h --7d --30d documented in help output" {
+	run usage
+	assert_success
+	assert_output --partial "--24h"
+	assert_output --partial "--7d"
+	assert_output --partial "--30d"
+}
+
+@test "usage_short: lists new event modifier flags" {
+	run usage_short
+	assert_success
+	assert_output --partial "--sort="
+	assert_output --partial "--24h"
+}
+
