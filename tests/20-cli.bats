@@ -213,22 +213,27 @@ teardown() {
 	assert_output --partial "1 bans in 24h"
 }
 
-@test "search_ip: shows events" {
+@test "search_ip: shows events from attack.pool" {
 	local now
 	now=$(date +"%s")
-	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
-	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 192.0.2.1 sshd 1 -- observed 0 22 1000 -" >> "$INSTALL_PATH/stats/attack.pool"
+	echo "$now 192.0.2.1 sshd 1 -- observed 0 22 1000 -" >> "$INSTALL_PATH/stats/attack.pool"
 	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	assert_output --partial "Failures (24h): 2"
 }
 
-@test "search_ip: shows attack pool triggers" {
-	echo "1700000000 192.0.2.1 sshd" >> "$INSTALL_PATH/stats/attack.pool"
-	echo "1700000001 192.0.2.1 sshd" >> "$INSTALL_PATH/stats/attack.pool"
+@test "search_ip: shows total failures and ban triggers" {
+	local now
+	now=$(date +"%s")
+	# recent entry (within 24h)
+	echo "$now 192.0.2.1 sshd 3 RU ban 600 22 15000 service" >> "$INSTALL_PATH/stats/attack.pool"
+	# old entry (beyond 24h cutoff) — makes total differ from 24h count
+	echo "$((now - 200000)) 192.0.2.1 sshd 2 RU escalate 1200 22 20000 service" >> "$INSTALL_PATH/stats/attack.pool"
 	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
-	assert_output --partial "2 failures across 2 bans"
+	assert_output --partial "Failures (24h): 3"
+	assert_output --partial "Total failures: 5 (2 ban triggers)"
 }
 
 @test "search_ip: shows pressure score" {

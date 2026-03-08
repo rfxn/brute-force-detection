@@ -3112,61 +3112,49 @@ _search_ip_data() {
 		IFS='|' read -r hist_24h hist_total <<< "$hist_raw"
 	fi
 
-	# Events (pressure.dat) — 24h event count and per-service counts
+	# Events (attack.pool) — durable 24h failure counts and all-time totals
 	local events_file="$install_path/tmp/pressure.dat"
+	local pool_file="$install_path/stats/attack.pool"
 	local evt_count=0 first_ts="" last_ts=""
 	local _gp_fmt="0.0"
-	local has_events=0
-	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
-		# Single AWK: 24h count, per-service 24h counts, first/last seen
-		local evt_raw
+	local pool_triggers=0 pool_failures=0
+	local evt_raw=""
+	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
 		evt_raw=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" '
 			$2 == ip {
-				ts = $1+0
+				cnt = ($4+0 > 0) ? $4+0 : 1
+				total += cnt; ts = $1+0
+				if (ts >= cutoff) { recent += cnt; rsvc[$3] += cnt }
 				if (!(first) || ts < first) first = ts
 				if (ts > last) last = ts
-				if (ts >= cutoff) {
-					total++
-					svc[$3]++
-				}
+				act = $6
+				if (act == "ban" || act == "escalate") bans++
 			}
 			END {
-				printf "X|%d|%d|%d\n", total+0, first+0, last+0
-				for (s in svc) printf "E|%s|%d\n", s, svc[s]
-			}' "$events_file")
+				printf "X|%d|%d|%d|%d|%d\n", recent+0, first+0, last+0, total+0, bans+0
+				for (s in rsvc) printf "E|%s|%d\n", s, rsvc[s]
+			}' "$pool_file")
 		if [ -n "$evt_raw" ]; then
 			local x_line
 			x_line=$(echo "$evt_raw" | grep '^X|')
-			IFS='|' read -r _ evt_count first_ts last_ts <<< "$x_line"
-			if [ "$first_ts" -gt 0 ] 2>/dev/null; then
-				has_events=1
-			fi
-		fi
-
-		# Pressure — reuse _events_ip_awk for single-pass computation
-		if [ "$has_events" -eq 1 ]; then
-			local ip_awk_raw
-			ip_awk_raw=$(_events_ip_awk "$events_file" "$ip" "$now" "$half_life")
-			if [ -n "$ip_awk_raw" ]; then
-				# extract overall pressure from H line
-				local h_line _gp
-				h_line=$(echo "$ip_awk_raw" | grep '^H|')
-				IFS='|' read -r _ _gp _ _ <<< "$h_line"
-				_gp_fmt=$(pressure_format "$_gp")
-			fi
+			IFS='|' read -r _ evt_count first_ts last_ts pool_failures pool_triggers <<< "$x_line"
 		fi
 	fi
 
-	# Attack pool — sum failures (COUNT field) and count ban events (lines)
-	local pool_file="$install_path/stats/attack.pool"
-	local pool_triggers=0 pool_failures=0
-	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
-		pool_triggers=$(awk -v ip="$ip" '$2 == ip {c++} END {print c+0}' "$pool_file")
-		pool_failures=$(awk -v ip="$ip" '$2 == ip { c += ($4+0 > 0 ? $4+0 : 1) } END {print c+0}' "$pool_file")
+	# Live pressure (pressure.dat) — for P lines and pressure display
+	local ip_awk_raw=""
+	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+		ip_awk_raw=$(_events_ip_awk "$events_file" "$ip" "$now" "$half_life")
+		if [ -n "$ip_awk_raw" ]; then
+			local h_line _gp
+			h_line=$(echo "$ip_awk_raw" | grep '^H|')
+			IFS='|' read -r _ _gp _ _ <<< "$h_line"
+			_gp_fmt=$(pressure_format "$_gp")
+		fi
 	fi
 
-	# Compute min-trip from per-service pressure lines
-	if [ "$has_events" -eq 1 ] && [ -n "${ip_awk_raw:-}" ]; then
+	# Compute min-trip from per-service pressure lines (if live pressure available)
+	if [ -n "${ip_awk_raw:-}" ]; then
 		local _p_svcs=""
 		local _type _svc _wt _cnt _sp
 		while IFS='|' read -r _type _svc _wt _cnt _sp; do
@@ -3186,8 +3174,8 @@ _search_ip_data() {
 		echo "$evt_raw" | grep '^E|'
 	fi
 
-	# Output: P lines (per-service pressure + per-rule trip)
-	if [ "$has_events" -eq 1 ] && [ -n "${ip_awk_raw:-}" ]; then
+	# Output: P lines (per-service live pressure + per-rule trip)
+	if [ -n "${ip_awk_raw:-}" ]; then
 		local _sp_fmt _svc_trip
 		while IFS='|' read -r _type _svc _wt _cnt _sp; do
 			[ "$_type" != "S" ] && continue
@@ -3238,7 +3226,7 @@ search_ip() {
 		echo "  Ban history:    none"
 	fi
 
-	# Events
+	# Events (from attack.pool — durable across pressure decay)
 	if [ "$evt_count" -gt 0 ] 2>/dev/null; then
 		# Build svc_summary from E lines: "sshd(5) dovecot(2)"
 		local evt_svcs=""
@@ -3248,31 +3236,33 @@ search_ip() {
 			evt_svcs="${evt_svcs}${_svc}(${_cnt}) "
 		done <<< "$data"
 		echo "  Failures (24h): $evt_count across $evt_svcs"
-
-		# First/last seen
-		if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
-			echo "  First seen:     $(date -d "@${first_ts}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$first_ts")"
-		fi
-		if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
-			echo "  Last seen:      $(date -d "@${last_ts}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$last_ts")"
-		fi
-
-		# Pressure
-		echo "  Pressure:       ${_gp_fmt}/${trip} (half-life=${half_life}s)"
-		# Per-service pressure from P lines
-		local _ptype _psvc _pfmt _ptrip
-		while IFS='|' read -r _ptype _psvc _pfmt _ptrip; do
-			[ "$_ptype" != "P" ] && continue
-			echo "                  ${_psvc}: ${_pfmt}/${_ptrip}"
-		done <<< "$data"
+	elif [ "$pool_failures" -gt 0 ] 2>/dev/null; then
+		echo "  Failures (24h): 0"
 	else
 		echo "  Failures (24h): 0"
 	fi
 
-	# Attack pool
-	if [ "$pool_triggers" -gt 0 ] 2>/dev/null; then
-		echo "  Attack pool:    $pool_failures failures across $pool_triggers bans"
+	# First/last seen and total (from attack.pool all-time data)
+	if [ -n "$first_ts" ] && [ "$first_ts" -gt 0 ] 2>/dev/null; then
+		echo "  First seen:     $(date -d "@${first_ts}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$first_ts")"
 	fi
+	if [ -n "$last_ts" ] && [ "$last_ts" -gt 0 ] 2>/dev/null; then
+		echo "  Last seen:      $(date -d "@${last_ts}" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$last_ts")"
+	fi
+	if [ "$pool_failures" -gt 0 ] 2>/dev/null; then
+		if [ "$pool_failures" -ne "$evt_count" ] 2>/dev/null; then
+			echo "  Total failures: $pool_failures ($pool_triggers ban triggers)"
+		fi
+	fi
+
+	# Live pressure
+	echo "  Pressure:       ${_gp_fmt}/${trip} (half-life=${half_life}s)"
+	# Per-service pressure from P lines
+	local _ptype _psvc _pfmt _ptrip
+	while IFS='|' read -r _ptype _psvc _pfmt _ptrip; do
+		[ "$_ptype" != "P" ] && continue
+		echo "                  ${_psvc}: ${_pfmt}/${_ptrip}"
+	done <<< "$data"
 }
 
 # list_rules install_path — list all rules with status in table format

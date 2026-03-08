@@ -20,6 +20,11 @@
       list sorting and time window filtering
 [Change] usage()/usage_short(): updated -e description and added new event
       modifier flags to output modifier sections
+[Change] _search_ip_data: query attack.pool for failure counts and ban triggers
+      instead of pressure.dat; -a IP search now shows durable event history that
+      persists across pressure decay cycles
+[Change] search_ip: display total failures and ban trigger count when all-time
+      total differs from 24h count
 
 -- UAT Fixes --
 
