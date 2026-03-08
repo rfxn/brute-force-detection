@@ -55,7 +55,7 @@
       proftpd (1 to 4), exim (Debian support), asterisk (SecurityEvent),
       sendmail (AUTH failure), mongodb (JSON structured log), apache-auth
       (digest auth)
-[New] Systemd journal reader with transparent fallback (16 of 34 rules);
+[New] Systemd journal reader with transparent fallback (36 of 57 rules);
       LOG_SOURCE config (auto/file/journal); cursor-based journal tracking;
       36 service-to-journalctl filter mappings via dynamic registry
 [New] Events CLI (-e/--events): active event dashboard showing all tracked
@@ -272,3 +272,12 @@
       polling helpers (uat_wait_for_log, uat_wait_for_condition,
       uat_cleanup_processes); add uat_bfd_teardown_watch helper; add
       skip guard for timeout dependency
+[Change] Documentation: update rule count (47 to 57) and rule catalog in
+      man page and README; add proxy, messaging, and expanded service
+      categories; update journal fallback ratio (36 of 57 rules)
+[Change] Test renaming: rules-tier1/tier2 test files renumbered from
+      40/41 to 42/43 to resolve conflict with events-list test files
+[Change] UAT test quality: multi-service log injection moved to setup_file
+      for test isolation; alert-validation BFD sourcing block extracted to
+      _bfd_alert_render helper; hardcoded temp path replaced with mktemp;
+      dead uat_bfd_setup_alert_capture helper removed

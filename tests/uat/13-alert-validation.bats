@@ -13,6 +13,24 @@ load '../infra/lib/uat-helpers'
 # so mktemp results are not visible in test functions; use a deterministic path)
 _ALERTS_FILE="/tmp/bfd-uat-alert-validation.dat"
 
+# _bfd_alert_render ALERTS_FILE [LOG_LINES]
+# Source BFD libraries in a subshell and render text alert output.
+# Wraps the common pattern of sourcing conf.bfd + internals + bfd.lib.sh
+# then calling _alert_render_text. Use with `run _bfd_alert_render ...`.
+_bfd_alert_render() {
+    local af="$1"
+    local lines="${2:-5}"
+    local install="/usr/local/bfd"
+    bash -c "
+        INSTALL_PATH='$install'
+        . '$install/conf.bfd'
+        . '$install/internals/internals.conf'
+        . '$install/internals/bfd.lib.sh'
+        V='2.0.1'
+        _alert_render_text '$af' '$install/alert' $lines
+    "
+}
+
 setup_file() {
     uat_setup
     uat_bfd_install
@@ -41,18 +59,7 @@ teardown_file() {
 
 # bats test_tags=uat,uat:alert-validation
 @test "UAT: alert template renders with expanded variables" {
-    local install="/usr/local/bfd"
-    local tpl_dir="$install/alert"
-
-    # Source BFD libraries in a subshell to access render functions
-    run bash -c "
-        INSTALL_PATH='$install'
-        . '$install/conf.bfd'
-        . '$install/internals/internals.conf'
-        . '$install/internals/bfd.lib.sh'
-        V='2.0.1'
-        _alert_render_text '$_ALERTS_FILE' '$tpl_dir' 5
-    "
+    run _bfd_alert_render "$_ALERTS_FILE"
     assert_success
     # Verify key template variables are expanded (not raw {{VAR}} tokens)
     assert_output --partial "192.0.2.100"
@@ -63,17 +70,7 @@ teardown_file() {
 
 # bats test_tags=uat,uat:alert-validation
 @test "UAT: alert text format has expected structure" {
-    local install="/usr/local/bfd"
-    local tpl_dir="$install/alert"
-
-    run bash -c "
-        INSTALL_PATH='$install'
-        . '$install/conf.bfd'
-        . '$install/internals/internals.conf'
-        . '$install/internals/bfd.lib.sh'
-        V='2.0.1'
-        _alert_render_text '$_ALERTS_FILE' '$tpl_dir' 5
-    "
+    run _bfd_alert_render "$_ALERTS_FILE"
     assert_success
     # Header section
     assert_output --partial "BFD Alert"
@@ -87,17 +84,7 @@ teardown_file() {
 
 # bats test_tags=uat,uat:alert-validation
 @test "UAT: alert includes ban type information" {
-    local install="/usr/local/bfd"
-    local tpl_dir="$install/alert"
-
-    run bash -c "
-        INSTALL_PATH='$install'
-        . '$install/conf.bfd'
-        . '$install/internals/internals.conf'
-        . '$install/internals/bfd.lib.sh'
-        V='2.0.1'
-        _alert_render_text '$_ALERTS_FILE' '$tpl_dir' 5
-    "
+    run _bfd_alert_render "$_ALERTS_FILE"
     assert_success
     # expiry=0 in our synthetic entry means permanent ban
     assert_output --partial "Permanent"
@@ -126,22 +113,14 @@ teardown_file() {
 
 # bats test_tags=uat,uat:alert-validation
 @test "UAT: alert config values propagate to rendered output" {
-    local install="/usr/local/bfd"
-    local tpl_dir="$install/alert"
-
     # Create a two-entry alerts file to trigger summary section
-    local multi_alerts="/tmp/bfd-uat-multi-alerts.dat"
+    local multi_alerts
+    multi_alerts=$(mktemp /tmp/bfd-uat-multi-alerts.XXXXXX)
+
     echo "192.0.2.101|sshd|22|21000|0|ban|0|/var/log/auth.log|test@example.com|15|300|3|7" > "$multi_alerts"
     echo "192.0.2.102|sshd|22|18000|0|ban|0|/var/log/auth.log|test@example.com|15|300|3|6" >> "$multi_alerts"
 
-    run bash -c "
-        INSTALL_PATH='$install'
-        . '$install/conf.bfd'
-        . '$install/internals/internals.conf'
-        . '$install/internals/bfd.lib.sh'
-        V='2.0.1'
-        _alert_render_text '$multi_alerts' '$tpl_dir' 5
-    "
+    run _bfd_alert_render "$multi_alerts"
     assert_success
     # Multi-ban alert should show count
     assert_output --partial "2 host(s) banned"

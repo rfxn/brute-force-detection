@@ -32,6 +32,12 @@ setup_file() {
     # but postfix always uses MAIL_LOG_PATH; use auth.log for all to simplify)
     touch /var/log/mail.log
     chmod 640 /var/log/mail.log
+
+    # Inject log failures for all three services upfront so individual tests
+    # can run independently without relying on prior test execution order
+    uat_bfd_inject_service_failures "sshd" "192.0.2.80" 30 /var/log/auth.log
+    uat_bfd_inject_service_failures "dovecot" "192.0.2.81" 30 /var/log/mail.log
+    uat_bfd_inject_service_failures "postfix" "192.0.2.82" 30 /var/log/mail.log
 }
 
 teardown_file() {
@@ -42,22 +48,19 @@ teardown_file() {
 }
 
 # bats test_tags=uat,uat:multi-service
-@test "UAT: inject sshd failures for multi-service test" {
-    uat_bfd_inject_service_failures "sshd" "192.0.2.80" 30 /var/log/auth.log
+@test "UAT: sshd failures injected for multi-service test" {
     run wc -l < /var/log/auth.log
     [ "$output" -ge 30 ]
 }
 
 # bats test_tags=uat,uat:multi-service
-@test "UAT: inject dovecot failures for multi-service test" {
-    uat_bfd_inject_service_failures "dovecot" "192.0.2.81" 30 /var/log/mail.log
+@test "UAT: dovecot failures injected for multi-service test" {
     run wc -l < /var/log/mail.log
     [ "$output" -ge 30 ]
 }
 
 # bats test_tags=uat,uat:multi-service
-@test "UAT: inject postfix failures for multi-service test" {
-    uat_bfd_inject_service_failures "postfix" "192.0.2.82" 30 /var/log/mail.log
+@test "UAT: postfix failures injected for multi-service test" {
     run wc -l < /var/log/mail.log
     [ "$output" -ge 60 ]
 }
