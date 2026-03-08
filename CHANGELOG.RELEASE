@@ -1,5 +1,10 @@
 2.0.1:
 
+  -- Bug Fixes --
+
+[Fix] tlog CLI wrapper: bump TLOG_VERSION from 2.0.2 to 2.0.3 to match
+      bundled tlog_lib.sh, fixing version mismatch warning in tests
+
   -- New Features --
 
 [New] Pressure-to-response scoring model: exponential-decay scoring replaces
