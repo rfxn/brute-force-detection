@@ -25,6 +25,12 @@
       persists across pressure decay cycles
 [Change] search_ip: display total failures and ban trigger count when all-time
       total differs from 24h count
+[Change] bfd.1: updated -e/--events description for attack.pool-backed event
+      history; added --sort=, --24h, --7d, --30d to Output Modifiers; updated
+      -a vs -e note, attack.pool FILES entry, and UPGRADING section
+[Change] README.md: rewrote section 5.8 (Events and Investigation) for new
+      event history behavior; updated -a vs -e callout and attack.pool
+      description in state files table
 
 -- UAT Fixes --
 

@@ -169,28 +169,51 @@ or
 for structured output.
 .IP
 .B Note:
+Both
 .B \-a
-reports on historical ban decisions and attack activity;
+and
 .B \-e
-reports on real-time pressure scores and active events.
+read from the same attack pool data store.
+.B \-a
+provides a summary-oriented threat activity overview with dual-interval
+(24h/7d) views and per-service breakdown.
+.B \-e
+provides event-level detail with configurable time windows
+.RB ( \-\-24h ", " \-\-7d ", " \-\-30d )
+and sort modes
+.RB ( \-\-sort=count|time|ip ).
 Use
 .B \-a
-to review past threat patterns and
+to review aggregate threat patterns and
 .B \-e
-to assess current risk.
+to drill into specific IPs or subnets.
 .TP
 .BI \-e " \fR[" IP | CIDR "\fR] [" N \fR]
-Active events and pressure report.
-Without arguments, shows all tracked IPs sorted by pressure descending,
-with event counts, services, and ban status.
-With a valid IP, shows per-IP pressure detail including per-service
-breakdown with individual weights, event counts, and sub-scores.
+Event history and investigation.
+Reads from the attack pool, which records all detected auth failures
+(both ban-triggering and sub-trip observations) with configurable retention
+(default: 365 days).
+.sp
+Without arguments, shows an event list of all IPs with failure counts,
+services, country, first/last seen, and ban status.
+Default: sorted by count descending, 24-hour window.
+Use
+.BR \-\-sort=time " or " \-\-sort=ip
+to change ordering, and
+.BR \-\-7d " or " \-\-30d
+to expand the time window.
+.sp
+With a valid IP, shows a comprehensive investigation report: historical
+failure counts from the attack pool (total and per-service breakdown),
+live pressure detail if the IP has active pressure, and a log sample.
 The optional
 .I N
 overrides the number of log sample lines shown (default:
 .BR EMAIL_LOGLINES ).
+.sp
 With an IPv4 CIDR (mask 8\-32), shows a subnet-scoped report with
 matching IPs and a summary line.
+.sp
 Combine with
 .B \-\-json
 or
@@ -285,6 +308,23 @@ Supported with
 Output in CSV format.
 Supported with
 .BR \-l ", " \-e ", and " \-a .
+.TP
+.BI \-\-sort= MODE
+Sort order for event list
+.RB ( \-e
+without IP).
+.I MODE
+is one of:
+.BR count " (default)," " time" ", or " ip .
+.TP
+.B \-\-24h
+Show events from the last 24 hours (default).
+.TP
+.B \-\-7d
+Show events from the last 7 days.
+.TP
+.B \-\-30d
+Show events from the last 30 days.
 .TP
 .BR \-V ", " \-\-verbose
 Show detailed output.
@@ -817,8 +857,12 @@ Currently active bans.
 Historical ban/unban records.
 .TP
 .I /usr/local/bfd/stats/attack.pool
-Threat activity pool \(em enriched ban decision log with timestamp, IP,
-service, count, country, action, duration, ports, pressure, and trip type.
+Threat activity pool \(em unified event store recording all detected auth
+failures (ban, escalate, observed) and outcomes.
+10-field format: timestamp, IP, service, count, country, action, duration,
+ports, pressure, trip type.
+Sub-trip observations (ACTION=observed) are recorded alongside ban decisions
+so event history persists across pressure decay cycles.
 .TP
 .I /usr/local/bfd/ignore.hosts
 User-managed IP ignore list.
@@ -867,9 +911,21 @@ to merge configuration and preserve state.
 migrates: user configuration (conf.bfd values), legacy variable name
 translations (TRIG \(-> PRESSURE_TRIP, BAN_DURATION \(-> BAN_TTL, etc.),
 per\-rule overrides (thresholds.conf \(-> pressure.conf), firewall backend
-detection, ban state (bans.active, bans.history, pressure.dat), log tracking
-state (tlog byte\-offsets, journal cursors), user\-customized alert template
-partials, and ignore lists.
+detection, ban state (bans.active, bans.history, pressure.dat), attack pool
+(attack.pool), log tracking state (tlog byte\-offsets, journal cursors),
+user\-customized alert template partials, and ignore lists.
+.PP
+.B Note:
+In 2.0.1, the internal pressure workspace was renamed from
+.I events.dat
+to
+.IR pressure.dat .
+.B importconf
+handles this automatically \(em if the backup contains
+.I events.dat
+but not
+.IR pressure.dat ,
+the file is migrated under the new name.
 .PP
 Post\-upgrade verification:
 .RS 4
