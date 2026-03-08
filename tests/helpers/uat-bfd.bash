@@ -172,17 +172,6 @@ uat_bfd_inject_service_failures() {
     esac
 }
 
-# uat_bfd_setup_alert_capture — create a synthetic alerts file for template testing.
-# Writes a pipe-delimited alert entry to a temp file and echoes the path.
-# Caller is responsible for cleanup.
-uat_bfd_setup_alert_capture() {
-    local alerts_file
-    alerts_file=$(mktemp /tmp/bfd-uat-alerts.XXXXXX)
-    # Fields: host|mod|ports|pressure_scaled|expiry|action|recent|log_path|recipient|trip|half_life|weight|fail_count
-    echo "192.0.2.100|sshd|22|18000|0|ban|0|/var/log/auth.log|root|15|300|3|6" > "$alerts_file"
-    echo "$alerts_file"
-}
-
 # uat_bfd_corrupt_state FILE — inject corrupt/empty data for error path testing.
 # Writes garbage content to the specified state file.
 uat_bfd_corrupt_state() {

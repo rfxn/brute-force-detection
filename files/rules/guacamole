@@ -1,0 +1,37 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="3"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+# guacd is the proxy daemon (network-facing); auth failures come from
+# guacamole-client (Java web app) logged to catalina.out
+PREREQ="/usr/sbin/guacd"
+if [ ! -f "$PREREQ" ]; then
+	PREREQ="/usr/local/sbin/guacd"
+fi
+
+if [ -f "$PREREQ" ]; then
+	PORTS="8080,443"
+
+	# detect Tomcat log path (guacamole-client logs to catalina.out)
+	if [ -f "/var/log/tomcat10/catalina.out" ]; then
+		LOG_FILE="/var/log/tomcat10/catalina.out"
+	elif [ -f "/var/log/tomcat9/catalina.out" ]; then
+		LOG_FILE="/var/log/tomcat9/catalina.out"
+	elif [ -f "/var/log/tomcat8/catalina.out" ]; then
+		LOG_FILE="/var/log/tomcat8/catalina.out"
+	else
+		LOG_FILE="/var/log/tomcat/catalina.out"
+	fi
+	LOG_TAG="guacamole"
+
+	## GUACAMOLE
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"Authentication attempt from <HOST>.* failed")
+fi

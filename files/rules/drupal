@@ -1,0 +1,26 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+# Drupal syslog module logs to system syslog — no daemon binary to check
+PREREQ="$KERNEL_LOG_PATH"
+
+if [ -f "$PREREQ" ]; then
+	PORTS="80,443"
+	LOG_FILE="$KERNEL_LOG_PATH"
+	LOG_TAG="drupal"
+
+	## Drupal — authentication failures via syslog module
+	# Drupal syslog format: drupal: URL|TIMESTAMP|TYPE|IP|URI|REFERER|UID|LINK|MESSAGE
+	# Pipe chars escaped as [|] for sed ERE used by extract_hosts
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"drupal.*[|]<HOST>[|].*Login attempt failed" \
+		"drupal.*[|]<HOST>[|].*Blocked submission of")
+fi

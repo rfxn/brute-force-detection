@@ -1,0 +1,30 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# very high trip point — DNS is high-volume
+# PRESSURE_WEIGHT="1"
+# PRESSURE_TRIP="200"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/sbin/pdns_server"
+
+if [ -f "$PREREQ" ]; then
+	PORTS="53"
+
+	# detect log file path (PowerDNS logs to syslog by default)
+	if [ -f "/var/log/pdns/pdns.log" ]; then
+		LOG_FILE="/var/log/pdns/pdns.log"
+	else
+		LOG_FILE="$KERNEL_LOG_PATH"
+	fi
+	LOG_TAG="pdns"
+
+	## PowerDNS — unauthorized zone transfers and notify abuse
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"AXFR of domain .* denied: client IP <HOST>" \
+		"Received NOTIFY .* from <HOST>.* not authoritative")
+fi

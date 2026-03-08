@@ -1,0 +1,31 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# detect jellyfin log path — dated log files (log_YYYYMMDD.log)
+# Find newest log file, similar to postgresql rule pattern
+if [ -d "/var/log/jellyfin" ]; then
+	LOG_FILE=$(ls -t /var/log/jellyfin/log_*.log 2>/dev/null | head -1)
+fi
+
+# file must exist for rule to be active
+PREREQ="/usr/bin/jellyfin"
+if [ ! -f "$PREREQ" ]; then
+	PREREQ="/opt/jellyfin/jellyfin"
+fi
+
+if [ -f "$PREREQ" ] && [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
+	PORTS="8096,8920"
+	LOG_TAG="jellyfin"
+
+	## Jellyfin — authentication failures
+	# Log format: [TIMESTAMP] [INF] Authentication request for "user" has been denied (IP: "A.B.C.D").
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		'Authentication request for .* has been denied.*IP: "<HOST>"')
+fi

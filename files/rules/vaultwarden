@@ -1,0 +1,33 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="3"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/bin/vaultwarden"
+if [ ! -f "$PREREQ" ]; then
+	PREREQ="/usr/local/bin/vaultwarden"
+fi
+
+if [ -f "$PREREQ" ]; then
+	PORTS="8000,443"
+
+	# detect log file path
+	if [ -f "/var/log/vaultwarden/vaultwarden.log" ]; then
+		LOG_FILE="/var/log/vaultwarden/vaultwarden.log"
+	else
+		LOG_FILE="/var/log/vaultwarden.log"
+	fi
+	LOG_TAG="vaultwarden"
+
+	## VAULTWARDEN
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"Username or password is incorrect.* IP: <HOST>" \
+		"Invalid admin token.* IP: <HOST>" \
+		"Invalid TOTP code.* IP: <HOST>")
+fi

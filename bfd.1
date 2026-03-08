@@ -76,7 +76,7 @@ if the watch daemon exits.
 .PP
 Each detection cycle reads new log lines (via the
 .B tlog
-byte-offset tracker), matches them against 47 service rule files
+byte-offset tracker), matches them against 57 service rule files
 using the
 .B extract_hosts()
 engine with fail2ban-compatible
@@ -845,7 +845,7 @@ Email template partials directory (8 files: text.*.tpl, html.*.tpl).
 User template overrides (per-file, preserved across upgrades).
 .TP
 .I /usr/local/bfd/rules/
-Service rule files (47 rules).
+Service rule files (57 rules).
 .TP
 .I /usr/local/bfd/tmp/pressure.dat
 Pressure scoring workspace (timestamp, IP, service, weight). Pruned every ~10 half-lives.

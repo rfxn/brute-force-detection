@@ -80,6 +80,16 @@ _bfd_journal_register_all() {
 	tlog_journal_register "asterisk" "SYSLOG_IDENTIFIER=asterisk"
 	tlog_journal_register "asterisk.iax" "SYSLOG_IDENTIFIER=asterisk"
 	tlog_journal_register "asterisk_nopeer" "SYSLOG_IDENTIFIER=asterisk"
+	tlog_journal_register "vaultwarden" "SYSLOG_IDENTIFIER=vaultwarden"
+	tlog_journal_register "guacamole" "SYSLOG_IDENTIFIER=guacamole-client"
+	tlog_journal_register "haproxy" "SYSLOG_IDENTIFIER=haproxy"
+	tlog_journal_register "squid" "SYSLOG_IDENTIFIER=squid"
+	tlog_journal_register "sogod" "SYSLOG_IDENTIFIER=sogod"
+	tlog_journal_register "freeswitch" "SYSLOG_IDENTIFIER=freeswitch"
+	tlog_journal_register "ejabberd" "SYSLOG_IDENTIFIER=ejabberd"
+	tlog_journal_register "drupal" "SYSLOG_IDENTIFIER=drupal"
+	tlog_journal_register "jellyfin" "SYSLOG_IDENTIFIER=jellyfin"
+	tlog_journal_register "pdns" "SYSLOG_IDENTIFIER=pdns_server"
 }
 # Register at module load
 _bfd_journal_register_all

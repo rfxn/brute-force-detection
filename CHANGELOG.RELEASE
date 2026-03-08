@@ -43,19 +43,21 @@
       previously modified templates; health check reports active overrides
 [New] Declarative rule engine with fail2ban-compatible <HOST> patterns,
       dual IPv4/IPv6 boundary-aware regex, and IGNOREREGEX per-rule exclusion
-[New] 27 new service rules (47 total): apache-auth, nginx-http-auth,
+[New] 37 new service rules (57 total): apache-auth, nginx-http-auth,
       mysqld-auth, wordpress, webmin, directadmin, cyrus-imap, roundcube,
       plesk, dropbear, http_401, pam_generic, named, postgresql, openvpn,
       phpmyadmin, gitlab, grafana, proxmox, lighttpd, mongodb, xrdp, cpanel,
-      interworx, gitea, nextcloud, cockpit, postscreen
+      interworx, gitea, nextcloud, cockpit, postscreen, vaultwarden,
+      guacamole, haproxy, squid, sogo, freeswitch, ejabberd, drupal,
+      jellyfin, powerdns
 [New] Existing rule expansions: sshd (3 to 12 patterns), dovecot (2 to 6
       with ManageSieve), postfix (connection-abuse and postscreen patterns),
       proftpd (1 to 4), exim (Debian support), asterisk (SecurityEvent),
       sendmail (AUTH failure), mongodb (JSON structured log), apache-auth
       (digest auth)
-[New] Systemd journal reader with transparent fallback (16 of 34 rules);
+[New] Systemd journal reader with transparent fallback (36 of 57 rules);
       LOG_SOURCE config (auto/file/journal); cursor-based journal tracking;
-      23 service-to-journalctl filter mappings via dynamic registry
+      36 service-to-journalctl filter mappings via dynamic registry
 [New] Events CLI (-e/--events): active event dashboard showing all tracked
       IPs with pressure scores, event counts, services, and ban proximity;
       per-IP detail with failure counts and log sample; CIDR subnet reports;
@@ -121,13 +123,9 @@
       parallel on tag push; creates GitHub Release with assets
 [New] BATS test suite: 1200 tests across 36 files with parallel runner
       and 10 Dockerfiles
-[New] UAT scenario test suite: 66 tests across 10 categories covering
-      ban lifecycle, escalation, detection pressure, scan mode, config
-      health, ignore lists, investigation, watch mode, CLI UX, output quality
-[New] UAT scenario expansion: 4 new test files (20 tests) covering
-      multi-service detection, error paths, alert template validation,
-      and concurrent operations; new helpers for service-specific log
-      injection, alert capture, and state corruption
+[New] UAT scenario test suite: 86 tests across 14 categories covering
+      ban lifecycle, escalation, detection, alerting, error paths, scan
+      mode, config health, investigation, watch mode, and CLI UX
 
   -- Bug Fixes --
 
@@ -203,6 +201,8 @@
 [Fix] Miscellaneous: POSIX == to = in test brackets; sed -r to sed -E;
       WATCH_INTERVAL default syntax; UNBAN_COMMAND warning gated on
       FIREWALL="custom"; firewalld examples removed --permanent flag
+[Fix] haproxy rule: remove redundant inline KERNEL_LOG_PATH default to match
+      convention used by all other rules referencing KERNEL_LOG_PATH
 
   -- Changes --
 
@@ -265,8 +265,6 @@
 [Change] README wholesale rewrite: quick start, config reference, rule
       catalog, ban lifecycle, firewall backends, IPv6, CLI flags, scan mode,
       events dashboard, structured output, upgrade guide, troubleshooting
-[Change] Version 1.6-1 to 2.0.1; copyright years updated to 2026
-[Change] UAT watch mode tests: replace hardcoded sleep with batsman v1.2.0
-      polling helpers (uat_wait_for_log, uat_wait_for_condition,
-      uat_cleanup_processes); add uat_bfd_teardown_watch helper; add
-      skip guard for timeout dependency
+[Change] Documentation: update rule count (47 to 57) and rule catalog in
+      man page and README; add proxy, messaging, and expanded service
+      categories; update journal fallback ratio (36 of 57 rules)
