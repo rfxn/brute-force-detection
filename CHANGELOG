@@ -1,5 +1,15 @@
 2.0.1:
 
+-- Pre-release Fixes --
+
+[Fix] --test-alert help text in usage_short(), usage(), and README now shows
+      all 4 channel types (email, slack, telegram, discord) instead of only email
+[Change] Man page .TH date updated to 2026-03-08
+[Fix] CI lint job (ci.yml) now includes alert_lib.sh, bfd_alert.sh, and pkg_lib.sh
+      in bash -n and shellcheck checks
+[Fix] Add shellcheck SC2034 directives in bfd_alert.sh for positional-parse and
+      global-consumer variables exposed by CI lint addition
+
 -- Library Sync --
 
 [Change] Sync pkg_lib v1.0.1 to v1.0.2; replaces 14 hardcoded /usr/bin/cp with
