@@ -1,5 +1,11 @@
 2.0.1:
 
+-- Event Data Architecture --
+
+[Change] Rename events.dat to pressure.dat; honest naming for the pressure
+      scoring workspace which is pruned every ~10 half-lives (~50 min) and
+      serves only the exponential-decay pressure model
+
 -- UAT Fixes --
 
 [Fix] CLI: suppress version banner (vhead) for --json and --csv output in -l,

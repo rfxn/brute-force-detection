@@ -279,7 +279,12 @@ cp -f "$BK_LAST/ignore.hosts" "$INSTALL_PATH" 2>/dev/null
 # preserve ban tracking state
 cp -f "$BK_LAST/tmp/bans.active" "$INSTALL_PATH/tmp/" 2>/dev/null
 cp -f "$BK_LAST/tmp/bans.history"* "$INSTALL_PATH/tmp/" 2>/dev/null
-cp -f "$BK_LAST/tmp/events.dat" "$INSTALL_PATH/tmp/" 2>/dev/null
+# pressure.dat (renamed from events.dat in 2.0.1)
+if [ -f "$BK_LAST/tmp/pressure.dat" ]; then
+	cp -f "$BK_LAST/tmp/pressure.dat" "$INSTALL_PATH/tmp/" 2>/dev/null
+elif [ -f "$BK_LAST/tmp/events.dat" ]; then
+	cp -f "$BK_LAST/tmp/events.dat" "$INSTALL_PATH/tmp/pressure.dat" 2>/dev/null
+fi
 cp -f "$BK_LAST/stats/"* "$INSTALL_PATH/stats/" 2>/dev/null
 
 # preserve journal cursor/timestamp state

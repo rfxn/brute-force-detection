@@ -66,9 +66,9 @@ teardown() {
 @test "show_status: reports events count" {
 	local now
 	now=$(date +"%s")
-	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 192.0.2.2 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 192.0.2.3 postfix" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 192.0.2.2 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 192.0.2.3 postfix" >> "$INSTALL_PATH/tmp/pressure.dat"
 	run show_status "$INSTALL_PATH"
 	assert_success
 	assert_output --partial "3 across 2 services"
@@ -105,9 +105,9 @@ teardown() {
 @test "show_service_status: shows events for service" {
 	local now
 	now=$(date +"%s")
-	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 192.0.2.2 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 192.0.2.3 postfix" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 192.0.2.2 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 192.0.2.3 postfix" >> "$INSTALL_PATH/tmp/pressure.dat"
 	run show_service_status "$INSTALL_PATH" "sshd"
 	assert_success
 	assert_output --partial "2 from 2 unique IPs"
@@ -216,8 +216,8 @@ teardown() {
 @test "search_ip: shows events" {
 	local now
 	now=$(date +"%s")
-	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
 	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	assert_output --partial "Failures (24h): 2"
@@ -234,7 +234,7 @@ teardown() {
 @test "search_ip: shows pressure score" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "5" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "5" "3"
 	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	assert_output --partial "Pressure:"
@@ -244,8 +244,8 @@ teardown() {
 @test "search_ip: shows per-service pressure" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "3" "3"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.1" "dovecot" "2" "2"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "3" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.1" "dovecot" "2" "2"
 	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	assert_output --partial "sshd:"

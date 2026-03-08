@@ -68,7 +68,7 @@ teardown() {
 @test "events_dashboard_json: single IP has correct fields" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "5" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "5" "3"
 	run events_dashboard_json "$INSTALL_PATH"
 	assert_success
 	assert_output --partial '"ip": "192.0.2.10"'
@@ -84,7 +84,7 @@ teardown() {
 @test "events_dashboard_json: pressure is numeric (not quoted)" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "3"
 	run events_dashboard_json "$INSTALL_PATH"
 	assert_success
 	# pressure value should NOT be in quotes — look for "pressure": followed by digit
@@ -94,8 +94,8 @@ teardown() {
 @test "events_dashboard_json: multiple services as array" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "3"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "1" "2"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "1" "2"
 	run events_dashboard_json "$INSTALL_PATH"
 	assert_success
 	assert_output --partial '"sshd"'
@@ -105,7 +105,7 @@ teardown() {
 @test "events_dashboard_json: banned IP shows BANNED status" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "3"
 	state_bans_active_append "$INSTALL_PATH" "$now" "0" "192.0.2.10" "sshd" "22"
 	run events_dashboard_json "$INSTALL_PATH"
 	assert_success
@@ -129,7 +129,7 @@ teardown() {
 @test "events_dashboard_csv: data rows present" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "3"
 	run events_dashboard_csv "$INSTALL_PATH"
 	assert_success
 	assert_output --partial "192.0.2.10"
@@ -142,8 +142,8 @@ teardown() {
 @test "events_ip_json: single object with service breakdown" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "3"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "2" "2"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "2" "2"
 	run events_ip_json "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	assert_output --partial '"ip": "192.0.2.10"'
@@ -169,7 +169,7 @@ teardown() {
 @test "events_ip_json: has pressure_trip and half_life fields" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "3"
 	run events_ip_json "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	assert_output --partial '"pressure_trip":'
@@ -187,8 +187,8 @@ teardown() {
 @test "events_ip_csv: one row per service" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "3"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "2" "2"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "2" "2"
 	run events_ip_csv "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	# header + 2 service rows
@@ -206,7 +206,7 @@ teardown() {
 @test "events_cidr_json: structure has cidr, summary, ips" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
 	run events_cidr_json "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
 	assert_output --partial '"cidr": "192.0.2.0/24"'
@@ -224,8 +224,8 @@ teardown() {
 @test "events_cidr_json: summary fields correct" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "1"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.20" "sshd" "2" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.20" "sshd" "2" "1"
 	run events_cidr_json "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
 	assert_output --partial '"match_count": 2'
@@ -249,7 +249,7 @@ teardown() {
 @test "events_cidr_csv: data rows present" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
 	run events_cidr_csv "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
 	assert_output --partial "192.0.2.10"
@@ -261,7 +261,7 @@ teardown() {
 @test "search_ip_json: all fields present" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$now" "192.0.2.10" "sshd" "1" "3"
+	state_pressure_append "$INSTALL_PATH" "$now" "192.0.2.10" "sshd" "1" "3"
 	run search_ip_json "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	assert_output --partial '"ip": "192.0.2.10"'
@@ -469,7 +469,7 @@ teardown() {
 @test "events_cidr_json: no PID temp files left after call" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
 	events_cidr_json "$INSTALL_PATH" "192.0.2.0/24" >/dev/null 2>&1
 	# verify no .cidr_json_summary.$$ or .cidr_json_ips.$$ files remain
 	local leftover

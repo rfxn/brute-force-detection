@@ -40,10 +40,10 @@ assert_ban_count() {
 	fi
 }
 
-# assert_event_count N — assert events.dat has exactly N lines
+# assert_event_count N — assert pressure.dat has exactly N lines
 assert_event_count() {
 	local expected="$1"
-	local events_file="${INSTALL_PATH}/tmp/events.dat"
+	local events_file="${INSTALL_PATH}/tmp/pressure.dat"
 	local actual
 	actual=$(wc -l < "$events_file" 2>/dev/null) || actual=0
 	if [ "$actual" -ne "$expected" ]; then

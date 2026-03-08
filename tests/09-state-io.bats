@@ -25,9 +25,9 @@ teardown() {
 	[ -d "$INSTALL_PATH/stats" ]
 }
 
-@test "state_init: creates events.dat, bans.active, bans.history, attack.pool" {
+@test "state_init: creates pressure.dat, bans.active, bans.history, attack.pool" {
 	state_init "$INSTALL_PATH"
-	[ -f "$INSTALL_PATH/tmp/events.dat" ]
+	[ -f "$INSTALL_PATH/tmp/pressure.dat" ]
 	[ -f "$INSTALL_PATH/tmp/bans.active" ]
 	[ -f "$INSTALL_PATH/tmp/bans.history" ]
 	[ -f "$INSTALL_PATH/stats/attack.pool" ]
@@ -45,7 +45,7 @@ teardown() {
 @test "state_init: sets 600 permissions on state files" {
 	state_init "$INSTALL_PATH"
 	local perms
-	perms=$(stat -c '%a' "$INSTALL_PATH/tmp/events.dat")
+	perms=$(stat -c '%a' "$INSTALL_PATH/tmp/pressure.dat")
 	[ "$perms" = "600" ]
 	perms=$(stat -c '%a' "$INSTALL_PATH/tmp/bans.active")
 	[ "$perms" = "600" ]
@@ -55,10 +55,10 @@ teardown() {
 
 @test "state_init: idempotent on existing dirs and files" {
 	state_init "$INSTALL_PATH"
-	echo "1000 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "1000 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
 	state_init "$INSTALL_PATH"
 	# file should not be truncated
-	run cat "$INSTALL_PATH/tmp/events.dat"
+	run cat "$INSTALL_PATH/tmp/pressure.dat"
 	assert_output "1000 192.0.2.1 sshd"
 }
 
@@ -94,15 +94,15 @@ teardown() {
 	[ "$line_count" -eq 10 ]
 }
 
-@test "state_events_append: concurrent writes produce correct line count" {
+@test "state_pressure_append: concurrent writes produce correct line count" {
 	state_init "$INSTALL_PATH"
 	local i
 	for i in $(seq 1 10); do
-		state_events_append "$INSTALL_PATH" "100$i" "192.0.2.$i" "sshd" &
+		state_pressure_append "$INSTALL_PATH" "100$i" "192.0.2.$i" "sshd" &
 	done
 	wait
 	local line_count
-	line_count=$(wc -l < "$INSTALL_PATH/tmp/events.dat")
+	line_count=$(wc -l < "$INSTALL_PATH/tmp/pressure.dat")
 	[ "$line_count" -eq 10 ]
 }
 

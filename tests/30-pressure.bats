@@ -63,7 +63,7 @@ teardown() {
 }
 
 @test "pressure_compute: missing events file returns 0" {
-	rm -f "$INSTALL_PATH/tmp/events.dat"
+	rm -f "$INSTALL_PATH/tmp/pressure.dat"
 	local now; now=$(date +%s)
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now"
 	assert_success
@@ -77,7 +77,7 @@ teardown() {
 @test "pressure_compute: single event at t=now returns weight*1000" {
 	local now; now=$(date +%s)
 	# event: timestamp IP mod weight
-	echo "$now 192.0.2.1 sshd 3" > "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd 3" > "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
 	# weight=3, age=0, decay=1.0 → 3*1000=3000
@@ -86,7 +86,7 @@ teardown() {
 
 @test "pressure_compute: single event weight=1 returns 1000" {
 	local now; now=$(date +%s)
-	echo "$now 192.0.2.1 sshd 1" > "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd 1" > "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
 	assert_output "1000"
@@ -99,7 +99,7 @@ teardown() {
 @test "pressure_compute: event at exactly 1 half-life ago ≈ weight*500" {
 	local now; now=$(date +%s)
 	local ts=$((now - 300))
-	echo "$ts 192.0.2.1 sshd 1" > "$INSTALL_PATH/tmp/events.dat"
+	echo "$ts 192.0.2.1 sshd 1" > "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
 	# weight=1, decay=0.5 → ~500
@@ -109,7 +109,7 @@ teardown() {
 @test "pressure_compute: event at 2 half-lives ago ≈ weight*250" {
 	local now; now=$(date +%s)
 	local ts=$((now - 600))
-	echo "$ts 192.0.2.1 sshd 1" > "$INSTALL_PATH/tmp/events.dat"
+	echo "$ts 192.0.2.1 sshd 1" > "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
 	assert_output "250"
@@ -124,7 +124,7 @@ teardown() {
 	{
 		echo "$now 192.0.2.1 sshd 3"
 		echo "$now 192.0.2.1 sshd 3"
-	} > "$INSTALL_PATH/tmp/events.dat"
+	} > "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
 	# 3+3 = 6 → 6000
@@ -136,7 +136,7 @@ teardown() {
 	{
 		echo "$now 192.0.2.1 sshd 3"
 		echo "$now 192.0.2.2 sshd 3"
-	} > "$INSTALL_PATH/tmp/events.dat"
+	} > "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
 	assert_output "3000"
@@ -151,7 +151,7 @@ teardown() {
 	{
 		echo "$now 192.0.2.1 sshd 3"
 		echo "$now 192.0.2.1 dovecot 2"
-	} > "$INSTALL_PATH/tmp/events.dat"
+	} > "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
 	assert_output "3000"
@@ -162,7 +162,7 @@ teardown() {
 	{
 		echo "$now 192.0.2.1 sshd 3"
 		echo "$now 192.0.2.1 dovecot 2"
-	} > "$INSTALL_PATH/tmp/events.dat"
+	} > "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now"
 	assert_success
 	# 3+2 = 5 → 5000
@@ -175,7 +175,7 @@ teardown() {
 
 @test "pressure_compute: 3-field events use weight=1" {
 	local now; now=$(date +%s)
-	echo "$now 192.0.2.1 sshd" > "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd" > "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
 	assert_output "1000"
@@ -197,13 +197,13 @@ teardown() {
 	assert_output "9000"
 }
 
-@test "record_and_score: creates events in events.dat" {
+@test "record_and_score: creates events in pressure.dat" {
 	local now; now=$(date +%s)
 	local hosts="192.0.2.1
 192.0.2.1"
 	record_and_score "192.0.2.1" "$hosts" "$INSTALL_PATH" "300" "$now" "sshd" "2" > /dev/null
 	local lines
-	lines=$(wc -l < "$INSTALL_PATH/tmp/events.dat")
+	lines=$(wc -l < "$INSTALL_PATH/tmp/pressure.dat")
 	[ "$lines" -eq 2 ]
 }
 
@@ -228,8 +228,8 @@ teardown() {
 @test "record_and_score: pre-computed count=0 appends nothing" {
 	local now; now=$(date +%s)
 	record_and_score "192.0.2.1" "" "$INSTALL_PATH" "300" "$now" "sshd" "1" "0" > /dev/null
-	# events.dat should not exist or be empty
-	[ ! -s "$INSTALL_PATH/tmp/events.dat" ]
+	# pressure.dat should not exist or be empty
+	[ ! -s "$INSTALL_PATH/tmp/pressure.dat" ]
 }
 
 # ============================================================
@@ -429,19 +429,19 @@ teardown() {
 }
 
 # ============================================================
-# state_events_append() — weight parameter (count+weight combo)
+# state_pressure_append() — weight parameter (count+weight combo)
 # ============================================================
 
-@test "state_events_append: count=2 creates 2 lines with weight" {
+@test "state_pressure_append: count=2 creates 2 lines with weight" {
 	local now; now=$(date +%s)
-	state_events_append "$INSTALL_PATH" "$now" "192.0.2.1" "sshd" "2" "5"
+	state_pressure_append "$INSTALL_PATH" "$now" "192.0.2.1" "sshd" "2" "5"
 	local lines
-	lines=$(wc -l < "$INSTALL_PATH/tmp/events.dat")
+	lines=$(wc -l < "$INSTALL_PATH/tmp/pressure.dat")
 	[ "$lines" -eq 2 ]
 	# both lines should have weight=5
 	local w1 w2
-	w1=$(awk 'NR==1{print $4}' "$INSTALL_PATH/tmp/events.dat")
-	w2=$(awk 'NR==2{print $4}' "$INSTALL_PATH/tmp/events.dat")
+	w1=$(awk 'NR==1{print $4}' "$INSTALL_PATH/tmp/pressure.dat")
+	w2=$(awk 'NR==2{print $4}' "$INSTALL_PATH/tmp/pressure.dat")
 	[ "$w1" = "5" ]
 	[ "$w2" = "5" ]
 }
@@ -455,7 +455,7 @@ teardown() {
 	# 7 events, weight 3 → pressure 21 → 21000 scaled
 	local i
 	for i in 1 2 3 4 5 6 7; do
-		echo "$now 192.0.2.1 sshd 3" >> "$INSTALL_PATH/tmp/events.dat"
+		echo "$now 192.0.2.1 sshd 3" >> "$INSTALL_PATH/tmp/pressure.dat"
 	done
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
@@ -469,7 +469,7 @@ teardown() {
 	# 4 events, weight 3 → pressure 12 → 12000 scaled
 	local i
 	for i in 1 2 3 4; do
-		echo "$now 192.0.2.1 sshd 3" >> "$INSTALL_PATH/tmp/events.dat"
+		echo "$now 192.0.2.1 sshd 3" >> "$INSTALL_PATH/tmp/pressure.dat"
 	done
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
@@ -486,7 +486,7 @@ teardown() {
 	local now=10000
 	local half_life=300
 	# event at 11 half-lives ago = now - 3300 = 6700
-	echo "6700 192.0.2.1 sshd 1" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "6700 192.0.2.1 sshd 1" >> "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "$half_life" "$now" "sshd"
 	assert_success
 	assert_output "0"
@@ -496,7 +496,7 @@ teardown() {
 	local now=10000
 	local half_life=300
 	# event at 9 half-lives ago = now - 2700 = 7300
-	echo "7300 192.0.2.1 sshd 1" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "7300 192.0.2.1 sshd 1" >> "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "$half_life" "$now" "sshd"
 	assert_success
 	# 2^(-9) ≈ 0.00195, scaled = 1 (truncated)
@@ -505,7 +505,7 @@ teardown() {
 
 @test "pressure_compute: zero weight in 4-field event falls back to weight 1" {
 	local now; now=$(date +%s)
-	echo "$now 192.0.2.1 sshd 0" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd 0" >> "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
 	# weight=0 → fallback to 1 → pressure = 1000
@@ -515,9 +515,9 @@ teardown() {
 @test "pressure_compute: mixed 3-field and 4-field events in same file" {
 	local now; now=$(date +%s)
 	# 3-field (old format) → weight defaults to 1
-	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
 	# 4-field (new format) → weight explicit 3
-	echo "$now 192.0.2.1 sshd 3" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd 3" >> "$INSTALL_PATH/tmp/pressure.dat"
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
 	# 1 + 3 = 4 → 4000 scaled

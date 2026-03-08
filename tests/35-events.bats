@@ -86,10 +86,10 @@ teardown() {
 	# IP with more events (higher pressure)
 	local i
 	for i in $(seq 1 10); do
-		state_events_append "$INSTALL_PATH" "$((now - i))" "192.0.2.10" "sshd" "1" "3"
+		state_pressure_append "$INSTALL_PATH" "$((now - i))" "192.0.2.10" "sshd" "1" "3"
 	done
 	# IP with fewer events (lower pressure)
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.20" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.20" "sshd" "1" "1"
 	run events_dashboard "$INSTALL_PATH"
 	assert_success
 	assert_output --partial "192.0.2.10"
@@ -104,7 +104,7 @@ teardown() {
 @test "events_dashboard: header row present" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
 	run events_dashboard "$INSTALL_PATH"
 	assert_success
 	assert_output --partial "PRESSURE"
@@ -119,7 +119,7 @@ teardown() {
 @test "events_dashboard: banned IP shows BANNED status" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.30" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.30" "sshd" "1" "1"
 	state_bans_active_append "$INSTALL_PATH" "$now" "0" "192.0.2.30" "sshd" "22"
 	run events_dashboard "$INSTALL_PATH"
 	assert_success
@@ -129,8 +129,8 @@ teardown() {
 @test "events_dashboard: multiple services shown comma-separated" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.40" "sshd" "1" "1"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.40" "dovecot" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.40" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.40" "dovecot" "1" "1"
 	run events_dashboard "$INSTALL_PATH"
 	assert_success
 	assert_output --partial "sshd"
@@ -140,8 +140,8 @@ teardown() {
 @test "events_dashboard: correct event count per IP" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.50" "sshd" "3" "1"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.50" "sshd" "2" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.50" "sshd" "3" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.50" "sshd" "2" "1"
 	run events_dashboard "$INSTALL_PATH"
 	assert_success
 	# 5 total events
@@ -153,7 +153,7 @@ teardown() {
 @test "events_ip: shows overall pressure score" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "5" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "5" "3"
 	run events_ip "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	assert_output --partial "Pressure:"
@@ -163,8 +163,8 @@ teardown() {
 @test "events_ip: shows per-service breakdown" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "3"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "2" "2"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "2" "2"
 	run events_ip "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	assert_output --partial "sshd"
@@ -175,8 +175,8 @@ teardown() {
 @test "events_ip: shows first/last seen timestamps" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 100))" "192.0.2.10" "sshd" "1" "1"
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 100))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
 	run events_ip "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	assert_output --partial "First seen:"
@@ -186,7 +186,7 @@ teardown() {
 @test "events_ip: shows ban status" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
 	state_bans_active_append "$INSTALL_PATH" "$now" "0" "192.0.2.10" "sshd" "22"
 	run events_ip "$INSTALL_PATH" "192.0.2.10"
 	assert_success
@@ -202,9 +202,9 @@ teardown() {
 @test "events_ip: multiple services listed separately" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "2" "3"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "1" "2"
-	state_events_append "$INSTALL_PATH" "$((now - 3))" "192.0.2.10" "postfix" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "2" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "1" "2"
+	state_pressure_append "$INSTALL_PATH" "$((now - 3))" "192.0.2.10" "postfix" "1" "1"
 	run events_ip "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	assert_output --partial "sshd"
@@ -217,8 +217,8 @@ teardown() {
 @test "events_cidr: finds IPs in /24 range" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.20" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.20" "sshd" "1" "1"
 	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
 	assert_output --partial "192.0.2.10"
@@ -228,8 +228,8 @@ teardown() {
 @test "events_cidr: excludes IPs outside range" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "sshd" "1" "1"
 	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
 	assert_output --partial "192.0.2.10"
@@ -239,7 +239,7 @@ teardown() {
 @test "events_cidr: shows pressure column" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "5" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "5" "3"
 	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
 	assert_output --partial "PRESSURE"
@@ -248,7 +248,7 @@ teardown() {
 @test "events_cidr: shows BANNED status for banned IPs" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
 	state_bans_active_append "$INSTALL_PATH" "$now" "0" "192.0.2.10" "sshd" "22"
 	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
@@ -264,7 +264,7 @@ teardown() {
 @test "events_cidr: no matching IPs shows message" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "198.51.100.5" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "198.51.100.5" "sshd" "1" "1"
 	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
 	assert_output --partial "No events found for 192.0.2.0/24"
@@ -273,8 +273,8 @@ teardown() {
 @test "events_cidr: summary line with totals" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "1"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.20" "sshd" "2" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.20" "sshd" "2" "1"
 	run events_cidr "$INSTALL_PATH" "192.0.2.0/24"
 	assert_success
 	assert_output --partial "2 IPs"
@@ -292,10 +292,10 @@ teardown() {
 @test "_pressure_aggregate_all: returns scaled pressure for all IPs" {
 	local now
 	now=$(date +"%s")
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	# 3 events for one IP, 1 event for another
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "2"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "dovecot" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "3" "2"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "dovecot" "1" "1"
 	run _pressure_aggregate_all "$events_file" "$now" "300"
 	assert_success
 	# first line should be the higher-pressure IP (192.0.2.10 with weight=2, count=3)
@@ -309,9 +309,9 @@ teardown() {
 @test "_events_pressure_awk: dashboard mode returns all IPs" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "dovecot" "1" "1"
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "dovecot" "1" "1"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	run _events_pressure_awk "$events_file" "$now" "300" "20"
 	assert_success
 	# should contain both IPs
@@ -322,9 +322,9 @@ teardown() {
 @test "_events_pressure_awk: CIDR mode filters by subnet" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "dovecot" "1" "1"
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "198.51.100.5" "dovecot" "1" "1"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	run _events_pressure_awk "$events_file" "$now" "300" "20" "192.0.2.0" "24"
 	assert_success
 	# should contain only the subnet-matching IP
@@ -375,7 +375,7 @@ RULE
 	chmod 644 "$RULES_PATH/sshd"
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "2" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "2" "1"
 	run events_ip "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	assert_output --partial "Recent log activity:"
@@ -396,7 +396,7 @@ RULE
 	chmod 644 "$RULES_PATH/sshd"
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
 	run events_ip "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	assert_output --partial "(no matching log entries found)"
@@ -418,7 +418,7 @@ RULE
 	chmod 644 "$RULES_PATH/sshd"
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
 	run events_ip "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	assert_output --partial "<REDACTED>"
@@ -441,7 +441,7 @@ RULE
 	chmod 644 "$RULES_PATH/sshd"
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
 	run events_ip_json "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	assert_output --partial '"log_sample":'
@@ -499,7 +499,7 @@ RULE
 	_PRESS_TRIP=([sshd]="15")
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
 	run events_dashboard "$INSTALL_PATH"
 	assert_success
 	assert_output --partial "/15"
@@ -510,8 +510,8 @@ RULE
 	_PRESS_TRIP=([sshd]="12" [dovecot]="30")
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "1"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.10" "dovecot" "1" "1"
 	run events_ip "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	# per-service lines should show their own trips
@@ -524,7 +524,7 @@ RULE
 	GLOB_PRESSURE_TRIP="20"
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "5"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.10" "sshd" "1" "5"
 	run search_ip "$INSTALL_PATH" "192.0.2.10"
 	assert_success
 	# overall pressure line uses min-trip from services

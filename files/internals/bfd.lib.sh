@@ -1648,7 +1648,7 @@ state_init() {
 		mkdir -m 750 -p "$install_path/stats"
 	fi
 	local f
-	for f in "$install_path/tmp/events.dat" "$install_path/tmp/bans.active" \
+	for f in "$install_path/tmp/pressure.dat" "$install_path/tmp/bans.active" \
 		 "$install_path/tmp/bans.history"; do
 		if [ ! -f "$f" ]; then
 			touch "$f"
@@ -1753,18 +1753,19 @@ state_bans_count_recent() {
 		"$history_file"
 }
 
-# --- Event state I/O functions ---
+# --- Pressure state I/O functions ---
 # State file format:
-#   events.dat: "TIMESTAMP IP MOD [WEIGHT]" — timestamped failure events
+#   pressure.dat: "TIMESTAMP IP MOD [WEIGHT]" — timestamped pressure events
 #   Field 4 (WEIGHT) is optional; older events without it default to weight 1.
+#   Pruned aggressively (~10 half-lives); used only for exponential-decay scoring.
 
-# state_events_append install_path timestamp host mod [count] [weight] — append events
-# Appends count timestamped event lines (default 1) to events.dat.
+# state_pressure_append install_path timestamp host mod [count] [weight] — append events
+# Appends count timestamped event lines (default 1) to pressure.dat.
 # weight (default "1") is stored as field 4 for pressure scoring.
-state_events_append() {
+state_pressure_append() {
 	local install_path="$1" timestamp="$2" host="$3" mod="$4"
 	local count="${5:-1}" weight="${6:-1}"
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	(
 		flock -x 200
 		local i
@@ -1774,12 +1775,12 @@ state_events_append() {
 	) 200>>"$events_file"
 }
 
-# state_events_prune install_path window now [max_lines] — remove old events
+# state_pressure_prune install_path window now [max_lines] — remove old events
 # Removes events older than window. Safety cap at max_lines (default 5000).
-state_events_prune() {
+state_pressure_prune() {
 	local install_path="$1" window="$2" now="$3"
 	local max_lines="${4:-5000}"
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
 		return 0
 	fi
@@ -1820,13 +1821,13 @@ state_pool_prune() {
 # --- Pressure scoring functions ---
 
 # pressure_compute install_path host half_life now [mod] — compute decayed pressure
-# Single-pass awk over events.dat: sums weight * 2^(-(now-ts)/half_life) for each
+# Single-pass awk over pressure.dat: sums weight * 2^(-(now-ts)/half_life) for each
 # event matching host (and optionally mod). Returns pressure * 1000 as integer.
 # Handles both 3-field (old, weight=1) and 4-field (new) event lines.
 pressure_compute() {
 	local install_path="$1" host="$2" half_life="$3" now="$4"
 	local mod="${5:-}"
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
 		echo "0"
 		return 0
@@ -1898,7 +1899,7 @@ _resolve_min_trip() {
 }
 
 # _pressure_aggregate_all events_file now half_life
-# Single-pass AWK over events.dat: computes decayed pressure for ALL IPs.
+# Single-pass AWK over pressure.dat: computes decayed pressure for ALL IPs.
 # Outputs "scaled_pressure ip" lines sorted descending, filtered to >0.
 # Used by show_status() for top-N pressure display.
 _pressure_aggregate_all() {
@@ -1924,7 +1925,7 @@ _pressure_aggregate_all() {
 # record_and_score host hosts_parsed install_path half_life now mod weight [count]
 # Replacement for count_failures() using pressure scoring:
 #   1. Count host occurrences in hosts_parsed (grep -cxF), or use pre-computed count
-#   2. Append that many weighted events to events.dat
+#   2. Append that many weighted events to pressure.dat
 #   3. Compute per-service pressure (decayed sum)
 #   4. Return pressure * 1000 as integer
 # When count (arg 8) is provided, skips the O(n) grep scan — check() pre-computes
@@ -1937,7 +1938,7 @@ record_and_score() {
 		count=$(echo "$hosts_parsed" | grep -cxF "$host")
 	fi
 	if [ "$count" -gt 0 ]; then
-		state_events_append "$install_path" "$now" "$host" "$mod" "$count" "$weight"
+		state_pressure_append "$install_path" "$now" "$host" "$mod" "$count" "$weight"
 	fi
 	pressure_compute "$install_path" "$host" "$half_life" "$now" "$mod"
 }
@@ -2035,13 +2036,13 @@ pressure_effective_weight() {
 }
 
 # count_subnet_attackers install_path window now mask mask_v6 min_unique
-# Single-pass awk over events.dat: groups events by subnet+service,
+# Single-pass awk over pressure.dat: groups events by subnet+service,
 # outputs "subnet_cidr mod unique_count" for subnets meeting threshold.
 # All subnet math done in awk (mawk-compatible) for O(n) performance.
 count_subnet_attackers() {
 	local install_path="$1" window="$2" now="$3"
 	local mask="$4" mask_v6="$5" min_unique="$6"
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	local cutoff=$((now - window))
 	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
 		return 0
@@ -2812,8 +2813,8 @@ show_status() {
 	fi
 	echo "  Active bans:    $total_bans ($temp_bans temporary, $perm_bans permanent)"
 
-	# Events (24h) from events.dat
-	local events_file="$install_path/tmp/events.dat"
+	# Events (24h) from pressure.dat
+	local events_file="$install_path/tmp/pressure.dat"
 	local cutoff_24h=$((now - 86400))
 	local event_count=0 service_count=0
 	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
@@ -2948,7 +2949,7 @@ show_service_status() {
 	echo "  Ports:          $rule_ports"
 
 	# Events (24h) for this service
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	local cutoff_24h=$((now - 86400))
 	local svc_events=0 svc_ips=0
 	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
@@ -3111,8 +3112,8 @@ _search_ip_data() {
 		IFS='|' read -r hist_24h hist_total <<< "$hist_raw"
 	fi
 
-	# Events (events.dat) — 24h event count and per-service counts
-	local events_file="$install_path/tmp/events.dat"
+	# Events (pressure.dat) — 24h event count and per-service counts
+	local events_file="$install_path/tmp/pressure.dat"
 	local evt_count=0 first_ts="" last_ts=""
 	local _gp_fmt="0.0"
 	local has_events=0
@@ -3745,7 +3746,7 @@ list_bans_csv() {
 # --- Events CLI functions ---
 
 # _events_pressure_awk events_file now half_life trip [target_addr target_mask]
-# Unified single-pass pressure computation over events.dat.
+# Unified single-pass pressure computation over pressure.dat.
 # Dashboard mode (no target_addr/target_mask): all IPs.
 # CIDR mode (target_addr + target_mask set): IPv4 subnet filter.
 # Outputs pipe-delimited raw data sorted by pressure descending:
@@ -3817,11 +3818,11 @@ _events_dashboard_awk() {
 }
 
 # events_dashboard install_path — show all IPs with active pressure
-# Single-pass awk over events.dat computes per-IP pressure aggregates,
+# Single-pass awk over pressure.dat computes per-IP pressure aggregates,
 # outputs pipe-delimited table sorted by pressure descending.
 events_dashboard() {
 	local install_path="$1"
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
@@ -3940,7 +3941,7 @@ _events_rule_patterns() {
 # Returns 2 if no events for IP.
 _events_ip_data() {
 	local install_path="$1" ip="$2"
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
@@ -4083,7 +4084,7 @@ _events_cidr_awk() {
 # Uses mawk-compatible ipv4_subnet() for CIDR matching (IPv4 only, mask 8-32).
 events_cidr() {
 	local install_path="$1" cidr="$2"
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
@@ -4137,7 +4138,7 @@ events_cidr() {
 # events_dashboard_json install_path — JSON array of pressure dashboard entries
 events_dashboard_json() {
 	local install_path="$1"
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
@@ -4175,7 +4176,7 @@ events_dashboard_json() {
 # events_dashboard_csv install_path — CSV formatted pressure dashboard
 events_dashboard_csv() {
 	local install_path="$1"
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
@@ -4322,7 +4323,7 @@ events_ip_csv() {
 # events_cidr_json install_path cidr — JSON object with CIDR summary and IP list
 events_cidr_json() {
 	local install_path="$1" cidr="$2"
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
@@ -4384,7 +4385,7 @@ events_cidr_json() {
 # events_cidr_csv install_path cidr — CSV formatted CIDR pressure report
 events_cidr_csv() {
 	local install_path="$1" cidr="$2"
-	local events_file="$install_path/tmp/events.dat"
+	local events_file="$install_path/tmp/pressure.dat"
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"

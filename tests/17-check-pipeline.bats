@@ -21,8 +21,8 @@ teardown() {
 
 @test "pipeline: PRESSURE_TRIP_GLOBAL triggers ban across services" {
 	# seed dovecot events (3) and sshd events (3) at now, total = 6
-	state_events_append "$INSTALL_PATH" "1000" "192.0.2.1" "dovecot" "3"
-	state_events_append "$INSTALL_PATH" "1000" "192.0.2.1" "sshd" "3"
+	state_pressure_append "$INSTALL_PATH" "1000" "192.0.2.1" "dovecot" "3"
+	state_pressure_append "$INSTALL_PATH" "1000" "192.0.2.1" "sshd" "3"
 	# PRESSURE_TRIP_GLOBAL=5000 (scaled): cross-service pressure >= 5
 	local global_pressure
 	global_pressure=$(pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "1000")
@@ -1089,7 +1089,7 @@ EOF
 	# seed 4 old events at t=400
 	local i
 	for i in 1 2 3 4; do
-		state_events_append "$INSTALL_PATH" "400" "192.0.2.1" "testrule_decay" "1"
+		state_pressure_append "$INSTALL_PATH" "400" "192.0.2.1" "testrule_decay" "1"
 	done
 	cat > "$rules_dir/testrule_decay" <<EOF
 PRESSURE_TRIP="5"

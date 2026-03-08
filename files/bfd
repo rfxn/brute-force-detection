@@ -396,7 +396,7 @@ check() {
 
 	# prune expired events once per run (10 half-lives = negligible contribution)
 	local prune_window=$((PRESSURE_HALF_LIFE * 10))
-	state_events_prune "$INSTALL_PATH" "$prune_window" "$UTIME"
+	state_pressure_prune "$INSTALL_PATH" "$prune_window" "$UTIME"
 
 	# prune attack pool periodically (once per 24h) — cron.daily skips during watch mode
 	if [ "${_SCAN_MODE:-}" != "1" ]; then

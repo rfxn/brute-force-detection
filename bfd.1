@@ -807,8 +807,8 @@ User template overrides (per-file, preserved across upgrades).
 .I /usr/local/bfd/rules/
 Service rule files (47 rules).
 .TP
-.I /usr/local/bfd/tmp/events.dat
-Pressure-scored failure event state (timestamp, IP, service, weight).
+.I /usr/local/bfd/tmp/pressure.dat
+Pressure scoring workspace (timestamp, IP, service, weight). Pruned every ~10 half-lives.
 .TP
 .I /usr/local/bfd/tmp/bans.active
 Currently active bans.
@@ -867,7 +867,7 @@ to merge configuration and preserve state.
 migrates: user configuration (conf.bfd values), legacy variable name
 translations (TRIG \(-> PRESSURE_TRIP, BAN_DURATION \(-> BAN_TTL, etc.),
 per\-rule overrides (thresholds.conf \(-> pressure.conf), firewall backend
-detection, ban state (bans.active, bans.history, events.dat), log tracking
+detection, ban state (bans.active, bans.history, pressure.dat), log tracking
 state (tlog byte\-offsets, journal cursors), user\-customized alert template
 partials, and ignore lists.
 .PP

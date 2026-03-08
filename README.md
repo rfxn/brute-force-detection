@@ -213,7 +213,7 @@ When upgrading from a previous BFD installation (including v1.5-2), `install.sh`
 | Legacy variable names | `TRIG` → `PRESSURE_TRIP`, `TRIG_WINDOW` → `PRESSURE_HALF_LIFE`, `TRIG_GLOBAL` → `PRESSURE_TRIP_GLOBAL`, `BAN_DURATION` → `BAN_TTL`, `BAN_PERMANENT_*` → `BAN_ESCALATE_*` |
 | Per-rule overrides | `thresholds.conf` → `pressure.conf` conversion |
 | Firewall backend | Set to `"custom"` if pre-2.0.1 `BAN_COMMAND` detected |
-| Ban state | `bans.active`, `bans.history`, `events.dat` |
+| Ban state | `bans.active`, `bans.history`, `pressure.dat` |
 | Log tracking state | tlog byte-offsets, journal cursors |
 | Alert templates | `alert/` partials (user-modified preserved), legacy `alert.bfd` |
 | Ignore lists | `ignore.hosts` |
@@ -864,7 +864,7 @@ bfd -b 192.0.2.1 sshd     # manually ban with a service label
 |------|-------------|
 | `bans.active` | Currently active bans (timestamp, expiry, IP, service, ports) |
 | `bans.history` | Append-only log of all ban/unban events |
-| `events.dat` | Per-IP failure events with pressure weights (timestamp, IP, service, weight) |
+| `pressure.dat` | Pressure scoring workspace (timestamp, IP, service, weight); pruned every ~10 half-lives |
 | `attack.pool` | Threat activity pool — enriched ban decision log for reporting |
 
 The `bfd -a` threat activity report integrates with ban state — each IP shows whether it is currently banned, its ban type (permanent or time remaining), and historical ban count.

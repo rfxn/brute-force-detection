@@ -319,7 +319,7 @@ INTEOF
 	assert_output 'RULES_PATH="/custom/rules"'
 }
 
-@test "importconf: state files (bans.active, events.dat) copied on upgrade" {
+@test "importconf: state files (bans.active, pressure.dat) copied on upgrade" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/tmp" "$inst.bk.last/stats" "$inst/tmp" "$inst/stats"
 
@@ -336,7 +336,7 @@ NEWEOF
 	# create state files in old backup
 	echo "192.0.2.4 1700000000 0 sshd all" > "$inst.bk.last/tmp/bans.active"
 	echo "192.0.2.4 1700000000 ban sshd all" > "$inst.bk.last/tmp/bans.history"
-	echo "192.0.2.4 1700000000 sshd" > "$inst.bk.last/tmp/events.dat"
+	echo "192.0.2.4 1700000000 sshd" > "$inst.bk.last/tmp/pressure.dat"
 	echo "192.0.2.4;5;sshd" > "$inst.bk.last/stats/attack.pool"
 	echo "192.0.2.1" > "$inst.bk.last/ignore.hosts"
 
@@ -350,7 +350,7 @@ NEWEOF
 	# verify state files were copied
 	[ -f "$inst/tmp/bans.active" ]
 	[ -f "$inst/tmp/bans.history" ]
-	[ -f "$inst/tmp/events.dat" ]
+	[ -f "$inst/tmp/pressure.dat" ]
 	[ -f "$inst/stats/attack.pool" ]
 	[ -f "$inst/ignore.hosts" ]
 
@@ -729,7 +729,7 @@ NEWEOF
 	echo "skip" > "$inst.bk.last/tmp/foo.cursor"
 	echo "skip" > "$inst.bk.last/tmp/bar.jts"
 	echo "skip" > "$inst.bk.last/tmp/bans.active"
-	echo "skip" > "$inst.bk.last/tmp/events.dat"
+	echo "skip" > "$inst.bk.last/tmp/pressure.dat"
 	# also create one that SHOULD be copied
 	echo "keep" > "$inst.bk.last/tmp/sshd"
 
