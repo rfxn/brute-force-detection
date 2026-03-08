@@ -112,6 +112,16 @@ uat_bfd_clear_cursors() {
     done
 }
 
+# uat_bfd_teardown_watch — Clean up watch mode processes.
+# Calls uat_cleanup_processes for all bfd run patterns, then resets state.
+# Requires uat-helpers (batsman v1.2.0+) to be loaded.
+uat_bfd_teardown_watch() {
+    uat_cleanup_processes "bfd -w"
+    uat_cleanup_processes "bfd -q"
+    uat_cleanup_processes "bfd -s"
+    uat_bfd_reset
+}
+
 # uat_bfd_inject_failures IP COUNT [SERVICE] [LOG_FILE]
 # Inject synthetic auth.log entries for detection testing.
 # Default service: sshd, default log: /var/log/auth.log

@@ -262,6 +262,10 @@
       catalog, ban lifecycle, firewall backends, IPv6, CLI flags, scan mode,
       events dashboard, structured output, upgrade guide, troubleshooting
 [Change] Version 1.6-1 to 2.0.1; copyright years updated to 2026
+[Change] UAT watch mode tests: replace hardcoded sleep with batsman v1.2.0
+      polling helpers (uat_wait_for_log, uat_wait_for_condition,
+      uat_cleanup_processes); add uat_bfd_teardown_watch helper; add
+      skip guard for timeout dependency
 
 1.5-2:
 [Change] simplified dovecot rule regex matching
