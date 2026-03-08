@@ -4,6 +4,9 @@
 
 [Fix] tlog CLI wrapper: bump TLOG_VERSION from 2.0.2 to 2.0.3 to match
       bundled tlog_lib.sh, fixing version mismatch warning in tests
+[Fix] CI: UAT job Docker build uses project-root context with -f
+      tests/Dockerfile instead of working-directory, matching Dockerfile
+      COPY paths that reference project-root files
 
   -- New Features --
 
