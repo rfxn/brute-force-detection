@@ -2,11 +2,18 @@
 
   -- Bug Fixes --
 
+[Fix] Slack API token: write token to chmod 600 temp file and pass via
+      curl -K to prevent exposure in /proc/PID/cmdline; affects
+      chat.postMessage, files.getUploadURLExternal, and
+      files.completeUploadExternal calls; Telegram already used this pattern
 [Fix] tlog CLI wrapper: bump TLOG_VERSION from 2.0.2 to 2.0.3 to match
       bundled tlog_lib.sh, fixing version mismatch warning in tests
 [Fix] CI: UAT job Docker build uses project-root context with -f
       tests/Dockerfile instead of working-directory, matching Dockerfile
       COPY paths that reference project-root files
+[Fix] tests/35-events.bats: add bfd_require_bash42 guard to 5 tests
+      that use _PRESS_TRIP with string keys, fixing CentOS 6 failures
+      where bash 4.1 treats associative syntax as arithmetic indices
 
   -- Enhancements --
 

@@ -122,6 +122,7 @@ RULE
 # --- Per-rule pressure trip threshold display ---
 
 @test "_resolve_trip: returns per-rule trip when set" {
+	bfd_require_bash42
 	_PRESS_TRIP=([sshd]="10" [dovecot]="30")
 	run _resolve_trip "sshd"
 	assert_success
@@ -129,6 +130,7 @@ RULE
 }
 
 @test "_resolve_trip: falls back to GLOB_PRESSURE_TRIP when unset" {
+	bfd_require_bash42
 	_PRESS_TRIP=([dovecot]="30")
 	GLOB_PRESSURE_TRIP="50"
 	run _resolve_trip "sshd"
@@ -137,6 +139,7 @@ RULE
 }
 
 @test "_resolve_min_trip: returns minimum across multiple services" {
+	bfd_require_bash42
 	_PRESS_TRIP=([sshd]="15" [dovecot]="8" [postfix]="25")
 	GLOB_PRESSURE_TRIP="20"
 	run _resolve_min_trip "sshd,dovecot,postfix"
@@ -145,6 +148,7 @@ RULE
 }
 
 @test "_resolve_min_trip: uses global fallback for unknown services" {
+	bfd_require_bash42
 	_PRESS_TRIP=([sshd]="30")
 	GLOB_PRESSURE_TRIP="10"
 	run _resolve_min_trip "sshd,unknown_svc"
@@ -161,6 +165,7 @@ RULE
 }
 
 @test "search_ip: per-service pressure shows per-rule trip" {
+	bfd_require_bash42
 	_PRESS_TRIP=([sshd]="8")
 	GLOB_PRESSURE_TRIP="20"
 	local now
