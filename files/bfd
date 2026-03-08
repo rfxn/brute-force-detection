@@ -396,7 +396,7 @@ check() {
 
 	# prune expired events once per run (10 half-lives = negligible contribution)
 	local prune_window=$((PRESSURE_HALF_LIFE * 10))
-	state_events_prune "$INSTALL_PATH" "$prune_window" "$UTIME"
+	state_pressure_prune "$INSTALL_PATH" "$prune_window" "$UTIME"
 
 	# prune attack pool periodically (once per 24h) — cron.daily skips during watch mode
 	if [ "${_SCAN_MODE:-}" != "1" ]; then
@@ -494,14 +494,14 @@ check() {
 					fi
 				fi
 			fi
+			# country lookup (cache-warm from pressure_effective_weight)
+			local _cc=""
+			_cc=$(ip_to_country "$ATTACK_HOST" "$INSTALL_PATH/ipcountry.dat")
 			if [ "$should_ban" -eq 1 ]; then
 				# skip if host already has an active ban
 				if state_bans_active_check "$INSTALL_PATH" "$ATTACK_HOST"; then
 					continue
 				fi
-				# country lookup (cache-warm from pressure_effective_weight)
-				local _cc=""
-				_cc=$(ip_to_country "$ATTACK_HOST" "$INSTALL_PATH/ipcountry.dat")
 				if [ "$filter_rc" -eq 2 ]; then
 					# local address — record attack, skip ban
 					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD" \
@@ -533,6 +533,11 @@ check() {
 						"$_host_count" "${_cc:---}" "$_pool_action" "$_pool_duration" \
 						"${PORTS:-all}" "$pressure_scaled" "$_trip_type"
 				fi
+			else
+				# sub-trip: record observation to attack pool
+				state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD" \
+					"$_host_count" "${_cc:---}" "observed" "0" "${PORTS:-all}" \
+					"$pressure_scaled" "-"
 			fi
 		done < <(echo "$HOSTS_PARSED" | uniq -c)
 	done
@@ -881,34 +886,82 @@ apool_list() {
 
 # --- Structured output for attack pool ---
 
-# _apool_awk source_file [search] [cutoff] — shared aggregation pipeline for attack pool
+# _apool_awk source_file [search] [cutoff] [sort_mode] [limit] [cidr_addr] [cidr_mask]
+# Shared aggregation pipeline for attack pool.
 # Outputs pipe-delimited: cnt|ip|first_ts|last_ts|rules_csv|country_code
 # cutoff: epoch timestamp — entries older than cutoff are skipped (0 = no filter)
+# sort_mode: count (default), time (last_seen desc), ip (version sort asc)
+# limit: max rows (default 25, 0 = unlimited)
+# cidr_addr/cidr_mask: optional CIDR filter (IPv4 only, mask 8-32)
 _apool_awk() {
 	local source_file="$1"
 	local search="${2:-}"
 	local cutoff="${3:-0}"
-	if [ -n "$search" ]; then
-		grep -F "$search" "$source_file"
-	else
-		cat "$source_file"
-	fi | awk -v cutoff="$cutoff" '{
-		ts = $1 + 0
-		if (cutoff > 0 && ts < cutoff) next
-		ip = $2; rule = $3
-		cnt = ($4+0 > 0) ? $4+0 : 1
-		cc_val = ($5 != "" && $5 != "--") ? $5 : ""
-		count[ip] += cnt
-		if (cc_val != "" && cc[ip] == "") cc[ip] = cc_val
-		if (!(ip in first) || ts < first[ip]) first[ip] = ts
-		if (!(ip in last) || ts > last[ip]) last[ip] = ts
-		if (rules[ip] == "") rules[ip] = rule
-		else if (index("," rules[ip] ",", "," rule ",") == 0) rules[ip] = rules[ip] "," rule
-	}
-	END {
-		for (ip in count)
-			print count[ip] "|" ip "|" first[ip] "|" last[ip] "|" rules[ip] "|" cc[ip]
-	}' | sort -t'|' -k1 -nr | head -n 25
+	local sort_mode="${4:-count}"
+	local limit="${5:-25}"
+	local cidr_addr="${6:-}" cidr_mask="${7:-}"
+	local cidr_mode=0
+	[ -n "$cidr_addr" ] && [ -n "$cidr_mask" ] && cidr_mode=1
+	{
+		if [ -n "$search" ]; then
+			grep -F "$search" "$source_file"
+		else
+			cat "$source_file"
+		fi | awk -v cutoff="$cutoff" -v cidr_mode="$cidr_mode" \
+			-v taddr="$cidr_addr" -v tmask="$cidr_mask" '
+		function pow2(n,    r, i) {
+			r = 1; for (i = 0; i < n; i++) r = r * 2; return r
+		}
+		function ipv4_subnet(ip, m,    parts, n, o1, o2, o3, o4, sh, divisor) {
+			n = split(ip, parts, ".")
+			if (n != 4) return ""
+			o1 = parts[1]+0; o2 = parts[2]+0; o3 = parts[3]+0; o4 = parts[4]+0
+			if (m >= 24) {
+				sh = 32 - m; divisor = pow2(sh)
+				o4 = int(o4 / divisor) * divisor
+				return o1 "." o2 "." o3 "." o4
+			} else if (m >= 16) {
+				sh = 24 - m; divisor = pow2(sh)
+				o3 = int(o3 / divisor) * divisor
+				return o1 "." o2 "." o3 ".0"
+			} else if (m >= 8) {
+				sh = 16 - m; divisor = pow2(sh)
+				o2 = int(o2 / divisor) * divisor
+				return o1 "." o2 ".0.0"
+			}
+			return ""
+		}
+		BEGIN {
+			if (cidr_mode) target_net = ipv4_subnet(taddr, tmask)
+		}
+		{
+			ts = $1 + 0
+			if (cutoff > 0 && ts < cutoff) next
+			ip = $2; rule = $3
+			if (cidr_mode) {
+				if (index(ip, ":") > 0) next
+				if (ipv4_subnet(ip, tmask) != target_net) next
+			}
+			cnt = ($4+0 > 0) ? $4+0 : 1
+			cc_val = ($5 != "" && $5 != "--") ? $5 : ""
+			count[ip] += cnt
+			if (cc_val != "" && cc[ip] == "") cc[ip] = cc_val
+			if (!(ip in first) || ts < first[ip]) first[ip] = ts
+			if (!(ip in last) || ts > last[ip]) last[ip] = ts
+			if (rules[ip] == "") rules[ip] = rule
+			else if (index("," rules[ip] ",", "," rule ",") == 0) rules[ip] = rules[ip] "," rule
+		}
+		END {
+			for (ip in count)
+				print count[ip] "|" ip "|" first[ip] "|" last[ip] "|" rules[ip] "|" cc[ip]
+		}'
+	} | {
+		case "$sort_mode" in
+			time) sort -t'|' -k4 -nr ;;
+			ip)   sort -t'|' -k2 -V ;;
+			*)    sort -t'|' -k1 -nr ;;
+		esac
+	} | if [ "$limit" -gt 0 ] 2>/dev/null; then head -n "$limit"; else cat; fi  # suppress non-numeric $limit comparison error (defaults to unlimited)
 }
 
 # _apool_report_json source_file [search] [cutoff] — JSON array of attack pool entries
@@ -1168,7 +1221,7 @@ usage_short() {
 	echo "  bfd --test-alert email  send test email alert"
 	echo "  bfd --scan [RULE]   full-log scan (all or specific rule)"
 	echo ""
-	echo "Output modifiers:    --json  --csv  -V (verbose)"
+	echo "Output modifiers:    --json  --csv  --sort=  --24h  --7d  --30d  -V"
 	echo ""
 	echo "Run 'bfd -h' for full option list, or 'man bfd' for documentation."
 }
@@ -1192,7 +1245,7 @@ usage() {
 	echo "Reporting:                                      Supports: --json --csv"
 	echo "  -l, --list                  list active bans"
 	echo "  -a, --activity [IP|STR]     threat activity and IP investigation"
-	echo "  -e, --events [IP|CIDR] [N]  active events, IP or subnet pressure detail (N=log lines)"
+	echo "  -e, --events [IP|CIDR] [N]  event history, IP or subnet detail (N=log lines)"
 	echo ""
 	echo "System:"
 	echo "  -S, --status [SERVICE]      operational status overview"
@@ -1213,6 +1266,10 @@ usage() {
 	echo "Output Modifiers:"
 	echo "  --json                      JSON output (with -l, -e, -a)"
 	echo "  --csv                       CSV output (with -l, -e, -a)"
+	echo "  --sort=MODE                 sort events: count (default), time, ip"
+	echo "  --24h                       events from last 24 hours (default)"
+	echo "  --7d                        events from last 7 days"
+	echo "  --30d                       events from last 30 days"
 	echo "  -V, --verbose               detailed output (with -s, -d, -c, -S, --scan)"
 	echo ""
 	echo "General:"
@@ -1223,17 +1280,21 @@ usage() {
 	echo "  bfd -s                      run detection and show results"
 	echo "  bfd -s -V                   verbose detection (show per-IP pressure)"
 	echo "  bfd -a 203.0.113.100        investigate an IP across all state"
-	echo "  bfd -e --json               active events in JSON"
+	echo "  bfd -e --json               event history in JSON"
+	echo "  bfd -e --7d --sort=time     events from last 7 days, newest first"
 	echo "  bfd --scan sshd -d          dry-run full-log scan for sshd only"
 	echo "  bfd -b 10.0.0.5 sshd        manually ban IP for sshd service"
 	echo "  bfd -T sshd /var/log/auth.log  test sshd rule against a log file"
 }
 
-# Pre-process global modifier flags (--json, --csv, --verbose, --max-lines=, --scan-timeout=)
+# Pre-process global modifier flags (--json, --csv, --verbose, --max-lines=, --scan-timeout=,
+# --sort=, --24h, --7d, --30d)
 VERBOSE=0
 OUTPUT_FORMAT="table"
 _CLI_SCAN_MAX_LINES=""
 _CLI_SCAN_TIMEOUT=""
+_EVENTS_SORT="count"
+_EVENTS_WINDOW="24h"
 declare -a _bfd_args=()
 # shellcheck disable=SC2034
 for _arg in "$@"; do
@@ -1243,10 +1304,26 @@ for _arg in "$@"; do
 		--verbose|-V) VERBOSE=1; ELOG_VERBOSE=1 ;;
 		--max-lines=*) _CLI_SCAN_MAX_LINES="${_arg#--max-lines=}" ;;
 		--scan-timeout=*) _CLI_SCAN_TIMEOUT="${_arg#--scan-timeout=}" ;;
+		--sort=*) _EVENTS_SORT="${_arg#--sort=}" ;;
+		--24h) _EVENTS_WINDOW="24h" ;;
+		--7d)  _EVENTS_WINDOW="7d" ;;
+		--30d) _EVENTS_WINDOW="30d" ;;
 		*)      _bfd_args+=("$_arg") ;;
 	esac
 done
 set -- "${_bfd_args[@]+"${_bfd_args[@]}"}"
+# Validate --sort= value
+case "$_EVENTS_SORT" in
+	count|time|ip) ;;
+	*) echo "warning: unknown sort mode '$_EVENTS_SORT', using 'count'" >&2
+	   _EVENTS_SORT="count" ;;
+esac
+# Compute _EVENTS_CUTOFF from window selection
+case "$_EVENTS_WINDOW" in
+	7d)  _EVENTS_CUTOFF=$(( $(date +%s) - 604800 )) ;;
+	30d) _EVENTS_CUTOFF=$(( $(date +%s) - 2592000 )) ;;
+	*)   _EVENTS_CUTOFF=$(( $(date +%s) - 86400 )) ;;
+esac
 
 case "${1:-}" in
 -s|--standard)  vhead; run ;;
@@ -1273,21 +1350,21 @@ case "${1:-}" in
 	[ "$OUTPUT_FORMAT" = "table" ] && vhead; pre
 	if [ -n "${2:-}" ] && validate_ip_any "$2" >/dev/null 2>&1; then
 		case "$OUTPUT_FORMAT" in
-			json) events_ip_json "$INSTALL_PATH" "$2" "${3:-}" ;;
-			csv)  events_ip_csv "$INSTALL_PATH" "$2" ;;
-			*)    events_ip "$INSTALL_PATH" "$2" "${3:-}" ;;
+			json) events_list_ip_json "$INSTALL_PATH" "$2" "${3:-}" ;;
+			csv)  events_list_ip_csv "$INSTALL_PATH" "$2" ;;
+			*)    events_list_ip "$INSTALL_PATH" "$2" "${3:-}" ;;
 		esac
 	elif [ -n "${2:-}" ] && [[ "$2" == */* ]]; then
 		case "$OUTPUT_FORMAT" in
-			json) events_cidr_json "$INSTALL_PATH" "$2" || exit "$?" ;;
-			csv)  events_cidr_csv "$INSTALL_PATH" "$2" || exit "$?" ;;
-			*)    events_cidr "$INSTALL_PATH" "$2" || exit "$?" ;;
+			json) events_list_cidr_json "$INSTALL_PATH" "$2" "$_EVENTS_SORT" || exit "$?" ;;
+			csv)  events_list_cidr_csv "$INSTALL_PATH" "$2" "$_EVENTS_SORT" || exit "$?" ;;
+			*)    events_list_cidr "$INSTALL_PATH" "$2" "$_EVENTS_SORT" || exit "$?" ;;
 		esac
 	else
 		case "$OUTPUT_FORMAT" in
-			json) events_dashboard_json "$INSTALL_PATH" ;;
-			csv)  events_dashboard_csv "$INSTALL_PATH" ;;
-			*)    events_dashboard "$INSTALL_PATH" ;;
+			json) events_list_json "$INSTALL_PATH" "$_EVENTS_SORT" ;;
+			csv)  events_list_csv "$INSTALL_PATH" "$_EVENTS_SORT" ;;
+			*)    events_list "$INSTALL_PATH" "$_EVENTS_SORT" ;;
 		esac
 	fi
 	;;

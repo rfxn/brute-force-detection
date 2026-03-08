@@ -133,7 +133,7 @@ teardown() {
 	local pool="$INSTALL_PATH/stats/attack.pool"
 	echo "$now 192.0.2.1 sshd" >> "$pool"
 	# create matching events so pressure_compute returns non-zero
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "5" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "5" "3"
 	run _apool_report "$pool" "Test report"
 	assert_success
 	# pressure column should show format like X.Y/20

@@ -241,7 +241,7 @@ _make_rule_body() {
 	# seed enough events to trigger global
 	local i
 	for i in $(seq 1 20); do
-		state_events_append "$INSTALL_PATH" "$((UTIME - i))" "192.0.2.60" "sshd" "1" "3"
+		state_pressure_append "$INSTALL_PATH" "$((UTIME - i))" "192.0.2.60" "sshd" "1" "3"
 	done
 	create_mock_rule "testrule" "$(_make_rule_body 192.0.2.60 1)"
 	run check

@@ -206,7 +206,7 @@ What importconf migrates automatically:
       BAN_PERMANENT_*  -> BAN_ESCALATE_*
   - Per-rule overrides (thresholds.conf -> pressure.conf conversion)
   - Firewall backend: set to "custom" if pre-2.0.1 BAN_COMMAND detected
-  - Ban state: bans.active, bans.history, events.dat
+  - Ban state: bans.active, bans.history, pressure.dat
   - Log tracking state: tlog byte-offsets, journal cursors
   - Custom alert template (alert.bfd)
   - Ignore lists (ignore.hosts)
@@ -783,8 +783,8 @@ State files in /usr/local/bfd/tmp/:
 
   bans.active   - currently active bans (timestamp, expiry, IP, service, ports)
   bans.history  - append-only log of all ban/unban events
-  events.dat    - per-IP failure events with pressure weights (timestamp, IP,
-                  service, weight)
+  pressure.dat  - pressure scoring workspace (timestamp, IP, service, weight);
+                  pruned every ~10 half-lives
   attack.pool   - persistent attack pool for reporting
 
 The 'bfd -a' attack pool report integrates with ban state — each IP shows

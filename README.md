@@ -213,7 +213,7 @@ When upgrading from a previous BFD installation (including v1.5-2), `install.sh`
 | Legacy variable names | `TRIG` → `PRESSURE_TRIP`, `TRIG_WINDOW` → `PRESSURE_HALF_LIFE`, `TRIG_GLOBAL` → `PRESSURE_TRIP_GLOBAL`, `BAN_DURATION` → `BAN_TTL`, `BAN_PERMANENT_*` → `BAN_ESCALATE_*` |
 | Per-rule overrides | `thresholds.conf` → `pressure.conf` conversion |
 | Firewall backend | Set to `"custom"` if pre-2.0.1 `BAN_COMMAND` detected |
-| Ban state | `bans.active`, `bans.history`, `events.dat` |
+| Ban state | `bans.active`, `bans.history`, `pressure.dat` |
 | Log tracking state | tlog byte-offsets, journal cursors |
 | Alert templates | `alert/` partials (user-modified preserved), legacy `alert.bfd` |
 | Ignore lists | `ignore.hosts` |
@@ -649,7 +649,7 @@ The report includes:
 - **Top 25 threat IPs (7d)** — same format, 7-day window
 - **Per-service threat breakdown (24h / 7d)** — dual-interval count, unique IPs, and top country per service
 
-> **`-a` vs `-e`:** The `-a` (threat activity) report shows historical ban decisions and attack patterns over 24h/7d windows. The `-e` (events/pressure) report shows real-time pressure scores and active events for currently tracked IPs. Use `-a` to review past activity and `-e` to assess current risk.
+> **`-a` vs `-e`:** Both commands read from the same attack pool data store. `-a` provides a summary-oriented threat activity overview with dual-interval (24h/7d) views and per-service breakdown. `-e` provides event-level detail with configurable time windows (`--24h`, `--7d`, `--30d`) and sort modes (`--sort=count|time|ip`). Use `-a` to review aggregate threat patterns and `-e` to drill into specific IPs or subnets.
 
 ### 5.4 Watch Mode
 
@@ -753,27 +753,28 @@ After a non-dry-run scan, tlog cursors are advanced to the current log position 
 
 **Lock behavior:** Scan acquires the same global lock as normal runs. If watch mode is running, stop it first (`systemctl stop bfd-watch`), run the scan, then restart.
 
-### 5.8 Events and Pressure
+### 5.8 Events and Investigation
 
-The `--events` command provides real-time visibility into the pressure model:
+The `--events` command provides event history and IP investigation, reading from the attack pool which records all detected auth failures (both ban-triggering and sub-trip observations) with configurable retention (default: 365 days):
 
 ```bash
-bfd --events                  # all tracked IPs sorted by pressure
-bfd --events 192.0.2.1        # per-IP detail — service breakdown
+bfd --events                  # event list — all IPs, last 24h
+bfd --events --7d --sort=time # last 7 days, newest first
+bfd --events 192.0.2.1        # IP investigation — history + pressure + logs
 bfd --events 192.0.2.0/24     # CIDR report — subnet-scoped view
 ```
 
-**Summary mode** (no argument) shows all IPs with active pressure events, sorted by pressure score descending. Columns: IP, pressure/trip, event count, services, first/last seen, ban status.
+**Event list** (no argument) shows all IPs with failure counts, services, country, first/last seen, and ban status. Default: sorted by count descending, 24-hour window. Use `--sort=time` or `--sort=ip` to change ordering, and `--7d` or `--30d` to expand the time window.
 
-**IP mode** shows overall pressure with half-life context, a per-service breakdown table (service, weight, events, pressure), first/last timestamps, and ban status.
+**IP investigation** shows a comprehensive report: historical failure counts from the attack pool (total and per-service breakdown), live pressure detail if the IP has active pressure, and a log sample from the triggering service.
 
 **CIDR mode** filters to a subnet (IPv4, mask 8-32) and includes a summary line with match count, total events, and banned count.
 
 All three modes support `--json` and `--csv`:
 
 ```bash
-bfd --events --json           # active events as JSON array
-bfd --events 192.0.2.1 --json # per-IP as single JSON object
+bfd --events --json           # event list as JSON array
+bfd --events 192.0.2.1 --json # IP detail as single JSON object
 bfd --events 10.0.0.0/8 --csv # CIDR as CSV
 ```
 
@@ -864,10 +865,10 @@ bfd -b 192.0.2.1 sshd     # manually ban with a service label
 |------|-------------|
 | `bans.active` | Currently active bans (timestamp, expiry, IP, service, ports) |
 | `bans.history` | Append-only log of all ban/unban events |
-| `events.dat` | Per-IP failure events with pressure weights (timestamp, IP, service, weight) |
-| `attack.pool` | Threat activity pool — enriched ban decision log for reporting |
+| `pressure.dat` | Pressure scoring workspace (timestamp, IP, service, weight); pruned every ~10 half-lives |
+| `attack.pool` | Unified event store — all detected auth failures (ban, escalate, observed) and outcomes |
 
-The `bfd -a` threat activity report integrates with ban state — each IP shows whether it is currently banned, its ban type (permanent or time remaining), and historical ban count.
+Both `bfd -a` (threat activity) and `bfd -e` (events) read from the attack pool. Sub-trip observations (ACTION=observed) are recorded alongside ban decisions so event history persists across pressure decay cycles. Each IP shows whether it is currently banned, its ban type (permanent or time remaining), and historical ban count.
 
 ---
 

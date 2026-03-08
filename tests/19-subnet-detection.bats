@@ -90,7 +90,7 @@ teardown() {
 
 @test "count_subnet_attackers: finds IPv4 subnet with 3 unique IPs" {
 	local now=1000000
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	echo "$now 192.0.2.1 sshd" >> "$events_file"
 	echo "$now 192.0.2.2 sshd" >> "$events_file"
 	echo "$now 192.0.2.3 sshd" >> "$events_file"
@@ -102,7 +102,7 @@ teardown() {
 
 @test "count_subnet_attackers: respects window cutoff" {
 	local now=1000000
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	# events outside window (window=300, cutoff=999700)
 	echo "999600 192.0.2.1 sshd" >> "$events_file"
 	echo "999600 192.0.2.2 sshd" >> "$events_file"
@@ -115,7 +115,7 @@ teardown() {
 
 @test "count_subnet_attackers: per-service isolation" {
 	local now=1000000
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	# 3 IPs for sshd
 	echo "$now 192.0.2.1 sshd" >> "$events_file"
 	echo "$now 192.0.2.2 sshd" >> "$events_file"
@@ -131,7 +131,7 @@ teardown() {
 
 @test "count_subnet_attackers: IPv6 subnet detection" {
 	local now=1000000
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	echo "$now 2001:db8:1234::1 sshd" >> "$events_file"
 	echo "$now 2001:db8:1234::2 sshd" >> "$events_file"
 	echo "$now 2001:db8:1234::3 sshd" >> "$events_file"
@@ -141,7 +141,7 @@ teardown() {
 	assert_output --partial "2001:db8:1234::/48 sshd 3"
 }
 
-@test "count_subnet_attackers: empty events.dat produces no output" {
+@test "count_subnet_attackers: empty pressure.dat produces no output" {
 	run count_subnet_attackers "$INSTALL_PATH" "300" "1000000" "24" "48" "3"
 	assert_success
 	assert_output ""
@@ -153,7 +153,7 @@ teardown() {
 
 @test "check_distributed: bans subnet when threshold met" {
 	local now=1000000
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	local alerts_file="$TEST_TMPDIR/alerts"
 	touch "$alerts_file"
 
@@ -180,7 +180,7 @@ teardown() {
 
 @test "check_distributed: skips already-banned subnet" {
 	local now=1000000
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	local alerts_file="$TEST_TMPDIR/alerts"
 	touch "$alerts_file"
 
@@ -204,7 +204,7 @@ teardown() {
 
 @test "check_distributed: no bans when SUBNET_TRIG not met" {
 	local now=1000000
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	local alerts_file="$TEST_TMPDIR/alerts"
 	touch "$alerts_file"
 
@@ -224,7 +224,7 @@ teardown() {
 
 @test "check_distributed: records action=subnet in bans.history" {
 	local now=1000000
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	local alerts_file="$TEST_TMPDIR/alerts"
 	touch "$alerts_file"
 
@@ -246,7 +246,7 @@ teardown() {
 
 @test "check_distributed: dry run records state but skips firewall command" {
 	local now=1000000
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	local alerts_file="$TEST_TMPDIR/alerts"
 	touch "$alerts_file"
 
@@ -270,7 +270,7 @@ teardown() {
 
 @test "count_subnet_attackers: deduplicates same IP multiple events" {
 	local now=1000000
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	# same IP appears 5 times, but only 2 unique IPs
 	echo "$now 192.0.2.1 sshd" >> "$events_file"
 	echo "$now 192.0.2.1 sshd" >> "$events_file"
@@ -286,7 +286,7 @@ teardown() {
 
 @test "check_distributed: ban expiry computed from BAN_DURATION" {
 	local now=1000000
-	local events_file="$INSTALL_PATH/tmp/events.dat"
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	local alerts_file="$TEST_TMPDIR/alerts"
 	touch "$alerts_file"
 

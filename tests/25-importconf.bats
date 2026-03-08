@@ -319,7 +319,7 @@ INTEOF
 	assert_output 'RULES_PATH="/custom/rules"'
 }
 
-@test "importconf: state files (bans.active, events.dat) copied on upgrade" {
+@test "importconf: state files (bans.active, pressure.dat) copied on upgrade" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/tmp" "$inst.bk.last/stats" "$inst/tmp" "$inst/stats"
 
@@ -336,7 +336,7 @@ NEWEOF
 	# create state files in old backup
 	echo "192.0.2.4 1700000000 0 sshd all" > "$inst.bk.last/tmp/bans.active"
 	echo "192.0.2.4 1700000000 ban sshd all" > "$inst.bk.last/tmp/bans.history"
-	echo "192.0.2.4 1700000000 sshd" > "$inst.bk.last/tmp/events.dat"
+	echo "192.0.2.4 1700000000 sshd" > "$inst.bk.last/tmp/pressure.dat"
 	echo "192.0.2.4;5;sshd" > "$inst.bk.last/stats/attack.pool"
 	echo "192.0.2.1" > "$inst.bk.last/ignore.hosts"
 
@@ -350,7 +350,7 @@ NEWEOF
 	# verify state files were copied
 	[ -f "$inst/tmp/bans.active" ]
 	[ -f "$inst/tmp/bans.history" ]
-	[ -f "$inst/tmp/events.dat" ]
+	[ -f "$inst/tmp/pressure.dat" ]
 	[ -f "$inst/stats/attack.pool" ]
 	[ -f "$inst/ignore.hosts" ]
 
@@ -359,6 +359,36 @@ NEWEOF
 	assert_output "192.0.2.4 1700000000 0 sshd all"
 	run cat "$inst/ignore.hosts"
 	assert_output "192.0.2.1"
+}
+
+@test "importconf: events.dat in backup migrated to pressure.dat" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last/tmp" "$inst/tmp"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 1.5-2 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# old backup has events.dat (pre-rename), no pressure.dat
+	echo "1700000000 192.0.2.4 sshd 3" > "$inst.bk.last/tmp/events.dat"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# events.dat should be migrated to pressure.dat
+	[ -f "$inst/tmp/pressure.dat" ]
+	run cat "$inst/tmp/pressure.dat"
+	assert_output "1700000000 192.0.2.4 sshd 3"
 }
 
 # --- pressure.conf / thresholds.conf migration ---
@@ -729,7 +759,7 @@ NEWEOF
 	echo "skip" > "$inst.bk.last/tmp/foo.cursor"
 	echo "skip" > "$inst.bk.last/tmp/bar.jts"
 	echo "skip" > "$inst.bk.last/tmp/bans.active"
-	echo "skip" > "$inst.bk.last/tmp/events.dat"
+	echo "skip" > "$inst.bk.last/tmp/pressure.dat"
 	# also create one that SHOULD be copied
 	echo "keep" > "$inst.bk.last/tmp/sshd"
 

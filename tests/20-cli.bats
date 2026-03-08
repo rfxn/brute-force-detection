@@ -66,9 +66,9 @@ teardown() {
 @test "show_status: reports events count" {
 	local now
 	now=$(date +"%s")
-	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 192.0.2.2 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 192.0.2.3 postfix" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 192.0.2.2 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 192.0.2.3 postfix" >> "$INSTALL_PATH/tmp/pressure.dat"
 	run show_status "$INSTALL_PATH"
 	assert_success
 	assert_output --partial "3 across 2 services"
@@ -105,9 +105,9 @@ teardown() {
 @test "show_service_status: shows events for service" {
 	local now
 	now=$(date +"%s")
-	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 192.0.2.2 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 192.0.2.3 postfix" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 192.0.2.2 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 192.0.2.3 postfix" >> "$INSTALL_PATH/tmp/pressure.dat"
 	run show_service_status "$INSTALL_PATH" "sshd"
 	assert_success
 	assert_output --partial "2 from 2 unique IPs"
@@ -213,28 +213,33 @@ teardown() {
 	assert_output --partial "1 bans in 24h"
 }
 
-@test "search_ip: shows events" {
+@test "search_ip: shows events from attack.pool" {
 	local now
 	now=$(date +"%s")
-	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
-	echo "$now 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/events.dat"
+	echo "$now 192.0.2.1 sshd 1 -- observed 0 22 1000 -" >> "$INSTALL_PATH/stats/attack.pool"
+	echo "$now 192.0.2.1 sshd 1 -- observed 0 22 1000 -" >> "$INSTALL_PATH/stats/attack.pool"
 	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	assert_output --partial "Failures (24h): 2"
 }
 
-@test "search_ip: shows attack pool triggers" {
-	echo "1700000000 192.0.2.1 sshd" >> "$INSTALL_PATH/stats/attack.pool"
-	echo "1700000001 192.0.2.1 sshd" >> "$INSTALL_PATH/stats/attack.pool"
+@test "search_ip: shows total failures and ban triggers" {
+	local now
+	now=$(date +"%s")
+	# recent entry (within 24h)
+	echo "$now 192.0.2.1 sshd 3 RU ban 600 22 15000 service" >> "$INSTALL_PATH/stats/attack.pool"
+	# old entry (beyond 24h cutoff) — makes total differ from 24h count
+	echo "$((now - 200000)) 192.0.2.1 sshd 2 RU escalate 1200 22 20000 service" >> "$INSTALL_PATH/stats/attack.pool"
 	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
-	assert_output --partial "2 failures across 2 bans"
+	assert_output --partial "Failures (24h): 3"
+	assert_output --partial "Total failures: 5 (2 ban triggers)"
 }
 
 @test "search_ip: shows pressure score" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "5" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "5" "3"
 	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	assert_output --partial "Pressure:"
@@ -244,8 +249,8 @@ teardown() {
 @test "search_ip: shows per-service pressure" {
 	local now
 	now=$(date +"%s")
-	state_events_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "3" "3"
-	state_events_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.1" "dovecot" "2" "2"
+	state_pressure_append "$INSTALL_PATH" "$((now - 1))" "192.0.2.1" "sshd" "3" "3"
+	state_pressure_append "$INSTALL_PATH" "$((now - 2))" "192.0.2.1" "dovecot" "2" "2"
 	run search_ip "$INSTALL_PATH" "192.0.2.1"
 	assert_success
 	assert_output --partial "sshd:"
@@ -594,5 +599,31 @@ teardown() {
 	local perms
 	perms=$(stat -c '%a' "$BFD_LOG_PATH")
 	[ "$perms" = "640" ]
+}
+
+# --- usage text ---
+
+bfd_load_function usage
+bfd_load_function usage_short
+
+@test "usage: --sort= documented in help output" {
+	run usage
+	assert_success
+	assert_output --partial "--sort=MODE"
+}
+
+@test "usage: --24h --7d --30d documented in help output" {
+	run usage
+	assert_success
+	assert_output --partial "--24h"
+	assert_output --partial "--7d"
+	assert_output --partial "--30d"
+}
+
+@test "usage_short: lists new event modifier flags" {
+	run usage_short
+	assert_success
+	assert_output --partial "--sort="
+	assert_output --partial "--24h"
 }
 
