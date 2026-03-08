@@ -1,0 +1,35 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="30"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/sbin/squid"
+if [ ! -f "$PREREQ" ]; then
+	PREREQ="/usr/local/sbin/squid"
+fi
+
+if [ -f "$PREREQ" ]; then
+	PORTS="3128,8080"
+
+	# detect log file path
+	if [ -f "/var/log/squid/access.log" ]; then
+		LOG_FILE="/var/log/squid/access.log"
+	else
+		LOG_FILE="/usr/local/squid/var/logs/access.log"
+	fi
+	LOG_TAG="squid"
+
+	## SQUID — proxy auth failures in native access.log format
+	# Format: EPOCH DURATION CLIENT_IP RESULT/STATUS BYTES METHOD URL ...
+	# Higher trip (30) because proxy auth sends initial 407 challenge
+	# No leading space before <HOST>: extract_hosts boundary logic handles it
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"<HOST> TCP_DENIED/407 " \
+		"<HOST> TCP_DENIED/403 ")
+fi

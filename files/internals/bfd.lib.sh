@@ -80,6 +80,10 @@ _bfd_journal_register_all() {
 	tlog_journal_register "asterisk" "SYSLOG_IDENTIFIER=asterisk"
 	tlog_journal_register "asterisk.iax" "SYSLOG_IDENTIFIER=asterisk"
 	tlog_journal_register "asterisk_nopeer" "SYSLOG_IDENTIFIER=asterisk"
+	tlog_journal_register "vaultwarden" "SYSLOG_IDENTIFIER=vaultwarden"
+	tlog_journal_register "guacamole" "SYSLOG_IDENTIFIER=guacamole-client"
+	tlog_journal_register "haproxy" "SYSLOG_IDENTIFIER=haproxy"
+	tlog_journal_register "squid" "SYSLOG_IDENTIFIER=squid"
 }
 # Register at module load
 _bfd_journal_register_all
