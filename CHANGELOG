@@ -124,6 +124,10 @@
 [New] UAT scenario test suite: 66 tests across 10 categories covering
       ban lifecycle, escalation, detection pressure, scan mode, config
       health, ignore lists, investigation, watch mode, CLI UX, output quality
+[New] UAT scenario expansion: 4 new test files (20 tests) covering
+      multi-service detection, error paths, alert template validation,
+      and concurrent operations; new helpers for service-specific log
+      injection, alert capture, and state corruption
 
   -- Bug Fixes --
 

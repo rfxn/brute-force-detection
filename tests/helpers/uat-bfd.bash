@@ -137,3 +137,58 @@ uat_bfd_inject_failures() {
             >> "$logfile"
     done
 }
+
+# uat_bfd_inject_service_failures SVC IP COUNT LOG
+# Inject service-specific log entries matching actual rule MATCHED_HOSTS patterns.
+# Supported services: sshd, dovecot, postfix.
+# For sshd, delegates to uat_bfd_inject_failures.
+uat_bfd_inject_service_failures() {
+    local svc="$1" ip="$2" count="$3" logfile="$4"
+    local i ts
+    case "$svc" in
+        sshd)
+            uat_bfd_inject_failures "$ip" "$count" "sshd" "$logfile"
+            ;;
+        dovecot)
+            # matches: imap-login.*auth failed.*rip=<HOST>
+            for i in $(seq 1 "$count"); do
+                ts="$(date '+%b %e %H:%M:%S')"
+                printf '%s localhost dovecot[%d]: imap-login: Disconnected (auth failed, 1 attempts): user=<test>, method=PLAIN, rip=%s, lip=127.0.0.1\n' \
+                    "$ts" "$$" "$ip" >> "$logfile"
+            done
+            ;;
+        postfix)
+            # matches: \[<HOST>\].*SASL.*authentication failed
+            for i in $(seq 1 "$count"); do
+                ts="$(date '+%b %e %H:%M:%S')"
+                printf '%s localhost postfix/smtpd[%d]: warning: unknown[%s]: SASL LOGIN authentication failed: authentication failure\n' \
+                    "$ts" "$$" "$ip" >> "$logfile"
+            done
+            ;;
+        *)
+            echo "uat_bfd_inject_service_failures: unsupported service '$svc'" >&2
+            return 1
+            ;;
+    esac
+}
+
+# uat_bfd_setup_alert_capture — create a synthetic alerts file for template testing.
+# Writes a pipe-delimited alert entry to a temp file and echoes the path.
+# Caller is responsible for cleanup.
+uat_bfd_setup_alert_capture() {
+    local alerts_file
+    alerts_file=$(mktemp /tmp/bfd-uat-alerts.XXXXXX)
+    # Fields: host|mod|ports|pressure_scaled|expiry|action|recent|log_path|recipient|trip|half_life|weight|fail_count
+    echo "192.0.2.100|sshd|22|18000|0|ban|0|/var/log/auth.log|root|15|300|3|6" > "$alerts_file"
+    echo "$alerts_file"
+}
+
+# uat_bfd_corrupt_state FILE — inject corrupt/empty data for error path testing.
+# Writes garbage content to the specified state file.
+uat_bfd_corrupt_state() {
+    local target="$1"
+    if [ ! -f "$target" ]; then
+        touch "$target"
+    fi
+    printf 'GARBAGE_LINE_NO_FIELDS\n\x00\xff binary junk\n' > "$target"
+}
