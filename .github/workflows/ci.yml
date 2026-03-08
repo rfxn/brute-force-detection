@@ -54,8 +54,8 @@ jobs:
         run: |
           docker build \
             --build-arg BASE_IMAGE=bfd-base-debian12 \
+            -f tests/Dockerfile \
             -t bfd-test-debian12 .
-        working-directory: tests
       - name: Run UAT scenarios
         run: make -C tests uat
       - name: Upload UAT results

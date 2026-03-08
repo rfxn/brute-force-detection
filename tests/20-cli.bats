@@ -294,6 +294,56 @@ teardown() {
 	assert_output --partial "1 active, 1 inactive (2 total)"
 }
 
+@test "list_rules: --active filter hides inactive rules" {
+	cat > "$RULES_PATH/fakeservice" <<-'RULE'
+	PREREQ="/nonexistent/binary"
+	LOG_FILE="/var/log/fake.log"
+	LOG_TAG="fake"
+	MATCHED_HOSTS=""
+	RULE
+	chmod 644 "$RULES_PATH/fakeservice"
+	chown root "$RULES_PATH/fakeservice" 2>/dev/null || true
+	run list_rules "$INSTALL_PATH" 1
+	assert_success
+	assert_output --partial "sshd"
+	refute_output --partial "fakeservice"
+	assert_output --partial "1 active (filtered, 2 total)"
+}
+
+@test "list_rules: log source shows journal when file missing and journal registered" {
+	command -v journalctl >/dev/null 2>&1 || skip "no journalctl"
+	tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+	# LOG_FILE=/var/log/auth.log won't exist in test container
+	[ ! -f "/var/log/auth.log" ] || skip "auth.log exists"
+	run list_rules "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "journal (sshd)"
+}
+
+@test "list_rules: log source shows file+journal when both available" {
+	command -v journalctl >/dev/null 2>&1 || skip "no journalctl"
+	touch /var/log/auth.log
+	tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+	run list_rules "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "(file+journal)"
+	rm -f /var/log/auth.log
+}
+
+@test "list_rules: log source shows not found when file missing and no journal" {
+	cat > "$RULES_PATH/nologsvc" <<-RULE
+	PREREQ="/bin/sh"
+	LOG_FILE="/nonexistent/log/file.log"
+	LOG_TAG="nologsvc"
+	MATCHED_HOSTS=""
+	RULE
+	chmod 644 "$RULES_PATH/nologsvc"
+	chown root "$RULES_PATH/nologsvc" 2>/dev/null || true
+	run list_rules "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "(not found)"
+}
+
 # --- show_rule ---
 
 @test "show_rule: shows rule details" {
@@ -303,6 +353,16 @@ teardown() {
 	assert_output --partial "Trip:"
 	assert_output --partial "Weight:"
 	assert_output --partial "Ports:      22"
+}
+
+@test "show_rule: shows journal availability when file and journal both present" {
+	command -v journalctl >/dev/null 2>&1 || skip "no journalctl"
+	touch /var/log/auth.log
+	tlog_journal_register "sshd" "SYSLOG_IDENTIFIER=sshd"
+	run show_rule "$INSTALL_PATH" "sshd"
+	assert_success
+	assert_output --partial "journal avail: sshd"
+	rm -f /var/log/auth.log
 }
 
 @test "show_rule: error for missing rule" {

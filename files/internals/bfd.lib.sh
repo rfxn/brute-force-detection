@@ -3273,9 +3273,36 @@ search_ip() {
 	done <<< "$data"
 }
 
-# list_rules install_path — list all rules with status in table format
+# _resolve_log_source_label log_source has_journalctl
+# Determines the display label for a rule's log source based on:
+#   - LOG_FILE existence, LOG_TAG, journal filter registration
+# Uses rule variables (LOG_FILE, LOG_TAG) from the caller's scope.
+_resolve_log_source_label() {
+	local log_source="$1" has_journalctl="$2"
+	local has_journal=0
+	if [ "$has_journalctl" = "1" ] && [ -n "${LOG_TAG:-}" ] && \
+	   tlog_journal_filter "$LOG_TAG" >/dev/null 2>&1; then
+		has_journal=1
+	fi
+	if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
+		if [ "$has_journal" = "1" ]; then
+			echo "$LOG_FILE (file+journal)"
+		else
+			echo "$LOG_FILE (file)"
+		fi
+	elif [ "$has_journal" = "1" ]; then
+		echo "journal ($LOG_TAG)"
+	elif [ -n "${LOG_FILE:-}" ]; then
+		echo "${LOG_FILE} (not found)"
+	else
+		echo "n/a"
+	fi
+}
+
+# list_rules install_path [active_only] — list all rules with status in table format
 list_rules() {
 	local install_path="$1"
+	local active_only="${2:-0}"
 	local rules_dir="${RULES_PATH:-$install_path/rules}"
 	local log_source="${LOG_SOURCE:-auto}"
 
@@ -3289,6 +3316,10 @@ list_rules() {
 	echo "RULE|STATUS|WEIGHT|TRIP|PORTS|LOG SOURCE" > "$atmp"
 
 	local active=0 inactive=0 total=0
+	local has_journalctl=0
+	if [ "$log_source" != "file" ] && command -v journalctl >/dev/null 2>&1; then
+		has_journalctl=1
+	fi
 	local rule_file rule_name
 	for rule_file in "$rules_dir"/*; do
 		[ ! -f "$rule_file" ] && continue
@@ -3308,23 +3339,19 @@ list_rules() {
 			if _rule_is_active; then
 				active=$((active + 1))
 				local log_info
-				if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
-					log_info="$LOG_FILE (file)"
-				elif [ "$log_source" != "file" ] && \
-				     command -v journalctl >/dev/null 2>&1 && \
-				     tlog_journal_filter "${LOG_TAG:-}" >/dev/null 2>&1; then
-					log_info="journal"
-				else
-					log_info="${LOG_FILE:-n/a}"
-				fi
+				log_info=$(_resolve_log_source_label "$log_source" "$has_journalctl")
 				echo "$rule_name|active|$rule_weight|$rule_trip|$rule_ports|$log_info" >> "$atmp"
 			else
 				inactive=$((inactive + 1))
-				echo "$rule_name|inactive|-|-|-|(no prereq)" >> "$atmp"
+				if [ "$active_only" != "1" ]; then
+					echo "$rule_name|inactive|-|-|-|(no prereq)" >> "$atmp"
+				fi
 			fi
 		else
 			inactive=$((inactive + 1))
-			echo "$rule_name|error|-|-|-|(source failed)" >> "$atmp"
+			if [ "$active_only" != "1" ]; then
+				echo "$rule_name|error|-|-|-|(source failed)" >> "$atmp"
+			fi
 		fi
 
 		_restore_rule_vars
@@ -3332,7 +3359,11 @@ list_rules() {
 
 	format_table < "$atmp"
 	echo ""
-	echo "$active active, $inactive inactive ($total total)"
+	if [ "$active_only" = "1" ]; then
+		echo "$active active (filtered, $total total)"
+	else
+		echo "$active active, $inactive inactive ($total total)"
+	fi
 	rm -f "$atmp"
 }
 
@@ -3374,14 +3405,27 @@ show_rule() {
 	echo "  Trip:       $rule_trip (half-life ${half_life}s)"
 	echo "  Ports:      ${PORTS:-all}"
 
+	local has_journalctl=0
+	if [ "$log_source" != "file" ] && command -v journalctl >/dev/null 2>&1; then
+		has_journalctl=1
+	fi
+	local has_journal=0
+	if [ "$has_journalctl" = "1" ] && [ -n "${LOG_TAG:-}" ] && \
+	   tlog_journal_filter "$LOG_TAG" >/dev/null 2>&1; then
+		has_journal=1
+	fi
 	if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
-		echo "  Log:        $LOG_FILE (file mode)"
-	elif [ "$log_source" != "file" ] && \
-	     command -v journalctl >/dev/null 2>&1 && \
-	     tlog_journal_filter "${LOG_TAG:-}" >/dev/null 2>&1; then
-		echo "  Log:        journal (${LOG_TAG:-})"
+		if [ "$has_journal" = "1" ]; then
+			echo "  Log:        $LOG_FILE (file, journal avail: $LOG_TAG)"
+		else
+			echo "  Log:        $LOG_FILE (file)"
+		fi
+	elif [ "$has_journal" = "1" ]; then
+		echo "  Log:        journal ($LOG_TAG)"
+	elif [ -n "${LOG_FILE:-}" ]; then
+		echo "  Log:        ${LOG_FILE} (not found)"
 	else
-		echo "  Log:        ${LOG_FILE:-not configured}"
+		echo "  Log:        not configured"
 	fi
 
 	_restore_rule_vars

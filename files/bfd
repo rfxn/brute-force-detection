@@ -1250,7 +1250,7 @@ usage() {
 	echo "System:"
 	echo "  -S, --status [SERVICE]      operational status overview"
 	echo "  -C, --config [VAR]          show active configuration"
-	echo "  -R, --rules [RULE]          list rules or show rule detail"
+	echo "  -R, --rules [RULE]          list rules or show rule detail (--active)"
 	echo "  -c, --check                 health check diagnostics"
 	echo ""
 	echo "Testing:"
@@ -1270,6 +1270,7 @@ usage() {
 	echo "  --24h                       events from last 24 hours (default)"
 	echo "  --7d                        events from last 7 days"
 	echo "  --30d                       events from last 30 days"
+	echo "  --active                    show only active rules (with -R)"
 	echo "  -V, --verbose               detailed output (with -s, -d, -c, -S, --scan)"
 	echo ""
 	echo "General:"
@@ -1288,13 +1289,14 @@ usage() {
 }
 
 # Pre-process global modifier flags (--json, --csv, --verbose, --max-lines=, --scan-timeout=,
-# --sort=, --24h, --7d, --30d)
+# --sort=, --24h, --7d, --30d, --active)
 VERBOSE=0
 OUTPUT_FORMAT="table"
 _CLI_SCAN_MAX_LINES=""
 _CLI_SCAN_TIMEOUT=""
 _EVENTS_SORT="count"
 _EVENTS_WINDOW="24h"
+_RULES_ACTIVE_ONLY=0
 declare -a _bfd_args=()
 # shellcheck disable=SC2034
 for _arg in "$@"; do
@@ -1308,6 +1310,7 @@ for _arg in "$@"; do
 		--24h) _EVENTS_WINDOW="24h" ;;
 		--7d)  _EVENTS_WINDOW="7d" ;;
 		--30d) _EVENTS_WINDOW="30d" ;;
+		--active) _RULES_ACTIVE_ONLY=1 ;;
 		*)      _bfd_args+=("$_arg") ;;
 	esac
 done
@@ -1405,7 +1408,7 @@ case "${1:-}" in
 	if [ -n "${2:-}" ]; then
 		show_rule "$INSTALL_PATH" "$2" || exit "$?"
 	else
-		list_rules "$INSTALL_PATH" || exit "$?"
+		list_rules "$INSTALL_PATH" "$_RULES_ACTIVE_ONLY" || exit "$?"
 	fi
 	;;
 -T|--test)

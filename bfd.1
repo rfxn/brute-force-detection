@@ -229,9 +229,16 @@ Shows run mode, firewall backend, active bans, events, and active rules.
 .BI \-C " \fR[" VAR \fR]
 Show all configuration variables, or a single variable value.
 .TP
-.BI \-R " \fR[" RULE \fR]
+.BI \-R " \fR[" RULE \fR] " \fR[" \-\-active \fR]
 List all rules with active/inactive status, or show details for a
 specific rule.
+Use
+.B \-\-active
+to show only active rules.
+The LOG SOURCE column shows the effective source for each rule:
+file path when the log file exists, "journal" when using systemd journal,
+or "file+journal" when both sources are available (file is primary,
+journal is fallback).
 .TP
 .BR \-c ", " \-\-check
 Run health check diagnostics.
@@ -325,6 +332,11 @@ Show events from the last 7 days.
 .TP
 .B \-\-30d
 Show events from the last 30 days.
+.TP
+.B \-\-active
+Show only active rules.
+Supported with
+.BR \-R .
 .TP
 .BR \-V ", " \-\-verbose
 Show detailed output.

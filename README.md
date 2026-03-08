@@ -578,7 +578,7 @@ Reporting:                                      Supports: --json --csv
 System:
   -S, --status [SERVICE]      operational status overview
   -C, --config [VAR]          show active configuration
-  -R, --rules [RULE]          list rules or show rule detail
+  -R, --rules [RULE]          list rules or show rule detail (--active)
   -c, --check                 health check diagnostics
 
 Testing:
@@ -594,6 +594,7 @@ Scan Mode:
 Output Modifiers:
   --json                      JSON output (with -l, -e, -a)
   --csv                       CSV output (with -l, -e, -a)
+  --active                    show only active rules (with -R)
   -V, --verbose               detailed output (with -s, -d, -c, -S, --scan)
 
 General:

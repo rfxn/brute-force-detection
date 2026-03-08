@@ -27,7 +27,7 @@
 PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin:/usr/local/sbin
 export PATH
 
-TLOG_VERSION="2.0.2"
+TLOG_VERSION="2.0.3"
 
 # BASERUN: cursor storage directory — sed-replaced at install time
 BASERUN="${BASERUN:-/tmp}"
