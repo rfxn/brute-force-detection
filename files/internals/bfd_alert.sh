@@ -279,6 +279,7 @@ _alert_set_entry_vars() {
 
 	# parse pipe-delimited fields (13 fields; field 13 = fail_count, optional for backward compat)
 	local host mod ports pressure_scaled expiry action recent lp recipient trip half_life weight fail_count
+	# shellcheck disable=SC2034 # recipient: positional placeholder consumed by field ordering
 	IFS='|' read -r host mod ports pressure_scaled expiry action recent lp recipient trip half_life weight fail_count <<< "$pipe_line"
 
 	export ENTRY_NUM="$entry_num"
@@ -399,7 +400,9 @@ _alert_set_entry_vars() {
 	# ban command display
 	# expand_command_template uses globals ATTACK_HOST, MOD, PORTS (raw values)
 	local _saved_ports="$PORTS"
+	# shellcheck disable=SC2034 # ATTACK_HOST: consumed by expand_command_template()
 	ATTACK_HOST="$host"
+	# shellcheck disable=SC2034 # MOD: consumed by expand_command_template()
 	MOD="$mod"
 	PORTS="$ports"
 	local display_cmd

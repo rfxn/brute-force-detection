@@ -584,7 +584,7 @@ System:
 Testing:
   -T, --test RULE [FILE|-]    test rule patterns against log or stdin
   --test-pattern PAT [FILE|-] test raw <HOST> pattern against log or stdin
-  --test-alert email          send a test email alert to verify delivery
+  --test-alert TYPE           send a test alert (email, slack, telegram, discord)
 
 Scan Mode:
   --scan [RULE] [-d]          full-log scan (all rules or specific rule)
