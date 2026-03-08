@@ -43,12 +43,13 @@
       previously modified templates; health check reports active overrides
 [New] Declarative rule engine with fail2ban-compatible <HOST> patterns,
       dual IPv4/IPv6 boundary-aware regex, and IGNOREREGEX per-rule exclusion
-[New] 31 new service rules (51 total): apache-auth, nginx-http-auth,
+[New] 37 new service rules (57 total): apache-auth, nginx-http-auth,
       mysqld-auth, wordpress, webmin, directadmin, cyrus-imap, roundcube,
       plesk, dropbear, http_401, pam_generic, named, postgresql, openvpn,
       phpmyadmin, gitlab, grafana, proxmox, lighttpd, mongodb, xrdp, cpanel,
       interworx, gitea, nextcloud, cockpit, postscreen, vaultwarden,
-      guacamole, haproxy, squid
+      guacamole, haproxy, squid, sogo, freeswitch, ejabberd, drupal,
+      jellyfin, powerdns
 [New] Existing rule expansions: sshd (3 to 12 patterns), dovecot (2 to 6
       with ManageSieve), postfix (connection-abuse and postscreen patterns),
       proftpd (1 to 4), exim (Debian support), asterisk (SecurityEvent),
@@ -56,7 +57,7 @@
       (digest auth)
 [New] Systemd journal reader with transparent fallback (16 of 34 rules);
       LOG_SOURCE config (auto/file/journal); cursor-based journal tracking;
-      27 service-to-journalctl filter mappings via dynamic registry
+      36 service-to-journalctl filter mappings via dynamic registry
 [New] Events CLI (-e/--events): active event dashboard showing all tracked
       IPs with pressure scores, event counts, services, and ban proximity;
       per-IP detail with failure counts and log sample; CIDR subnet reports;

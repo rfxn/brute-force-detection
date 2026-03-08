@@ -1,0 +1,29 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/sbin/sogod"
+
+if [ -f "$PREREQ" ]; then
+	PORTS="80,443,20000"
+
+	# detect log file path
+	if [ -f "/var/log/sogo/sogo.log" ]; then
+		LOG_FILE="/var/log/sogo/sogo.log"
+	else
+		LOG_FILE="$KERNEL_LOG_PATH"
+	fi
+	LOG_TAG="sogod"
+
+	## SOGo — login failures
+	# Requires SOGo logging to file or syslog
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"Login from '<HOST>.* might not have worked")
+fi
