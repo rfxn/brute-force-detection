@@ -36,11 +36,9 @@
 <tr>
 <td style="padding:4px 16px;color:#71717a;vertical-align:top;">Pressure</td>
 <td style="padding:4px 16px;color:#09090b;">
-<span style="font-size:15px;font-weight:bold;color:{{PRESSURE_COLOR}};">{{PRESSURE_PCT}}%</span>
-<span style="font-size:13px;color:#09090b;"> of threshold</span>
-<span style="font-size:12px;color:#71717a;"> ({{PRESSURE}}/{{PRESSURE_TRIP}})</span>
+<span style="font-size:13px;font-weight:bold;color:#09090b;">{{FAIL_COUNT}} logins &times; weight {{WEIGHT}} = +{{PRESSURE_CONTRIB}} this scan</span>
 <br>
-<span style="font-size:12px;color:#71717a;">{{FAIL_COUNT}} failed logins &middot; weight {{WEIGHT}} &middot; half-life {{HALF_LIFE_FMT}}</span>
+<span style="font-size:12px;color:#71717a;">{{PRESSURE}} accumulated pressure &middot; trips at {{PRESSURE_TRIP}} &middot; half-life {{HALF_LIFE_FMT}}</span>
 </td>
 </tr>
 <!-- Ban -->

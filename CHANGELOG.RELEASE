@@ -26,9 +26,10 @@
       when using systemd journal, indicates dual-source availability
       (file+journal) when both are eligible, and shows (not found) when
       the configured log file is missing
-[Change] Ban email pressure display: replace always-full progress bar with
-      pressure ratio and unclamped percentage (e.g., "285/200 -- 142% of
-      threshold"); HTML retains color-coded severity via PRESSURE_COLOR;
+[Change] Ban email pressure display: replace progress bar with formula chain
+      showing fail_count x weight = contribution this scan, accumulated
+      pressure, trip threshold, and half-life (A-1 format); new
+      PRESSURE_CONTRIB template variable exported by alert pipeline;
       messaging templates (Slack/Telegram/Discord) unchanged this release
 
   -- New Features --
