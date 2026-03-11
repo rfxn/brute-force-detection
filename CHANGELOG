@@ -2,6 +2,10 @@
 
   -- Bug Fixes --
 
+[Fix] Slack API token: write token to chmod 600 temp file and pass via
+      curl -K to prevent exposure in /proc/PID/cmdline; affects
+      chat.postMessage, files.getUploadURLExternal, and
+      files.completeUploadExternal calls; Telegram already used this pattern
 [Fix] tlog CLI wrapper: bump TLOG_VERSION from 2.0.2 to 2.0.3 to match
       bundled tlog_lib.sh, fixing version mismatch warning in tests
 [Fix] CI: UAT job Docker build uses project-root context with -f

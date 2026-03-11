@@ -21,7 +21,7 @@
 _ALERT_LIB_LOADED=1
 
 # shellcheck disable=SC2034
-ALERT_LIB_VERSION="1.0.3"
+ALERT_LIB_VERSION="1.0.4"
 
 # Channel registry — consuming projects populate via alert_channel_register()
 # Uses parallel indexed arrays instead of declare -A to avoid scope issues
@@ -552,6 +552,8 @@ _alert_slack_webhook() {
 
 # _alert_slack_post_message payload_file token channel — POST to chat.postMessage API
 # Injects "channel" field into JSON payload, sends to Slack Web API.
+# Token is written to a chmod 600 config file and passed via curl -K to keep
+# it out of the process listing (/proc/PID/cmdline).
 # Returns 0 on success, 1 on failure.
 _alert_slack_post_message() {
 	local payload_file="$1" token="$2" channel="$3"
@@ -570,12 +572,17 @@ _alert_slack_post_message() {
 	modified_payload=$(mktemp "${ALERT_TMPDIR}/alert_slack_msg.XXXXXX")
 	awk -v ch="$channel" 'NR==1 && /^\{/ { print "{\"channel\":\"" ch "\"," substr($0,2); next } { print }' \
 		"$payload_file" > "$modified_payload"
+	# Write token to config file — keeps it out of /proc/PID/cmdline
+	local auth_cfg
+	auth_cfg=$(mktemp "${ALERT_TMPDIR}/alert_sl_auth.XXXXXX")
+	chmod 600 "$auth_cfg"
+	printf 'header = "Authorization: Bearer %s"\n' "$token" > "$auth_cfg"
 	local response
 	response=$(_alert_curl_post "https://slack.com/api/chat.postMessage" \
-		-H "Authorization: Bearer $token" \
+		-K "$auth_cfg" \
 		-H "Content-Type: application/json" \
-		-d @"$modified_payload") || { rm -f "$modified_payload"; return 1; }
-	rm -f "$modified_payload"
+		-d @"$modified_payload") || { rm -f "$modified_payload" "$auth_cfg"; return 1; }
+	rm -f "$modified_payload" "$auth_cfg"
 	# Slack API returns {"ok":true,...} on success
 	case "$response" in
 		*'"ok":true'*) return 0 ;;
@@ -590,7 +597,9 @@ _alert_slack_post_message() {
 # Step 1: files.getUploadURLExternal → get upload_url + file_id
 # Step 2: POST file to upload_url
 # Step 3: files.completeUploadExternal → finalize and share to channels
-# Extracted from LMD functions. Returns 0 on success, 1 on failure.
+# Token is written to a chmod 600 config file and passed via curl -K to keep
+# it out of the process listing (/proc/PID/cmdline).
+# Returns 0 on success, 1 on failure.
 _alert_slack_upload() {
 	local file_path="$1" title="$2" token="$3" channels="$4"
 	if [ ! -f "$file_path" ]; then
@@ -606,27 +615,35 @@ _alert_slack_upload() {
 	fsize="${fsize##* }"  # trim whitespace (some wc implementations pad)
 	filename="${file_path##*/}"
 
+	# Write token to config file — keeps it out of /proc/PID/cmdline
+	local auth_cfg
+	auth_cfg=$(mktemp "${ALERT_TMPDIR}/alert_sl_auth.XXXXXX")
+	chmod 600 "$auth_cfg"
+	printf 'header = "Authorization: Bearer %s"\n' "$token" > "$auth_cfg"
+
 	# Step 1: get upload URL
 	local url_response upload_url file_id
 	url_response=$(_alert_curl_post "https://slack.com/api/files.getUploadURLExternal" \
-		-H "Authorization: Bearer $token" \
+		-K "$auth_cfg" \
 		-d "filename=$filename" \
-		-d "length=$fsize") || return 1
+		-d "length=$fsize") || { rm -f "$auth_cfg"; return 1; }
 	case "$url_response" in
 		*'"ok":true'*) ;;
 		*)
 			local api_err
 			api_err=$(printf '%s' "$url_response" | sed -n 's/.*"error" *: *"\([^"]*\)".*/\1/p')
 			echo "alert_lib: Slack getUploadURLExternal error${api_err:+: $api_err}" >&2
+			rm -f "$auth_cfg"
 			return 1
 			;;
 	esac
 	upload_url=$(printf '%s' "$url_response" | sed -n 's/.*"upload_url" *: *"\([^"]*\)".*/\1/p')
 	file_id=$(printf '%s' "$url_response" | sed -n 's/.*"file_id" *: *"\([^"]*\)".*/\1/p')
 
-	# Step 2: upload file content
+	# Step 2: upload file content to presigned URL (no auth header needed)
 	_alert_curl_post "$upload_url" -F "file=@$file_path" > /dev/null || {
 		echo "alert_lib: Slack file upload to presigned URL failed." >&2
+		rm -f "$auth_cfg"
 		return 1
 	}
 
@@ -634,9 +651,10 @@ _alert_slack_upload() {
 	local escaped_title complete_response
 	escaped_title=$(_alert_json_escape "$title")
 	complete_response=$(_alert_curl_post "https://slack.com/api/files.completeUploadExternal" \
-		-H "Authorization: Bearer $token" \
+		-K "$auth_cfg" \
 		-H "Content-Type: application/json" \
-		-d "{\"files\":[{\"id\":\"$file_id\",\"title\":\"$escaped_title\"}],\"channels\":\"$channels\"}") || return 1
+		-d "{\"files\":[{\"id\":\"$file_id\",\"title\":\"$escaped_title\"}],\"channels\":\"$channels\"}") || { rm -f "$auth_cfg"; return 1; }
+	rm -f "$auth_cfg"
 	case "$complete_response" in
 		*'"ok":true'*) return 0 ;;
 	esac
