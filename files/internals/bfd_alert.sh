@@ -339,6 +339,9 @@ _alert_set_entry_vars() {
 	fi
 	export FAIL_COUNT="$_fc"
 
+	# this scan's raw pressure contribution: fail_count * weight
+	export PRESSURE_CONTRIB=$(( _fc * ${weight:-1} ))
+
 	# half-life: format seconds to human-readable
 	export HALF_LIFE_FMT
 	HALF_LIFE_FMT=$(format_duration "${half_life:-300}")

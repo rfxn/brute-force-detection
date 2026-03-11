@@ -784,7 +784,7 @@ validate_config() {
 					fi
 				done
 				if [ "$_rl_valid" -eq 0 ]; then
-					echo "warning: EMAIL_REPUTATION_LINKS contains unknown provider '$_rl'." >&2
+					echo "warning: EMAIL_REPUTATION_LINKS contains unknown provider '$_rl'; known: $_rl_known." >&2
 				fi
 			fi
 		done

@@ -677,8 +677,11 @@ EOF
 	export PORTS="22"
 	export PRESSURE="85"
 	export PRESSURE_TRIP="100"
+	export PRESSURE_PCT="85"
 	export PRESSURE_BAR="[=================   ] 85%"
 	export WEIGHT="10"
+	export FAIL_COUNT="7"
+	export PRESSURE_CONTRIB="70"
 	export HALF_LIFE_FMT="30m"
 	export BAN_TYPE="temporary"
 	export BAN_DURATION_DETAIL=" (10m), expires 2026-03-04 14:32:31"
@@ -694,7 +697,10 @@ EOF
 	assert_output --partial "Ban 1 of 3"
 	assert_output --partial "Host:        192.0.2.1 (IPv4) US"
 	assert_output --partial "Service:     sshd (22)"
-	assert_output --partial "Pressure:    85/100"
+	assert_output --partial "7 failed logins = +70 this scan"
+	assert_output --partial "85 accumulated pressure"
+	assert_output --partial "trips at 100"
+	assert_output --partial "weight 10"
 	assert_output --partial "Ban:         temporary (10m)"
 	assert_output --partial "History:     2 prior bans"
 	assert_output --partial "Command:"
@@ -741,7 +747,7 @@ EOF
 	assert_output --partial "#0891b2"
 }
 
-@test "template render: html.entry.tpl contains pressure bar and detail rows" {
+@test "template render: html.entry.tpl contains pressure detail and severity rows" {
 	export HOST="198.51.100.5"
 	export HOST_VERSION="IPv4"
 	export COUNTRY_CODE="CN"
@@ -754,6 +760,8 @@ EOF
 	export PRESSURE_PCT_CLAMPED="100"
 	export PRESSURE_COLOR="#dc2626"
 	export WEIGHT="15"
+	export FAIL_COUNT="14"
+	export PRESSURE_CONTRIB="210"
 	export HALF_LIFE_FMT="1h"
 	export BAN_TYPE="escalated"
 	export BAN_TYPE_COLOR="#d97706"
@@ -770,8 +778,11 @@ EOF
 	assert_output --partial "198.51.100.5"
 	assert_output --partial "#d97706"
 	assert_output --partial "dovecot"
-	assert_output --partial "120%"
-	assert_output --partial "#dc2626"
+	assert_output --partial "14 failed logins"
+	assert_output --partial "+210 this scan"
+	assert_output --partial "accumulated pressure"
+	assert_output --partial "weight 15"
+	assert_output --partial "trips at 100"
 }
 
 @test "template render: html.footer.tpl closes structure and shows version" {
@@ -1195,8 +1206,10 @@ EOF
 	# footer
 	assert_output --partial "BFD (Brute Force Detection) 2.0.1"
 	assert_output --partial "rfxn.com/projects/brute-force-detection"
-	# failure count in pressure line
-	assert_output --partial "5 failed logins"
+	# pressure formula chain in A-1 format
+	assert_output --partial "5 failed logins = +15 this scan"
+	assert_output --partial "accumulated pressure"
+	assert_output --partial "weight 3"
 	# no summary for single entry
 	refute_output --partial "Summary"
 }
@@ -1271,7 +1284,7 @@ EOF
 	assert_output --partial "</html>"
 }
 
-@test "_alert_render_html: pressure bar has color and width" {
+@test "_alert_render_html: pressure formula chain and severity color" {
 	V="2.0.1"
 	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
 	_FW_BACKEND="custom"
@@ -1282,9 +1295,11 @@ EOF
 	echo "192.0.2.1|sshd|22|15000|0|ban|0||root|10|300|1|5" > "$af"
 	run _alert_render_html "$af" "${PROJECT_ROOT}/files/alert"
 	assert_success
-	# pressure bar should contain color and percentage width
+	# severity color from ban type (permanent: expiry=0)
 	assert_output --partial "background-color:#dc2626"
-	assert_output --partial "150%"
+	# A-1 formula chain: 5 failed logins = +5
+	assert_output --partial "failed logins"
+	assert_output --partial "accumulated pressure"
 }
 
 # ===================================================================

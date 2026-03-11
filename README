@@ -70,7 +70,7 @@ Quick Start:
 
 1) Introduction
 Brute Force Detection (BFD) is a modular shell script for parsing application
-logs and detecting authentication failures. It ships with 42 service rules
+logs and detecting authentication failures. It ships with 57 service rules
 covering SSH, mail, FTP, web, database, control panel, DNS, VPN, and VoIP
 services. Each rule declares fail2ban-compatible <HOST> regex patterns; the
 engine handles log reading, IP extraction, IPv6 normalization, and validation.
@@ -93,7 +93,7 @@ occurred and grabs log tails from both the new log file and the rotated log
 file.
 
 Detection:
-- 42 service rules with fail2ban-compatible <HOST> regex patterns
+- 57 service rules with fail2ban-compatible <HOST> regex patterns
 - exponential-decay pressure scoring with per-service weights
 - a human mistyping a password stays below the trip point; a bot hammering
   a service trips immediately
@@ -684,7 +684,7 @@ manual activation is needed — install the application and BFD will detect it.
 Use 'bfd -c' to see which rules are active on your system.
 
 6.1) Rule Engine: Rule Catalog
-BFD ships with 42 rules:
+BFD ships with 57 rules:
 
   SSH:      sshd, dropbear
   Mail:     dovecot, courier, postfix, sendmail, exim_authfail, exim_nxuser,

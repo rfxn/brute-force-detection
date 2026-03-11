@@ -2,6 +2,10 @@
 
   -- Bug Fixes --
 
+[Fix] README: update plain-text rule count from 42 to 57 (lines 73, 96, 687)
+[Fix] validate_config: EMAIL_REPUTATION_LINKS warning now lists known providers
+      (abuseipdb, shodan, virustotal, ipinfo, greynoise)
+
 [Fix] Slack API token: write token to chmod 600 temp file and pass via
       curl -K to prevent exposure in /proc/PID/cmdline; affects
       chat.postMessage, files.getUploadURLExternal, and
@@ -14,6 +18,10 @@
 [Fix] tests/35-events.bats: add bfd_require_bash42 guard to 5 tests
       that use _PRESS_TRIP with string keys, fixing CentOS 6 failures
       where bash 4.1 treats associative syntax as arithmetic indices
+[Fix] README and man page: update html.entry.tpl description from
+      "pressure bar" to "pressure detail" after bar removal
+[Fix] tests/37-alert-engine.bats: add PRESSURE_PCT and FAIL_COUNT
+      exports to template smoke tests; rename misleading test name
 
   -- Enhancements --
 
@@ -22,6 +30,12 @@
       when using systemd journal, indicates dual-source availability
       (file+journal) when both are eligible, and shows (not found) when
       the configured log file is missing
+[Change] Ban alert pressure display: replace progress bar with A-1 formula
+      chain across all templates; line 1 shows "N failed logins = +C this
+      scan", line 2 shows accumulated pressure, trip threshold, weight, and
+      half-life; messaging templates (Slack/Telegram/Discord) updated to
+      same formula chain style; new PRESSURE_CONTRIB template variable
+      exported by alert pipeline
 
   -- New Features --
 

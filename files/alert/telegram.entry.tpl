@@ -1,4 +1,4 @@
 {{COUNTRY_FLAG}} *{{HOST}}* \({{HOST_VERSION}}\) {{COUNTRY_CODE}}
 `{{SERVICE}}` on {{PORTS}} \| {{BAN_TYPE}}{{BAN_DURATION_DETAIL}}
-Pressure: {{PRESSURE}}/{{PRESSURE_TRIP}} \({{FAIL_COUNT}} failures\) {{PRESSURE_BAR}}
+Pressure: {{FAIL_COUNT}} failed logins \= \+{{PRESSURE_CONTRIB}} \| {{PRESSURE}} accumulated, trips at {{PRESSURE_TRIP}} \(weight {{WEIGHT}}, half\-life {{HALF_LIFE_FMT}}\)
 

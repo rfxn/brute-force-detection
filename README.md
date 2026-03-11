@@ -406,7 +406,7 @@ Alert emails are rendered from customizable template partials in the `alert/` di
 | `text.summary.tpl` | Text: digest summary statistics |
 | `text.footer.tpl` | Text: version, project link |
 | `html.header.tpl` | HTML: banner and hostname bar |
-| `html.entry.tpl` | HTML: per-ban card with pressure bar |
+| `html.entry.tpl` | HTML: per-ban card with pressure detail |
 | `html.summary.tpl` | HTML: aggregate statistics table |
 | `html.footer.tpl` | HTML: footer and closing tags |
 
