@@ -14,6 +14,10 @@
 [Fix] tests/35-events.bats: add bfd_require_bash42 guard to 5 tests
       that use _PRESS_TRIP with string keys, fixing CentOS 6 failures
       where bash 4.1 treats associative syntax as arithmetic indices
+[Fix] README and man page: update html.entry.tpl description from
+      "pressure bar" to "pressure detail" after bar removal
+[Fix] tests/37-alert-engine.bats: add PRESSURE_PCT and FAIL_COUNT
+      exports to template smoke tests; rename misleading test name
 
   -- Enhancements --
 

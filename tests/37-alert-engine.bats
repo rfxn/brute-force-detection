@@ -677,8 +677,10 @@ EOF
 	export PORTS="22"
 	export PRESSURE="85"
 	export PRESSURE_TRIP="100"
+	export PRESSURE_PCT="85"
 	export PRESSURE_BAR="[=================   ] 85%"
 	export WEIGHT="10"
+	export FAIL_COUNT="7"
 	export HALF_LIFE_FMT="30m"
 	export BAN_TYPE="temporary"
 	export BAN_DURATION_DETAIL=" (10m), expires 2026-03-04 14:32:31"
@@ -695,6 +697,8 @@ EOF
 	assert_output --partial "Host:        192.0.2.1 (IPv4) US"
 	assert_output --partial "Service:     sshd (22)"
 	assert_output --partial "Pressure:    85/100"
+	assert_output --partial "85% of threshold"
+	assert_output --partial "7 failed logins"
 	assert_output --partial "Ban:         temporary (10m)"
 	assert_output --partial "History:     2 prior bans"
 	assert_output --partial "Command:"
@@ -741,7 +745,7 @@ EOF
 	assert_output --partial "#0891b2"
 }
 
-@test "template render: html.entry.tpl contains pressure bar and detail rows" {
+@test "template render: html.entry.tpl contains pressure detail and severity rows" {
 	export HOST="198.51.100.5"
 	export HOST_VERSION="IPv4"
 	export COUNTRY_CODE="CN"
@@ -754,6 +758,7 @@ EOF
 	export PRESSURE_PCT_CLAMPED="100"
 	export PRESSURE_COLOR="#dc2626"
 	export WEIGHT="15"
+	export FAIL_COUNT="14"
 	export HALF_LIFE_FMT="1h"
 	export BAN_TYPE="escalated"
 	export BAN_TYPE_COLOR="#d97706"
@@ -772,6 +777,7 @@ EOF
 	assert_output --partial "dovecot"
 	assert_output --partial "120%"
 	assert_output --partial "#dc2626"
+	assert_output --partial "14 failed logins"
 }
 
 @test "template render: html.footer.tpl closes structure and shows version" {
