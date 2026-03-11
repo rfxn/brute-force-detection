@@ -36,19 +36,11 @@
 <tr>
 <td style="padding:4px 16px;color:#71717a;vertical-align:top;">Pressure</td>
 <td style="padding:4px 16px;color:#09090b;">
-{{PRESSURE}}/{{PRESSURE_TRIP}} &mdash; {{FAIL_COUNT}} failed logins, weight {{WEIGHT}}, half-life {{HALF_LIFE_FMT}}
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:4px;">
-<tr>
-<td style="background-color:#e4e4e7;border-radius:3px;padding:0;">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:{{PRESSURE_PCT_CLAMPED}}%;min-width:1px;">
-<tr>
-<td style="background-color:{{PRESSURE_COLOR}};height:8px;border-radius:3px;">&nbsp;</td>
-</tr>
-</table>
-</td>
-<td style="width:45px;padding-left:6px;font-size:11px;color:#71717a;white-space:nowrap;">{{PRESSURE_PCT}}%</td>
-</tr>
-</table>
+<span style="font-size:15px;font-weight:bold;color:{{PRESSURE_COLOR}};">{{PRESSURE_PCT}}%</span>
+<span style="font-size:13px;color:#09090b;"> of threshold</span>
+<span style="font-size:12px;color:#71717a;"> ({{PRESSURE}}/{{PRESSURE_TRIP}})</span>
+<br>
+<span style="font-size:12px;color:#71717a;">{{FAIL_COUNT}} failed logins &middot; weight {{WEIGHT}} &middot; half-life {{HALF_LIFE_FMT}}</span>
 </td>
 </tr>
 <!-- Ban -->
