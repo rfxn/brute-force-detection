@@ -2,6 +2,11 @@
 
   -- Bug Fixes --
 
+[Fix] bfd --scan: SCAN_TIMEOUT was not enforced for file-based rules (only
+      journal sources); watchdog background process now sends SIGTERM to the
+      scan process after SCAN_TIMEOUT seconds with a clear timeout message
+[Fix] check(): state_pressure_prune now skipped in scan mode (_SCAN_MODE=1);
+      scan operations must not mutate pressure.dat state mid-scan
 [Fix] tests/33-watch-mode.bats: replace inline eval+awk with bfd_load_function()
       for consistency with all other test files (F-059)
 [Fix] check_distributed: set LOG_FILE alert field to "(multiple)" for distributed
