@@ -697,9 +697,10 @@ EOF
 	assert_output --partial "Ban 1 of 3"
 	assert_output --partial "Host:        192.0.2.1 (IPv4) US"
 	assert_output --partial "Service:     sshd (22)"
-	assert_output --partial "7 logins x weight 10 = +70 this scan"
+	assert_output --partial "7 failed logins = +70 this scan"
 	assert_output --partial "85 accumulated pressure"
 	assert_output --partial "trips at 100"
+	assert_output --partial "weight 10"
 	assert_output --partial "Ban:         temporary (10m)"
 	assert_output --partial "History:     2 prior bans"
 	assert_output --partial "Command:"
@@ -777,10 +778,10 @@ EOF
 	assert_output --partial "198.51.100.5"
 	assert_output --partial "#d97706"
 	assert_output --partial "dovecot"
-	assert_output --partial "14 logins"
-	assert_output --partial "weight 15"
+	assert_output --partial "14 failed logins"
 	assert_output --partial "+210 this scan"
 	assert_output --partial "accumulated pressure"
+	assert_output --partial "weight 15"
 	assert_output --partial "trips at 100"
 }
 
@@ -1206,8 +1207,9 @@ EOF
 	assert_output --partial "BFD (Brute Force Detection) 2.0.1"
 	assert_output --partial "rfxn.com/projects/brute-force-detection"
 	# pressure formula chain in A-1 format
-	assert_output --partial "5 logins x weight 3 = +15 this scan"
+	assert_output --partial "5 failed logins = +15 this scan"
 	assert_output --partial "accumulated pressure"
+	assert_output --partial "weight 3"
 	# no summary for single entry
 	refute_output --partial "Summary"
 }
@@ -1295,8 +1297,8 @@ EOF
 	assert_success
 	# severity color from ban type (permanent: expiry=0)
 	assert_output --partial "background-color:#dc2626"
-	# A-1 formula chain: 5 logins * weight 1 = +5
-	assert_output --partial "logins"
+	# A-1 formula chain: 5 failed logins = +5
+	assert_output --partial "failed logins"
 	assert_output --partial "accumulated pressure"
 }
 

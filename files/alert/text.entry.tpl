@@ -2,8 +2,8 @@
 
   Host:        {{HOST}} ({{HOST_VERSION}}) {{COUNTRY_CODE}}
   Service:     {{SERVICE}} ({{PORTS}})
-  Pressure:    {{FAIL_COUNT}} logins x weight {{WEIGHT}} = +{{PRESSURE_CONTRIB}} this scan
-               {{PRESSURE}} accumulated pressure  *  trips at {{PRESSURE_TRIP}}  *  half-life {{HALF_LIFE_FMT}}
+  Pressure:    {{FAIL_COUNT}} failed logins = +{{PRESSURE_CONTRIB}} this scan
+               {{PRESSURE}} accumulated pressure * trips at {{PRESSURE_TRIP}} * weight {{WEIGHT}} * half-life {{HALF_LIFE_FMT}}
   Ban:         {{BAN_TYPE}}{{BAN_DURATION_DETAIL}}
 {{HISTORY_LINE}}
 {{ESCALATION_LINE}}
