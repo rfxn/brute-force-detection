@@ -2,6 +2,11 @@
 
   -- Bug Fixes --
 
+[Fix] tests/33-watch-mode.bats: replace inline eval+awk with bfd_load_function()
+      for consistency with all other test files (F-059)
+[Fix] check_distributed: set LOG_FILE alert field to "(multiple)" for distributed
+      subnet bans; _alert_set_entry_vars now shows "distributed subnet ban" instead
+      of misleading "systemd journal" in source logs section (F-089)
 [Fix] README: update plain-text rule count from 42 to 57 (lines 73, 96, 687)
 [Fix] validate_config: EMAIL_REPUTATION_LINKS warning now lists known providers
       (abuseipdb, shodan, virustotal, ipinfo, greynoise)

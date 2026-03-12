@@ -481,6 +481,14 @@ ${indented_logs}"
 			SOURCE_LOGS_SECTION_HTML=$(printf '<tr>\n<td colspan="2" style="padding:8px 16px;">\n<div style="background-color:#f4f4f5;border:1px solid #d4d4d8;border-radius:6px;padding:10px;font-family:&apos;Courier New&apos;,Courier,monospace;font-size:11px;color:#09090b;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;">%s</div>\n</td>\n</tr>' "$html_logs")
 			export SOURCE_LOGS_SECTION_HTML
 		fi
+	elif [ "$lp" = "(multiple)" ]; then
+		# distributed subnet ban — no single log source
+		SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (distributed subnet ban)"
+		export SOURCE_LOGS_SECTION_TEXT
+		# shellcheck disable=SC2089  # variable contains HTML with literal quotes, not shell quoting
+		SOURCE_LOGS_SECTION_HTML='<tr><td colspan="2" style="padding:8px 16px;color:#71717a;font-style:italic;">Source logs not available (distributed subnet ban)</td></tr>'
+		# shellcheck disable=SC2090  # variable contains HTML output
+		export SOURCE_LOGS_SECTION_HTML
 	elif [ -z "$lp" ] || [ ! -f "${lp:-/dev/null}" ]; then
 		# journal-based logs: no log file path available
 		SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (logs via systemd journal)"

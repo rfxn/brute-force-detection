@@ -15,11 +15,10 @@ load 'helpers/bfd-common'
 # into the current shell scope. Both functions depend only on bfd.lib.sh
 # (already sourced via bfd_common_setup) and config variables.
 _load_watch_functions() {
-	local bfd_file="$PROJECT_ROOT/files/bfd"
-	eval "$(awk '/^config_init\(\) \{/,/^\}/' "$bfd_file")"
-	eval "$(awk '/^_cleanup_common\(\) \{/,/^\}/' "$bfd_file")"
-	eval "$(awk '/^cleanup_watch\(\) \{/,/^\}/' "$bfd_file")"
-	eval "$(awk '/^reload_watch\(\) \{/,/^\}/' "$bfd_file")"
+	bfd_load_function config_init
+	bfd_load_function _cleanup_common
+	bfd_load_function cleanup_watch
+	bfd_load_function reload_watch
 }
 
 # _setup_watch_env: create a minimal BFD install directory suitable for
