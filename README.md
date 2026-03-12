@@ -799,7 +799,7 @@ BFD ships with 57 rules:
 | **SSH** | sshd, dropbear |
 | **Mail** | dovecot, courier, postfix, postscreen, sendmail, exim_authfail, exim_nxuser, vpopmail, cyrus-imap, sogo |
 | **FTP** | vsftpd, vsftpd2, proftpd, pure-ftpd |
-| **Web** | apache-auth, nginx-http-auth, modsec, wordpress, roundcube, http_401, lighttpd, phpmyadmin, gitea, nextcloud, vaultwarden, drupal, jellyfin |
+| **Web** | apache-auth, nginx-http-auth, mod_sec, wordpress, roundcube, http_401, lighttpd, phpmyadmin, gitea, nextcloud, vaultwarden, drupal, jellyfin |
 | **Panel** | cpanel, plesk, webmin, directadmin, interworx, cockpit, gitlab, grafana, proxmox, guacamole |
 | **Auth** | pam_generic, xrdp |
 | **Database** | mysqld-auth, postgresql, mongodb |

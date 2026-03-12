@@ -1,5 +1,11 @@
 2.0.1:
 
+  -- Changes --
+
+[Change] Rename modsec rule to mod_sec for naming consistency with other
+      underscore-delimited multi-word rule names; LOG_TAG="httpd.modsec"
+      preserved (Apache log identifier, not a BFD rule name)
+
   -- New Features --
 
 [New] geoip_lib integration: alert templates now show full country names

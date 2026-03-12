@@ -310,9 +310,9 @@ Feb 22 10:15:03 myhost ipop3d[12345]: Login failed user=admin auth=admin host=[1
 # NOTE: SiteWorx (SW) login failure
 2024-02-22 10:15:03 SW 203.0.113.55 user@example.com
 
-# --- modsec ---
+# --- mod_sec ---
 
-# RULE: modsec
+# RULE: mod_sec
 # PATTERN: \[client <HOST>.*ModSecurity: Access denied
 # EXPECT: 203.0.113.10
 [Wed Feb 22 10:15:03.123456 2024] [security2:error] [pid 12345] [client 203.0.113.10:54321] ModSecurity: Access denied with code 403 (phase 2). [id "1234"]
