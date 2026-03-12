@@ -560,7 +560,7 @@ SCRIPT
 	[ -f "$marker" ]
 }
 
-@test "execute_ban: sets BAN_COMMAND global for custom backend" {
+@test "execute_ban: custom backend stores BAN_COMMAND_TEMPLATE unexpanded" {
 	_FW_BACKEND="custom"
 	BAN_COMMAND_TEMPLATE="/bin/true -d \$ATTACK_HOST"
 	execute_ban "192.0.2.1" "sshd" "0" "22"
