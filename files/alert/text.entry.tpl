@@ -1,6 +1,6 @@
 --- Ban {{ENTRY_NUM}} of {{ENTRY_TOTAL}} ------------------------------------------
 
-  Host:        {{HOST}} ({{HOST_VERSION}}) {{COUNTRY_CODE}}
+  Host:        {{HOST}} ({{HOST_VERSION}}) {{COUNTRY_DISPLAY}}
   Service:     {{SERVICE}} ({{PORTS}})
   Pressure:    {{FAIL_COUNT}} failed logins = +{{PRESSURE_CONTRIB}} this scan
                {{PRESSURE}} accumulated pressure * trips at {{PRESSURE_TRIP}} * weight {{WEIGHT}} * half-life {{HALF_LIFE_FMT}}

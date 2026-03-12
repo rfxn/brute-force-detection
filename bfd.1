@@ -708,6 +708,7 @@ Available template variables include:
 .B {{BAN_TYPE}}\fR,
 .B {{BAN_DURATION}}\fR,
 .B {{COUNTRY_CODE}}\fR,
+.B {{COUNTRY_DISPLAY}}\fR,
 .B {{SOURCE_LOGS}}\fR,
 .B {{REPUTATION_LINKS_TEXT}}\fR,
 and others.
@@ -827,7 +828,17 @@ Structured logging library (sourced by bfd.lib.sh).
 Log tracking library for incremental reads (sourced by bfd.lib.sh).
 .TP
 .I /usr/local/bfd/internals/alert_lib.sh
-Email alert library (sourced by bfd.lib.sh).
+Alert delivery library (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_alert.sh
+BFD-specific alert functions and country display enrichment (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/geoip_lib.sh
+GeoIP metadata library \(em country names, continent mapping, CIDR download
+(sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/pkg_lib.sh
+Packaging utility library (sourced by install.sh and uninstall.sh).
 .TP
 .I /usr/local/bfd/internals/internals.conf
 Internal/derived variables.
@@ -848,7 +859,9 @@ IP-to-country lookup database.
 Track log \(em byte-offset log reader CLI wrapper.
 .TP
 .I /usr/local/bfd/update-ipcountry.sh
-Script to download and update the IP-to-country database.
+Script to download per-country CIDR zones (ipverse.net/ipdeny.com cascade) and
+rebuild the IP-to-country database. Run automatically at install time
+(background) and refreshed via cron.daily when data is older than 30 days.
 .TP
 .I /usr/local/bfd/alert/
 Email template partials directory (8 files: text.*.tpl, html.*.tpl).

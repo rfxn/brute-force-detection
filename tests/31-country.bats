@@ -246,3 +246,100 @@ teardown() {
 	assert_success
 	assert_output "CN"
 }
+
+# ============================================================
+# COUNTRY_DISPLAY enrichment via _alert_set_entry_vars()
+# ============================================================
+
+# helper: minimal _alert_set_entry_vars call with country lookup
+_run_entry_vars_country() {
+	local ip="$1"
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	local line="${ip}|sshd|22|5000|0|ban|0||root|10|300|1|5"
+	_alert_set_entry_vars "$line" 1 1
+}
+
+@test "COUNTRY_DISPLAY: geoip_lib present shows 'China (CN)'" {
+	# geoip_lib.sh is sourced by bfd.lib.sh; geoip_cc_name should be available
+	declare -f geoip_cc_name >/dev/null 2>&1 || skip "geoip_lib not loaded"
+	_run_entry_vars_country "192.0.2.128"
+	[ "$COUNTRY_CODE" = "CN" ]
+	[ "$COUNTRY_DISPLAY" = "China (CN)" ]
+}
+
+@test "COUNTRY_DISPLAY: geoip_lib present shows 'Russia (RU)'" {
+	declare -f geoip_cc_name >/dev/null 2>&1 || skip "geoip_lib not loaded"
+	_run_entry_vars_country "198.51.100.50"
+	[ "$COUNTRY_CODE" = "RU" ]
+	[ "$COUNTRY_DISPLAY" = "Russia (RU)" ]
+}
+
+@test "COUNTRY_DISPLAY: geoip_lib present shows 'United States (US)'" {
+	declare -f geoip_cc_name >/dev/null 2>&1 || skip "geoip_lib not loaded"
+	_run_entry_vars_country "203.0.113.100"
+	[ "$COUNTRY_CODE" = "US" ]
+	[ "$COUNTRY_DISPLAY" = "United States (US)" ]
+}
+
+@test "COUNTRY_DISPLAY: unknown IP shows '--'" {
+	_run_entry_vars_country "198.51.100.200"
+	[ "$COUNTRY_CODE" = "--" ]
+	[ "$COUNTRY_DISPLAY" = "--" ]
+}
+
+@test "COUNTRY_DISPLAY: unknown CC returns bare code (geoip_cc_name passthrough)" {
+	# XX is in our test DB but not in geoip_cc_name's case table — returns bare "XX"
+	declare -f geoip_cc_name >/dev/null 2>&1 || skip "geoip_lib not loaded"
+	_run_entry_vars_country "192.0.2.1"
+	[ "$COUNTRY_CODE" = "XX" ]
+	[ "$COUNTRY_DISPLAY" = "XX" ]
+}
+
+@test "COUNTRY_DISPLAY: graceful degradation without geoip_lib" {
+	# temporarily unset geoip_cc_name to simulate lib not loaded
+	local _saved_func
+	_saved_func=$(declare -f geoip_cc_name 2>/dev/null) || true
+	unset -f geoip_cc_name 2>/dev/null || true
+	_run_entry_vars_country "192.0.2.128"
+	[ "$COUNTRY_CODE" = "CN" ]
+	[ "$COUNTRY_DISPLAY" = "CN" ]
+	# restore function
+	if [ -n "$_saved_func" ]; then
+		eval "$_saved_func"
+	fi
+}
+
+# ============================================================
+# COUNTRY_DISPLAY_TG — Telegram MarkdownV2-escaped variant
+# ============================================================
+
+@test "COUNTRY_DISPLAY_TG: parentheses escaped for MarkdownV2" {
+	declare -f geoip_cc_name >/dev/null 2>&1 || skip "geoip_lib not loaded"
+	_run_entry_vars_country "192.0.2.128"
+	[ "$COUNTRY_DISPLAY" = "China (CN)" ]
+	[ "$COUNTRY_DISPLAY_TG" = 'China \(CN\)' ]
+}
+
+@test "COUNTRY_DISPLAY_TG: bare code without parens unchanged" {
+	# temporarily unset geoip_cc_name to simulate lib not loaded
+	local _saved_func
+	_saved_func=$(declare -f geoip_cc_name 2>/dev/null) || true
+	unset -f geoip_cc_name 2>/dev/null || true
+	_run_entry_vars_country "192.0.2.128"
+	[ "$COUNTRY_DISPLAY" = "CN" ]
+	[ "$COUNTRY_DISPLAY_TG" = "CN" ]
+	# restore function
+	if [ -n "$_saved_func" ]; then
+		eval "$_saved_func"
+	fi
+}
+
+@test "COUNTRY_DISPLAY_TG: dash-dash unchanged" {
+	_run_entry_vars_country "198.51.100.200"
+	[ "$COUNTRY_DISPLAY" = "--" ]
+	[ "$COUNTRY_DISPLAY_TG" = '\-\-' ]
+}

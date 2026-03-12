@@ -321,3 +321,14 @@ else
 	postinfo
 	pkg_success "BFD ${VER} installation complete"
 fi
+
+# Non-blocking initial country database download (runs in background).
+# If download fails (no network, no curl/wget), the stub ipcountry.dat
+# remains and BFD operates without country data. || true prevents
+# background failure from propagating; disown avoids set -e interaction.
+# Subshell exec closes inherited pipe fds to prevent caller hang.
+if [ -x "$INSPATH/update-ipcountry.sh" ]; then
+	echo "Downloading IP country database in background..."
+	( exec >/dev/null 2>&1; "$INSPATH/update-ipcountry.sh" || true ) &  # non-fatal: network may be unavailable
+	disown 2>/dev/null  # safe: may not be available in all shells
+fi

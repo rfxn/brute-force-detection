@@ -359,7 +359,7 @@ Additional variables (`LOG_SOURCE`, `LOCK_FILE_TIMEOUT`, `BAN_RETRY_COUNT`, `OUT
 
 Country weighting is active automatically when `pressure-country.conf` contains uncommented entries. No toggle is required — if the file has entries, they are applied; if all entries are commented out (the default), country weighting is off.
 
-The country database (`ipcountry.dat`) maps IPv4 addresses to 2-letter country codes. Update it periodically with `update-ipcountry.sh` (or the pre-built file ships with BFD).
+The country database (`ipcountry.dat`) maps IPv4 addresses to 2-letter country codes. It is downloaded automatically at install time (background) and refreshed via `cron.daily` when data is older than 30 days. Manual updates can be run with `update-ipcountry.sh`, which downloads per-country CIDR zones from ipverse.net (ipdeny.com fallback) and converts them to BFD's integer-range lookup format.
 
 The multiplier file (`pressure-country.conf`) uses `CC=N` format where N is weight×10 (e.g., `CN=20` means 2.0× weight, `US=10` means 1.0× = no change). Unlisted countries default to 1.0×.
 
@@ -426,6 +426,7 @@ To customize, edit the template files directly. On upgrade, `importconf` compare
 | `{{BAN_TYPE}}` | `Temporary` | Ban type (Temporary/Permanent/Escalated) |
 | `{{BAN_DURATION}}` | `10m` | Human-readable duration |
 | `{{COUNTRY_CODE}}` | `CN` | 2-letter country code |
+| `{{COUNTRY_DISPLAY}}` | `China (CN)` | Country name with code (degrades to bare code) |
 | `{{SOURCE_LOGS}}` | *(log lines)* | Sanitized source log excerpt |
 | `{{REPUTATION_LINKS_TEXT}}` | `AbuseIPDB: https://...` | Text-format reputation links |
 

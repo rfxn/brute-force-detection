@@ -432,6 +432,29 @@ _alert_set_entry_vars() {
 		COUNTRY_FLAG=""
 	fi
 
+	# COUNTRY_DISPLAY: human-friendly country string for templates
+	# Three cases: "China (CN)" when geoip_lib loaded | "CN" when lib absent | "--" when no CC
+	if [ -n "$cc" ]; then
+		if declare -f geoip_cc_name >/dev/null 2>&1; then
+			local _cc_name
+			_cc_name=$(geoip_cc_name "$cc")
+			if [ "$_cc_name" != "$cc" ]; then
+				export COUNTRY_DISPLAY="${_cc_name} (${cc})"
+			else
+				export COUNTRY_DISPLAY="$cc"
+			fi
+		else
+			export COUNTRY_DISPLAY="$cc"
+		fi
+	else
+		export COUNTRY_DISPLAY="--"
+	fi
+
+	# COUNTRY_DISPLAY_TG: Telegram MarkdownV2-escaped variant
+	# Parentheses in "China (CN)" are MarkdownV2 special chars; escape for Telegram templates
+	export COUNTRY_DISPLAY_TG
+	COUNTRY_DISPLAY_TG=$(_alert_telegram_escape "$COUNTRY_DISPLAY")
+
 	# reputation links
 	local rep_config="${EMAIL_REPUTATION_LINKS:-}"
 	if [ -n "$rep_config" ]; then

@@ -418,8 +418,10 @@ are applied; if all entries are commented out (the default), country weighting
 is off.
 
 The country database (ipcountry.dat) maps IPv4 addresses to 2-letter country
-codes. Update it periodically with update-ipcountry.sh (or the pre-built file
-ships with BFD).
+codes. It is downloaded automatically at install time (background) and refreshed
+via cron.daily when data is older than 30 days. Manual updates can be run with
+update-ipcountry.sh, which downloads per-country CIDR zones from ipverse.net
+(ipdeny.com fallback) and converts them to BFD's integer-range lookup format.
 
 The multiplier file (pressure-country.conf) uses CC=N format where N is
 weight*10 (e.g., CN=20 means 2.0x weight, US=10 means 1.0x = no change).
