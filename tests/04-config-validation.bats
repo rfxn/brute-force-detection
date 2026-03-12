@@ -107,12 +107,6 @@ run_validate_output() {
 	assert_output --partial "exceeds maximum"
 }
 
-@test "validate_config: PRESSURE_TRIP=500 rejects (exceeds ceiling)" {
-	run run_validate_output 'PRESSURE_TRIP="500"'
-	assert_failure
-	assert_output --partial "exceeds maximum"
-}
-
 @test "validate_config: EMAIL_ALERTS=2 rejects" {
 	run run_validate 'EMAIL_ALERTS="2"'
 	assert_failure

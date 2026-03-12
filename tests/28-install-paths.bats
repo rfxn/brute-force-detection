@@ -187,10 +187,6 @@ teardown() {
 
 # --- Man page ---
 
-@test "install-paths: bfd.1 man page exists in source tree" {
-	[ -f "$PROJECT_ROOT/bfd.1" ]
-}
-
 @test "install-paths: bfd.1 contains /usr/local/bfd default paths" {
 	run grep -c '/usr/local/bfd' "$PROJECT_ROOT/bfd.1"
 	assert_success
@@ -210,10 +206,6 @@ teardown() {
 }
 
 # --- Bash tab completion ---
-
-@test "install-paths: bfd.bash-completion exists in source tree" {
-	[ -f "$PROJECT_ROOT/bfd.bash-completion" ]
-}
 
 @test "install-paths: bfd.bash-completion contains /usr/local/bfd default paths" {
 	run grep -c '/usr/local/bfd' "$PROJECT_ROOT/bfd.bash-completion"
