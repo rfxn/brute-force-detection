@@ -2,6 +2,10 @@
 
   -- Bug Fixes --
 
+[Fix] README: update plain-text rule count from 42 to 57 (lines 73, 96, 687)
+[Fix] validate_config: EMAIL_REPUTATION_LINKS warning now lists known providers
+      (abuseipdb, shodan, virustotal, ipinfo, greynoise)
+
 [Fix] Slack API token: write token to chmod 600 temp file and pass via
       curl -K to prevent exposure in /proc/PID/cmdline; affects
       chat.postMessage, files.getUploadURLExternal, and
