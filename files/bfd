@@ -395,8 +395,11 @@ check() {
 	_build_ignore_cache "$IGNORE_HOST_FILES" "$_IGNORE_CACHE_FILE"
 
 	# prune expired events once per run (10 half-lives = negligible contribution)
-	local prune_window=$((PRESSURE_HALF_LIFE * 10))
-	state_pressure_prune "$INSTALL_PATH" "$prune_window" "$UTIME"
+	# scan mode skips pruning — pressure.dat state must not be mutated during a scan
+	if [ "${_SCAN_MODE:-}" != "1" ]; then
+		local prune_window=$((PRESSURE_HALF_LIFE * 10))
+		state_pressure_prune "$INSTALL_PATH" "$prune_window" "$UTIME"
+	fi
 
 	# prune attack pool periodically (once per 24h) — cron.daily skips during watch mode
 	if [ "${_SCAN_MODE:-}" != "1" ]; then
@@ -1474,8 +1477,14 @@ case "${1:-}" in
 	_SCAN_MODE=1
 	_SCAN_LOG_PAIRS=""
 	eout "scan: processing ${_SCAN_RULE:-all rules} (max_lines=$SCAN_MAX_LINES, timeout=${SCAN_TIMEOUT}s, dry_run=$DRY_RUN)" le
+	# watchdog: kill this process with SIGTERM if scan exceeds SCAN_TIMEOUT seconds
+	( sleep "$SCAN_TIMEOUT"; kill -TERM $$ ) >/dev/null 2>&1 &
+	_scan_watchdog_pid=$!
+	trap 'kill "$_scan_watchdog_pid" 2>/dev/null; eout "scan: timed out after ${SCAN_TIMEOUT}s -- use --scan-timeout=N to extend" le; exit 1' TERM
 	process_unbans "$INSTALL_PATH" "$UTIME"
 	check
+	kill "$_scan_watchdog_pid" 2>/dev/null
+	trap cleanup TERM
 	# force-flush digest spool after scan (one-shot operation)
 	if [ "${EMAIL_ALERTS:-0}" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
 		_bfd_digest_flush

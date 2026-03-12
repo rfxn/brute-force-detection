@@ -284,6 +284,30 @@ teardown() {
 	assert_output ""
 }
 
+@test "check_distributed: alert entry has (multiple) as LOG_FILE field" {
+	local now=1000000
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	local alerts_file="$TEST_TMPDIR/alerts"
+	touch "$alerts_file"
+
+	for i in 1 2 3; do
+		echo "$now 192.0.2.${i} sshd" >> "$events_file"
+	done
+
+	SUBNET_TRIG="3"
+	SUBNET_MASK="24"
+	SUBNET_MASK_V6="48"
+	TRIG_WINDOW="300"
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="admin@example.com"
+
+	check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$now" "$alerts_file" >/dev/null
+
+	# field 8 must be "(multiple)" — not empty — for correct distributed ban labeling
+	run awk -F'|' '{print $8}' "$alerts_file"
+	assert_output "(multiple)"
+}
+
 @test "check_distributed: ban expiry computed from BAN_DURATION" {
 	local now=1000000
 	local events_file="$INSTALL_PATH/tmp/pressure.dat"

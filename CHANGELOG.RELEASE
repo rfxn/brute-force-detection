@@ -2,6 +2,16 @@
 
   -- Bug Fixes --
 
+[Fix] bfd --scan: SCAN_TIMEOUT was not enforced for file-based rules (only
+      journal sources); watchdog background process now sends SIGTERM to the
+      scan process after SCAN_TIMEOUT seconds with a clear timeout message
+[Fix] check(): state_pressure_prune now skipped in scan mode (_SCAN_MODE=1);
+      scan operations must not mutate pressure.dat state mid-scan
+[Fix] tests/33-watch-mode.bats: replace inline eval+awk with bfd_load_function()
+      for consistency with all other test files (F-059)
+[Fix] check_distributed: set LOG_FILE alert field to "(multiple)" for distributed
+      subnet bans; _alert_set_entry_vars now shows "distributed subnet ban" instead
+      of misleading "systemd journal" in source logs section (F-089)
 [Fix] README: update plain-text rule count from 42 to 57 (lines 73, 96, 687)
 [Fix] validate_config: EMAIL_REPUTATION_LINKS warning now lists known providers
       (abuseipdb, shodan, virustotal, ipinfo, greynoise)
@@ -280,6 +290,9 @@
       "Failures" across all text/JSON/CSV views for clarity
 [Change] Events per-IP: append recent log activity section filtered by
       rule detection patterns; EMAIL_LOGLINES default reduced from 50 to 5
+[Change] elog_lib.sh updated to v1.0.3: host field in JSON and syslog UDP
+      output now resolves FQDN via hostname -f with short-name fallback; aligns
+      with RFC 5424 HOSTNAME recommendation for multi-domain log aggregation
 [Change] tlog_lib.sh updated to canonical 2.0.3: rotation refactored with
       pipe fallback for disk-full; journal flock support; cursor validation
       hardening

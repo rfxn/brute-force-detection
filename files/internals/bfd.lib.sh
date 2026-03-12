@@ -2160,7 +2160,7 @@ check_distributed() {
 				"$unique_count" "--" "$ban_action" "$_dist_duration" "all" \
 				"0" "subnet"
 			if [ "$EMAIL_ALERTS" = "1" ] && [ "$DRY_RUN" != "1" ]; then
-				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}||${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}|1|0" >> "$alerts_file"
+				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}|(multiple)|${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}|1|0" >> "$alerts_file"
 			fi
 		fi
 	done < <(count_subnet_attackers "$install_path" "$window" "$now" \
