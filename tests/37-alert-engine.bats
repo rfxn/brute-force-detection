@@ -673,6 +673,7 @@ EOF
 	export HOST="192.0.2.1"
 	export HOST_VERSION="IPv4"
 	export COUNTRY_CODE="US"
+	export COUNTRY_DISPLAY="United States (US)"
 	export SERVICE="sshd"
 	export PORTS="22"
 	export PRESSURE="85"
@@ -695,7 +696,7 @@ EOF
 	run _alert_tpl_render "${PROJECT_ROOT}/files/alert/text.entry.tpl"
 	assert_success
 	assert_output --partial "Ban 1 of 3"
-	assert_output --partial "Host:        192.0.2.1 (IPv4) US"
+	assert_output --partial "Host:        192.0.2.1 (IPv4) United States (US)"
 	assert_output --partial "Service:     sshd (22)"
 	assert_output --partial "7 failed logins = +70 this scan"
 	assert_output --partial "85 accumulated pressure"
@@ -751,6 +752,7 @@ EOF
 	export HOST="198.51.100.5"
 	export HOST_VERSION="IPv4"
 	export COUNTRY_CODE="CN"
+	export COUNTRY_DISPLAY="China (CN)"
 	export COUNTRY_FLAG=""
 	export SERVICE="dovecot"
 	export PORTS="110,143"
@@ -802,6 +804,7 @@ EOF
 
 @test "template render: empty HISTORY_LINE produces no label text" {
 	export HOST="192.0.2.1" HOST_VERSION="IPv4" COUNTRY_CODE="US"
+	export COUNTRY_DISPLAY="United States (US)"
 	export SERVICE="sshd" PORTS="22" PRESSURE="50" PRESSURE_TRIP="100"
 	export PRESSURE_BAR="[==========          ] 50%"
 	export WEIGHT="10" HALF_LIFE_FMT="30m"
@@ -817,6 +820,7 @@ EOF
 
 @test "template render: populated HISTORY_LINE appears in output" {
 	export HOST="192.0.2.1" HOST_VERSION="IPv4" COUNTRY_CODE=""
+	export COUNTRY_DISPLAY="--"
 	export SERVICE="sshd" PORTS="22" PRESSURE="100" PRESSURE_TRIP="100"
 	export PRESSURE_BAR="[====================] 100%"
 	export WEIGHT="10" HALF_LIFE_FMT="30m"
@@ -833,6 +837,7 @@ EOF
 
 @test "template render: multi-line SOURCE_LOGS_SECTION_TEXT renders correctly" {
 	export HOST="203.0.113.1" HOST_VERSION="IPv4" COUNTRY_CODE="RU"
+	export COUNTRY_DISPLAY="Russia (RU)"
 	export SERVICE="sshd" PORTS="22" PRESSURE="90" PRESSURE_TRIP="100"
 	export PRESSURE_BAR="[==================  ] 90%"
 	export WEIGHT="10" HALF_LIFE_FMT="30m"
@@ -854,6 +859,7 @@ EOF
 
 @test "template render: empty HTML conditional rows leave no artifacts" {
 	export HOST="192.0.2.1" HOST_VERSION="IPv4" COUNTRY_CODE=""
+	export COUNTRY_DISPLAY="--"
 	export COUNTRY_FLAG="" SERVICE="sshd" PORTS="22"
 	export PRESSURE="50" PRESSURE_TRIP="100" PRESSURE_PCT="50"
 	export PRESSURE_PCT_CLAMPED="50" PRESSURE_COLOR="#16a34a"
@@ -1082,7 +1088,7 @@ EOF
 	[[ "$SOURCE_LOGS_SECTION_HTML" == *"Failed password"* ]]
 }
 
-@test "_alert_set_entry_vars: country code defaults to --" {
+@test "_alert_set_entry_vars: country code defaults to -- and COUNTRY_DISPLAY to --" {
 	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
 	_FW_BACKEND="custom"
 	BAN_ESCALATE_AFTER="0"
@@ -1094,7 +1100,26 @@ EOF
 	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ "$COUNTRY_CODE" = "--" ]
+	[ "$COUNTRY_DISPLAY" = "--" ]
 	INSTALL_PATH="$_old_ip"
+}
+
+@test "_alert_set_entry_vars: COUNTRY_DISPLAY includes full name when geoip_lib loaded" {
+	declare -f geoip_cc_name >/dev/null 2>&1 || skip "geoip_lib not loaded"
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	BAN_ESCALATION="none"
+	EMAIL_REPUTATION_LINKS=""
+	# create ipcountry.dat with CN mapping for 192.0.2.128
+	mkdir -p "$INSTALL_PATH"
+	cat > "$INSTALL_PATH/ipcountry.dat" <<'EOF'
+3221226112 3221226239 CN
+EOF
+	local line="192.0.2.128|sshd|22|5000|0|ban|0||root|10|300|1|5"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$COUNTRY_CODE" = "CN" ]
+	[ "$COUNTRY_DISPLAY" = "China (CN)" ]
 }
 
 @test "_alert_set_entry_vars: FAIL_COUNT from 13th field" {

@@ -49,6 +49,12 @@ if [ -f "$_internals_dir/bfd_alert.sh" ]; then
 	# shellcheck disable=SC1091
 	. "$_internals_dir/bfd_alert.sh"
 fi
+
+# Source shared GeoIP metadata library (country names, continents, validation)
+if [ -f "$_internals_dir/geoip_lib.sh" ]; then
+	# shellcheck disable=SC1091
+	. "$_internals_dir/geoip_lib.sh"
+fi
 unset _internals_dir
 
 # _bfd_journal_register_all: populate journal filter mappings for all BFD rules

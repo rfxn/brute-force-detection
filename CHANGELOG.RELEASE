@@ -1,5 +1,14 @@
 2.0.1:
 
+  -- New Features --
+
+[New] geoip_lib integration: alert templates now show full country names
+      (e.g. "China (CN)" instead of bare "CN") via shared geoip_lib.sh;
+      graceful degradation to bare code when library not present
+[New] COUNTRY_DISPLAY export in _alert_set_entry_vars() for human-friendly
+      country display across all 5 alert channels (text, HTML, Slack,
+      Telegram, Discord)
+
   -- Bug Fixes --
 
 [Fix] bfd --scan: SCAN_TIMEOUT was not enforced for file-based rules (only

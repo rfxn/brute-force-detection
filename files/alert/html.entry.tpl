@@ -30,7 +30,7 @@
 <!-- Host -->
 <tr>
 <td style="padding:4px 16px;color:#71717a;vertical-align:top;">Host</td>
-<td style="padding:4px 16px;color:#09090b;">{{HOST}} ({{HOST_VERSION}}) {{COUNTRY_CODE}}</td>
+<td style="padding:4px 16px;color:#09090b;">{{HOST}} ({{HOST_VERSION}}) {{COUNTRY_DISPLAY}}</td>
 </tr>
 <!-- Pressure -->
 <tr>
