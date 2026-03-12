@@ -285,6 +285,9 @@
       "Failures" across all text/JSON/CSV views for clarity
 [Change] Events per-IP: append recent log activity section filtered by
       rule detection patterns; EMAIL_LOGLINES default reduced from 50 to 5
+[Change] elog_lib.sh updated to v1.0.3: host field in JSON and syslog UDP
+      output now resolves FQDN via hostname -f with short-name fallback; aligns
+      with RFC 5424 HOSTNAME recommendation for multi-domain log aggregation
 [Change] tlog_lib.sh updated to canonical 2.0.3: rotation refactored with
       pipe fallback for disk-full; journal flock support; cursor validation
       hardening
