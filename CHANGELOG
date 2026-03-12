@@ -57,6 +57,8 @@
 [Fix] install.sh: background update-ipcountry.sh subshell inherited parent
       pipe fd causing hang when install.sh invoked via pipe (e.g. 2>&1 | tee);
       use exec >/dev/null 2>&1 at subshell level to close inherited fds
+[Fix] bfd.1: add geoip_lib.sh, bfd_alert.sh, and pkg_lib.sh to FILES section;
+      all internal libraries now documented in man page
 
   -- Enhancements --
 
