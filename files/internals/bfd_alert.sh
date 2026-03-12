@@ -450,6 +450,11 @@ _alert_set_entry_vars() {
 		export COUNTRY_DISPLAY="--"
 	fi
 
+	# COUNTRY_DISPLAY_TG: Telegram MarkdownV2-escaped variant
+	# Parentheses in "China (CN)" are MarkdownV2 special chars; escape for Telegram templates
+	export COUNTRY_DISPLAY_TG
+	COUNTRY_DISPLAY_TG=$(_alert_telegram_escape "$COUNTRY_DISPLAY")
+
 	# reputation links
 	local rep_config="${EMAIL_REPUTATION_LINKS:-}"
 	if [ -n "$rep_config" ]; then

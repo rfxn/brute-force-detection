@@ -8,6 +8,8 @@
 [New] COUNTRY_DISPLAY export in _alert_set_entry_vars() for human-friendly
       country display across all 5 alert channels (text, HTML, Slack,
       Telegram, Discord)
+[New] COUNTRY_DISPLAY_TG export: MarkdownV2-escaped variant of COUNTRY_DISPLAY
+      for Telegram templates; parentheses in "China (CN)" properly escaped
 
   -- Bug Fixes --
 
@@ -24,6 +26,10 @@
 [Fix] README: update plain-text rule count from 42 to 57 (lines 73, 96, 687)
 [Fix] validate_config: EMAIL_REPUTATION_LINKS warning now lists known providers
       (abuseipdb, shodan, virustotal, ipinfo, greynoise)
+[Fix] telegram.entry.tpl: use {{COUNTRY_DISPLAY_TG}} instead of {{COUNTRY_DISPLAY}}
+      to prevent MarkdownV2 parse errors from unescaped parentheses
+[Fix] bfd.1 and README: add {{COUNTRY_DISPLAY}} to template variable documentation
+      alongside existing {{COUNTRY_CODE}}
 
 [Fix] Slack API token: write token to chmod 600 temp file and pass via
       curl -K to prevent exposure in /proc/PID/cmdline; affects

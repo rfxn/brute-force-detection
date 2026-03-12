@@ -312,3 +312,34 @@ _run_entry_vars_country() {
 		eval "$_saved_func"
 	fi
 }
+
+# ============================================================
+# COUNTRY_DISPLAY_TG — Telegram MarkdownV2-escaped variant
+# ============================================================
+
+@test "COUNTRY_DISPLAY_TG: parentheses escaped for MarkdownV2" {
+	declare -f geoip_cc_name >/dev/null 2>&1 || skip "geoip_lib not loaded"
+	_run_entry_vars_country "192.0.2.128"
+	[ "$COUNTRY_DISPLAY" = "China (CN)" ]
+	[ "$COUNTRY_DISPLAY_TG" = 'China \(CN\)' ]
+}
+
+@test "COUNTRY_DISPLAY_TG: bare code without parens unchanged" {
+	# temporarily unset geoip_cc_name to simulate lib not loaded
+	local _saved_func
+	_saved_func=$(declare -f geoip_cc_name 2>/dev/null) || true
+	unset -f geoip_cc_name 2>/dev/null || true
+	_run_entry_vars_country "192.0.2.128"
+	[ "$COUNTRY_DISPLAY" = "CN" ]
+	[ "$COUNTRY_DISPLAY_TG" = "CN" ]
+	# restore function
+	if [ -n "$_saved_func" ]; then
+		eval "$_saved_func"
+	fi
+}
+
+@test "COUNTRY_DISPLAY_TG: dash-dash unchanged" {
+	_run_entry_vars_country "198.51.100.200"
+	[ "$COUNTRY_DISPLAY" = "--" ]
+	[ "$COUNTRY_DISPLAY_TG" = '\-\-' ]
+}

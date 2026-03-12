@@ -426,6 +426,7 @@ To customize, edit the template files directly. On upgrade, `importconf` compare
 | `{{BAN_TYPE}}` | `Temporary` | Ban type (Temporary/Permanent/Escalated) |
 | `{{BAN_DURATION}}` | `10m` | Human-readable duration |
 | `{{COUNTRY_CODE}}` | `CN` | 2-letter country code |
+| `{{COUNTRY_DISPLAY}}` | `China (CN)` | Country name with code (degrades to bare code) |
 | `{{SOURCE_LOGS}}` | *(log lines)* | Sanitized source log excerpt |
 | `{{REPUTATION_LINKS_TEXT}}` | `AbuseIPDB: https://...` | Text-format reputation links |
 
