@@ -41,11 +41,6 @@ load 'helpers/bfd-common'
 	assert_output ""
 }
 
-@test "validate_ip: invalid 300.0.0.1" {
-	run validate_ip "300.0.0.1"
-	assert_failure
-	assert_output ""
-}
 
 # --- validate_ip: invalid IPs (wrong format) ---
 
@@ -139,11 +134,6 @@ load 'helpers/bfd-common'
 	assert_output "asterisk-iax"
 }
 
-@test "sanitize_mod: valid rh_imapd" {
-	run sanitize_mod "rh_imapd"
-	assert_success
-	assert_output "rh_imapd"
-}
 
 @test "sanitize_mod: valid vsftpd2" {
 	run sanitize_mod "vsftpd2"

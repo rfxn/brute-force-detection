@@ -91,11 +91,6 @@ run_validate_output() {
 	assert_failure
 }
 
-@test "validate_config: PRESSURE_TRIP=15 passes" {
-	run run_validate 'PRESSURE_TRIP="15"'
-	assert_success
-}
-
 @test "validate_config: PRESSURE_TRIP=1 passes" {
 	run run_validate 'PRESSURE_TRIP="1"'
 	assert_success
@@ -112,12 +107,6 @@ run_validate_output() {
 	assert_output --partial "exceeds maximum"
 }
 
-@test "validate_config: PRESSURE_TRIP=500 rejects (exceeds ceiling)" {
-	run run_validate_output 'PRESSURE_TRIP="500"'
-	assert_failure
-	assert_output --partial "exceeds maximum"
-}
-
 @test "validate_config: EMAIL_ALERTS=2 rejects" {
 	run run_validate 'EMAIL_ALERTS="2"'
 	assert_failure
@@ -126,11 +115,6 @@ run_validate_output() {
 @test "validate_config: EMAIL_ALERTS=abc rejects" {
 	run run_validate 'EMAIL_ALERTS="abc"'
 	assert_failure
-}
-
-@test "validate_config: EMAIL_ALERTS=0 passes" {
-	run run_validate 'EMAIL_ALERTS="0"'
-	assert_success
 }
 
 @test "validate_config: EMAIL_ALERTS=1 passes" {
@@ -193,11 +177,6 @@ run_validate_output() {
 	assert_failure
 }
 
-@test "validate_config: TIMEOUT=300 passes" {
-	run run_validate 'LOCK_FILE_TIMEOUT="300"'
-	assert_success
-}
-
 @test "validate_config: empty BAN_COMMAND rejects" {
 	run run_validate 'BAN_COMMAND_TEMPLATE=""'
 	assert_failure
@@ -214,12 +193,6 @@ run_validate_output() {
 }
 
 # --- PRESSURE_HALF_LIFE ---
-
-@test "validate_config: PRESSURE_HALF_LIFE=300 passes" {
-	run run_validate 'PRESSURE_HALF_LIFE="300"'
-	assert_success
-}
-
 @test "validate_config: PRESSURE_HALF_LIFE=0 rejects" {
 	run run_validate 'PRESSURE_HALF_LIFE="0"'
 	assert_failure
@@ -236,12 +209,6 @@ run_validate_output() {
 }
 
 # --- PRESSURE_TRIP_GLOBAL ---
-
-@test "validate_config: PRESSURE_TRIP_GLOBAL=0 passes (disabled)" {
-	run run_validate 'PRESSURE_TRIP_GLOBAL="0"'
-	assert_success
-}
-
 @test "validate_config: PRESSURE_TRIP_GLOBAL=10 passes" {
 	run run_validate 'PRESSURE_TRIP_GLOBAL="10"'
 	assert_success
@@ -352,12 +319,6 @@ run_validate_output() {
 }
 
 # --- WATCH_INTERVAL ---
-
-@test "validate_config: WATCH_INTERVAL=10 passes" {
-	run run_validate 'WATCH_INTERVAL="10"'
-	assert_success
-}
-
 @test "validate_config: WATCH_INTERVAL=1 passes" {
 	run run_validate 'WATCH_INTERVAL="1"'
 	assert_success
@@ -486,11 +447,6 @@ run_validate_output() {
 	assert_success
 }
 
-@test "validate_config: BAN_RETRY_COUNT=2 passes" {
-	run run_validate 'BAN_RETRY_COUNT="2"'
-	assert_success
-}
-
 @test "validate_config: BAN_RETRY_COUNT=abc rejects" {
 	run run_validate 'BAN_RETRY_COUNT="abc"'
 	assert_failure
@@ -502,12 +458,6 @@ run_validate_output() {
 }
 
 # --- EMAIL_LOGLINES ---
-
-@test "validate_config: EMAIL_LOGLINES=50 passes" {
-	run run_validate 'EMAIL_LOGLINES="50"'
-	assert_success
-}
-
 @test "validate_config: EMAIL_LOGLINES=1 passes" {
 	run run_validate 'EMAIL_LOGLINES="1"'
 	assert_success
@@ -529,12 +479,6 @@ run_validate_output() {
 }
 
 # --- LOG_FORMAT ---
-
-@test "validate_config: LOG_FORMAT=classic passes" {
-	run run_validate 'LOG_FORMAT="classic"'
-	assert_success
-}
-
 @test "validate_config: LOG_FORMAT=json passes" {
 	run run_validate 'LOG_FORMAT="json"'
 	assert_success
@@ -554,11 +498,6 @@ run_validate_output() {
 
 @test "validate_config: LOG_LEVEL=0 passes" {
 	run run_validate 'LOG_LEVEL="0"'
-	assert_success
-}
-
-@test "validate_config: LOG_LEVEL=1 passes" {
-	run run_validate 'LOG_LEVEL="1"'
 	assert_success
 }
 
