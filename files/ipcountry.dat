@@ -1,10 +1,11 @@
 # BFD IP-to-country database
 # Format: START_INT END_INT CC
 # IPv4 addresses converted to integers for binary search.
-# Rebuild with: update-ipcountry.sh
+# Rebuild with: update-ipcountry.sh (ipverse/ipdeny CIDR cascade)
 #
-# This is a sample database for testing. For production use,
-# run update-ipcountry.sh to download the full DB-IP Lite dataset.
+# This is a stub database for initial installs. BFD will download the
+# full database via update-ipcountry.sh at install time (background)
+# and refresh via cron.daily when data is older than 30 days.
 #
 # RFC 5737 test ranges (used by BFD test suite):
 # 192.0.2.0/24   = 3221225984-3221226239  (TEST-NET-1)

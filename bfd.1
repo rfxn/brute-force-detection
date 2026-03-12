@@ -849,7 +849,9 @@ IP-to-country lookup database.
 Track log \(em byte-offset log reader CLI wrapper.
 .TP
 .I /usr/local/bfd/update-ipcountry.sh
-Script to download and update the IP-to-country database.
+Script to download per-country CIDR zones (ipverse.net/ipdeny.com cascade) and
+rebuild the IP-to-country database. Run automatically at install time
+(background) and refreshed via cron.daily when data is older than 30 days.
 .TP
 .I /usr/local/bfd/alert/
 Email template partials directory (8 files: text.*.tpl, html.*.tpl).

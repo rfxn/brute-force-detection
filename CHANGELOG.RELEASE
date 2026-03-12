@@ -10,6 +10,13 @@
       Telegram, Discord)
 [New] COUNTRY_DISPLAY_TG export: MarkdownV2-escaped variant of COUNTRY_DISPLAY
       for Telegram templates; parentheses in "China (CN)" properly escaped
+[New] update-ipcountry.sh: rewritten to use geoip_lib.sh for CIDR zone
+      downloads (ipverse.net/ipdeny.com cascade); replaces DB-IP Lite CSV
+      source; drops gzip dependency; adds IPv6 data to ipcountry6.dat
+[New] install.sh: background country database download at install/upgrade
+      time (non-blocking, fail-silent)
+[New] cron.daily: automatic country database refresh when ipcountry.dat
+      is older than 30 days (mtime-based staleness check)
 
   -- Bug Fixes --
 

@@ -5,28 +5,33 @@
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
 # This program may be freely redistributed under the terms of the GNU GPL
 #
-# update-ipcountry.sh — rebuild ipcountry.dat from a CSV source
+# update-ipcountry.sh — rebuild ipcountry.dat from CIDR zone data
 #
-# Downloads the DB-IP Lite country CSV and converts it to the sorted
-# integer-range format used by ip_to_country(). Run periodically to
-# keep the country database current.
+# Downloads per-country CIDR zone files via geoip_lib.sh (ipverse/ipdeny
+# cascade) and converts them to the sorted integer-range format used by
+# ip_to_country(). Also downloads IPv6 CIDR data to ipcountry6.dat for
+# future use.
 #
 # Usage: update-ipcountry.sh [output_file]
 #   output_file defaults to $INSTALL_PATH/ipcountry.dat
 
 INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
 OUTPUT="${1:-$INSTALL_PATH/ipcountry.dat}"
-DBIP_URL="https://download.db-ip.com/free/dbip-country-lite-$(date +%Y-%m).csv.gz"
+OUTPUT6="${OUTPUT%.*}6.${OUTPUT##*.}"
 DL_TIMEOUT="${DL_TIMEOUT:-120}"
 
-WGET_BIN=$(command -v wget 2>/dev/null)
-CURL_BIN=$(command -v curl 2>/dev/null)
-GZIP_BIN=$(command -v gzip 2>/dev/null)
-
-if [ -z "$GZIP_BIN" ]; then
-	echo "error: gzip not found, cannot decompress download."
+# Source geoip_lib.sh for download functions and CC metadata
+_script_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+_geoip_lib="$_script_dir/internals/geoip_lib.sh"
+if [ ! -f "$_geoip_lib" ]; then
+	echo "error: geoip_lib.sh not found at $_geoip_lib"
 	exit 1
 fi
+# shellcheck disable=SC1090
+. "$_geoip_lib"
+
+# Export download timeout for geoip_lib
+export GEOIP_DL_TIMEOUT="$DL_TIMEOUT"
 
 # prefer INSTALL_PATH/tmp for temp files (owned by root, mode 750);
 # fall back to /tmp if install path is not yet available
@@ -37,66 +42,97 @@ else
 fi
 trap 'rm -rf "$tmpdir"' EXIT INT TERM
 
-csv_gz="$tmpdir/dbip.csv.gz"
-csv_file="$tmpdir/dbip.csv"
+# _all_cc_codes — emit all known country codes (one per line)
+# Iterates the 6 continent CC lists from geoip_lib module variables.
+_all_cc_codes() {
+	local _cont _code _save_ifs
+	for _cont in "$_GEOIP_CC_AF" "$_GEOIP_CC_AS" "$_GEOIP_CC_EU" \
+	             "$_GEOIP_CC_NA" "$_GEOIP_CC_SA" "$_GEOIP_CC_OC"; do
+		_save_ifs="$IFS"
+		IFS=","
+		for _code in $_cont; do
+			echo "$_code"
+		done
+		IFS="$_save_ifs"
+	done
+}
 
-# _download url output — download with timeout, TLS fallback for legacy systems
-_download() {
-	local url="$1" out="$2"
-	if [ -n "$WGET_BIN" ]; then
-		"$WGET_BIN" -q --timeout="$DL_TIMEOUT" -O "$out" "$url" 2>/dev/null && return 0
-		# TLS fallback: retry without certificate verification (legacy CA bundles)
-		echo "warning: TLS download failed, retrying without certificate verification."
-		"$WGET_BIN" -q --timeout="$DL_TIMEOUT" --no-check-certificate -O "$out" "$url" && return 0
-	elif [ -n "$CURL_BIN" ]; then
-		"$CURL_BIN" -sL --connect-timeout 15 --max-time "$DL_TIMEOUT" -o "$out" "$url" 2>/dev/null && return 0
-		# TLS fallback: retry without certificate verification (legacy CA bundles)
-		echo "warning: TLS download failed, retrying without certificate verification."
-		"$CURL_BIN" -sL --connect-timeout 15 --max-time "$DL_TIMEOUT" -k -o "$out" "$url" && return 0
+# _cidr4_to_ranges — convert CIDR file to integer-range format.
+# Input: file of CIDR lines (1.0.0.0/24), one per line (comments/blanks ignored)
+# Output: "START_INT END_INT CC" lines to stdout
+# Uses mawk-compatible awk: no gensub, no strftime. 2^(32-n) is safe in mawk
+# (proven in APF _geoip_cidr4_search and tested for edge cases /0,/1,/8,/32).
+_cidr4_to_ranges() {
+	local cidr_file="$1" cc="$2"
+	awk -v cc="$cc" '
+/^[0-9]/ {
+	n = split($0, p, "[./]")
+	if (n < 5) next
+	net = (p[1]+0) * 16777216 + (p[2]+0) * 65536 + (p[3]+0) * 256 + (p[4]+0)
+	bits = int(p[5]+0)
+	if (bits < 0 || bits > 32) next
+	size = 2 ^ (32 - bits)
+	end = net + size - 1
+	printf "%d %d %s\n", net, end, cc
+}' "$cidr_file"
+}
+
+echo "Downloading IP country CIDR zones..."
+
+dl_count=0
+dl_fail=0
+v6_count=0
+
+while IFS= read -r cc; do
+	cidr_file="$tmpdir/${cc}.zone"
+	if geoip_download "$cc" "4" "$cidr_file"; then
+		_cidr4_to_ranges "$cidr_file" "$cc" >> "$tmpdir/merged.dat"
+		dl_count=$(( dl_count + 1 ))
 	else
-		echo "error: neither wget nor curl found."
-		return 1
+		dl_fail=$(( dl_fail + 1 ))
 	fi
-	return 1
-}
+	rm -f "$cidr_file"
 
-echo "Downloading DB-IP country database..."
-if ! _download "$DBIP_URL" "$csv_gz"; then
-	echo "error: download failed."
-	exit 1
+	# IPv6: download to separate file for future use
+	cidr6_file="$tmpdir/${cc}.zone6"
+	if geoip_download "$cc" "6" "$cidr6_file"; then
+		awk -v cc="$cc" '/^[0-9a-fA-F:]/ { printf "%s %s\n", $0, cc }' \
+			"$cidr6_file" >> "$tmpdir/merged6.dat"
+		v6_count=$(( v6_count + 1 ))
+	fi
+	rm -f "$cidr6_file"
+done < <(_all_cc_codes)
+
+echo "Downloaded $dl_count countries ($dl_fail failed)."
+
+# Sort IPv4 ranges by start integer
+if [ -f "$tmpdir/merged.dat" ]; then
+	sort -n -k1 "$tmpdir/merged.dat" > "$tmpdir/ipcountry.dat"
+else
+	: > "$tmpdir/ipcountry.dat"
 fi
-
-"$GZIP_BIN" -d "$csv_gz" || {
-	echo "error: decompression failed."
-	exit 1
-}
-
-echo "Converting to integer-range format..."
-# DB-IP CSV format: start_ip,end_ip,country_code
-# We convert IPv4 addresses to integers for binary search.
-# IPv6 ranges are skipped (not supported in v1).
-awk -F, '
-function ip2int(ip,    parts, n) {
-	n = split(ip, parts, ".")
-	if (n != 4) return -1
-	return (parts[1]+0) * 16777216 + (parts[2]+0) * 65536 + (parts[3]+0) * 256 + (parts[4]+0)
-}
-{
-	# skip IPv6 ranges
-	if (index($1, ":") > 0) next
-	start = ip2int($1)
-	end = ip2int($2)
-	cc = toupper($3)
-	if (start >= 0 && end >= 0 && cc != "")
-		printf "%d %d %s\n", start, end, cc
-}' "$csv_file" | sort -n -k1 > "$tmpdir/ipcountry.dat"
 
 lines=$(wc -l < "$tmpdir/ipcountry.dat")
 if [ "$lines" -lt 1000 ]; then
-	echo "error: output has only $lines lines, expected 100k+. Aborting."
+	echo "error: output has only $lines ranges, expected 100k+. Aborting."
 	exit 1
 fi
 
 cp "$tmpdir/ipcountry.dat" "$OUTPUT"
 chmod 644 "$OUTPUT"
-echo "Updated $OUTPUT ($lines ranges)."
+echo "Updated $OUTPUT ($lines IPv4 ranges)."
+
+# Write IPv6 data if any was collected
+if [ -f "$tmpdir/merged6.dat" ] && [ -s "$tmpdir/merged6.dat" ]; then
+	sort "$tmpdir/merged6.dat" > "$tmpdir/ipcountry6.dat"
+	v6_lines=$(wc -l < "$tmpdir/ipcountry6.dat")
+	cp "$tmpdir/ipcountry6.dat" "$OUTPUT6"
+	chmod 644 "$OUTPUT6"
+	echo "Updated $OUTPUT6 ($v6_lines IPv6 prefixes)."
+fi
+
+# Mark update timestamp for staleness tracking
+_dat_dir="$(dirname "$OUTPUT")"
+if [ -d "$_dat_dir" ]; then
+	geoip_mark_updated "$_dat_dir"
+fi

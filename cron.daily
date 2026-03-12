@@ -90,6 +90,15 @@ if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
 	) 201>>"$pool_file"
 fi
 
+# Refresh country database if stale (>30 days since last update)
+_dat="$INSTALL_PATH/ipcountry.dat"
+if [ -x "$INSTALL_PATH/update-ipcountry.sh" ] && [ -f "$_dat" ]; then
+	_age=$(( $(date +%s) - $(stat -c %Y "$_dat") ))
+	if [ "$_age" -gt 2592000 ]; then
+		"$INSTALL_PATH/update-ipcountry.sh" >/dev/null 2>&1 || true  # non-fatal: network may be unavailable
+	fi
+fi
+
 # clear transient state but preserve ban tracking and event data
 rm -f "$INSTALL_PATH"/tmp/.alist.*
 rm -f "$INSTALL_PATH"/tmp/.alerts.*
