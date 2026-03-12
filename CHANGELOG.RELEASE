@@ -10,9 +10,13 @@
       Telegram, Discord)
 [New] COUNTRY_DISPLAY_TG export: MarkdownV2-escaped variant of COUNTRY_DISPLAY
       for Telegram templates; parentheses in "China (CN)" properly escaped
-[New] update-ipcountry.sh: rewritten to use geoip_lib.sh for CIDR zone
-      downloads (ipverse.net/ipdeny.com cascade); replaces DB-IP Lite CSV
-      source; drops gzip dependency; adds IPv6 data to ipcountry6.dat
+[New] update-ipcountry.sh: rewritten to use geoip_lib.sh geoip_build_ipdb()
+      for IPv4 (bulk tarball with per-country fallback) and per-country
+      downloads for IPv6; replaces DB-IP Lite CSV source; drops gzip
+      dependency; adds IPv6 data to ipcountry6.dat
+[New] ipcountry.dat: ships pre-filled with 238 countries (256K IPv4 ranges)
+      from ipdeny.com bulk tarball; installations land with working country
+      data before first cron refresh
 [New] install.sh: background country database download at install/upgrade
       time (non-blocking, fail-silent)
 [New] cron.daily: automatic country database refresh when ipcountry.dat
@@ -345,3 +349,6 @@
 [Change] Documentation: update rule count (47 to 57) and rule catalog in
       man page and README; add proxy, messaging, and expanded service
       categories; update journal fallback ratio (36 of 57 rules)
+[Change] geoip_lib.sh updated to v1.0.1: adds geoip_all_cc(),
+      geoip_ip_lookup(), geoip_build_ipdb(), _geoip_cidr4_to_ranges(),
+      _geoip_download_ipdeny_bulk(); IFS contamination fix in geoip_all_cc()
