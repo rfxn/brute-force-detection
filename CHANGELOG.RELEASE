@@ -1,5 +1,11 @@
 2.0.1:
 
+  -- Changes --
+
+[Change] Rename modsec rule to mod_sec for naming consistency with other
+      underscore-delimited multi-word rule names; LOG_TAG="httpd.modsec"
+      preserved (Apache log identifier, not a BFD rule name)
+
   -- New Features --
 
 [New] geoip_lib integration: alert templates now show full country names
@@ -39,6 +45,13 @@
       (abuseipdb, shodan, virustotal, ipinfo, greynoise)
 [Fix] telegram.entry.tpl: use {{COUNTRY_DISPLAY_TG}} instead of {{COUNTRY_DISPLAY}}
       to prevent MarkdownV2 parse errors from unescaped parentheses
+[Fix] -b/--ban: reject service name argument starting with '-' (e.g.
+      'bfd -b IP --ttl 300' silently used '--ttl' as service name)
+[Fix] -a/--attackpool: print "No attack pool data." when attack.pool file
+      does not exist instead of producing no output
+[Fix] list_bans: skip corrupt bans.active lines with non-numeric timestamp
+      or missing host field instead of passing garbled data to _fmt_ts;
+      same guard applied to list_bans_json and list_bans_csv
 [Fix] bfd.1 and README: add {{COUNTRY_DISPLAY}} to template variable documentation
       alongside existing {{COUNTRY_CODE}}
 
@@ -63,6 +76,9 @@
       use exec >/dev/null 2>&1 at subshell level to close inherited fds
 [Fix] bfd.1: add geoip_lib.sh, bfd_alert.sh, and pkg_lib.sh to FILES section;
       all internal libraries now documented in man page
+[Fix] -a/--attackpool: add -s (non-empty) guard to apool_list, apool_list_json,
+      and apool_list_csv elif conditions; the init path always touch-creates
+      attack.pool so the -f test alone never reached the else branch
 
   -- Enhancements --
 

@@ -280,9 +280,9 @@ teardown() {
 	[ "$result" = "203.0.113.55" ]
 }
 
-# --- modsec ---
+# --- mod_sec ---
 
-@test "regex: modsec - ModSecurity Access denied" {
+@test "regex: mod_sec - ModSecurity Access denied" {
 	local result
 	result=$(echo '[Wed Feb 22 10:15:03.123456 2024] [security2:error] [pid 12345] [client 203.0.113.10:54321] ModSecurity: Access denied with code 403 (phase 2). [id "1234"]' | \
 		extract_hosts "\[client <HOST>.*ModSecurity: Access denied")

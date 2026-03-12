@@ -692,7 +692,7 @@ BFD ships with 57 rules:
   Mail:     dovecot, courier, postfix, sendmail, exim_authfail, exim_nxuser,
             vpopmail, cyrus-imap
   FTP:      vsftpd, vsftpd2, proftpd, pure-ftpd
-  Web:      apache-auth, nginx-http-auth, modsec, wordpress, roundcube,
+  Web:      apache-auth, nginx-http-auth, mod_sec, wordpress, roundcube,
             http_401, lighttpd, phpmyadmin
   Panel:    cpanel, plesk, webmin, directadmin, gitlab, grafana, proxmox
   Auth:     pam_generic, xrdp

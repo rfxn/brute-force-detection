@@ -1597,7 +1597,10 @@ list_bans() {
 	atmp=$(mktemp "$install_path/tmp/.lbans.XXXXXX")
 	echo "IP|SERVICE|PORTS|BANNED|EXPIRES" > "$atmp"
 	local ts expiry host mod ports banned_fmt expiry_fmt
+	local _ts_numeric='^[0-9]+$'
 	while IFS='|' read -r ts expiry host mod ports; do
+		[[ "$ts" =~ $_ts_numeric ]] || continue
+		[ -n "$host" ] || continue
 		banned_fmt=$(_fmt_ts "$ts")
 		if [ "$expiry" = "0" ]; then
 			expiry_fmt="permanent"
@@ -3750,7 +3753,10 @@ list_bans_json() {
 	echo "["
 	local first=1
 	local ts expiry host mod ports
+	local _ts_numeric='^[0-9]+$'
 	while IFS='|' read -r ts expiry host mod ports; do
+		[[ "$ts" =~ $_ts_numeric ]] || continue
+		[ -n "$host" ] || continue
 		local banned_fmt expiry_fmt
 		banned_fmt=$(_fmt_ts_iso "$ts")
 		if [ "$expiry" = "0" ]; then
@@ -3778,7 +3784,10 @@ list_bans_csv() {
 	local raw
 	if raw=$(_list_bans_data "$install_path"); then
 		local ts expiry host mod ports
+		local _ts_numeric='^[0-9]+$'
 		while IFS='|' read -r ts expiry host mod ports; do
+			[[ "$ts" =~ $_ts_numeric ]] || continue
+			[ -n "$host" ] || continue
 			local banned_fmt expiry_fmt
 			banned_fmt=$(_fmt_ts_iso "$ts")
 			if [ "$expiry" = "0" ]; then
