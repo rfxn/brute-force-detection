@@ -54,6 +54,9 @@
       "pressure bar" to "pressure detail" after bar removal
 [Fix] tests/37-alert-engine.bats: add PRESSURE_PCT and FAIL_COUNT
       exports to template smoke tests; rename misleading test name
+[Fix] install.sh: background update-ipcountry.sh subshell inherited parent
+      pipe fd causing hang when install.sh invoked via pipe (e.g. 2>&1 | tee);
+      use exec >/dev/null 2>&1 at subshell level to close inherited fds
 
   -- Enhancements --
 
