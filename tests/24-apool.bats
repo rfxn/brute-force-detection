@@ -204,6 +204,13 @@ teardown() {
 	assert_success
 }
 
+@test "apool_list: absent pool file prints no-data message" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool.nonexistent"
+	run apool_list
+	assert_success
+	assert_output "No attack pool data."
+}
+
 @test "apool_list: pool with entries shows summary, 24h, 7d, then services" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
 	local now

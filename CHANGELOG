@@ -45,6 +45,13 @@
       (abuseipdb, shodan, virustotal, ipinfo, greynoise)
 [Fix] telegram.entry.tpl: use {{COUNTRY_DISPLAY_TG}} instead of {{COUNTRY_DISPLAY}}
       to prevent MarkdownV2 parse errors from unescaped parentheses
+[Fix] -b/--ban: reject service name argument starting with '-' (e.g.
+      'bfd -b IP --ttl 300' silently used '--ttl' as service name)
+[Fix] -a/--attackpool: print "No attack pool data." when attack.pool file
+      does not exist instead of producing no output
+[Fix] list_bans: skip corrupt bans.active lines with non-numeric timestamp
+      or missing host field instead of passing garbled data to _fmt_ts;
+      same guard applied to list_bans_json and list_bans_csv
 [Fix] bfd.1 and README: add {{COUNTRY_DISPLAY}} to template variable documentation
       alongside existing {{COUNTRY_CODE}}
 

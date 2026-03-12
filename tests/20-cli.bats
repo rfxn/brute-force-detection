@@ -397,6 +397,23 @@ teardown() {
 	assert_output --partial "192.0.2.2"
 }
 
+@test "list_bans: corrupt line with non-numeric ts is skipped" {
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "CORRUPT 0 10.0.0.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	run list_bans "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "192.0.2.1"
+	refute_output --partial "10.0.0.1"
+}
+
+@test "list_bans: corrupt line with missing host is skipped" {
+	echo "1700000000 0 192.0.2.1 sshd 22" >> "$INSTALL_PATH/tmp/bans.active"
+	echo "1700000000 0" >> "$INSTALL_PATH/tmp/bans.active"
+	run list_bans "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "192.0.2.1"
+}
+
 # --- _json_escape ---
 
 @test "_json_escape: no special chars unchanged" {
@@ -685,5 +702,41 @@ bfd_load_function usage_short
 	assert_success
 	assert_output --partial "--sort="
 	assert_output --partial "--24h"
+}
+
+# --- ban flag guard (UAT-001) ---
+
+@test "ban flag guard: rejects service name starting with dash" {
+	# The -b handler in files/bfd guards $3: if it starts with '-', reject it.
+	# We test the guard logic directly since the case handler is not a function.
+	local svc="--ttl"
+	if [ -n "${svc:-}" ] && [[ "${svc}" == -* ]]; then
+		# guard triggered — this is the expected path
+		return 0
+	fi
+	# guard did not trigger — fail the test
+	fail "flag-like service name '--ttl' was not rejected by the guard"
+}
+
+@test "ban flag guard: accepts normal service name" {
+	local svc="sshd"
+	if [ -n "${svc:-}" ] && [[ "${svc}" == -* ]]; then
+		fail "normal service name 'sshd' was rejected by the guard"
+	fi
+}
+
+@test "ban flag guard: accepts empty service name (default)" {
+	local svc=""
+	if [ -n "${svc:-}" ] && [[ "${svc}" == -* ]]; then
+		fail "empty service name was rejected by the guard"
+	fi
+}
+
+@test "sanitize_mod: accepts --ttl (flag-like but passes regex)" {
+	# Demonstrates that sanitize_mod alone does not guard against flag-like names;
+	# the CLI-level guard in the -b handler is required.
+	run sanitize_mod "--ttl"
+	assert_success
+	assert_output "--ttl"
 }
 

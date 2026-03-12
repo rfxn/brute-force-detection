@@ -884,6 +884,8 @@ apool_list() {
 		_apool_report "$APOOL_LIST" "Top 25 threat IPs (7d)" "" "$cutoff_7d"
 		echo
 		_apool_service_dual "$APOOL_LIST" "$cutoff_24h" "$cutoff_7d"
+	else
+		echo "No attack pool data."
 	fi
 }
 
@@ -1394,6 +1396,10 @@ case "${1:-}" in
 	vhead; pre
 	if [ -z "${2:-}" ]; then
 		echo "error: -b requires an IP address." >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
+	fi
+	if [ -n "${3:-}" ] && [[ "${3}" == -* ]]; then
+		echo "error: service name cannot start with '-': '${3}'" >&2
+		echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
 	fi
 	manual_ban "$INSTALL_PATH" "$2" "$UTIME" "${3:-manual}" "all" || exit "$?"
 	;;
