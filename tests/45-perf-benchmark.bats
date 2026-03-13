@@ -14,6 +14,10 @@
 # Raw extract_hosts sizes are smaller because it runs 4 rules sequentially
 # without the batching optimizations that check() provides.
 #
+# Mode deviation (P2): diagnostic-only benchmarks documenting where modes
+# diverge. No hard KPI assertions — reports scan vs standard tlog path,
+# TLOG_FLOCK overhead, and DRY_RUN=0 vs DRY_RUN=1 ban execution overhead.
+#
 
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
@@ -511,4 +515,243 @@ _perf_generate_logs() {
 	assert_success
 	# ceiling: full group < 30s (the hard limit)
 	[ "$ms" -lt 30000 ]
+}
+
+# ============================================================
+#  MODE DEVIATION: scan vs standard, TLOG_FLOCK, DRY_RUN
+#  Diagnostic-only — no hard KPI assertions, only ceiling guards.
+#  Documents where BFD's operating modes diverge in performance.
+# ============================================================
+
+@test "perf: deviation -- scan vs standard tlog path (sshd, 2K lines)" {
+	local _timeout=30
+	local _group_start
+	_group_start=$(date +%s)
+
+	# Generate 2K sshd log (100% match for consistent extraction)
+	local _log_file="$INSTALL_PATH/tmp/perf_dev_sshd.log"
+	generate_sshd_log 2000 200 100 > "$_log_file"
+	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
+
+	LOG_SOURCE="file"
+
+	# --- Scan mode: _rule_tlog → tlog_read_full ---
+	_SCAN_MODE=1
+	_TLOG_PASSTHROUGH=""
+	timer_start
+	local scan_out
+	scan_out=$(_rule_tlog "$_log_file" "sshd" | extract_hosts \
+		"sshd.*Failed password for .* from <HOST>")
+	local ms_scan
+	ms_scan=$(timer_elapsed_ms)
+	local scan_count
+	scan_count=$(echo "$scan_out" | grep -c . 2>/dev/null || echo 0)
+	kpi_report "deviation.scan.sshd" "$scan_count lines in ${ms_scan}ms" ""
+	perf_timeout_check "scan_path" "$_group_start" "$_timeout"
+
+	# --- Standard mode: _rule_tlog → tlog_read (TLOG_FIRST_RUN=full) ---
+	_SCAN_MODE=""
+	TLOG_FIRST_RUN="full"
+	TLOG_FLOCK=0
+	/usr/bin/rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
+	timer_start
+	local std_out
+	std_out=$(_rule_tlog "$_log_file" "sshd" | extract_hosts \
+		"sshd.*Failed password for .* from <HOST>")
+	local ms_std
+	ms_std=$(timer_elapsed_ms)
+	local std_count
+	std_count=$(echo "$std_out" | grep -c . 2>/dev/null || echo 0)
+	kpi_report "deviation.standard.sshd" "$std_count lines in ${ms_std}ms" ""
+	perf_timeout_check "standard_path" "$_group_start" "$_timeout"
+
+	# --- Delta ---
+	local delta=0
+	if [ "$ms_scan" -gt 0 ]; then
+		delta=$(( (ms_std - ms_scan) * 100 / (ms_scan + 1) ))
+	fi
+	kpi_report "deviation.scan_vs_standard" "scan=${ms_scan}ms standard=${ms_std}ms" "(${delta}% overhead)"
+
+	# cleanup
+	TLOG_FIRST_RUN="skip"
+}
+
+@test "perf: deviation -- TLOG_FLOCK overhead (sshd, 2K lines)" {
+	local _timeout=30
+	local _group_start
+	_group_start=$(date +%s)
+
+	# Generate 2K sshd log
+	local _log_file="$INSTALL_PATH/tmp/perf_dev_flock.log"
+	generate_sshd_log 2000 200 100 > "$_log_file"
+	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
+
+	LOG_SOURCE="file"
+	_SCAN_MODE=""
+	_TLOG_PASSTHROUGH=""
+	TLOG_FIRST_RUN="full"
+
+	# --- Without flock ---
+	TLOG_FLOCK=0
+	/usr/bin/rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
+	timer_start
+	local noflock_out
+	noflock_out=$(_rule_tlog "$_log_file" "sshd" | extract_hosts \
+		"sshd.*Failed password for .* from <HOST>")
+	local ms_noflock
+	ms_noflock=$(timer_elapsed_ms)
+	local noflock_count
+	noflock_count=$(echo "$noflock_out" | grep -c . 2>/dev/null || echo 0)
+	kpi_report "deviation.flock_off.sshd" "$noflock_count lines in ${ms_noflock}ms" ""
+	perf_timeout_check "flock_off" "$_group_start" "$_timeout"
+
+	# --- With flock ---
+	TLOG_FLOCK=1
+	/usr/bin/rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
+	timer_start
+	local flock_out
+	flock_out=$(_rule_tlog "$_log_file" "sshd" | extract_hosts \
+		"sshd.*Failed password for .* from <HOST>")
+	local ms_flock
+	ms_flock=$(timer_elapsed_ms)
+	local flock_count
+	flock_count=$(echo "$flock_out" | grep -c . 2>/dev/null || echo 0)
+	kpi_report "deviation.flock_on.sshd" "$flock_count lines in ${ms_flock}ms" ""
+	perf_timeout_check "flock_on" "$_group_start" "$_timeout"
+
+	# --- Delta ---
+	local delta=0
+	if [ "$ms_noflock" -gt 0 ]; then
+		delta=$(( (ms_flock - ms_noflock) * 100 / (ms_noflock + 1) ))
+	fi
+	kpi_report "deviation.tlog_flock" "off=${ms_noflock}ms on=${ms_flock}ms" "(${delta}% overhead)"
+
+	# cleanup
+	TLOG_FIRST_RUN="skip"
+	TLOG_FLOCK=0
+}
+
+@test "perf: deviation -- DRY_RUN=0 vs DRY_RUN=1 (4 rules, 1K lines)" {
+	local _timeout=30
+	local _group_start
+	_group_start=$(date +%s)
+
+	# Use small tier (1K lines) to keep within timeout
+	_perf_generate_logs "dev" 1000 50 100
+	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
+
+	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 256
+
+	# Create 4 mock rules using _TLOG_PASSTHROUGH (tlog path is identical;
+	# only the ban execution path differs between DRY_RUN modes)
+	create_mock_rule "sshd" "$(printf 'PREREQ=""\nLOG_FILE="%s"\nLOG_TAG="sshd"\n_TLOG_PASSTHROUGH="%s"\nMATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts "sshd.*Failed password for .* from <HOST>")\n' \
+		"$_LOG_sshd" "$_LOG_sshd")"
+	create_mock_rule "mod_sec" "$(printf 'PREREQ=""\nLOG_FILE="%s"\nLOG_TAG="httpd.modsec"\n_TLOG_PASSTHROUGH="%s"\nMATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts "\\[client <HOST>.*ModSecurity: Access denied")\n' \
+		"$_LOG_mod_sec" "$_LOG_mod_sec")"
+	create_mock_rule "postfix" "$(printf 'PREREQ=""\nLOG_FILE="%s"\nLOG_TAG="postfix"\n_TLOG_PASSTHROUGH="%s"\nMATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts "\\[<HOST>\\].*SASL.*authentication failed")\n' \
+		"$_LOG_postfix" "$_LOG_postfix")"
+	create_mock_rule "dovecot" "$(printf 'PREREQ=""\nLOG_FILE="%s"\nLOG_TAG="dovecot"\n_TLOG_PASSTHROUGH="%s"\nMATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts "imap-login.*auth failed.*rip=<HOST>")\n' \
+		"$_LOG_dovecot" "$_LOG_dovecot")"
+
+	perf_timeout_check "rule_creation" "$_group_start" "$_timeout"
+
+	# --- DRY_RUN=1 (baseline, no ban execution) ---
+	DRY_RUN=1
+	timer_start
+	run check
+	local ms_dry
+	ms_dry=$(timer_elapsed_ms)
+	kpi_report "deviation.dryrun_on" "${ms_dry}ms" "(4 rules, 1K lines, DRY_RUN=1)"
+	perf_timeout_check "dryrun_on" "$_group_start" "$_timeout"
+
+	# Reset state for fair comparison
+	> "$INSTALL_PATH/tmp/bans.active"
+	> "$INSTALL_PATH/tmp/bans.history"
+	> "$INSTALL_PATH/tmp/pressure.dat"
+	> "$INSTALL_PATH/stats/attack.pool"
+
+	# --- DRY_RUN=0 (live ban via mock /bin/true) ---
+	DRY_RUN=0
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	UNBAN_COMMAND_TEMPLATE="/bin/true"
+	timer_start
+	run check
+	local ms_live
+	ms_live=$(timer_elapsed_ms)
+	kpi_report "deviation.dryrun_off" "${ms_live}ms" "(4 rules, 1K lines, DRY_RUN=0)"
+	perf_timeout_check "dryrun_off" "$_group_start" "$_timeout"
+
+	# --- Delta ---
+	local delta=0
+	if [ "$ms_dry" -gt 0 ]; then
+		delta=$(( (ms_live - ms_dry) * 100 / (ms_dry + 1) ))
+	fi
+	kpi_report "deviation.dryrun" "dry=${ms_dry}ms live=${ms_live}ms" "(${delta}% overhead)"
+
+	# restore
+	DRY_RUN=1
+}
+
+@test "perf: deviation -- realistic line length (4 rules, 500 lines)" {
+	local _timeout=30
+	local _group_start
+	_group_start=$(date +%s)
+
+	# Real-world target line lengths (measured from production logs):
+	#   sshd: 150 chars (synthetic ~110)  — "invalid user" + longer names
+	#   mod_sec: 800 chars (synthetic ~120) — OWASP CRS metadata fields
+	#   postfix: 250 chars (synthetic ~120) — TLS cipher + SASL detail
+	#   dovecot: 250 chars (synthetic ~130) — TLS + session + attempts
+	local _log_sshd="$INSTALL_PATH/tmp/perf_real_sshd.log"
+	local _log_mod_sec="$INSTALL_PATH/tmp/perf_real_mod_sec.log"
+	local _log_postfix="$INSTALL_PATH/tmp/perf_real_postfix.log"
+	local _log_dovecot="$INSTALL_PATH/tmp/perf_real_dovecot.log"
+	generate_sshd_log 500 50 100 150 > "$_log_sshd"
+	generate_mod_sec_log 500 50 100 800 > "$_log_mod_sec"
+	generate_postfix_log 500 50 100 250 > "$_log_postfix"
+	generate_dovecot_log 500 50 100 250 > "$_log_dovecot"
+	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
+
+	# sshd (150-char lines)
+	timer_start
+	local result
+	result=$(cat "$_log_sshd" | extract_hosts \
+		"sshd.*Failed password for .* from <HOST>")
+	local ms
+	ms=$(timer_elapsed_ms)
+	local count
+	count=$(echo "$result" | grep -c . 2>/dev/null || echo 0)
+	local rate=$(( count * 1000 / (ms + 1) ))
+	kpi_report "realistic.sshd" "$count lines in ${ms}ms" "(${rate} lines/sec, ~150 char/line)"
+	perf_timeout_check "sshd" "$_group_start" "$_timeout"
+
+	# mod_sec (800-char lines)
+	timer_start
+	result=$(cat "$_log_mod_sec" | extract_hosts \
+		"\[client <HOST>.*ModSecurity: Access denied")
+	ms=$(timer_elapsed_ms)
+	count=$(echo "$result" | grep -c . 2>/dev/null || echo 0)
+	rate=$(( count * 1000 / (ms + 1) ))
+	kpi_report "realistic.mod_sec" "$count lines in ${ms}ms" "(${rate} lines/sec, ~800 char/line)"
+	perf_timeout_check "mod_sec" "$_group_start" "$_timeout"
+
+	# postfix (250-char lines)
+	timer_start
+	result=$(cat "$_log_postfix" | extract_hosts \
+		"\[<HOST>\].*SASL.*authentication failed")
+	ms=$(timer_elapsed_ms)
+	count=$(echo "$result" | grep -c . 2>/dev/null || echo 0)
+	rate=$(( count * 1000 / (ms + 1) ))
+	kpi_report "realistic.postfix" "$count lines in ${ms}ms" "(${rate} lines/sec, ~250 char/line)"
+	perf_timeout_check "postfix" "$_group_start" "$_timeout"
+
+	# dovecot (250-char lines)
+	timer_start
+	result=$(cat "$_log_dovecot" | extract_hosts \
+		"imap-login.*auth failed.*rip=<HOST>")
+	ms=$(timer_elapsed_ms)
+	count=$(echo "$result" | grep -c . 2>/dev/null || echo 0)
+	rate=$(( count * 1000 / (ms + 1) ))
+	kpi_report "realistic.dovecot" "$count lines in ${ms}ms" "(${rate} lines/sec, ~250 char/line)"
+	perf_timeout_check "dovecot" "$_group_start" "$_timeout"
 }

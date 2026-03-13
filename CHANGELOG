@@ -27,11 +27,15 @@
 
   -- New Features --
 
-[New] Performance benchmark suite: 9 tests across 3 scaling tiers (small/
+[New] Performance benchmark suite: 13 tests across 3 scaling tiers (small/
       medium/large) measuring extract_hosts throughput, batch pressure/country
-      lookups, and full check() cycle wall time; 30-second hard timeout per
-      test group with stage-level diagnostics on timeout; KPI output in TAP
-      diagnostic format for trend tracking
+      lookups, and full check() cycle wall time; mode deviation benchmarks
+      comparing scan vs standard tlog path, TLOG_FLOCK overhead, and
+      DRY_RUN=0 vs DRY_RUN=1 ban execution cost; realistic line-length
+      benchmarks with production-representative log content (sshd 150, mod_sec
+      800, postfix 250, dovecot 250 chars); 30-second hard timeout per test
+      group with stage-level diagnostics on timeout; KPI output in TAP
+      diagnostic format for trend tracking; dedicated 'make bench' target
 [New] geoip_lib integration: alert templates now show full country names
       (e.g. "China (CN)" instead of bare "CN") via shared geoip_lib.sh;
       graceful degradation to bare code when library not present
