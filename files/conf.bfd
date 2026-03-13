@@ -208,8 +208,8 @@ KERNEL_LOG_PATH="/var/log/messages"
 # mail log (auto-detected: /var/log/mail.log on Debian/Ubuntu)
 MAIL_LOG_PATH="/var/log/maillog"
 
-# BFD's own application log
-BFD_LOG_PATH="/var/log/bfd_log"
+# BFD's own application log (v1.x used /var/log/bfd_log; auto-migrated on upgrade)
+BFD_LOG_PATH="/var/log/bfd/bfd.log"
 
 # log source: auto (file with journal fallback), file (only), journal (only)
 # auto-detection tries log files first, falls back to journalctl if missing

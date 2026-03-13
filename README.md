@@ -327,7 +327,7 @@ Leave empty when using tools that handle both protocols natively (nft with `inet
 | `AUTH_LOG_PATH` | `/var/log/secure` | Auth log (auto-detected: `/var/log/auth.log` on Debian) |
 | `KERNEL_LOG_PATH` | `/var/log/messages` | Kernel/syslog (auto-detected: `/var/log/syslog` on Debian) |
 | `MAIL_LOG_PATH` | `/var/log/maillog` | Mail log (auto-detected: `/var/log/mail.log` on Debian) |
-| `BFD_LOG_PATH` | `/var/log/bfd_log` | BFD's own application log |
+| `BFD_LOG_PATH` | `/var/log/bfd/bfd.log` | BFD's own application log |
 
 Log paths are auto-detected based on the distribution. Override in `conf.bfd` if your system uses non-standard paths.
 

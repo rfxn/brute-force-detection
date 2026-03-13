@@ -70,7 +70,7 @@ _cleanup_common() {
 cleanup() {
 	_cleanup_common
 	# remove per-rule temp files that may remain after abnormal exit
-	/usr/bin/rm -f "$INSTALL_PATH/tmp/.uniq_ips."* \
+	command rm -f "$INSTALL_PATH/tmp/.uniq_ips."* \
 		"$INSTALL_PATH/tmp/.pressure_buf."* \
 		"$INSTALL_PATH/tmp/.pool_buf."* 2>/dev/null  # safe if glob expands to nothing
 }
@@ -182,6 +182,9 @@ config_init() {
 	# ELOG config derived from conf.bfd values — consumed by sourced elog_lib.sh
 	# shellcheck disable=SC2034
 	ELOG_LOG_FILE="$BFD_LOG_PATH"
+	# Legacy log path — elog_init creates symlink if this path doesn't exist yet
+	# shellcheck disable=SC2034
+	ELOG_LEGACY_LOG="/var/log/bfd_log"
 	# shellcheck disable=SC2034
 	ELOG_SYSLOG_FILE=""
 	# shellcheck disable=SC2034
@@ -307,6 +310,25 @@ if [ ! -d "$TLOG_BASERUN" ]; then
 	mkdir -p "$TLOG_BASERUN"
 	chmod 750 "$TLOG_BASERUN"
 fi
+# one-time log path migration: /var/log/bfd_log → /var/log/bfd/bfd.log
+# v1.x used a flat file; v2.x consolidates into the elog log directory.
+# Moves content to new path and leaves a symlink at the old location so
+# external log parsers, logrotate entries, and muscle memory still work.
+_LEGACY_LOG="/var/log/bfd_log"
+if [ -f "$_LEGACY_LOG" ] && [ ! -L "$_LEGACY_LOG" ] && [ "$BFD_LOG_PATH" = "/var/log/bfd/bfd.log" ]; then
+	mkdir -p /var/log/bfd
+	chmod 750 /var/log/bfd
+	if [ -s "$BFD_LOG_PATH" ]; then
+		# both exist with content — prepend old (chronologically earlier) before new
+		cat "$_LEGACY_LOG" "$BFD_LOG_PATH" > "${BFD_LOG_PATH}.mig"
+		command mv -f "${BFD_LOG_PATH}.mig" "$BFD_LOG_PATH"
+	else
+		command mv -f "$_LEGACY_LOG" "$BFD_LOG_PATH"
+	fi
+	chmod 640 "$BFD_LOG_PATH"
+	ln -sf "$BFD_LOG_PATH" "$_LEGACY_LOG"
+fi
+
 if [ ! -f "$BFD_LOG_PATH" ]; then
 	touch "$BFD_LOG_PATH"
 	chmod 640 "$BFD_LOG_PATH"
@@ -637,7 +659,7 @@ check() {
 		fi
 
 		# per-rule cleanup
-		/usr/bin/rm -f "$_unique_file" "$_pressure_tmp" "$_pool_tmp" "$_counted_file"
+		command rm -f "$_unique_file" "$_pressure_tmp" "$_pool_tmp" "$_counted_file"
 		unset _filter_map _cc_map _pre_mod_p _pre_global_p
 	done
 
@@ -663,7 +685,7 @@ check() {
 	rm -f "$alerts_file"
 
 	# cleanup per-cycle caches
-	/usr/bin/rm -f "$_IGNORE_CACHE_FILE"
+	command rm -f "$_IGNORE_CACHE_FILE"
 	_IGNORE_CACHE_FILE=""
 	unset _cw_map _active_bans
 

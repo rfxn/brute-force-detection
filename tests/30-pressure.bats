@@ -546,7 +546,7 @@ teardown() {
 
 @test "_batch_pressure_compute: missing events file produces no output" {
 	local now; now=$(date +%s)
-	/usr/bin/rm -f "$INSTALL_PATH/tmp/pressure.dat"
+	command rm -f "$INSTALL_PATH/tmp/pressure.dat"
 	run _batch_pressure_compute "$INSTALL_PATH/tmp/pressure.dat" "$now" "300" "sshd"
 	assert_success
 	assert_output ""

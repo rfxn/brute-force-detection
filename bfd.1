@@ -594,7 +594,8 @@ Kernel/messages log path (default: /var/log/messages).
 Mail log path (default: /var/log/maillog).
 .TP
 .B BFD_LOG_PATH
-BFD application log path (default: /var/log/bfd_log).
+BFD application log path (default: /var/log/bfd/bfd.log).
+Upgraded from v1.x, the legacy /var/log/bfd_log is automatically symlinked.
 .SS Advanced
 .TP
 .B PRESSURE_TRIP_GLOBAL
@@ -919,8 +920,8 @@ SysVinit init script for watch mode (CentOS 6/7, Ubuntu 14.04).
 .I /etc/bash_completion.d/bfd
 Bash tab completion for bfd commands.
 .TP
-.I /var/log/bfd_log
-Application log.
+.I /var/log/bfd/bfd.log
+Application log (v1.x: /var/log/bfd_log, auto-migrated with symlink).
 .SH UPGRADING
 When upgrading from a previous BFD installation (including v1.5\-2),
 .B install.sh

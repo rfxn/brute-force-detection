@@ -553,7 +553,7 @@ _perf_generate_logs() {
 	_SCAN_MODE=""
 	TLOG_FIRST_RUN="full"
 	TLOG_FLOCK=0
-	/usr/bin/rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
+	command rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
 	timer_start
 	local std_out
 	std_out=$(_rule_tlog "$_log_file" "sshd" | extract_hosts \
@@ -593,7 +593,7 @@ _perf_generate_logs() {
 
 	# --- Without flock ---
 	TLOG_FLOCK=0
-	/usr/bin/rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
+	command rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
 	timer_start
 	local noflock_out
 	noflock_out=$(_rule_tlog "$_log_file" "sshd" | extract_hosts \
@@ -607,7 +607,7 @@ _perf_generate_logs() {
 
 	# --- With flock ---
 	TLOG_FLOCK=1
-	/usr/bin/rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
+	command rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
 	timer_start
 	local flock_out
 	flock_out=$(_rule_tlog "$_log_file" "sshd" | extract_hosts \
