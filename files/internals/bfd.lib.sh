@@ -1376,10 +1376,10 @@ _fw_custom_ban() {
 	fi
 	ATTACK_HOST="$host"; MOD="$mod"; PORTS="$ports"
 	# Security: $cmd is from BAN_COMMAND_TEMPLATE, extracted raw from conf.bfd
-	# by extract_command_template(). $host is validated by validate_ip_any(),
-	# $mod by sanitize_mod(), $ports by sanitize_ports(). conf.bfd is root-owned
-	# and verified by safe_source(). This eval is intentional for user-defined
-	# firewall commands.
+	# by extract_command_template(). $host is validated by validate_ip_any()
+	# (check() loop + CLI callers), $mod by sanitize_mod(), $ports by
+	# sanitize_ports(). conf.bfd is root-owned and verified by safe_source().
+	# This eval is intentional for user-defined firewall commands.
 	eval "$cmd" >/dev/null 2>&1
 }
 

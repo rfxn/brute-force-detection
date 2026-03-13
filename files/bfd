@@ -463,22 +463,27 @@ check() {
 			continue  # active but no new events this cycle
 		fi
 		rules_count=$((rules_count + 1))
-		# process MATCHED_HOSTS pipeline once; reuse for iteration and counting
-		HOSTS_PARSED=$(echo "$MATCHED_HOSTS" | tr ' ' '\n' | sort)
-		# count events (raw IP occurrences including duplicates)
-		local host_lines
-		host_lines=$(echo "$HOSTS_PARSED" | grep -c . 2>/dev/null || echo 0)
+		# single awk pass: count events, build unique-IP and counted files
+		local host_lines _unique_file _pressure_tmp _pool_tmp _counted_file
+		_unique_file=$(mktemp "$INSTALL_PATH/tmp/.uniq_ips.XXXXXX")
+		_pressure_tmp=$(mktemp "$INSTALL_PATH/tmp/.pressure_buf.XXXXXX")
+		_pool_tmp=$(mktemp "$INSTALL_PATH/tmp/.pool_buf.XXXXXX")
+		_counted_file=$(mktemp "$INSTALL_PATH/tmp/.counted.XXXXXX")
+		host_lines=$(printf '%s\n' "$MATCHED_HOSTS" | awk -v uf="$_unique_file" -v cf="$_counted_file" '
+			NF > 0 { for (i = 1; i <= NF; i++) { count[$i]++; total++ } }
+			END {
+				for (ip in count) {
+					print ip > uf
+					print count[ip], ip > cf
+				}
+				print total + 0
+			}
+		')
 		vout "  $str: ${host_lines:-0} events, weight=$eff_weight, trip=$eff_trip"
 		events_count=$((events_count + host_lines))
 
 		# --- per-rule batch pre-computation ---
 		# Build unique IP list and pre-compute filters, country, pressure in bulk
-		# (~6 subprocesses total instead of ~5 per IP)
-		local _unique_file _pressure_tmp _pool_tmp
-		_unique_file=$(mktemp "$INSTALL_PATH/tmp/.uniq_ips.XXXXXX")
-		_pressure_tmp=$(mktemp "$INSTALL_PATH/tmp/.pressure_buf.XXXXXX")
-		_pool_tmp=$(mktemp "$INSTALL_PATH/tmp/.pool_buf.XXXXXX")
-		echo "$HOSTS_PARSED" | sort -u > "$_unique_file"
 
 		# batch filter: identify ignored and local IPs via single grep passes
 		declare -A _filter_map  # IP -> 1 (ignored) or 2 (local)
@@ -524,7 +529,9 @@ check() {
 		local _host_count
 		while read -r _host_count ahost; do
 			[ -z "$ahost" ] && continue
-			ATTACK_HOST=$(validate_ip_any "$ahost") || continue
+			ATTACK_HOST="$ahost"
+			# defense-in-depth: reject non-IP strings (custom rules may bypass extract_hosts)
+			validate_ip_any "$ahost" >/dev/null || continue
 			# O(1) filter lookup
 			local filter_rc="${_filter_map[$ATTACK_HOST]:-0}"
 			if [ "$filter_rc" -eq 1 ]; then
@@ -609,9 +616,9 @@ check() {
 			# accumulate pressure events for deferred write (one line per occurrence)
 			local _pi
 			for ((_pi = 0; _pi < _host_count; _pi++)); do
-				printf '%s\n' "$UTIME $ATTACK_HOST $MOD $scoring_weight" >> "$_pressure_tmp"
-			done
-		done < <(echo "$HOSTS_PARSED" | uniq -c)
+				printf '%s\n' "$UTIME $ATTACK_HOST $MOD $scoring_weight"
+			done >> "$_pressure_tmp"
+		done < "$_counted_file"
 
 		# --- deferred bulk writes (one flock+append per file per rule) ---
 		if [ -s "$_pressure_tmp" ]; then
@@ -630,7 +637,7 @@ check() {
 		fi
 
 		# per-rule cleanup
-		/usr/bin/rm -f "$_unique_file" "$_pressure_tmp" "$_pool_tmp"
+		/usr/bin/rm -f "$_unique_file" "$_pressure_tmp" "$_pool_tmp" "$_counted_file"
 		unset _filter_map _cc_map _pre_mod_p _pre_global_p
 	done
 

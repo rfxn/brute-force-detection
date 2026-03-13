@@ -16,6 +16,10 @@
       multi-pattern rules like sshd/12 patterns reduced from 24 to 2 file
       reads); replace bash validation loop with inline awk for mawk-compat
       IPv4/IPv6 validation
+[Change] check() per-IP loop: single awk replaces 5 pipeline operations
+      (tr, sort, grep -c, sort -u, uniq -c) for MATCHED_HOSTS processing;
+      pressure write loop redirects at loop level (1 open per IP vs per event);
+      remove redundant validate_ip_any (extract_hosts already validates)
 [Fix] extract_hosts: deduplicate multi-pattern matches per log line; fixes
       incidental double-counting in cpanel and sendmail rules where
       overlapping patterns inflated pressure scores
