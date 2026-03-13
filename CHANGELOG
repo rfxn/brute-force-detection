@@ -17,6 +17,9 @@
 [Fix] Scan timeout watchdog: kill entire process group (kill -TERM -- -$$)
       instead of single PID so child processes inside $() substitutions are
       terminated and the trap handler fires immediately
+[Fix] importconf: prevent stale modsec rule from being restored as a
+      "custom rule" on upgrade; rename modsec entries in pressure.conf
+      to mod_sec
 
   -- New Features --
 

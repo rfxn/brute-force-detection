@@ -186,6 +186,10 @@ new_press="$INSTALL_PATH/pressure.conf"
 if [ -f "$BK_LAST/pressure.conf" ]; then
 	# already has pressure.conf — preserve it
 	cp -f "$BK_LAST/pressure.conf" "$new_press"
+	# rename rule entries for rules that changed names (modsec -> mod_sec)
+	if grep -q '^modsec:' "$new_press" 2>/dev/null; then
+		sed -i 's/^modsec:/mod_sec:/' "$new_press"
+	fi
 	echo "  Preserved pressure.conf from previous install."
 elif [ -f "$BK_LAST/thresholds.conf" ]; then
 	# translate thresholds.conf TRIG entries → pressure.conf PRESSURE_TRIP entries
@@ -349,6 +353,8 @@ if [ -f "$BK_LAST/alert.bfd" ] && [ ! -d "$BK_LAST/alert" ]; then
 fi
 
 # preserve custom rule files from backup (user-added rules not in shipped set)
+# rules renamed or removed in this version — do not restore from backup
+_REMOVED_RULES="modsec"
 if [ -d "$BK_LAST/rules" ]; then
 	_custom_rules=0
 	for _old_rule in "$BK_LAST/rules"/*; do
@@ -356,6 +362,10 @@ if [ -d "$BK_LAST/rules" ]; then
 		_rule_name="${_old_rule##*/}"
 		# skip rules that exist in the new install (shipped rules — use new version)
 		[ -f "$INSTALL_PATH/rules/$_rule_name" ] && continue
+		# skip rules that were renamed or removed
+		case " $_REMOVED_RULES " in
+			*" $_rule_name "*) continue ;;
+		esac
 		cp -f "$_old_rule" "$INSTALL_PATH/rules/$_rule_name"
 		chmod 640 "$INSTALL_PATH/rules/$_rule_name"
 		_custom_rules=$((_custom_rules + 1))
