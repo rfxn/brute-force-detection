@@ -165,14 +165,13 @@ teardown() {
 
 # --- apool_list_json ---
 
-@test "apool_list_json: empty pool returns valid structure" {
+@test "apool_list_json: empty pool returns empty JSON object" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
 	> "$APOOL_LIST"
 	run apool_list_json
 	assert_success
-	# pool file exists but empty: still outputs full JSON structure
-	assert_output --partial '"last_24h":'
-	assert_output --partial '"services":'
+	# empty pool file (zero-byte): apool_list_json falls through to else branch returning {}
+	assert_output "{}"
 }
 
 @test "apool_list_json: has summary, last_24h, last_7d, services sections" {
