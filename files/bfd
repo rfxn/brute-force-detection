@@ -69,6 +69,10 @@ _cleanup_common() {
 # shellcheck disable=SC2317 # called via trap
 cleanup() {
 	_cleanup_common
+	# remove per-rule temp files that may remain after abnormal exit
+	/usr/bin/rm -f "$INSTALL_PATH/tmp/.uniq_ips."* \
+		"$INSTALL_PATH/tmp/.pressure_buf."* \
+		"$INSTALL_PATH/tmp/.pool_buf."* 2>/dev/null  # safe if glob expands to nothing
 }
 trap cleanup EXIT INT TERM
 
@@ -507,6 +511,9 @@ check() {
 		done < <(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_unique_file")
 
 		# batch pressure: single awk pass over pressure.dat for this MOD
+		# Note: pressure values are pre-computed from events recorded BEFORE this
+		# rule iteration. IP Y does not see IP X's events from the same rule in
+		# this cycle. The delta is negligible (events at age~0 with decay~1.0).
 		declare -A _pre_mod_p _pre_global_p  # IP -> scaled pressure (int)
 		local _bp_ip _bp_mod _bp_glob
 		while read -r _bp_ip _bp_mod _bp_glob; do

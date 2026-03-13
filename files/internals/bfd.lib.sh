@@ -2125,7 +2125,7 @@ _batch_ip_to_country() {
 			else { f = cc[m]; break }
 		}
 		print $0, (f != "" ? f : "-")
-	}' "$db_file" -
+	}' "$db_file" /dev/stdin
 }
 
 # count_subnet_attackers install_path window now mask mask_v6 min_unique

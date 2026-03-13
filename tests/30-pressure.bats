@@ -531,3 +531,80 @@ teardown() {
 	# implementation detail: may show "0.-5" or similar, but shouldn't crash
 	# mainly verifying no error exit
 }
+
+# ============================================================
+# _batch_pressure_compute()
+# ============================================================
+
+@test "_batch_pressure_compute: empty events file produces no output" {
+	local now; now=$(date +%s)
+	> "$INSTALL_PATH/tmp/pressure.dat"
+	run _batch_pressure_compute "$INSTALL_PATH/tmp/pressure.dat" "$now" "300" "sshd"
+	assert_success
+	assert_output ""
+}
+
+@test "_batch_pressure_compute: missing events file produces no output" {
+	local now; now=$(date +%s)
+	/usr/bin/rm -f "$INSTALL_PATH/tmp/pressure.dat"
+	run _batch_pressure_compute "$INSTALL_PATH/tmp/pressure.dat" "$now" "300" "sshd"
+	assert_success
+	assert_output ""
+}
+
+@test "_batch_pressure_compute: single IP returns per-mod and global pressure" {
+	local now; now=$(date +%s)
+	echo "$now 192.0.2.1 sshd 3" > "$INSTALL_PATH/tmp/pressure.dat"
+	run _batch_pressure_compute "$INSTALL_PATH/tmp/pressure.dat" "$now" "300" "sshd"
+	assert_success
+	# weight=3, age=0, decay=1.0 → per-mod=3000, global=3000
+	assert_output "192.0.2.1 3000 3000"
+}
+
+@test "_batch_pressure_compute: per-mod filters by service" {
+	local now; now=$(date +%s)
+	{
+		echo "$now 192.0.2.1 sshd 3"
+		echo "$now 192.0.2.1 dovecot 2"
+	} > "$INSTALL_PATH/tmp/pressure.dat"
+	run _batch_pressure_compute "$INSTALL_PATH/tmp/pressure.dat" "$now" "300" "sshd"
+	assert_success
+	# per-mod (sshd only) = 3000, global (sshd+dovecot) = 5000
+	assert_output "192.0.2.1 3000 5000"
+}
+
+@test "_batch_pressure_compute: multiple IPs returned separately" {
+	local now; now=$(date +%s)
+	{
+		echo "$now 192.0.2.1 sshd 3"
+		echo "$now 192.0.2.2 sshd 2"
+	} > "$INSTALL_PATH/tmp/pressure.dat"
+	local result
+	result=$(_batch_pressure_compute "$INSTALL_PATH/tmp/pressure.dat" "$now" "300" "sshd")
+	# both IPs should appear (order may vary)
+	echo "$result" | grep -q "192.0.2.1 3000 3000"
+	echo "$result" | grep -q "192.0.2.2 2000 2000"
+}
+
+@test "_batch_pressure_compute: cutoff excludes events beyond 10 half-lives" {
+	local now=10000
+	local half_life=300
+	# event at 11 half-lives ago → cutoff = 10000 - 3000 = 7000; ts=6700 < 7000
+	echo "6700 192.0.2.1 sshd 3" > "$INSTALL_PATH/tmp/pressure.dat"
+	run _batch_pressure_compute "$INSTALL_PATH/tmp/pressure.dat" "$now" "$half_life" "sshd"
+	assert_success
+	assert_output ""
+}
+
+@test "_batch_pressure_compute: event at 1 half-life decays to ~half" {
+	local now=10000
+	local half_life=300
+	local ts=$((now - half_life))
+	echo "$ts 192.0.2.1 sshd 1" > "$INSTALL_PATH/tmp/pressure.dat"
+	local result
+	result=$(_batch_pressure_compute "$INSTALL_PATH/tmp/pressure.dat" "$now" "$half_life" "sshd")
+	# weight=1, decay≈0.5 → ~500 scaled
+	local per_mod global_p
+	read -r _ per_mod global_p <<< "$result"
+	[ "$per_mod" -ge 490 ] && [ "$per_mod" -le 510 ]
+}
