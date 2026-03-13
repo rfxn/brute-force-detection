@@ -343,3 +343,64 @@ _run_entry_vars_country() {
 	[ "$COUNTRY_DISPLAY" = "--" ]
 	[ "$COUNTRY_DISPLAY_TG" = '\-\-' ]
 }
+
+# ============================================================
+# _batch_ip_to_country()
+# ============================================================
+
+@test "_batch_ip_to_country: no-db fallback outputs 'IP -' for each IP" {
+	local result
+	result=$(printf '192.0.2.1\n192.0.2.2\n' | _batch_ip_to_country "/nonexistent/ipcountry.dat")
+	echo "$result" | grep -q "192.0.2.1 -"
+	echo "$result" | grep -q "192.0.2.2 -"
+}
+
+@test "_batch_ip_to_country: empty db file outputs 'IP -'" {
+	> "$INSTALL_PATH/ipcountry.dat"
+	local result
+	result=$(printf '192.0.2.1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	[ "$result" = "192.0.2.1 -" ]
+}
+
+@test "_batch_ip_to_country: single IPv4 match returns correct CC" {
+	local result
+	result=$(printf '192.0.2.128\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	[ "$result" = "192.0.2.128 CN" ]
+}
+
+@test "_batch_ip_to_country: multiple IPs resolved in one pass" {
+	local result
+	result=$(printf '192.0.2.1\n192.0.2.128\n198.51.100.50\n203.0.113.100\n' \
+		| _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	echo "$result" | grep -q "192.0.2.1 XX"
+	echo "$result" | grep -q "192.0.2.128 CN"
+	echo "$result" | grep -q "198.51.100.50 RU"
+	echo "$result" | grep -q "203.0.113.100 US"
+}
+
+@test "_batch_ip_to_country: unknown IP returns dash" {
+	local result
+	result=$(printf '10.0.0.1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	[ "$result" = "10.0.0.1 -" ]
+}
+
+@test "_batch_ip_to_country: IPv6 address skipped with dash" {
+	local result
+	result=$(printf '2001:db8::1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	[ "$result" = "2001:db8::1 -" ]
+}
+
+@test "_batch_ip_to_country: mixed IPv4 and IPv6" {
+	local result
+	result=$(printf '192.0.2.128\n2001:db8::1\n198.51.100.50\n' \
+		| _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	echo "$result" | grep -q "192.0.2.128 CN"
+	echo "$result" | grep -q "2001:db8::1 -"
+	echo "$result" | grep -q "198.51.100.50 RU"
+}
+
+@test "_batch_ip_to_country: empty input produces no output" {
+	local result
+	result=$(printf '' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	[ -z "$result" ]
+}

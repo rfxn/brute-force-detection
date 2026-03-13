@@ -5,15 +5,37 @@
 [Change] Rename modsec rule to mod_sec for naming consistency with other
       underscore-delimited multi-word rule names; LOG_TAG="httpd.modsec"
       preserved (Apache log identifier, not a BFD rule name)
+[Change] check() performance: batch pre-computation replaces per-IP subprocess
+      calls with O(1) associative array lookups for filter, country, pressure,
+      and ban-status checks; deferred bulk writes reduce flock calls from
+      ~500/rule to 2/rule; ~6 subprocesses per rule regardless of IP count
+[Change] extract_hosts: write tlog output to temp file once instead of
+      piping multi-MB variable through echo per pattern
 
   -- Fixes --
 
 [Fix] Scan timeout watchdog: kill entire process group (kill -TERM -- -$$)
       instead of single PID so child processes inside $() substitutions are
       terminated and the trap handler fires immediately
+[Fix] importconf: prevent stale modsec rule from being restored as a
+      "custom rule" on upgrade; rename modsec entries in pressure.conf
+      to mod_sec
+[Fix] _batch_ip_to_country: replace awk stdin '-' argument with
+      /dev/stdin for mawk portability on deep-legacy targets
+[Fix] cleanup() trap: glob-remove per-rule temp files (.uniq_ips.*,
+      .pressure_buf.*, .pool_buf.*) on abnormal exit
 
   -- New Features --
 
+[New] Performance benchmark suite: 13 tests across 3 scaling tiers (small/
+      medium/large) measuring extract_hosts throughput, batch pressure/country
+      lookups, and full check() cycle wall time; mode deviation benchmarks
+      comparing scan vs standard tlog path, TLOG_FLOCK overhead, and
+      DRY_RUN=0 vs DRY_RUN=1 ban execution cost; realistic line-length
+      benchmarks with production-representative log content (sshd 150, mod_sec
+      800, postfix 250, dovecot 250 chars); 30-second hard timeout per test
+      group with stage-level diagnostics on timeout; KPI output in TAP
+      diagnostic format for trend tracking; dedicated 'make bench' target
 [New] geoip_lib integration: alert templates now show full country names
       (e.g. "China (CN)" instead of bare "CN") via shared geoip_lib.sh;
       graceful degradation to bare code when library not present

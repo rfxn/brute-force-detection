@@ -43,7 +43,6 @@ fi
 # initialize variables that may be unset
 SKIP_ALERT=""
 DRY_RUN=0
-_COUNTRY_CACHE_FILE=""
 _IGNORE_CACHE_FILE=""
 
 # ELOG constants (BFD-specific, never change on reload)
@@ -64,12 +63,16 @@ declare -A _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
 _cleanup_common() {
 	rm -rf "$LOCK_FILE.lk" 2>/dev/null
 	rm -f "$LOCK_FILE" 2>/dev/null
-	rm -f "${_COUNTRY_CACHE_FILE:-}" "${_IGNORE_CACHE_FILE:-}" 2>/dev/null
+	rm -f "${_IGNORE_CACHE_FILE:-}" 2>/dev/null
 }
 
 # shellcheck disable=SC2317 # called via trap
 cleanup() {
 	_cleanup_common
+	# remove per-rule temp files that may remain after abnormal exit
+	/usr/bin/rm -f "$INSTALL_PATH/tmp/.uniq_ips."* \
+		"$INSTALL_PATH/tmp/.pressure_buf."* \
+		"$INSTALL_PATH/tmp/.pool_buf."* 2>/dev/null  # safe if glob expands to nothing
 }
 trap cleanup EXIT INT TERM
 
@@ -388,11 +391,29 @@ check() {
 	alerts_file=$(mktemp "$INSTALL_PATH/tmp/.alerts.XXXXXX")
 
 	# --- per-cycle caches (cleaned up at end of check) ---
-	# country cache: avoids repeated awk scans of 190K-line ipcountry.dat per IP
-	_COUNTRY_CACHE_FILE=$(mktemp "$INSTALL_PATH/tmp/.cc_cache.XXXXXX")
 	# ignore cache: pre-loads all ignore lists into a single file for fast grep
 	_IGNORE_CACHE_FILE=$(mktemp "$INSTALL_PATH/tmp/.ig_cache.XXXXXX")
 	_build_ignore_cache "$IGNORE_HOST_FILES" "$_IGNORE_CACHE_FILE"
+
+	# cycle-level caches: country weights and active bans (shared across all rules)
+	declare -A _cw_map    # CC -> weight multiplier
+	declare -A _active_bans  # IP -> 1
+	local _cw_file="$INSTALL_PATH/pressure-country.conf"
+	if [ -f "$_cw_file" ]; then
+		local _cw_cc _cw_val
+		while IFS='=' read -r _cw_cc _cw_val; do
+			[[ "$_cw_cc" == \#* ]] && continue
+			[ -z "$_cw_cc" ] && continue
+			_cw_map[$_cw_cc]="$_cw_val"
+		done < "$_cw_file"
+	fi
+	local _bans_file="$INSTALL_PATH/tmp/bans.active"
+	if [ -f "$_bans_file" ] && [ -s "$_bans_file" ]; then
+		local _ba_ip
+		while read -r _ _ _ba_ip _; do
+			[ -n "$_ba_ip" ] && _active_bans[$_ba_ip]=1
+		done < "$_bans_file"
+	fi
 
 	# prune expired events once per run (10 half-lives = negligible contribution)
 	# scan mode skips pruning — pressure.dat state must not be mutated during a scan
@@ -449,27 +470,77 @@ check() {
 		host_lines=$(echo "$HOSTS_PARSED" | grep -c . 2>/dev/null || echo 0)
 		vout "  $str: ${host_lines:-0} events, weight=$eff_weight, trip=$eff_trip"
 		events_count=$((events_count + host_lines))
-		# iterate unique IPs with pre-computed occurrence counts (uniq -c)
-		# avoids O(n^2) grep in record_and_score by passing count directly
+
+		# --- per-rule batch pre-computation ---
+		# Build unique IP list and pre-compute filters, country, pressure in bulk
+		# (~6 subprocesses total instead of ~5 per IP)
+		local _unique_file _pressure_tmp _pool_tmp
+		_unique_file=$(mktemp "$INSTALL_PATH/tmp/.uniq_ips.XXXXXX")
+		_pressure_tmp=$(mktemp "$INSTALL_PATH/tmp/.pressure_buf.XXXXXX")
+		_pool_tmp=$(mktemp "$INSTALL_PATH/tmp/.pool_buf.XXXXXX")
+		echo "$HOSTS_PARSED" | sort -u > "$_unique_file"
+
+		# batch filter: identify ignored and local IPs via single grep passes
+		declare -A _filter_map  # IP -> 1 (ignored) or 2 (local)
+		local _ignored_ips _local_ips
+		if [ -s "$_IGNORE_CACHE_FILE" ]; then
+			_ignored_ips=$(grep -Fxf "$_IGNORE_CACHE_FILE" "$_unique_file" 2>/dev/null) || true  # exit 1 = no matches (normal)
+			if [ -n "$_ignored_ips" ]; then
+				local _fip
+				while IFS= read -r _fip; do
+					[ -n "$_fip" ] && _filter_map[$_fip]=1
+				done <<< "$_ignored_ips"
+			fi
+		fi
+		if [ -f "$LO_HOSTS" ] && [ -s "$LO_HOSTS" ]; then
+			_local_ips=$(grep -Fxf "$LO_HOSTS" "$_unique_file" 2>/dev/null) || true  # exit 1 = no matches (normal)
+			if [ -n "$_local_ips" ]; then
+				local _lip
+				while IFS= read -r _lip; do
+					# only set local if not already ignored
+					[ -n "$_lip" ] && [ -z "${_filter_map[$_lip]+_}" ] && _filter_map[$_lip]=2
+				done <<< "$_local_ips"
+			fi
+		fi
+
+		# batch country lookup: single awk pass over ipcountry.dat
+		declare -A _cc_map  # IP -> CC (or "-")
+		local _cc_line _cc_ip _cc_val
+		while read -r _cc_ip _cc_val; do
+			[ -n "$_cc_ip" ] && _cc_map[$_cc_ip]="$_cc_val"
+		done < <(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_unique_file")
+
+		# batch pressure: single awk pass over pressure.dat for this MOD
+		# Note: pressure values are pre-computed from events recorded BEFORE this
+		# rule iteration. IP Y does not see IP X's events from the same rule in
+		# this cycle. The delta is negligible (events at age~0 with decay~1.0).
+		declare -A _pre_mod_p _pre_global_p  # IP -> scaled pressure (int)
+		local _bp_ip _bp_mod _bp_glob
+		while read -r _bp_ip _bp_mod _bp_glob; do
+			[ -n "$_bp_ip" ] && _pre_mod_p[$_bp_ip]="$_bp_mod" && _pre_global_p[$_bp_ip]="$_bp_glob"
+		done < <(_batch_pressure_compute "$INSTALL_PATH/tmp/pressure.dat" "$UTIME" "$PRESSURE_HALF_LIFE" "$MOD")
+
+		# --- per-IP loop with O(1) lookups ---
 		local _host_count
 		while read -r _host_count ahost; do
 			[ -z "$ahost" ] && continue
 			ATTACK_HOST=$(validate_ip_any "$ahost") || continue
-			local filter_rc=0
-			filter_host "$ATTACK_HOST" "$IGNORE_HOST_FILES" "$LO_HOSTS" || filter_rc=$?
+			# O(1) filter lookup
+			local filter_rc="${_filter_map[$ATTACK_HOST]:-0}"
 			if [ "$filter_rc" -eq 1 ]; then
 				vout "  $ATTACK_HOST filtered (ignored)"
 				continue
 			fi
-			# compute pressure score for this host+service (country multiplier auto-applied)
-			local scoring_weight
-			scoring_weight=$(pressure_effective_weight "$eff_weight" "$ATTACK_HOST" "$INSTALL_PATH")
-			local pressure_scaled
-			pressure_scaled=$(record_and_score "$ATTACK_HOST" "$HOSTS_PARSED" \
-				"$INSTALL_PATH" "$PRESSURE_HALF_LIFE" "$UTIME" "$MOD" "$scoring_weight" "$_host_count")
-			if [ -z "$pressure_scaled" ]; then
-				pressure_scaled=0
+			# O(1) country + weight lookup
+			local _cc="${_cc_map[$ATTACK_HOST]:-}"
+			[ "$_cc" = "-" ] && _cc=""
+			local scoring_weight="$eff_weight"
+			if [ -n "$_cc" ] && [ -n "${_cw_map[$_cc]+_}" ]; then
+				scoring_weight=$(( (eff_weight * ${_cw_map[$_cc]} + 5) / 10 ))
+				[ "$scoring_weight" -lt 1 ] && scoring_weight=1
 			fi
+			# O(1) pressure: pre-computed base + new events at decay=1.0
+			local pressure_scaled=$(( ${_pre_mod_p[$ATTACK_HOST]:-0} + _host_count * scoring_weight * 1000 ))
 			# verbose: show per-IP pressure score
 			if [ "${VERBOSE:-0}" = "1" ]; then
 				local _p_fmt
@@ -485,8 +556,8 @@ check() {
 			if [ "$pressure_scaled" -ge "$trip_scaled" ]; then
 				should_ban=1
 			elif [ "${PRESSURE_TRIP_GLOBAL:-0}" -gt 0 ]; then
-				local gp
-				gp=$(pressure_compute "$INSTALL_PATH" "$ATTACK_HOST" "$PRESSURE_HALF_LIFE" "$UTIME")
+				# O(1) global pressure: pre-computed base + new events at decay=1.0
+				local gp=$(( ${_pre_global_p[$ATTACK_HOST]:-0} + _host_count * scoring_weight * 1000 ))
 				if [ "$gp" -ge $((PRESSURE_TRIP_GLOBAL * 1000)) ]; then
 					should_ban=1
 					_trip_type="global"
@@ -497,19 +568,14 @@ check() {
 					fi
 				fi
 			fi
-			# country lookup (cache-warm from pressure_effective_weight)
-			local _cc=""
-			_cc=$(ip_to_country "$ATTACK_HOST" "$INSTALL_PATH/ipcountry.dat")
 			if [ "$should_ban" -eq 1 ]; then
-				# skip if host already has an active ban
-				if state_bans_active_check "$INSTALL_PATH" "$ATTACK_HOST"; then
+				# O(1) active ban check
+				if [ -n "${_active_bans[$ATTACK_HOST]+_}" ]; then
 					continue
 				fi
 				if [ "$filter_rc" -eq 2 ]; then
 					# local address — record attack, skip ban
-					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD" \
-						"$_host_count" "${_cc:---}" "skip-local" "-1" "${PORTS:-all}" \
-						"$pressure_scaled" "$_trip_type"
+					printf '%s\n' "$UTIME $ATTACK_HOST $MOD $_host_count ${_cc:---} skip-local -1 ${PORTS:-all} $pressure_scaled $_trip_type" >> "$_pool_tmp"
 					elog warn "{$MOD} $ATTACK_HOST is a local address, skipping ban."
 				else
 					local _pool_action="ban-failed" _pool_duration="-1"
@@ -531,18 +597,41 @@ check() {
 							local eff_recipient="${RULE_EMAIL:-$EMAIL_ADDRESS}"
 							echo "${ATTACK_HOST}|${MOD}|${PORTS:-all}|${pressure_scaled}|${ban_expiry}|${ban_action}|${recent_bans}|${LOG_FILE}|${eff_recipient}|${eff_trip}|${PRESSURE_HALF_LIFE}|${scoring_weight}|${_host_count}" >> "$alerts_file"
 						fi
+						# update active bans cache for remainder of this cycle
+						_active_bans[$ATTACK_HOST]=1
 					fi
-					state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD" \
-						"$_host_count" "${_cc:---}" "$_pool_action" "$_pool_duration" \
-						"${PORTS:-all}" "$pressure_scaled" "$_trip_type"
+					printf '%s\n' "$UTIME $ATTACK_HOST $MOD $_host_count ${_cc:---} $_pool_action $_pool_duration ${PORTS:-all} $pressure_scaled $_trip_type" >> "$_pool_tmp"
 				fi
 			else
 				# sub-trip: record observation to attack pool
-				state_pool_append "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD" \
-					"$_host_count" "${_cc:---}" "observed" "0" "${PORTS:-all}" \
-					"$pressure_scaled" "-"
+				printf '%s\n' "$UTIME $ATTACK_HOST $MOD $_host_count ${_cc:---} observed 0 ${PORTS:-all} $pressure_scaled -" >> "$_pool_tmp"
 			fi
+			# accumulate pressure events for deferred write (one line per occurrence)
+			local _pi
+			for ((_pi = 0; _pi < _host_count; _pi++)); do
+				printf '%s\n' "$UTIME $ATTACK_HOST $MOD $scoring_weight" >> "$_pressure_tmp"
+			done
 		done < <(echo "$HOSTS_PARSED" | uniq -c)
+
+		# --- deferred bulk writes (one flock+append per file per rule) ---
+		if [ -s "$_pressure_tmp" ]; then
+			local _pdat="$INSTALL_PATH/tmp/pressure.dat"
+			(
+				flock -x 200
+				cat "$_pressure_tmp" >> "$_pdat"
+			) 200>>"$_pdat"
+		fi
+		if [ -s "$_pool_tmp" ]; then
+			local _pool_file="$INSTALL_PATH/stats/attack.pool"
+			(
+				flock -x 200
+				cat "$_pool_tmp" >> "$_pool_file"
+			) 200>>"$_pool_file"
+		fi
+
+		# per-rule cleanup
+		/usr/bin/rm -f "$_unique_file" "$_pressure_tmp" "$_pool_tmp"
+		unset _filter_map _cc_map _pre_mod_p _pre_global_p
 	done
 
 	# distributed attack detection
@@ -567,9 +656,9 @@ check() {
 	rm -f "$alerts_file"
 
 	# cleanup per-cycle caches
-	rm -f "$_COUNTRY_CACHE_FILE" "$_IGNORE_CACHE_FILE"
-	_COUNTRY_CACHE_FILE=""
+	/usr/bin/rm -f "$_IGNORE_CACHE_FILE"
 	_IGNORE_CACHE_FILE=""
+	unset _cw_map _active_bans
 
 	local run_end run_elapsed
 	run_end=$(date +"%s")

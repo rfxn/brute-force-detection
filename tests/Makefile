@@ -13,3 +13,9 @@ include infra/include/Makefile.tests
 # linger after bats exits.
 uat:
 	BATSMAN_DOCKER_FLAGS="--init --stop-timeout 3" $(BATSMAN_RUN_TESTS) -- $(BATSMAN_UAT_PATH)
+
+# Performance benchmarks: run only the benchmark test file.
+# Output includes KPI diagnostics in TAP format.
+.PHONY: bench
+bench:
+	$(BATSMAN_RUN_TESTS) -- /opt/tests/45-perf-benchmark.bats

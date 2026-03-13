@@ -1037,6 +1037,92 @@ NEWEOF
 	assert_output "# default country config"
 }
 
+# --- modsec -> mod_sec rename handling ---
+
+@test "importconf: modsec entries in pressure.conf renamed to mod_sec" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# old pressure.conf with modsec entries
+	cat > "$inst.bk.last/pressure.conf" <<'EOF'
+sshd:PRESSURE_WEIGHT=3:PRESSURE_TRIP=10
+modsec:PRESSURE_WEIGHT=3:PRESSURE_TRIP=5
+dovecot:PRESSURE_WEIGHT=2
+EOF
+
+	# new pressure.conf with defaults
+	cat > "$inst/pressure.conf" <<'EOF'
+sshd:PRESSURE_TRIP=5
+mod_sec:PRESSURE_TRIP=10
+EOF
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# modsec should be renamed to mod_sec in preserved pressure.conf
+	run grep '^mod_sec:' "$inst/pressure.conf"
+	assert_output "mod_sec:PRESSURE_WEIGHT=3:PRESSURE_TRIP=5"
+	# old modsec: prefix should not remain
+	run grep '^modsec:' "$inst/pressure.conf"
+	assert_failure
+}
+
+@test "importconf: old modsec rule file blocked by _REMOVED_RULES" {
+	local inst="$TEST_TMPDIR/bfd"
+	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/rules" "$inst/tmp" "$inst/stats"
+
+	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+OLDEOF
+
+	cat > "$inst/conf.bfd" <<'NEWEOF'
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+INSTALL_PATH="/usr/local/bfd"
+NEWEOF
+
+	# shipped rules in new install
+	echo "NEW SSHD" > "$inst/rules/sshd"
+	echo "NEW MOD_SEC" > "$inst/rules/mod_sec"
+
+	# old backup has both shipped and renamed rules
+	echo "OLD SSHD" > "$inst.bk.last/rules/sshd"
+	echo "OLD MODSEC" > "$inst.bk.last/rules/modsec"
+	# also a genuinely custom rule
+	echo "CUSTOM RULE" > "$inst.bk.last/rules/my_custom"
+
+	local script
+	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
+	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
+	chmod +x "$script"
+	run bash "$script"
+	assert_success
+
+	# modsec should NOT be restored (it's in _REMOVED_RULES)
+	[ ! -f "$inst/rules/modsec" ]
+	# custom rule should be restored
+	[ -f "$inst/rules/my_custom" ]
+	run cat "$inst/rules/my_custom"
+	assert_output "CUSTOM RULE"
+	# shipped rules should keep new version
+	run cat "$inst/rules/sshd"
+	assert_output "NEW SSHD"
+}
+
 # --- legacy migration message (F-047) ---
 
 @test "importconf: legacy migration message recommends bfd -c (F-047)" {
