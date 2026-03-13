@@ -27,6 +27,11 @@
 
   -- New Features --
 
+[New] Performance benchmark suite: 9 tests across 3 scaling tiers (small/
+      medium/large) measuring extract_hosts throughput, batch pressure/country
+      lookups, and full check() cycle wall time; 30-second hard timeout per
+      test group with stage-level diagnostics on timeout; KPI output in TAP
+      diagnostic format for trend tracking
 [New] geoip_lib integration: alert templates now show full country names
       (e.g. "China (CN)" instead of bare "CN") via shared geoip_lib.sh;
       graceful degradation to bare code when library not present
