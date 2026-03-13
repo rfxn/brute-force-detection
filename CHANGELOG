@@ -6,6 +6,12 @@
       underscore-delimited multi-word rule names; LOG_TAG="httpd.modsec"
       preserved (Apache log identifier, not a BFD rule name)
 
+  -- Fixes --
+
+[Fix] Scan timeout watchdog: kill entire process group (kill -TERM -- -$$)
+      instead of single PID so child processes inside $() substitutions are
+      terminated and the trap handler fires immediately
+
   -- New Features --
 
 [New] geoip_lib integration: alert templates now show full country names
