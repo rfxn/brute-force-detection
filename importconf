@@ -380,4 +380,10 @@ if [ -f "$BK_LAST/exclude.files" ]; then
 	cp -f "$BK_LAST/exclude.files" "$INSTALL_PATH/exclude.files"
 fi
 
+# Migrate BFD_LOG_PATH from legacy flat file to log directory
+if grep -q '^BFD_LOG_PATH="/var/log/bfd_log"' "$new_conf" 2>/dev/null; then
+	sed -i 's|^BFD_LOG_PATH="/var/log/bfd_log"|BFD_LOG_PATH="/var/log/bfd/bfd.log"|' "$new_conf"
+	echo "  Migrated BFD_LOG_PATH: /var/log/bfd_log -> /var/log/bfd/bfd.log (symlink preserved)."
+fi
+
 echo "  Imported config and state from BFD $OV to $NV."

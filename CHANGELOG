@@ -20,6 +20,9 @@
       (tr, sort, grep -c, sort -u, uniq -c) for MATCHED_HOSTS processing;
       pressure write loop redirects at loop level (1 open per IP vs per event);
       remove redundant validate_ip_any (extract_hosts already validates)
+[Change] Consolidate BFD_LOG_PATH from /var/log/bfd_log to /var/log/bfd/bfd.log;
+      on upgrade, existing log content is moved and a symlink preserves the
+      legacy path for external log parsers and logrotate
 [Fix] extract_hosts: deduplicate multi-pattern matches per log line; fixes
       incidental double-counting in cpanel and sendmail rules where
       overlapping patterns inflated pressure scores
