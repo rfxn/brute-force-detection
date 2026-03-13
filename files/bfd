@@ -1483,10 +1483,12 @@ case "${1:-}" in
 	_SCAN_MODE=1
 	_SCAN_LOG_PAIRS=""
 	eout "scan: processing ${_SCAN_RULE:-all rules} (max_lines=$SCAN_MAX_LINES, timeout=${SCAN_TIMEOUT}s, dry_run=$DRY_RUN)" le
-	# watchdog: kill this process with SIGTERM if scan exceeds SCAN_TIMEOUT seconds
-	( sleep "$SCAN_TIMEOUT"; kill -TERM $$ ) >/dev/null 2>&1 &
+	# watchdog: kill the entire process group if scan exceeds SCAN_TIMEOUT seconds.
+	# kill -TERM -- -$$ targets the process group, ensuring child processes inside
+	# $() command substitutions are terminated so the trap handler fires immediately.
+	( sleep "$SCAN_TIMEOUT"; kill -TERM -- -$$ ) >/dev/null 2>&1 &
 	_scan_watchdog_pid=$!
-	trap 'kill "$_scan_watchdog_pid" 2>/dev/null; eout "scan: timed out after ${SCAN_TIMEOUT}s -- use --scan-timeout=N to extend" le; exit 1' TERM
+	trap 'kill "$_scan_watchdog_pid" 2>/dev/null; wait 2>/dev/null; eout "scan: timed out after ${SCAN_TIMEOUT}s -- use --scan-timeout=N to extend" le; exit 1' TERM
 	process_unbans "$INSTALL_PATH" "$UTIME"
 	check
 	kill "$_scan_watchdog_pid" 2>/dev/null
