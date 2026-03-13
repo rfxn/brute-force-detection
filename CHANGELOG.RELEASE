@@ -76,6 +76,9 @@
       use exec >/dev/null 2>&1 at subshell level to close inherited fds
 [Fix] bfd.1: add geoip_lib.sh, bfd_alert.sh, and pkg_lib.sh to FILES section;
       all internal libraries now documented in man page
+[Fix] -a/--attackpool: add -s (non-empty) guard to apool_list, apool_list_json,
+      and apool_list_csv elif conditions; the init path always touch-creates
+      attack.pool so the -f test alone never reached the else branch
 
   -- Enhancements --
 
