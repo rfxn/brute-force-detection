@@ -921,9 +921,15 @@ _rule_tlog() {
 extract_hosts() {
 	local ip4_re='[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
 	local ip6_re='[0-9a-fA-F]{0,4}(:[0-9a-fA-F]{0,4}){1,7}'
-	local tlog_input
-	tlog_input=$(sed 's/::ffff://g')
-	[ -z "$tlog_input" ] && return 0
+	# write tlog output to temp file once; sed reads from file per pattern
+	# instead of echo-piping multi-MB $tlog_input variable for each pattern
+	local _tlog_file
+	_tlog_file=$(mktemp "${TMPDIR:-/tmp}/.bfd_extract.XXXXXX")
+	sed 's/::ffff://g' > "$_tlog_file"
+	if [ ! -s "$_tlog_file" ]; then
+		/usr/bin/rm -f "$_tlog_file"
+		return 0
+	fi
 
 	# apply IGNOREREGEX exclusion if set by rule
 	if [ -n "${IGNOREREGEX:-}" ]; then
@@ -934,8 +940,14 @@ extract_hosts() {
 			elog warn "invalid IGNOREREGEX pattern '$IGNOREREGEX', ignoring" >&2
 			IGNOREREGEX=""
 		else
-			tlog_input=$(echo "$tlog_input" | grep -Ev "$IGNOREREGEX")
-			[ -z "$tlog_input" ] && return 0
+			local _tlog_filtered
+			_tlog_filtered=$(mktemp "${TMPDIR:-/tmp}/.bfd_extract.XXXXXX")
+			grep -Ev "$IGNOREREGEX" "$_tlog_file" > "$_tlog_filtered" || true  # exit 1 = all lines match (valid)
+			/usr/bin/mv -f "$_tlog_filtered" "$_tlog_file"
+			if [ ! -s "$_tlog_file" ]; then
+				/usr/bin/rm -f "$_tlog_file"
+				return 0
+			fi
 		fi
 	fi
 
@@ -945,14 +957,15 @@ extract_hosts() {
 		sed_pat="${pattern//<HOST>/($ip4_re)}"
 		# (^|.*[^0-9.]) boundary prevents greedy .* from consuming
 		# leading digits of the IP address; IP capture becomes \2
-		echo "$tlog_input" | sed -En "s#(^|.*[^0-9.])${sed_pat}.*#\2#p"
+		sed -En "s#(^|.*[^0-9.])${sed_pat}.*#\2#p" "$_tlog_file"
 		# IPv6 extraction — inner group in ip6_re pushes IP to \2
 		sed_pat="${pattern//<HOST>/($ip6_re)}"
-		echo "$tlog_input" | sed -En "s#(^|.*[^0-9a-fA-F:])${sed_pat}.*#\2#p"
+		sed -En "s#(^|.*[^0-9a-fA-F:])${sed_pat}.*#\2#p" "$_tlog_file"
 	done | tr -d '[]' | while IFS= read -r ip; do
 		[ -z "$ip" ] && continue
 		validate_ip_any "$ip" 2>/dev/null || true
 	done
+	/usr/bin/rm -f "$_tlog_file"
 }
 
 # validate_rule rule_name — check that a sourced rule set required variables.
@@ -2052,6 +2065,67 @@ pressure_effective_weight() {
 		eff=1
 	fi
 	echo "$eff"
+}
+
+# --- Batch pre-computation functions for check() performance ---
+# These functions perform single-pass computation over all IPs at once,
+# replacing per-IP subprocess calls with O(1) associative array lookups.
+
+# _batch_pressure_compute events_file now half_life mod
+# Single awk pass over pressure.dat computing BOTH per-mod and global decayed
+# pressure for all IPs. Output: "IP mod_p global_p" (pressures scaled *1000).
+_batch_pressure_compute() {
+	local events_file="$1" now="$2" half_life="$3" mod="$4"
+	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
+		return 0
+	fi
+	local cutoff=$((now - half_life * 10))
+	awk -v now="$now" -v hl="$half_life" -v cutoff="$cutoff" -v mod="$mod" \
+		'BEGIN { ln2 = 0.693147180559945 }
+		$1+0 >= cutoff {
+			w = ($4+0 > 0) ? $4+0 : 1
+			age = now - ($1+0)
+			d = w * exp(-ln2 * age / hl)
+			global[$2] += d
+			if ($3 == mod) per_mod[$2] += d
+		}
+		END {
+			for (ip in global)
+				printf "%s %d %d\n", ip, int((ip in per_mod ? per_mod[ip] : 0) * 1000), int(global[ip] * 1000)
+		}' "$events_file"
+}
+
+# _batch_ip_to_country db_file < ip_list
+# Single awk pass: loads ipcountry.dat ranges into indexed arrays (pass 1),
+# then binary-searches each IP from stdin (pass 2). Output: "IP CC" (or "IP -").
+# O(M + N*log(M)) where M=db entries (~256K) and N=unique IPs (~500).
+_batch_ip_to_country() {
+	local db_file="$1"
+	if [ ! -f "$db_file" ] || [ ! -s "$db_file" ]; then
+		# no db — output "IP -" for each input IP
+		while IFS= read -r _ip; do
+			[ -n "$_ip" ] && echo "$_ip -"
+		done
+		return 0
+	fi
+	awk 'NR==FNR {
+		if (/^#/) next
+		lo[++n] = $1+0; hi[n] = $2+0; cc[n] = $3
+		next
+	}
+	/:/ { print $0, "-"; next }
+	{
+		split($0, p, ".")
+		t = (p[1]+0) * 16777216 + (p[2]+0) * 65536 + (p[3]+0) * 256 + (p[4]+0)
+		l = 1; r = n; f = ""
+		while (l <= r) {
+			m = int((l + r) / 2)
+			if (t < lo[m]) r = m - 1
+			else if (t > hi[m]) l = m + 1
+			else { f = cc[m]; break }
+		}
+		print $0, (f != "" ? f : "-")
+	}' "$db_file" -
 }
 
 # count_subnet_attackers install_path window now mask mask_v6 min_unique
