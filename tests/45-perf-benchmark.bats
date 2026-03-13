@@ -755,3 +755,61 @@ _perf_generate_logs() {
 	kpi_report "realistic.dovecot" "$count lines in ${ms}ms" "(${rate} lines/sec, ~250 char/line)"
 	perf_timeout_check "dovecot" "$_group_start" "$_timeout"
 }
+
+@test "perf: deviation -- multi-pattern scaling (sshd 1 vs 12 patterns, 2K lines)" {
+	local _timeout=30
+	local _group_start
+	_group_start=$(date +%s)
+
+	# Generate 2K sshd log (100% match on "Failed password")
+	local _log_file="$INSTALL_PATH/tmp/perf_multi_sshd.log"
+	generate_sshd_log 2000 200 100 > "$_log_file"
+	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
+
+	# --- Single pattern baseline ---
+	timer_start
+	local result_1
+	result_1=$(cat "$_log_file" | extract_hosts \
+		"sshd.*Failed password for .* from <HOST>")
+	local ms_1
+	ms_1=$(timer_elapsed_ms)
+	local count_1
+	count_1=$(echo "$result_1" | grep -c . 2>/dev/null || echo 0)
+	local rate_1=$(( count_1 * 1000 / (ms_1 + 1) ))
+	kpi_report "multi.sshd.1pat" "$count_1 lines in ${ms_1}ms" "(${rate_1} lines/sec)"
+	perf_timeout_check "single_pattern" "$_group_start" "$_timeout"
+
+	# --- All 12 sshd patterns (production configuration) ---
+	timer_start
+	local result_12
+	result_12=$(cat "$_log_file" | extract_hosts \
+		"sshd.*Invalid user .* from <HOST>" \
+		"sshd.*Failed password for .* from <HOST>" \
+		"sshd.*User .* from <HOST> not allowed" \
+		"sshd.*Failed keyboard-interactive.* from <HOST>" \
+		"sshd.*Did not receive identification string from <HOST>" \
+		"sshd.*refused connect from <HOST>" \
+		"sshd.*maximum authentication attempts exceeded.* from <HOST>" \
+		"sshd.*pam_unix.*authentication failure.*rhost=<HOST>" \
+		"sshd.*Connection closed by authenticating user .* <HOST> port" \
+		"sshd.*Disconnected from authenticating user .* <HOST> port" \
+		"sshd.*banner exchange: Connection from <HOST> port" \
+		"sshd.*Unable to negotiate with <HOST> port")
+	local ms_12
+	ms_12=$(timer_elapsed_ms)
+	local count_12
+	count_12=$(echo "$result_12" | grep -c . 2>/dev/null || echo 0)
+	local rate_12=$(( count_12 * 1000 / (ms_12 + 1) ))
+	kpi_report "multi.sshd.12pat" "$count_12 lines in ${ms_12}ms" "(${rate_12} lines/sec)"
+	perf_timeout_check "twelve_patterns" "$_group_start" "$_timeout"
+
+	# --- Delta ---
+	local delta=0
+	if [ "$ms_1" -gt 0 ]; then
+		delta=$(( (ms_12 - ms_1) * 100 / (ms_1 + 1) ))
+	fi
+	kpi_report "multi.sshd.1_vs_12" "1pat=${ms_1}ms 12pat=${ms_12}ms" "(${delta}% overhead for 12x patterns)"
+
+	# counts must match (all lines match "Failed password" = pattern 2)
+	[ "$count_1" -eq "$count_12" ]
+}

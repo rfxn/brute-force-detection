@@ -11,6 +11,18 @@
       ~500/rule to 2/rule; ~6 subprocesses per rule regardless of IP count
 [Change] extract_hosts: write tlog output to temp file once instead of
       piping multi-MB variable through echo per pattern
+[Change] extract_hosts: combine N per-pattern sed invocations into single
+      IPv4 + IPv6 pass using sed 't' branch (~85x throughput improvement;
+      multi-pattern rules like sshd/12 patterns reduced from 24 to 2 file
+      reads); replace bash validation loop with inline awk for mawk-compat
+      IPv4/IPv6 validation
+[Change] check() per-IP loop: single awk replaces 5 pipeline operations
+      (tr, sort, grep -c, sort -u, uniq -c) for MATCHED_HOSTS processing;
+      pressure write loop redirects at loop level (1 open per IP vs per event);
+      remove redundant validate_ip_any (extract_hosts already validates)
+[Fix] extract_hosts: deduplicate multi-pattern matches per log line; fixes
+      incidental double-counting in cpanel and sendmail rules where
+      overlapping patterns inflated pressure scores
 
   -- Fixes --
 

@@ -951,20 +951,66 @@ extract_hosts() {
 		fi
 	fi
 
-	local pattern sed_pat
+	# Build combined sed scripts: one IPv4 pass, one IPv6 pass.
+	# Uses sed 't' (test-and-branch) to skip remaining patterns on first
+	# match — reduces 2N file reads to 2 for N-pattern rules (e.g. sshd
+	# with 12 patterns: 24 sed processes → 2).  If a line matches >1
+	# pattern, only the first fires; this is correct (one log line = one
+	# event) and fixes incidental double-counting in cpanel/sendmail rules
+	# where overlapping patterns previously inflated pressure scores.
+	local sed_v4="" sed_v6="" pattern sed_pat
 	for pattern in "$@"; do
-		# IPv4 extraction
-		sed_pat="${pattern//<HOST>/($ip4_re)}"
 		# (^|.*[^0-9.]) boundary prevents greedy .* from consuming
 		# leading digits of the IP address; IP capture becomes \2
-		sed -En "s#(^|.*[^0-9.])${sed_pat}.*#\2#p" "$_tlog_file"
+		sed_pat="${pattern//<HOST>/($ip4_re)}"
+		sed_v4="${sed_v4}s#(^|.*[^0-9.])${sed_pat}.*#\2#p; t; "
 		# IPv6 extraction — inner group in ip6_re pushes IP to \2
 		sed_pat="${pattern//<HOST>/($ip6_re)}"
-		sed -En "s#(^|.*[^0-9a-fA-F:])${sed_pat}.*#\2#p" "$_tlog_file"
-	done | tr -d '[]' | while IFS= read -r ip; do
-		[ -z "$ip" ] && continue
-		validate_ip_any "$ip" 2>/dev/null || true
+		sed_v6="${sed_v6}s#(^|.*[^0-9a-fA-F:])${sed_pat}.*#\2#p; t; "
 	done
+	{
+		sed -En "$sed_v4" "$_tlog_file"
+		sed -En "$sed_v6" "$_tlog_file"
+	} | awk '{
+		gsub(/[\[\]]/, "")
+		if ($0 == "") next
+		ip = $0
+		# IPv4: exactly 4 dot-separated groups, each 0-255
+		n = split(ip, o, ".")
+		if (n == 4) {
+			valid = 1
+			for (i = 1; i <= 4; i++) {
+				if (o[i] ~ /[^0-9]/ || o[i] == "" || length(o[i]) > 3 || o[i]+0 > 255) {
+					valid = 0; break
+				}
+			}
+			if (valid) { print ip; next }
+		}
+		# IPv6: strip zone ID, validate hex:colon structure
+		sub(/%.*$/, "", ip)
+		if (ip == "") next
+		if (ip !~ /^[0-9a-fA-F:]+$/) next
+		if (ip !~ /:/) next
+		if (ip ~ /:::/) next
+		if (ip ~ /^:[^:]/) next
+		if (ip ~ /[^:]:$/) next
+		tmp = ip; dc = gsub(/::/, "::", tmp)
+		if (dc > 1) next
+		n = split(ip, g, ":")
+		ne = 0; valid = 1
+		for (i = 1; i <= n; i++) {
+			if (g[i] != "") {
+				ne++
+				if (length(g[i]) > 4) { valid = 0; break }
+			}
+		}
+		if (!valid) next
+		if (dc == 1) {
+			if (ne <= 7) print ip
+		} else {
+			if (ne == 8) print ip
+		}
+	}'
 	/usr/bin/rm -f "$_tlog_file"
 }
 
@@ -1330,10 +1376,10 @@ _fw_custom_ban() {
 	fi
 	ATTACK_HOST="$host"; MOD="$mod"; PORTS="$ports"
 	# Security: $cmd is from BAN_COMMAND_TEMPLATE, extracted raw from conf.bfd
-	# by extract_command_template(). $host is validated by validate_ip_any(),
-	# $mod by sanitize_mod(), $ports by sanitize_ports(). conf.bfd is root-owned
-	# and verified by safe_source(). This eval is intentional for user-defined
-	# firewall commands.
+	# by extract_command_template(). $host is validated by validate_ip_any()
+	# (check() loop + CLI callers), $mod by sanitize_mod(), $ports by
+	# sanitize_ports(). conf.bfd is root-owned and verified by safe_source().
+	# This eval is intentional for user-defined firewall commands.
 	eval "$cmd" >/dev/null 2>&1
 }
 
