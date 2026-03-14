@@ -39,6 +39,9 @@
       /dev/stdin for mawk portability on deep-legacy targets
 [Fix] cleanup() trap: glob-remove per-rule temp files (.uniq_ips.*,
       .pressure_buf.*, .pool_buf.*) on abnormal exit
+[Fix] Replace hardcoded /usr/bin/rm and /usr/bin/mv with 'command rm'
+      and 'command mv' for deep-legacy portability (CentOS 6, Ubuntu 12.04
+      have rm/mv at /bin/, not /usr/bin/)
 
   -- New Features --
 

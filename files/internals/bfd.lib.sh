@@ -927,7 +927,7 @@ extract_hosts() {
 	_tlog_file=$(mktemp "${TMPDIR:-/tmp}/.bfd_extract.XXXXXX")
 	sed 's/::ffff://g' > "$_tlog_file"
 	if [ ! -s "$_tlog_file" ]; then
-		/usr/bin/rm -f "$_tlog_file"
+		command rm -f "$_tlog_file"
 		return 0
 	fi
 
@@ -943,9 +943,9 @@ extract_hosts() {
 			local _tlog_filtered
 			_tlog_filtered=$(mktemp "${TMPDIR:-/tmp}/.bfd_extract.XXXXXX")
 			grep -Ev "$IGNOREREGEX" "$_tlog_file" > "$_tlog_filtered" || true  # exit 1 = all lines match (valid)
-			/usr/bin/mv -f "$_tlog_filtered" "$_tlog_file"
+			command mv -f "$_tlog_filtered" "$_tlog_file"
 			if [ ! -s "$_tlog_file" ]; then
-				/usr/bin/rm -f "$_tlog_file"
+				command rm -f "$_tlog_file"
 				return 0
 			fi
 		fi
@@ -1011,7 +1011,7 @@ extract_hosts() {
 			if (ne == 8) print ip
 		}
 	}'
-	/usr/bin/rm -f "$_tlog_file"
+	command rm -f "$_tlog_file"
 }
 
 # validate_rule rule_name — check that a sourced rule set required variables.

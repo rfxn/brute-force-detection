@@ -70,7 +70,7 @@ _cleanup_common() {
 cleanup() {
 	_cleanup_common
 	# remove per-rule temp files that may remain after abnormal exit
-	/usr/bin/rm -f "$INSTALL_PATH/tmp/.uniq_ips."* \
+	command rm -f "$INSTALL_PATH/tmp/.uniq_ips."* \
 		"$INSTALL_PATH/tmp/.pressure_buf."* \
 		"$INSTALL_PATH/tmp/.pool_buf."* 2>/dev/null  # safe if glob expands to nothing
 }
@@ -321,9 +321,9 @@ if [ -f "$_LEGACY_LOG" ] && [ ! -L "$_LEGACY_LOG" ] && [ "$BFD_LOG_PATH" = "/var
 	if [ -s "$BFD_LOG_PATH" ]; then
 		# both exist with content — prepend old (chronologically earlier) before new
 		cat "$_LEGACY_LOG" "$BFD_LOG_PATH" > "${BFD_LOG_PATH}.mig"
-		/usr/bin/mv -f "${BFD_LOG_PATH}.mig" "$BFD_LOG_PATH"
+		command mv -f "${BFD_LOG_PATH}.mig" "$BFD_LOG_PATH"
 	else
-		/usr/bin/mv -f "$_LEGACY_LOG" "$BFD_LOG_PATH"
+		command mv -f "$_LEGACY_LOG" "$BFD_LOG_PATH"
 	fi
 	chmod 640 "$BFD_LOG_PATH"
 	ln -sf "$BFD_LOG_PATH" "$_LEGACY_LOG"
@@ -659,7 +659,7 @@ check() {
 		fi
 
 		# per-rule cleanup
-		/usr/bin/rm -f "$_unique_file" "$_pressure_tmp" "$_pool_tmp" "$_counted_file"
+		command rm -f "$_unique_file" "$_pressure_tmp" "$_pool_tmp" "$_counted_file"
 		unset _filter_map _cc_map _pre_mod_p _pre_global_p
 	done
 
@@ -685,7 +685,7 @@ check() {
 	rm -f "$alerts_file"
 
 	# cleanup per-cycle caches
-	/usr/bin/rm -f "$_IGNORE_CACHE_FILE"
+	command rm -f "$_IGNORE_CACHE_FILE"
 	_IGNORE_CACHE_FILE=""
 	unset _cw_map _active_bans
 
