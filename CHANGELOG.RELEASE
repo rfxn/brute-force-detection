@@ -23,6 +23,14 @@
 [Change] Consolidate BFD_LOG_PATH from /var/log/bfd_log to /var/log/bfd/bfd.log;
       on upgrade, existing log content is moved and a symlink preserves the
       legacy path for external log parsers and logrotate
+[Change] importconf: replace inline merge_conf() AWK function with
+      pkg_config_merge() from pkg_lib; removes 32-line inline merge
+      implementation in favor of shared library call; pkg_lib sourced
+      after early-exit guards with explicit file-not-found error;
+      trap cleanup updated for new .tmp file paths
+[Change] pkg_lib.sh updated to v1.0.3: pkg_config_merge preserves
+      original file permissions on output (stat/chmod parity with
+      inline merge_conf)
 [Fix] extract_hosts: deduplicate multi-pattern matches per log line; fixes
       incidental double-counting in cpanel and sendmail rules where
       overlapping patterns inflated pressure scores

@@ -10,10 +10,19 @@ load 'helpers/bfd-common'
 setup() {
 	bfd_common_setup
 	IMPORTCONF="$PROJECT_ROOT/importconf"
+	_PKG_LIB_SRC="$PROJECT_ROOT/files/internals/pkg_lib.sh"
 }
 
 teardown() {
 	bfd_teardown
+}
+
+# _importconf_prep_inst: create internals dir and copy pkg_lib.sh into $inst
+# Call after creating the $inst directory in each test.
+_importconf_prep_inst() {
+	local inst="$1"
+	mkdir -p "$inst/internals"
+	cp "$_PKG_LIB_SRC" "$inst/internals/pkg_lib.sh"
 }
 
 # --- fresh install (no backup dir) ---
@@ -35,6 +44,7 @@ teardown() {
 	# set up install path and backup
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	# old config with user customizations
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
@@ -75,6 +85,7 @@ NEWEOF
 @test "importconf: preserves template variables (BAN_COMMAND with \$ATTACK_HOST)" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
@@ -103,6 +114,7 @@ NEWEOF
 @test "importconf: new variables get defaults (old config missing BAN_COMMAND_V6)" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	# old config WITHOUT BAN_COMMAND_V6
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
@@ -137,6 +149,7 @@ NEWEOF
 @test "importconf: removed variables dropped (old config has var not in new)" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
@@ -166,6 +179,7 @@ NEWEOF
 @test "importconf: comments and section headers from new config preserved" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
@@ -205,6 +219,7 @@ NEWEOF
 @test "importconf: version extraction works" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
@@ -230,6 +245,7 @@ NEWEOF
 @test "importconf: pre-split conf.bfd variables migrate to internals.conf" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats" "$inst/internals"
+	_importconf_prep_inst "$inst"
 
 	# old pre-split config has internal variables in conf.bfd
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
@@ -281,6 +297,7 @@ INTEOF
 @test "importconf: post-split upgrade merges both old files" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats" "$inst/internals"
+	_importconf_prep_inst "$inst"
 
 	# old post-split install has both files (flat layout)
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
@@ -322,6 +339,7 @@ INTEOF
 @test "importconf: state files (bans.active, pressure.dat) copied on upgrade" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/tmp" "$inst.bk.last/stats" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
@@ -364,6 +382,7 @@ NEWEOF
 @test "importconf: events.dat in backup migrated to pressure.dat" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/tmp" "$inst/tmp"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
@@ -396,6 +415,7 @@ NEWEOF
 @test "importconf: pre-thresholds upgrade migrates old rule TRIG to pressure.conf" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
@@ -443,6 +463,7 @@ EOF
 @test "importconf: post-pressure upgrade preserves existing pressure.conf" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -486,6 +507,7 @@ EOF
 @test "importconf: thresholds.conf migrated to pressure.conf on upgrade" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -530,6 +552,7 @@ EOF
 @test "importconf: TRIG migrated to PRESSURE_TRIP in conf.bfd" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	# old config with legacy TRIG variable
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
@@ -561,6 +584,7 @@ NEWEOF
 @test "importconf: TRIG=500 clamped to 200 during migration" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
@@ -590,6 +614,7 @@ NEWEOF
 @test "importconf: inherited PRESSURE_TRIP=500 clamped to 200 post-merge" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	# old config already has PRESSURE_TRIP=500 (from prior bad migration)
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
@@ -620,6 +645,7 @@ NEWEOF
 @test "importconf: BAN_DURATION migrated to BAN_TTL in conf.bfd" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
@@ -649,6 +675,7 @@ NEWEOF
 @test "importconf: TRIG_WINDOW migrated to PRESSURE_HALF_LIFE in conf.bfd" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
@@ -677,6 +704,7 @@ NEWEOF
 @test "importconf: BAN_PERMANENT_AFTER migrated to BAN_ESCALATE_AFTER" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>
@@ -707,6 +735,7 @@ NEWEOF
 @test "importconf: tlog byte-offset files preserved on upgrade" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/tmp" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -743,6 +772,7 @@ NEWEOF
 @test "importconf: tlog loop skips dotfiles and extension files" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/tmp" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -781,6 +811,7 @@ NEWEOF
 @test "importconf: custom alert template preserved on upgrade" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -814,6 +845,7 @@ NEWEOF
 @test "importconf: custom rule files restored on upgrade" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/rules" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -856,6 +888,7 @@ NEWEOF
 @test "importconf: shipped rules not overwritten by backup versions" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/rules" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -885,6 +918,7 @@ NEWEOF
 @test "importconf: no custom rules produces no restoration output" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/rules" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -912,6 +946,7 @@ NEWEOF
 @test "importconf: exclude.files preserved on upgrade" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -946,6 +981,7 @@ NEWEOF
 @test "importconf: missing alert.bfd in backup keeps new default" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -977,6 +1013,7 @@ NEWEOF
 @test "importconf: pressure-country.conf preserved on upgrade (F-046)" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -1010,6 +1047,7 @@ NEWEOF
 @test "importconf: missing pressure-country.conf in backup keeps new default (F-046)" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -1042,6 +1080,7 @@ NEWEOF
 @test "importconf: modsec entries in pressure.conf renamed to mod_sec" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -1084,6 +1123,7 @@ EOF
 @test "importconf: old modsec rule file blocked by _REMOVED_RULES" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/rules" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 2.0.1 <bfd@rfxn.com>
@@ -1128,6 +1168,7 @@ NEWEOF
 @test "importconf: legacy migration message recommends bfd -c (F-047)" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
+	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
 # Brute Force Detection 1.5-2 <bfd@rfxn.com>

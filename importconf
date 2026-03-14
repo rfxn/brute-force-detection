@@ -38,49 +38,27 @@ if [ ! -f "$old_conf" ] || [ ! -f "$new_conf" ]; then
 	exit 0
 fi
 
+# source pkg_lib for pkg_config_merge (installed by install.sh before importconf runs)
+# shellcheck disable=SC1090,SC1091
+if [ -f "$INSTALL_PATH/internals/pkg_lib.sh" ]; then
+	. "$INSTALL_PATH/internals/pkg_lib.sh"
+else
+	echo "importconf: error: $INSTALL_PATH/internals/pkg_lib.sh not found" >&2
+	exit 1
+fi
+
 # extract old/new version from file header comment
 OV=$(awk '/^# Brute Force Detection/ {print $5; exit}' "$old_conf")
 NV=$(awk '/^# Brute Force Detection/ {print $5; exit}' "$new_conf")
 
-# merge_conf old_source new_target — overlay old user values onto new config
-# awk extracts raw text (no shell expansion), preserving $ATTACK_HOST etc.
-merge_conf() {
-	local old_source="$1" new_target="$2"
-	# preserve original permissions — awk redirect creates .tmp with umask
-	local _orig_mode
-	_orig_mode=$(stat -c '%a' "$new_target")
-	awk -v old_conf="$old_source" '
-BEGIN {
-	# read old config: store last uncommented assignment per variable
-	while ((getline line < old_conf) > 0) {
-		if (line ~ /^[A-Za-z_][A-Za-z_0-9]*=/) {
-			idx = index(line, "=")
-			name = substr(line, 1, idx - 1)
-			old[name] = line
-		}
-	}
-	close(old_conf)
-}
-{
-	# for uncommented assignments in new config, substitute old value if exists
-	if ($0 ~ /^[A-Za-z_][A-Za-z_0-9]*=/) {
-		idx = index($0, "=")
-		name = substr($0, 1, idx - 1)
-		if (name in old) {
-			print old[name]
-			next
-		}
-	}
-	print
-}' "$new_target" > "$new_target.tmp" && mv -f "$new_target.tmp" "$new_target"
-	chmod "$_orig_mode" "$new_target"
-}
+# define merge targets before trap so cleanup paths are valid
+new_int="$INSTALL_PATH/internals/internals.conf"
 
 # build combined old source: concatenate old conf.bfd + old internals.conf
 # (for pre-split installs, all variables are in conf.bfd; for post-split,
 # internals.conf has the internal variables)
 old_combined=$(mktemp "$INSTALL_PATH/tmp/.importconf.XXXXXX")
-trap 'rm -f "$old_combined" "$INSTALL_PATH/conf.bfd.tmp" "$INSTALL_PATH/internals/internals.conf.tmp" "$INSTALL_PATH/thresholds.conf.tmp" "$INSTALL_PATH/pressure.conf.tmp"' EXIT INT TERM
+trap 'rm -f "$old_combined" "$new_conf.tmp" "$new_int.tmp"' EXIT INT TERM
 cat "$old_conf" > "$old_combined"
 # support both new (internals/) and old (flat) backup layouts
 if [ -f "$BK_LAST/internals/internals.conf" ]; then
@@ -89,13 +67,14 @@ elif [ -f "$BK_LAST/internals.conf" ]; then
 	cat "$BK_LAST/internals.conf" >> "$old_combined"
 fi
 
-# merge conf.bfd
-merge_conf "$old_combined" "$new_conf"
+# merge conf.bfd — overlay old user values onto new config template
+pkg_config_merge "$old_combined" "$new_conf" "$new_conf.tmp" \
+	&& command mv -f "$new_conf.tmp" "$new_conf"
 
 # merge internals.conf if new install has it
-new_int="$INSTALL_PATH/internals/internals.conf"
 if [ -f "$new_int" ]; then
-	merge_conf "$old_combined" "$new_int"
+	pkg_config_merge "$old_combined" "$new_int" "$new_int.tmp" \
+		&& command mv -f "$new_int.tmp" "$new_int"
 fi
 
 rm -f "$old_combined"
