@@ -32,8 +32,15 @@ fi
 
 # source config for retention settings
 if [ -f "$INSTALL_PATH/conf.bfd" ]; then
-	# shellcheck disable=SC1090,SC1091
-	. "$INSTALL_PATH/conf.bfd"
+	# Validate root-owned and not group/world-writable before sourcing (SF-001)
+	_cfg_owner=$(stat -L -c '%u' "$INSTALL_PATH/conf.bfd" 2>/dev/null)
+	_cfg_perms=$(stat -L -c '%a' "$INSTALL_PATH/conf.bfd" 2>/dev/null)
+	if [ "${_cfg_owner:-}" = "0" ] && \
+	   [ "$(( ${_cfg_perms:1:1} & 2 ))" -eq 0 ] 2>/dev/null && \
+	   [ "$(( ${_cfg_perms: -1} & 2 ))" -eq 0 ] 2>/dev/null; then
+		# shellcheck disable=SC1090,SC1091
+		. "$INSTALL_PATH/conf.bfd"
+	fi
 fi
 APOOL_RETENTION_DAYS="${APOOL_RETENTION_DAYS:-365}"
 APOOL_MAX_LINES="${APOOL_MAX_LINES:-500000}"

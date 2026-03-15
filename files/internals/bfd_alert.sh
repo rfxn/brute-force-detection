@@ -709,8 +709,12 @@ _bfd_alert_init() {
 	export ALERT_SMTP_FROM="${SMTP_FROM:-}"
 	export ALERT_SMTP_USER="${SMTP_USER:-}"
 	export ALERT_SMTP_PASS="${SMTP_PASS:-}"
-	# Set temp dir for shared lib
-	export ALERT_TMPDIR="${TMPDIR:-/tmp}"
+	# Use BFD's private tmp dir when available (ADV-001: avoid /tmp for alert staging)
+	if [ -n "${INSTALL_PATH:-}" ] && [ -d "$INSTALL_PATH/tmp" ]; then
+		export ALERT_TMPDIR="$INSTALL_PATH/tmp"
+	else
+		export ALERT_TMPDIR="${TMPDIR:-/tmp}"
+	fi
 
 	# Map Slack config
 	export ALERT_SLACK_MODE="${SLACK_MODE:-webhook}"
