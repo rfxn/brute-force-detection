@@ -39,11 +39,11 @@ PKG_BACKUP_SYMLINK="bfd.bk.last"
 
 install_files(){
 	# Remove stale install directory (backup already taken by caller)
-	rm -rf "$INSPATH"
+	command rm -rf "$INSPATH"
 
 	# Copy source tree and documentation
 	pkg_copy_tree "./files" "$INSPATH"
-	/usr/bin/cp README CHANGELOG COPYING.GPL "$INSPATH"
+	command cp README CHANGELOG COPYING.GPL "$INSPATH"
 
 	# Create runtime directories
 	pkg_create_dirs "750" "$INSPATH/tmp" "$INSPATH/stats"
@@ -58,7 +58,7 @@ install_files(){
 
 	# Install uninstall.sh into install path
 	if [ -f "uninstall.sh" ]; then
-		/usr/bin/cp uninstall.sh "$INSPATH/"
+		command cp uninstall.sh "$INSPATH/"
 		chmod 750 "$INSPATH/uninstall.sh"
 	fi
 
@@ -114,7 +114,7 @@ install_files(){
 		# Clean legacy /etc/systemd/system/ units from pre-pkg_lib installs
 		# to prevent systemd priority conflict with auto-detected unit dir
 		if [ "${_IS_UPGRADE:-0}" = "1" ]; then
-			rm -f /etc/systemd/system/bfd.service \
+			command rm -f /etc/systemd/system/bfd.service \
 			      /etc/systemd/system/bfd.timer \
 			      /etc/systemd/system/bfd-watch.service 2>/dev/null  # safe: may not exist
 		fi

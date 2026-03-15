@@ -58,7 +58,7 @@ new_int="$INSTALL_PATH/internals/internals.conf"
 # (for pre-split installs, all variables are in conf.bfd; for post-split,
 # internals.conf has the internal variables)
 old_combined=$(mktemp "$INSTALL_PATH/tmp/.importconf.XXXXXX")
-trap 'rm -f "$old_combined" "$new_conf.tmp" "$new_int.tmp"' EXIT INT TERM
+trap 'command rm -f "$old_combined" "$new_conf.tmp" "$new_int.tmp"' EXIT INT TERM  # cleanup temp files on exit
 cat "$old_conf" > "$old_combined"
 # support both new (internals/) and old (flat) backup layouts
 if [ -f "$BK_LAST/internals/internals.conf" ]; then
@@ -77,7 +77,7 @@ if [ -f "$new_int" ]; then
 		&& command mv -f "$new_int.tmp" "$new_int"
 fi
 
-rm -f "$old_combined"
+command rm -f "$old_combined"
 
 # Clamp PRESSURE_TRIP values inherited from previous install
 # (catches prior bad migrations, e.g., old TRIG=500 that was already carried forward)
@@ -164,7 +164,7 @@ fi
 new_press="$INSTALL_PATH/pressure.conf"
 if [ -f "$BK_LAST/pressure.conf" ]; then
 	# already has pressure.conf — preserve it
-	cp -f "$BK_LAST/pressure.conf" "$new_press"
+	command cp -f "$BK_LAST/pressure.conf" "$new_press"
 	# rename rule entries for rules that changed names (modsec -> mod_sec)
 	if grep -q '^modsec:' "$new_press" 2>/dev/null; then
 		sed -i 's/^modsec:/mod_sec:/' "$new_press"
@@ -252,27 +252,27 @@ fi
 
 # preserve user's country pressure multiplier customizations
 if [ -f "$BK_LAST/pressure-country.conf" ]; then
-	cp -f "$BK_LAST/pressure-country.conf" "$INSTALL_PATH/pressure-country.conf"
+	command cp -f "$BK_LAST/pressure-country.conf" "$INSTALL_PATH/pressure-country.conf"
 	echo "  Preserved pressure-country.conf from previous install."
 fi
 
 # preserve user's ignore lists
-cp -f "$BK_LAST/ignore.hosts" "$INSTALL_PATH" 2>/dev/null
+command cp -f "$BK_LAST/ignore.hosts" "$INSTALL_PATH" 2>/dev/null
 
 # preserve ban tracking state
-cp -f "$BK_LAST/tmp/bans.active" "$INSTALL_PATH/tmp/" 2>/dev/null
-cp -f "$BK_LAST/tmp/bans.history"* "$INSTALL_PATH/tmp/" 2>/dev/null
+command cp -f "$BK_LAST/tmp/bans.active" "$INSTALL_PATH/tmp/" 2>/dev/null
+command cp -f "$BK_LAST/tmp/bans.history"* "$INSTALL_PATH/tmp/" 2>/dev/null
 # pressure.dat (renamed from events.dat in 2.0.1)
 if [ -f "$BK_LAST/tmp/pressure.dat" ]; then
-	cp -f "$BK_LAST/tmp/pressure.dat" "$INSTALL_PATH/tmp/" 2>/dev/null
+	command cp -f "$BK_LAST/tmp/pressure.dat" "$INSTALL_PATH/tmp/" 2>/dev/null
 elif [ -f "$BK_LAST/tmp/events.dat" ]; then
-	cp -f "$BK_LAST/tmp/events.dat" "$INSTALL_PATH/tmp/pressure.dat" 2>/dev/null
+	command cp -f "$BK_LAST/tmp/events.dat" "$INSTALL_PATH/tmp/pressure.dat" 2>/dev/null
 fi
-cp -f "$BK_LAST/stats/"* "$INSTALL_PATH/stats/" 2>/dev/null
+command cp -f "$BK_LAST/stats/"* "$INSTALL_PATH/stats/" 2>/dev/null
 
 # preserve journal cursor/timestamp state
-cp -f "$BK_LAST/tmp/"*.cursor "$INSTALL_PATH/tmp/" 2>/dev/null
-cp -f "$BK_LAST/tmp/"*.jts "$INSTALL_PATH/tmp/" 2>/dev/null
+command cp -f "$BK_LAST/tmp/"*.cursor "$INSTALL_PATH/tmp/" 2>/dev/null
+command cp -f "$BK_LAST/tmp/"*.jts "$INSTALL_PATH/tmp/" 2>/dev/null
 
 # preserve tlog byte-offset tracking state
 # (files named by LOG_TAG: sshd, dovecot, postfix, etc. — no dots in name)
@@ -283,7 +283,7 @@ for _f in "$BK_LAST/tmp/"*; do
 	case "$_bn" in
 		.*|*.*) continue ;;
 	esac
-	cp -f "$_f" "$INSTALL_PATH/tmp/" 2>/dev/null
+	command cp -f "$_f" "$INSTALL_PATH/tmp/" 2>/dev/null
 done
 
 # preserve custom.d/ template overrides from backup
@@ -294,7 +294,7 @@ if [ -d "$BK_LAST/alert/custom.d" ] && [ -d "$INSTALL_PATH/alert" ]; then
 	for _old_custom in "$BK_LAST/alert/custom.d"/*.tpl; do
 		[ -f "$_old_custom" ] || continue
 		_tpl_name="${_old_custom##*/}"
-		cp -f "$_old_custom" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+		command cp -f "$_old_custom" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
 		chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
 		_custom_tpl=$((_custom_tpl + 1))
 	done
@@ -315,7 +315,7 @@ if [ -d "$BK_LAST/alert" ] && [ ! -d "$BK_LAST/alert/custom.d" ]; then
 		if [ -f "$_new_tpl" ] && ! cmp -s "$_old_tpl" "$_new_tpl"; then
 			mkdir -p "$INSTALL_PATH/alert/custom.d"
 			chmod 750 "$INSTALL_PATH/alert/custom.d"
-			cp -f "$_old_tpl" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+			command cp -f "$_old_tpl" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
 			chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
 			_migrated_tpl=$((_migrated_tpl + 1))
 		fi
@@ -328,7 +328,7 @@ fi
 
 # preserve legacy alert.bfd for users upgrading from pre-2.0.1 with custom templates
 if [ -f "$BK_LAST/alert.bfd" ] && [ ! -d "$BK_LAST/alert" ]; then
-	cp -f "$BK_LAST/alert.bfd" "$INSTALL_PATH/alert.bfd" 2>/dev/null || true
+	command cp -f "$BK_LAST/alert.bfd" "$INSTALL_PATH/alert.bfd" 2>/dev/null || true  # non-fatal: legacy file may be unreadable
 fi
 
 # preserve custom rule files from backup (user-added rules not in shipped set)
@@ -345,7 +345,7 @@ if [ -d "$BK_LAST/rules" ]; then
 		case " $_REMOVED_RULES " in
 			*" $_rule_name "*) continue ;;
 		esac
-		cp -f "$_old_rule" "$INSTALL_PATH/rules/$_rule_name"
+		command cp -f "$_old_rule" "$INSTALL_PATH/rules/$_rule_name"
 		chmod 640 "$INSTALL_PATH/rules/$_rule_name"
 		_custom_rules=$((_custom_rules + 1))
 	done
@@ -356,7 +356,7 @@ fi
 
 # preserve user's custom exclude.files entries
 if [ -f "$BK_LAST/exclude.files" ]; then
-	cp -f "$BK_LAST/exclude.files" "$INSTALL_PATH/exclude.files"
+	command cp -f "$BK_LAST/exclude.files" "$INSTALL_PATH/exclude.files"
 fi
 
 # Migrate BFD_LOG_PATH from legacy flat file to log directory

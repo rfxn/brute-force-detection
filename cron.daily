@@ -32,8 +32,15 @@ fi
 
 # source config for retention settings
 if [ -f "$INSTALL_PATH/conf.bfd" ]; then
-	# shellcheck disable=SC1090,SC1091
-	. "$INSTALL_PATH/conf.bfd"
+	# Validate root-owned and not group/world-writable before sourcing (SF-001)
+	_cfg_owner=$(stat -L -c '%u' "$INSTALL_PATH/conf.bfd" 2>/dev/null)
+	_cfg_perms=$(stat -L -c '%a' "$INSTALL_PATH/conf.bfd" 2>/dev/null)
+	if [ "${_cfg_owner:-}" = "0" ] && \
+	   [ "$(( ${_cfg_perms:1:1} & 2 ))" -eq 0 ] 2>/dev/null && \
+	   [ "$(( ${_cfg_perms: -1} & 2 ))" -eq 0 ] 2>/dev/null; then
+		# shellcheck disable=SC1090,SC1091
+		. "$INSTALL_PATH/conf.bfd"
+	fi
 fi
 APOOL_RETENTION_DAYS="${APOOL_RETENTION_DAYS:-365}"
 APOOL_MAX_LINES="${APOOL_MAX_LINES:-500000}"
@@ -65,7 +72,7 @@ if find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' -type f \
 			-type f -delete
 		sort -n "$pool_file" > "$pool_file.new"
 		cat "$pool_file.new" > "$pool_file"
-		rm -f "$pool_file.new"
+		command rm -f "$pool_file.new"
 	) 201>>"$pool_file"
 fi
 
@@ -83,10 +90,10 @@ if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
 		elif [ "$APOOL_MAX_LINES" -gt 0 ] 2>/dev/null; then
 			tail -n "$APOOL_MAX_LINES" "$pool_file" > "$pool_file.new"
 		else
-			cp "$pool_file" "$pool_file.new"
+			command cp "$pool_file" "$pool_file.new"
 		fi
 		cat "$pool_file.new" > "$pool_file"
-		rm -f "$pool_file.new"
+		command rm -f "$pool_file.new"
 	) 201>>"$pool_file"
 fi
 
@@ -100,12 +107,12 @@ if [ -x "$INSTALL_PATH/update-ipcountry.sh" ] && [ -f "$_dat" ]; then
 fi
 
 # clear transient state but preserve ban tracking and event data
-rm -f "$INSTALL_PATH"/tmp/.alist.*
-rm -f "$INSTALL_PATH"/tmp/.alerts.*
+command rm -f "$INSTALL_PATH"/tmp/.alist.*
+command rm -f "$INSTALL_PATH"/tmp/.alerts.*
 
 # rotate bans.history (append-only, rotated daily)
 if [ -f "$INSTALL_PATH/tmp/bans.history" ]; then
-	cp "$INSTALL_PATH/tmp/bans.history" "$INSTALL_PATH/tmp/bans.history.$(date +%m%d%y)"
+	command cp "$INSTALL_PATH/tmp/bans.history" "$INSTALL_PATH/tmp/bans.history.$(date +%m%d%y)"
 	: > "$INSTALL_PATH/tmp/bans.history"
 fi
 ) 200>"$CRON_LOCK"
