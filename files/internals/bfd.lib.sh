@@ -2219,7 +2219,7 @@ _batch_ip_to_country() {
 	local _tmpdir
 	_tmpdir=$(mktemp -d /tmp/bfd-batch.XXXXXX)
 	# shellcheck disable=SC2064
-	trap "/usr/bin/rm -rf '$_tmpdir'" RETURN
+	trap "command rm -rf '$_tmpdir'" RETURN
 	local _v4="$_tmpdir/v4" _v6="$_tmpdir/v6"
 
 	# Split input: IPv4 to one file, IPv6 to another
@@ -2278,7 +2278,7 @@ _batch_ip_to_country() {
 	fi
 
 	# trap RETURN handles cleanup; explicit rm as belt-and-suspenders
-	/usr/bin/rm -rf "$_tmpdir"
+	command rm -rf "$_tmpdir"
 }
 
 # count_subnet_attackers install_path window now mask mask_v6 min_unique
