@@ -2023,23 +2023,15 @@ record_and_score() {
 
 # --- Country multiplier functions ---
 
-# ip_to_country ip db_file — look up 2-letter country code for an IPv4 address
-# Uses awk linear scan on sorted integer ranges in ipcountry.dat.
-# Returns CC to stdout, or empty string if not found or IPv6.
+# ip_to_country ip db_file — look up 2-letter country code for an IP address
+# IPv4: awk linear scan on sorted integer ranges in ipcountry.dat.
+# IPv6: geoip_ip6_lookup on hex-range database (ipcountry6.dat).
+# Returns CC to stdout, or empty string if not found.
 # When _COUNTRY_CACHE_FILE is set, caches lookups to avoid repeated scans of
 # the 190K-line database (reduces O(IPs * DB_lines) to O(IPs + DB_lines)).
 ip_to_country() {
 	local ip="$1" db_file="$2"
-	# IPv6 not supported in v1
-	if [[ "$ip" == *:* ]]; then
-		echo ""
-		return 0
-	fi
-	if [ ! -f "$db_file" ] || [ ! -s "$db_file" ]; then
-		echo ""
-		return 0
-	fi
-	# per-cycle cache: check before expensive awk scan
+	# per-cycle cache: check before expensive awk/hex scan (both families)
 	if [ -n "${_COUNTRY_CACHE_FILE:-}" ] && [ -f "$_COUNTRY_CACHE_FILE" ]; then
 		local _cached_line
 		_cached_line=$(grep -m1 "^${ip} " "$_COUNTRY_CACHE_FILE" 2>/dev/null) || true
@@ -2048,6 +2040,40 @@ ip_to_country() {
 			if [ "$_cached_cc" = "-" ]; then echo ""; else echo "$_cached_cc"; fi
 			return 0
 		fi
+	fi
+	# IPv6: derive db6 path from db_file (ipcountry.dat -> ipcountry6.dat)
+	if [[ "$ip" == *:* ]]; then
+		local db6_file="${db_file%.*}6.${db_file##*.}"
+		# Format guard: verify hex-range format before calling lookup.
+		# Protects upgrade path where old raw-CIDR ipcountry6.dat may persist
+		# if network was unavailable at first run after upgrade.
+		if [ -f "$db6_file" ] && [ -s "$db6_file" ]; then
+			local _hdr
+			_hdr=$(head -1 "$db6_file")
+			# hex-range format: two 32-char hex fields + 2-char CC (no colons)
+			# raw-CIDR format: starts with hex:hex (contains colons)
+			if [[ "$_hdr" == *:* ]]; then
+				# old raw-CIDR format — skip IPv6 lookup silently
+				echo ""
+				return 0
+			fi
+			if declare -f geoip_ip6_lookup >/dev/null 2>&1; then
+				local v6cc
+				v6cc=$(geoip_ip6_lookup "$ip" "$db6_file") || true
+				# populate cache (use "-" sentinel for empty results)
+				if [ -n "${_COUNTRY_CACHE_FILE:-}" ]; then
+					echo "$ip ${v6cc:--}" >> "$_COUNTRY_CACHE_FILE"
+				fi
+				echo "$v6cc"
+				return 0
+			fi
+		fi
+		echo ""
+		return 0
+	fi
+	if [ ! -f "$db_file" ] || [ ! -s "$db_file" ]; then
+		echo ""
+		return 0
 	fi
 	local cc
 	cc=$(awk -v ip="$ip" '
@@ -2142,36 +2168,114 @@ _batch_pressure_compute() {
 }
 
 # _batch_ip_to_country db_file < ip_list
-# Single awk pass: loads ipcountry.dat ranges into indexed arrays (pass 1),
-# then binary-searches each IP from stdin (pass 2). Output: "IP CC" (or "IP -").
-# O(M + N*log(M)) where M=db entries (~256K) and N=unique IPs (~500).
+# Dual-stack batch lookup. IPv4: binary search on integer-range DB (pass 1 load,
+# pass 2 search). IPv6: hex-range DB lookup via awk lexicographic comparison.
+# Output: "IP CC" (or "IP -"). Order not guaranteed when both families present.
+# O(M + N*log(M)) for IPv4 where M=db entries (~256K) and N=unique IPs (~500).
 _batch_ip_to_country() {
 	local db_file="$1"
 	if [ ! -f "$db_file" ] || [ ! -s "$db_file" ]; then
-		# no db — output "IP -" for each input IP
+		# no IPv4 db — output "IP -" for each input IP (both families)
 		while IFS= read -r _ip; do
 			[ -n "$_ip" ] && echo "$_ip -"
 		done
 		return 0
 	fi
-	awk 'NR==FNR {
-		if (/^#/) next
-		lo[++n] = $1+0; hi[n] = $2+0; cc[n] = $3
-		next
-	}
-	/:/ { print $0, "-"; next }
-	{
-		split($0, p, ".")
-		t = (p[1]+0) * 16777216 + (p[2]+0) * 65536 + (p[3]+0) * 256 + (p[4]+0)
-		l = 1; r = n; f = ""
-		while (l <= r) {
-			m = int((l + r) / 2)
-			if (t < lo[m]) r = m - 1
-			else if (t > hi[m]) l = m + 1
-			else { f = cc[m]; break }
+
+	# Check if IPv6 DB is available and in hex-range format
+	local db6_file="${db_file%.*}6.${db_file##*.}"
+	local _have_v6=0
+	if [ -f "$db6_file" ] && [ -s "$db6_file" ] && \
+	   declare -f geoip_ip6_lookup >/dev/null 2>&1; then
+		local _hdr
+		_hdr=$(head -1 "$db6_file")
+		[[ "$_hdr" != *:* ]] && _have_v6=1
+	fi
+
+	if [ "$_have_v6" -eq 0 ]; then
+		# No IPv6 DB — existing behavior: IPv4 binary search, IPv6 gets "-"
+		awk 'NR==FNR {
+			if (/^#/) next
+			lo[++n] = $1+0; hi[n] = $2+0; cc[n] = $3
+			next
 		}
-		print $0, (f != "" ? f : "-")
-	}' "$db_file" /dev/stdin
+		/:/ { print $0, "-"; next }
+		{
+			split($0, p, ".")
+			t = (p[1]+0) * 16777216 + (p[2]+0) * 65536 + (p[3]+0) * 256 + (p[4]+0)
+			l = 1; r = n; f = ""
+			while (l <= r) {
+				m = int((l + r) / 2)
+				if (t < lo[m]) r = m - 1
+				else if (t > hi[m]) l = m + 1
+				else { f = cc[m]; break }
+			}
+			print $0, (f != "" ? f : "-")
+		}' "$db_file" /dev/stdin
+		return 0
+	fi
+
+	# Dual-stack: partition stdin, run each DB lookup, merge
+	local _tmpdir
+	_tmpdir=$(mktemp -d /tmp/bfd-batch.XXXXXX)
+	local _v4="$_tmpdir/v4" _v6="$_tmpdir/v6"
+
+	# Split input: IPv4 to one file, IPv6 to another
+	while IFS= read -r _ip; do
+		[ -z "$_ip" ] && continue
+		if [[ "$_ip" == *:* ]]; then
+			echo "$_ip" >> "$_v6"
+		else
+			echo "$_ip" >> "$_v4"
+		fi
+	done
+
+	# IPv4 batch: binary-search awk
+	if [ -f "$_v4" ]; then
+		awk 'NR==FNR {
+			if (/^#/) next
+			lo[++n] = $1+0; hi[n] = $2+0; cc[n] = $3
+			next
+		}
+		{
+			split($0, p, ".")
+			t = (p[1]+0) * 16777216 + (p[2]+0) * 65536 + (p[3]+0) * 256 + (p[4]+0)
+			l = 1; r = n; f = ""
+			while (l <= r) {
+				m = int((l + r) / 2)
+				if (t < lo[m]) r = m - 1
+				else if (t > hi[m]) l = m + 1
+				else { f = cc[m]; break }
+			}
+			print $0, (f != "" ? f : "-")
+		}' "$db_file" "$_v4"
+	fi
+
+	# IPv6 batch: hex-range lookup via awk
+	if [ -f "$_v6" ]; then
+		"$GEOIP_AWK_BIN" -v db="$db6_file" \
+		"${_GEOIP_V6_AWK}"'
+		BEGIN {
+			while ((getline line < db) > 0) {
+				if (line ~ /^#/) continue
+				n = split(line, f, " ")
+				if (n >= 3) { lo[++m] = f[1]; hi[m] = f[2]; cc[m] = f[3] }
+			}
+			close(db)
+		}
+		{
+			ip = $0
+			hex = v6hex(ip)
+			if (hex == "") { print ip, "-"; next }
+			found = ""
+			for (i = 1; i <= m; i++) {
+				if (hex >= lo[i] && hex <= hi[i]) { found = cc[i]; break }
+			}
+			print ip, (found != "" ? found : "-")
+		}' "$_v6"
+	fi
+
+	/usr/bin/rm -rf "$_tmpdir"
 }
 
 # count_subnet_attackers install_path window now mask mask_v6 min_unique
