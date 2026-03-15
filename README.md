@@ -65,12 +65,9 @@ and IPv4/IPv6 support across 57 service rules.
 # Configure — set your firewall ban command
 vi /usr/local/bfd/conf.bfd
 
-# Enable watch mode (recommended — ~10s detection latency)
-systemctl enable --now bfd-watch.service    # systemd
-service bfd-watch start                     # SysVinit
-
-# Health check — validate config, log paths, and rules
-bfd -c
+# Verify — watch mode should be running (auto-enabled by installer)
+systemctl status bfd-watch       # systemd
+bfd -c                           # health check
 
 # Dry run — detect without banning
 bfd -d
@@ -202,7 +199,7 @@ The cron entry does not need to be removed when using watch mode.
 
 When upgrading from a previous BFD installation (including v1.5-2), `install.sh` automatically:
 
-- Backs up the existing installation to `/usr/local/bfd.bk.DDMMYYYY-HHMMSS` (symlinked as `/usr/local/bfd.bk.last` for easy access)
+- Backs up the existing installation to `/usr/local/bfd.bk.DDMMYYYY-EPOCH` (symlinked as `/usr/local/bfd.bk.last` for easy access)
 - Runs `importconf` to merge your configuration and preserve state
 
 **What importconf migrates automatically:**
@@ -346,6 +343,8 @@ Log paths are auto-detected based on the distribution. Override in `conf.bfd` if
 | `LOG_IDLE_SUPPRESS` | `1` | Suppress idle (0-event) run-complete messages from syslog (0 = off, 1 = on) |
 | `LOG_FORMAT` | `classic` | Log format: `classic` (syslog-style) or `json` (JSONL) |
 | `LOG_LEVEL` | `1` | Min severity: 0=debug, 1=info, 2=warn, 3=error |
+| `APOOL_RETENTION_DAYS` | `365` | Max age in days for attack pool entries |
+| `APOOL_MAX_LINES` | `500000` | Max lines in attack pool file |
 
 Additional variables (`LOG_SOURCE`, `LOCK_FILE_TIMEOUT`, `BAN_RETRY_COUNT`, `OUTPUT_SYSLOG_FILE`) have sensible defaults in `internals.conf` and can be overridden by adding them to `conf.bfd`.
 
@@ -359,7 +358,7 @@ Additional variables (`LOG_SOURCE`, `LOCK_FILE_TIMEOUT`, `BAN_RETRY_COUNT`, `OUT
 
 Country weighting is active automatically when `pressure-country.conf` contains uncommented entries. No toggle is required — if the file has entries, they are applied; if all entries are commented out (the default), country weighting is off.
 
-The country database (`ipcountry.dat`) maps IPv4 addresses to 2-letter country codes. It is downloaded automatically at install time (background) and refreshed via `cron.daily` when data is older than 30 days. Manual updates can be run with `update-ipcountry.sh`, which downloads per-country CIDR zones from ipverse.net (ipdeny.com fallback) and converts them to BFD's integer-range lookup format.
+The country database maps IP addresses to 2-letter country codes. IPv4 ranges are stored in `ipcountry.dat` (integer-range format) and IPv6 ranges in `ipcountry6.dat` (hex-range format). Both are downloaded automatically at install time (background) and refreshed via `cron.daily` when data is older than 30 days. Manual updates can be run with `update-ipcountry.sh`, which downloads per-country CIDR zones from ipverse.net (ipdeny.com fallback) and converts them to BFD's lookup format. Both IPv4 and IPv6 addresses are resolved to country codes.
 
 The multiplier file (`pressure-country.conf`) uses `CC=N` format where N is weight×10 (e.g., `CN=20` means 2.0× weight, `US=10` means 1.0× = no change). Unlisted countries default to 1.0×.
 
@@ -412,7 +411,7 @@ Alert emails are rendered from customizable template partials in the `alert/` di
 
 The entry template is rendered once per ban. The summary template is included only when multiple bans are batched in one email. Header and footer wrap the entire message.
 
-To customize, edit the template files directly. On upgrade, `importconf` compares each partial against the shipped default — user-modified files are preserved, unmodified files are updated.
+To customize, copy the desired partial(s) into `alert/custom.d/` and edit the copies. BFD checks `custom.d/` first for each partial and falls back to the shipped default. Templates in `custom.d/` persist across upgrades automatically.
 
 **Key template variables:**
 
@@ -574,7 +573,7 @@ Ban Management:
 Reporting:                                      Supports: --json --csv
   -l, --list                  list active bans
   -a, --activity [IP|STR]     threat activity and IP investigation
-  -e, --events [IP|CIDR]      active events, IP or subnet pressure detail
+  -e, --events [IP|CIDR] [N]  event history, IP or subnet detail (N=log lines)
 
 System:
   -S, --status [SERVICE]      operational status overview
@@ -585,7 +584,7 @@ System:
 Testing:
   -T, --test RULE [FILE|-]    test rule patterns against log or stdin
   --test-pattern PAT [FILE|-] test raw <HOST> pattern against log or stdin
-  --test-alert TYPE           send a test alert (email, slack, telegram, discord)
+  --test-alert TYPE           send test alert (email,slack,telegram,discord)
 
 Scan Mode:
   --scan [RULE] [-d]          full-log scan (all rules or specific rule)
@@ -595,12 +594,16 @@ Scan Mode:
 Output Modifiers:
   --json                      JSON output (with -l, -e, -a)
   --csv                       CSV output (with -l, -e, -a)
+  --sort=MODE                 sort events: count (default), time, ip
+  --24h                       events from last 24 hours (default)
+  --7d                        events from last 7 days
+  --30d                       events from last 30 days
   --active                    show only active rules (with -R)
   -V, --verbose               detailed output (with -s, -d, -c, -S, --scan)
 
 General:
   -v, --version               display version
-  -h, --help                  display full help (short summary shown with no args)
+  -h, --help                  display this help (see bfd.1 for full docs)
 ```
 
 The **`-s|--standard`** and **`-q|--quiet`** options run the full detection and banning cycle. Standard mode prints output; quiet mode suppresses it (used by cron). Both parse logs, compute pressure against trip points, and execute bans.
@@ -870,6 +873,11 @@ bfd -b 192.0.2.1 sshd     # manually ban with a service label
 | `bans.active` | Currently active bans (timestamp, expiry, IP, service, ports) |
 | `bans.history` | Append-only log of all ban/unban events |
 | `pressure.dat` | Pressure scoring workspace (timestamp, IP, service, weight); pruned every ~10 half-lives |
+
+**State files** in `/usr/local/bfd/stats/`:
+
+| File | Description |
+|------|-------------|
 | `attack.pool` | Unified event store — all detected auth failures (ban, escalate, observed) and outcomes |
 
 Both `bfd -a` (threat activity) and `bfd -e` (events) read from the attack pool. Sub-trip observations (ACTION=observed) are recorded alongside ban decisions so event history persists across pressure decay cycles. Each IP shows whether it is currently banned, its ban type (permanent or time remaining), and historical ban count.

@@ -26,12 +26,12 @@ Contents:
 5 ............. General Usage
 5.1 ........... General Usage: Dry Run
 5.2 ........... General Usage: Health Check
-5.3 ........... General Usage: Attack Pool
+5.3 ........... General Usage: Threat Activity
 5.4 ........... General Usage: Watch Mode
 5.5 ........... General Usage: Flush Bans
 5.6 ........... General Usage: Structured Output
 5.7 ........... General Usage: Scan Mode
-5.8 ........... General Usage: Events Dashboard
+5.8 ........... General Usage: Events and Investigation
 6 ............. Rule Engine
 6.1 ........... Rule Engine: Rule Catalog
 6.2 ........... Rule Engine: Rule Customization
@@ -117,7 +117,7 @@ Operational:
 - health check mode for non-destructive diagnostics (bfd -c)
 - dry-run mode for testing rules without banning (bfd -d)
 - verbose mode for detailed per-rule and per-ban output (bfd --verbose)
-- attack pool reporting with per-service breakdown and ban status (bfd -a)
+- threat activity reporting with per-service breakdown and ban status (bfd -a)
 - per-run statistics logging (rules checked, events parsed, bans executed)
 - batched email alerts with enriched context (ban type, duration, history)
   and per-rule routing
@@ -191,7 +191,7 @@ The cron entry does not need to be removed when using watch mode.
 When upgrading from a previous BFD installation (including v1.5-2),
 install.sh automatically:
 
-  - Backs up the existing installation to /usr/local/bfd.bk.DDMMYYYY-HHMMSS
+  - Backs up the existing installation to /usr/local/bfd.bk.DDMMYYYY-EPOCH
     (symlinked as /usr/local/bfd.bk.last for easy access)
   - Runs importconf to merge your configuration and preserve state
 
@@ -368,7 +368,8 @@ KERNEL_LOG_PATH="/var/log/messages" - kernel/syslog. Auto-detected as
 MAIL_LOG_PATH="/var/log/maillog" - mail log. Auto-detected as
   /var/log/mail.log on Debian/Ubuntu.
 
-BFD_LOG_PATH="/var/log/bfd_log" - BFD's own application log.
+BFD_LOG_PATH="/var/log/bfd/bfd.log" - BFD's own application log.
+  Upgraded from v1.x: auto-migrated from /var/log/bfd_log via symlink.
 
 Log paths are auto-detected based on the distribution. Override in conf.bfd
 if your system uses non-standard paths.
@@ -396,6 +397,11 @@ SCAN_TIMEOUT="120" - journal read timeout in seconds per rule during scan.
 
 OUTPUT_SYSLOG="1" - echo BFD log messages to syslog (0 = off, 1 = on).
 
+LOG_IDLE_SUPPRESS="1" - suppress idle (0-event) run-complete messages from
+  syslog (0 = off, 1 = on). When enabled, zero-event cycles are still
+  recorded in BFD_LOG_PATH but do not echo to syslog; cycles with events
+  always log to both.
+
 LOG_FORMAT="classic" - log output format.
   classic: traditional syslog-style (timestamp hostname app(pid): message).
   json: one JSON object per line (JSONL). Fields: ts, host, app, pid, level,
@@ -405,6 +411,12 @@ LOG_LEVEL="1" - minimum log severity threshold.
   0 = debug (all messages including verbose), 1 = info (default),
   2 = warn, 3 = error. Messages below the threshold are suppressed.
   Debug messages are stdout-only and controlled by --verbose, not LOG_LEVEL.
+
+APOOL_RETENTION_DAYS="365" - maximum age in days for attack pool entries.
+  Entries older than this are pruned by cron.daily.
+
+APOOL_MAX_LINES="500000" - maximum lines in the attack pool file. When
+  exceeded, the oldest entries are removed by cron.daily.
 
 Additional variables (LOG_SOURCE, LOCK_FILE_TIMEOUT, BAN_RETRY_COUNT,
 OUTPUT_SYSLOG_FILE) have sensible defaults in internals.conf and can be
@@ -489,8 +501,8 @@ Ban Management:
 
 Reporting:                                      Supports: --json --csv
   -l, --list                  list active bans
-  -a, --attackpool [IP|STR]   attack pool and IP investigation
-  -e, --events [IP|CIDR]      pressure dashboard, IP or subnet detail
+  -a, --activity [IP|STR]     threat activity and IP investigation
+  -e, --events [IP|CIDR] [N]  event history, IP or subnet detail (N=log lines)
 
 System:
   -S, --status [SERVICE]      operational status overview
@@ -498,9 +510,10 @@ System:
   -R, --rules [RULE]          list rules or show rule detail (--active)
   -c, --check                 health check diagnostics
 
-Rule Testing:
+Testing:
   -T, --test RULE [FILE|-]    test rule patterns against log or stdin
   --test-pattern PAT [FILE|-] test raw <HOST> pattern against log or stdin
+  --test-alert TYPE           send test alert (email,slack,telegram,discord)
 
 Scan Mode:
   --scan [RULE] [-d]          full-log scan (all rules or specific rule)
@@ -510,12 +523,16 @@ Scan Mode:
 Output Modifiers:
   --json                      JSON output (with -l, -e, -a)
   --csv                       CSV output (with -l, -e, -a)
+  --sort=MODE                 sort events: count (default), time, ip
+  --24h                       events from last 24 hours (default)
+  --7d                        events from last 7 days
+  --30d                       events from last 30 days
   --active                    show only active rules (with -R)
   -V, --verbose               detailed output (with -s, -d, -c, -S, --scan)
 
 General:
   -v, --version               display version
-  -h, --help                  display full help (short summary shown with no args)
+  -h, --help                  display this help (see bfd.1 for full docs)
 
 The -s|--standard and -q|--quiet options run the full detection and banning
 cycle. Standard mode prints output; quiet mode suppresses it (used by cron).
@@ -550,8 +567,8 @@ entire BFD installation:
 Output uses [PASS], [WARN], [FAIL], and [SKIP] (inactive rules) indicators
 with a final summary.
 
-5.3) General Usage: Attack Pool
-The -a|--attackpool option displays the top brute force attackers with
+5.3) General Usage: Threat Activity
+The -a|--activity option displays the top brute force attackers with
 per-service breakdown and ban status for each IP:
 
   bfd -a           # show top attackers
@@ -615,9 +632,9 @@ Use --json or --csv with -l, -e, or -a for machine-readable output:
 
   bfd -l --json          # active bans as JSON
   bfd -l --csv           # active bans as CSV
-  bfd -e --json          # events dashboard as JSON
+  bfd -e --json          # event history as JSON
   bfd -e 192.0.2.1 --csv # per-IP events as CSV
-  bfd -a --json          # attack pool as JSON
+  bfd -a --json          # threat activity as JSON
   bfd -a 192.0.2.1 --csv # IP report as CSV
 
 JSON outputs arrays of objects (or nested objects for IP detail and CIDR).
@@ -653,27 +670,32 @@ configured in conf.bfd or overridden on the command line.
 Lock behavior: scan acquires the same global lock as normal runs. If watch mode
 is running, stop it first (systemctl stop bfd-watch), run the scan, then restart.
 
-5.8) General Usage: Events Dashboard
-The --events command provides real-time visibility into the pressure model:
+5.8) General Usage: Events and Investigation
+The --events command provides event history and IP investigation, reading from
+the attack pool which records all detected auth failures (both ban-triggering
+and sub-trip observations) with configurable retention (default: 365 days):
 
-  bfd --events                  # pressure dashboard - all tracked IPs
-  bfd --events 192.0.2.1        # per-IP detail - service breakdown
+  bfd --events                  # event list - all IPs, last 24h
+  bfd --events --7d --sort=time # last 7 days, newest first
+  bfd --events 192.0.2.1        # IP investigation - history + pressure + logs
   bfd --events 192.0.2.0/24     # CIDR report - subnet-scoped view
 
-Dashboard mode (no argument) shows all IPs with active pressure events, sorted
-by pressure score descending. Columns: IP, pressure/trip, event count, services,
-first/last seen, ban status.
+Event list (no argument) shows all IPs with failure counts, services, country,
+first/last seen, and ban status. Default: sorted by count descending, 24-hour
+window. Use --sort=time or --sort=ip to change ordering, and --7d or --30d to
+expand the time window.
 
-IP mode shows overall pressure with half-life context, a per-service breakdown
-table (service, weight, events, pressure), first/last timestamps, and ban status.
+IP investigation shows a comprehensive report: historical failure counts from
+the attack pool (total and per-service breakdown), live pressure detail if the
+IP has active pressure, and a log sample from the triggering service.
 
-CIDR mode filters the dashboard to a subnet (IPv4, mask 8-32) and includes a
-summary line with match count, total events, and banned count.
+CIDR mode filters to a subnet (IPv4, mask 8-32) and includes a summary line
+with match count, total events, and banned count.
 
 All three modes support --json and --csv:
 
-  bfd --events --json           # dashboard as JSON array
-  bfd --events 192.0.2.1 --json # per-IP as single JSON object
+  bfd --events --json           # event list as JSON array
+  bfd --events 192.0.2.1 --json # IP detail as single JSON object
   bfd --events 10.0.0.0/8 --csv # CIDR as CSV
 
 6) Rule Engine
@@ -790,11 +812,15 @@ State files in /usr/local/bfd/tmp/:
   bans.history  - append-only log of all ban/unban events
   pressure.dat  - pressure scoring workspace (timestamp, IP, service, weight);
                   pruned every ~10 half-lives
-  attack.pool   - persistent attack pool for reporting
 
-The 'bfd -a' attack pool report integrates with ban state — each IP shows
-whether it is currently banned, its ban type (permanent or time remaining),
-and historical ban count.
+State files in /usr/local/bfd/stats/:
+
+  attack.pool   - unified event store for all detected auth failures (ban,
+                  escalate, observed); configurable retention (365 days default)
+
+Both 'bfd -a' (threat activity) and 'bfd -e' (events) read from the attack
+pool. Each IP shows whether it is currently banned, its ban type (permanent
+or time remaining), and historical ban count.
 
 9) IPv6 Support
 BFD detects and bans both IPv4 and IPv6 addresses automatically. Rules do not

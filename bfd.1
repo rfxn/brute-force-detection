@@ -220,16 +220,16 @@ or
 .B \-\-csv
 for structured output.
 .TP
-.BI \-S " \fR[" SERVICE \fR]
+.BR \-S ", " \-\-status " \fR[" \fISERVICE\fR ]
 System status overview, or per-service status when
 .I SERVICE
 is given.
 Shows run mode, firewall backend, active bans, events, and active rules.
 .TP
-.BI \-C " \fR[" VAR \fR]
+.BR \-C ", " \-\-config " \fR[" \fIVAR\fR ]
 Show all configuration variables, or a single variable value.
 .TP
-.BI \-R " \fR[" RULE \fR] " \fR[" \-\-active \fR]
+.BR \-R ", " \-\-rules " \fR[" \fIRULE\fR "] \fR[" \-\-active \fR]
 List all rules with active/inactive status, or show details for a
 specific rule.
 Use
@@ -358,7 +358,7 @@ is run with no arguments, a short summary of common commands is shown instead.
 .SH CONFIGURATION
 Configuration is in
 .BR conf.bfd ,
-organized into eight sections.
+organized into ten sections.
 The file is sourced as bash; all values are shell variables.
 Additional tuning variables with sensible defaults
 .RB ( LOG_SOURCE ", " LOCK_FILE_TIMEOUT ", " BAN_RETRY_COUNT ", " OUTPUT_SYSLOG_FILE )
@@ -652,6 +652,17 @@ Debug messages are stdout\-only and controlled by
 .B \-\-verbose
 rather than
 .BR LOG_LEVEL .
+.SS Attack Pool
+.TP
+.B APOOL_RETENTION_DAYS
+Maximum age in days for attack pool entries (default: 365).
+Entries older than this are pruned by
+.BR cron.daily .
+.TP
+.B APOOL_MAX_LINES
+Maximum number of lines in the attack pool file (default: 500000).
+When exceeded, the oldest entries are removed by
+.BR cron.daily .
 .SH ALERT TEMPLATES
 Alert messages are rendered from customizable template partials in the
 .B alert/
@@ -930,7 +941,7 @@ Application log (v1.x: /var/log/bfd_log, auto-migrated with symlink).
 When upgrading from a previous BFD installation (including v1.5\-2),
 .B install.sh
 automatically backs up the existing installation to
-.I /usr/local/bfd.bk.DDMMYYYY\-HHMMSS
+.I /usr/local/bfd.bk.DDMMYYYY\-EPOCH
 (symlinked as
 .IR /usr/local/bfd.bk.last )
 and runs
