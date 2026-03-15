@@ -61,7 +61,7 @@ start() {
 			return 0
 		fi
 		# stale pidfile
-		rm -f "$PIDFILE"
+		command rm -f "$PIDFILE"
 	fi
 
 	if [ ! -x "$BFD_BIN" ]; then
@@ -91,7 +91,7 @@ start() {
 		fi
 		return 0
 	else
-		rm -f "$PIDFILE"
+		command rm -f "$PIDFILE"
 		if [ "$INITSTYLE" = "rhel" ]; then
 			failure
 			echo
@@ -113,7 +113,7 @@ stop() {
 	local _pid
 	_pid=$(cat "$PIDFILE" 2>/dev/null)
 	if [ -z "$_pid" ]; then
-		rm -f "$PIDFILE" "$LOCKFILE"
+		command rm -f "$PIDFILE" "$LOCKFILE"
 		return 0
 	fi
 
@@ -136,7 +136,7 @@ stop() {
 		sleep 1
 	fi
 
-	rm -f "$PIDFILE" "$LOCKFILE"
+	command rm -f "$PIDFILE" "$LOCKFILE"
 
 	if [ "$INITSTYLE" = "rhel" ]; then
 		success
@@ -159,7 +159,7 @@ reload_bfd() {
 	_pid=$(cat "$PIDFILE" 2>/dev/null)
 	if [ -z "$_pid" ] || ! kill -0 "$_pid" 2>/dev/null; then
 		echo "$prog is not running (stale pidfile)"
-		rm -f "$PIDFILE"
+		command rm -f "$PIDFILE"
 		return 7
 	fi
 

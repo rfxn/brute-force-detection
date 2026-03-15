@@ -440,21 +440,21 @@ _tlog_cmd_reset() {
 
 	# Cursor file
 	if [[ -f "$BASERUN/$name" ]]; then
-		rm -f "$BASERUN/$name"
+		command rm -f "$BASERUN/$name"
 		printf 'removed: %s\n' "$BASERUN/$name"
 		found=1
 	fi
 
 	# Journal timestamp
 	if [[ -f "$BASERUN/${name}.jts" ]]; then
-		rm -f "$BASERUN/${name}.jts"
+		command rm -f "$BASERUN/${name}.jts"
 		printf 'removed: %s\n' "$BASERUN/${name}.jts"
 		found=1
 	fi
 
 	# Lock file
 	if [[ -f "$BASERUN/${name}.lock" ]]; then
-		rm -f "$BASERUN/${name}.lock"
+		command rm -f "$BASERUN/${name}.lock"
 		printf 'removed: %s\n' "$BASERUN/${name}.lock"
 		found=1
 	fi
@@ -463,7 +463,7 @@ _tlog_cmd_reset() {
 	local tmpfile
 	for tmpfile in "$BASERUN"/."${name}".??????; do
 		if [[ -f "$tmpfile" ]]; then
-			rm -f "$tmpfile"
+			command rm -f "$tmpfile"
 			printf 'removed: %s\n' "$tmpfile"
 			found=1
 		fi
@@ -472,7 +472,7 @@ _tlog_cmd_reset() {
 	# Orphaned JTS temp files (mktemp pattern: .NAME.jts.XXXXXX)
 	for tmpfile in "$BASERUN"/."${name}".jts.??????; do
 		if [[ -f "$tmpfile" ]]; then
-			rm -f "$tmpfile"
+			command rm -f "$tmpfile"
 			printf 'removed: %s\n' "$tmpfile"
 			found=1
 		fi

@@ -61,9 +61,9 @@ declare -A _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
 declare -A _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
 
 _cleanup_common() {
-	rm -rf "$LOCK_FILE.lk" 2>/dev/null
-	rm -f "$LOCK_FILE" 2>/dev/null
-	rm -f "${_IGNORE_CACHE_FILE:-}" 2>/dev/null
+	command rm -rf "$LOCK_FILE.lk" 2>/dev/null
+	command rm -f "$LOCK_FILE" 2>/dev/null
+	command rm -f "${_IGNORE_CACHE_FILE:-}" 2>/dev/null
 }
 
 # shellcheck disable=SC2317 # called via trap
@@ -374,7 +374,7 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 		DIFF=$((UTIME - OVAL))
 		if [ "$DIFF" -gt "$LOCK_FILE_TIMEOUT" ]; then
 			elog warn "cleared stale lock (${DIFF}s old, pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null || echo unknown))."
-			rm -rf "$LOCK_FILE.lk"
+			command rm -rf "$LOCK_FILE.lk"
 			mkdir "$LOCK_FILE.lk" 2>/dev/null || {
 				elog error "unable to acquire lock after stale cleanup, aborting."
 				exit "$EXIT_LOCK_ERROR"
@@ -385,7 +385,7 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 			_lock_pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null)
 			if [ -n "$_lock_pid" ] && ! kill -0 "$_lock_pid" 2>/dev/null; then
 				elog warn "cleared dead lock (pid=$_lock_pid exited, lock ${DIFF}s old)."
-				rm -rf "$LOCK_FILE.lk"
+				command rm -rf "$LOCK_FILE.lk"
 				mkdir "$LOCK_FILE.lk" 2>/dev/null || {
 					elog error "unable to acquire lock after dead-pid cleanup, aborting."
 					exit "$EXIT_LOCK_ERROR"
@@ -682,7 +682,7 @@ check() {
 	if [ "$EMAIL_ALERTS" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
 		_bfd_digest_check
 	fi
-	rm -f "$alerts_file"
+	command rm -f "$alerts_file"
 
 	# cleanup per-cycle caches
 	command rm -f "$_IGNORE_CACHE_FILE"
@@ -726,7 +726,7 @@ _apool_report() {
 		echo "$cnt|$aip|${_gp_fmt}/${trip}|${aip_cc:---}|$first_fmt|$last_fmt|$mods|$ban_status" >> "$atmp"
 	done < <(_apool_awk "$source_file" "$search" "$cutoff")
 	format_table < "$atmp"
-	rm -f "$atmp"
+	command rm -f "$atmp"
 }
 
 # _apool_ban_status ip — return ban status string for an IP
@@ -790,7 +790,7 @@ _apool_service_summary() {
 	echo "SERVICE|COUNT|UNIQUE_IPS" > "$atmp"
 	_apool_service_summary_awk "$source_file" "$cutoff" >> "$atmp"
 	format_table < "$atmp"
-	rm -f "$atmp"
+	command rm -f "$atmp"
 }
 
 # _apool_service_dual_awk source_file cutoff_24h cutoff_7d — dual-interval per-service AWK
@@ -851,7 +851,7 @@ _apool_service_dual() {
 	echo "SERVICE|24H_COUNT|7D_COUNT|24H_IPS|7D_IPS|TOP_COUNTRY" > "$atmp"
 	_apool_service_dual_awk "$source_file" "$cutoff_24h" "$cutoff_7d" >> "$atmp"
 	format_table < "$atmp"
-	rm -f "$atmp"
+	command rm -f "$atmp"
 }
 
 # _apool_service_dual_json source_file cutoff_24h cutoff_7d — JSON dual-interval services

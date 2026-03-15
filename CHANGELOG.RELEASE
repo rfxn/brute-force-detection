@@ -6,6 +6,11 @@
       copies causing intermittent 'command not found' on _bfd_alert_init()
 [Fix] Deep-legacy portability: /usr/bin/rm not found on CentOS 6 / Ubuntu
       12.04 in _batch_ip_to_country() dual-stack cleanup (use 'command rm')
+[Fix] Deep-legacy portability: all bare rm/cp/mv in shipped source files
+      (bfd, bfd.lib.sh, tlog, install.sh, importconf, cron.daily, uninstall.sh,
+      bfd-watch.init) converted to 'command rm/cp/mv' for CentOS 6 / Ubuntu
+      12.04 (/bin/ vs /usr/bin/); hardcoded /usr/bin/cp in install.sh also
+      converted
 [New] IPv6 country lookup: ip_to_country() now resolves IPv6 addresses via
       ipcountry6.dat hex-range database (geoip_lib v1.0.2 geoip_ip6_lookup)
 [New] _batch_ip_to_country() dual-stack: IPv6 addresses resolved in batch

@@ -1669,7 +1669,7 @@ list_bans() {
 		echo "$host|$mod|$ports|$banned_fmt|$expiry_fmt"
 	done <<< "$raw" >> "$atmp"
 	format_table < "$atmp"
-	rm -f "$atmp"
+	command rm -f "$atmp"
 }
 
 # manual_unban install_path ip utime — manually unban an IP via firewall backend
@@ -1782,7 +1782,7 @@ state_bans_active_remove() {
 	(
 		flock -x 200
 		awk -v ip="$host" '$3 != ip' "$bans_file" > "$bans_file.new" || true
-		mv "$bans_file.new" "$bans_file"
+		command mv "$bans_file.new" "$bans_file"
 		chmod 600 "$bans_file"
 	) 200>>"$bans_file"
 }
@@ -1867,7 +1867,7 @@ state_pressure_prune() {
 		flock -x 200
 		awk -v cutoff="$cutoff" '$1+0 >= cutoff' "$events_file" \
 			| tail -n "$max_lines" > "$events_file.new"
-		mv "$events_file.new" "$events_file"
+		command mv "$events_file.new" "$events_file"
 		chmod 600 "$events_file"
 	) 200>>"$events_file"
 }
@@ -1892,7 +1892,7 @@ state_pool_prune() {
 			tail -n "$max_lines" "$pool_file" > "$pool_file.new"
 		fi
 		cat "$pool_file.new" > "$pool_file"   # preserves inode for flock
-		rm -f "$pool_file.new"
+		command rm -f "$pool_file.new"
 	) 200>>"$pool_file"
 }
 
@@ -2955,7 +2955,7 @@ send_alerts() {
 		# shellcheck disable=SC2034  # consumed by custom hooks
 		ALERT_COUNT="$alert_count"
 
-		rm -f "$recip_file" "$text_file" "$html_file"
+		command rm -f "$recip_file" "$text_file" "$html_file"
 	done <<< "$recipients"
 
 	# --- Messaging delivery (per-batch, not per-recipient) ---
@@ -3600,7 +3600,7 @@ list_rules() {
 	else
 		echo "$active active, $inactive inactive ($total total)"
 	fi
-	rm -f "$atmp"
+	command rm -f "$atmp"
 }
 
 # show_rule install_path rule_name — show detailed rule info
@@ -3698,7 +3698,7 @@ test_rule() {
 
 	if [ "$src_rc" -ne 0 ]; then
 		echo "error: failed to source rule '$rule_name'" >&2
-		rm -f "$stdin_file"
+		command rm -f "$stdin_file"
 		_restore_rule_vars
 		return 1
 	fi
@@ -3729,7 +3729,7 @@ test_rule() {
 			done
 	fi
 
-	rm -f "$stdin_file"
+	command rm -f "$stdin_file"
 	_restore_rule_vars
 }
 
@@ -3862,11 +3862,11 @@ test_alert_email() {
 
 	if send_alerts "$alerts_file" "$subject" "${EMAIL_LOGLINES:-5}"; then
 		echo "Test alert sent successfully."
-		rm -f "$alerts_file"
+		command rm -f "$alerts_file"
 		return 0
 	else
 		echo "Test alert failed — check EMAIL_* and SMTP_* configuration (bfd -c)." >&2
-		rm -f "$alerts_file"
+		command rm -f "$alerts_file"
 		return 1
 	fi
 }
@@ -3922,13 +3922,13 @@ test_alert_messaging() {
 
 	if _bfd_dispatch_messaging "$alerts_file" "$subject" "${EMAIL_LOGLINES:-5}" "$tpl_dir"; then
 		echo "Test $channel alert sent successfully."
-		rm -f "$alerts_file"
+		command rm -f "$alerts_file"
 		return 0
 	else
 		local _uc
 		_uc=$(echo "$channel" | tr '[:lower:]' '[:upper:]')
 		echo "Test $channel alert failed — check ${_uc}_* configuration (bfd -c)." >&2
-		rm -f "$alerts_file"
+		command rm -f "$alerts_file"
 		return 1
 	fi
 }
@@ -4168,13 +4168,13 @@ events_list() {
 	done < <(_apool_awk "$pool_file" "" "$cutoff" "$sort_mode" "0") >> "$atmp"
 
 	if [ "$(wc -l < "$atmp")" -le 1 ]; then
-		rm -f "$atmp"
+		command rm -f "$atmp"
 		echo "No events recorded."
 		return 0
 	fi
 
 	format_table < "$atmp"
-	rm -f "$atmp"
+	command rm -f "$atmp"
 }
 
 # events_list_ip install_path ip [loglines] — per-IP event detail from attack.pool
@@ -4250,7 +4250,7 @@ events_list_ip() {
 			echo "$_svc|$_cnt|$_sfmt|$_lfmt"
 		done <<< "$pool_data" >> "$atmp"
 		format_table < "$atmp"
-		rm -f "$atmp"
+		command rm -f "$atmp"
 		echo ""
 	fi
 
@@ -4338,10 +4338,10 @@ events_list_cidr() {
 		total_events=$(awk -F'|' '{s+=$1} END {print s+0}' "$_cidr_summary")
 		banned_count=$(awk -F'|' '$2 ~ /BANNED/ {c++} END {print c+0}' "$_cidr_summary")
 	fi
-	rm -f "$_cidr_summary"
+	command rm -f "$_cidr_summary"
 
 	if [ "$match_count" -eq 0 ]; then
-		rm -f "$atmp"
+		command rm -f "$atmp"
 		echo "No events found for $cidr."
 		return 0
 	fi
@@ -4349,7 +4349,7 @@ events_list_cidr() {
 	format_table < "$atmp"
 	echo ""
 	echo "$match_count IPs, $total_events failures, $banned_count banned"
-	rm -f "$atmp"
+	command rm -f "$atmp"
 }
 
 # --- Event list JSON/CSV variants ---
@@ -4637,7 +4637,7 @@ events_list_cidr_json() {
 	cat "$_cidr_ips" 2>/dev/null
 	echo ""
 	echo "]}"
-	rm -f "$_cidr_summary" "$_cidr_ips"
+	command rm -f "$_cidr_summary" "$_cidr_ips"
 }
 
 # events_list_cidr_csv install_path cidr [sort_mode] — CSV CIDR event search

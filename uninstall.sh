@@ -45,11 +45,11 @@ if [ -d "$INSPATH" ]; then
 	pkg_service_uninstall "bfd"
 	pkg_service_uninstall "bfd-watch"
 	# Remove legacy /etc/systemd/system/ units from pre-pkg_lib installs
-	rm -f /etc/systemd/system/bfd.service \
+	command rm -f /etc/systemd/system/bfd.service \
 	      /etc/systemd/system/bfd.timer \
 	      /etc/systemd/system/bfd-watch.service 2>/dev/null  # safe: may not exist
 	# Additional SysV state files
-	rm -f /var/run/bfd-watch.pid /var/lock/subsys/bfd-watch
+	command rm -f /var/run/bfd-watch.pid /var/lock/subsys/bfd-watch
 
 	# Remove man page, bash completion, logrotate
 	pkg_uninstall_man "1" "bfd"
@@ -63,7 +63,7 @@ if [ -d "$INSPATH" ]; then
 			| tail -1 | sed 's/^BFD_LOG_PATH=//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//') || true
 	fi
 	if [ -n "$_custom_log" ] && [ "$_custom_log" != "/var/log/bfd_log" ]; then
-		rm -f "$_custom_log"
+		command rm -f "$_custom_log"
 	fi
 
 	# Remove cron files, install directory, symlink, backups, default log
