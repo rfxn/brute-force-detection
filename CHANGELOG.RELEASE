@@ -2,6 +2,21 @@
 
   -- Changes --
 
+[Fix] Packaging: RPM spec and DEB rules missing bfd_alert.sh, geoip_lib.sh,
+      pkg_lib.sh in %install, symlink farm, and %files sections; package test
+      template count updated from 8 to 14; RPM changelog rule count 42→57
+[Fix] Logrotate: target path updated from /var/log/bfd_log to
+      /var/log/bfd/bfd.log to match BFD_LOG_PATH consolidation
+[Fix] DEB postrm: purge case now removes /var/log/bfd/ directory
+[Change] Convention compliance: all || true in project-owned shipped files
+      annotated with inline comments explaining why the error is safe to ignore
+[Fix] Documentation: README --attackpool→--activity, stale BFD_LOG_PATH default,
+      events section rewritten to match actual output, attack.pool path
+      corrected to stats/, backup path format HHMMSS→EPOCH, man page section
+      count and missing --status/--config/--rules long forms, bash completion
+      sync with show_config(), README.md template customization instructions
+      and country weighting IPv6 coverage, LOG_IDLE_SUPPRESS and APOOL_*
+      variables documented across all surfaces
 [Fix] Watch-mode tests: _start_watch() missing bfd_alert.sh and geoip_lib.sh
       copies causing intermittent 'command not found' on _bfd_alert_init()
 [Fix] Deep-legacy portability: /usr/bin/rm not found on CentOS 6 / Ubuntu

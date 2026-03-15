@@ -480,7 +480,7 @@ $REPUTATION_LINKS_TEXT"
 	if [ -n "$lp" ] && [ -f "$lp" ]; then
 		local _patterns raw_logs
 		_patterns=$(_events_rule_patterns "$mod") || _patterns=""
-		raw_logs=$(_alert_sanitize_logs "$lp" "$host" "$loglines" "$_patterns") || true
+		raw_logs=$(_alert_sanitize_logs "$lp" "$host" "$loglines" "$_patterns") || true  # no matching log lines is valid
 		if [ -n "$raw_logs" ]; then
 			export SOURCE_LOGS="$raw_logs"
 			# indent for text display

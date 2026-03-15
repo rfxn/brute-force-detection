@@ -75,6 +75,9 @@ check_file /usr/lib/bfd/internals/bfd.lib.sh "Library: bfd.lib.sh"
 check_file /usr/lib/bfd/internals/tlog_lib.sh "Library: tlog_lib.sh"
 check_file /usr/lib/bfd/internals/elog_lib.sh "Library: elog_lib.sh"
 check_file /usr/lib/bfd/internals/alert_lib.sh "Library: alert_lib.sh"
+check_file /usr/lib/bfd/internals/bfd_alert.sh "Library: bfd_alert.sh"
+check_file /usr/lib/bfd/internals/geoip_lib.sh "Library: geoip_lib.sh"
+check_file /usr/lib/bfd/internals/pkg_lib.sh "Library: pkg_lib.sh"
 check_file /usr/lib/bfd/tlog "Library: tlog"
 check_file /usr/lib/bfd/alert "Library: alert directory"
 check_file /usr/lib/bfd/update-ipcountry.sh "Library: update-ipcountry.sh"
@@ -100,6 +103,9 @@ check_link /usr/local/bfd/internals/bfd.lib.sh /usr/lib/bfd/internals/bfd.lib.sh
 check_link /usr/local/bfd/internals/tlog_lib.sh /usr/lib/bfd/internals/tlog_lib.sh "Symlink: internals/tlog_lib.sh"
 check_link /usr/local/bfd/internals/elog_lib.sh /usr/lib/bfd/internals/elog_lib.sh "Symlink: internals/elog_lib.sh"
 check_link /usr/local/bfd/internals/alert_lib.sh /usr/lib/bfd/internals/alert_lib.sh "Symlink: internals/alert_lib.sh"
+check_link /usr/local/bfd/internals/bfd_alert.sh /usr/lib/bfd/internals/bfd_alert.sh "Symlink: internals/bfd_alert.sh"
+check_link /usr/local/bfd/internals/geoip_lib.sh /usr/lib/bfd/internals/geoip_lib.sh "Symlink: internals/geoip_lib.sh"
+check_link /usr/local/bfd/internals/pkg_lib.sh /usr/lib/bfd/internals/pkg_lib.sh "Symlink: internals/pkg_lib.sh"
 check_link /usr/local/bfd/internals/internals.conf /etc/bfd/internals.conf "Symlink: internals/internals.conf"
 check_link /usr/local/bfd/tlog /usr/lib/bfd/tlog "Symlink: tlog"
 check_link /usr/local/bfd/alert /usr/lib/bfd/alert "Symlink: alert"
@@ -196,10 +202,10 @@ echo ""
 # --- Test 7b: Alert template files ---
 echo "--- Test 7b: Alert templates ---"
 tpl_count=$(find /usr/lib/bfd/alert/ -maxdepth 1 -name '*.tpl' -type f 2>/dev/null | wc -l)
-if [ "$tpl_count" -eq 8 ]; then
+if [ "$tpl_count" -eq 14 ]; then
 	pass "Alert template files present ($tpl_count templates)"
 else
-	fail "Expected 8 alert templates, found $tpl_count"
+	fail "Expected 14 alert templates, found $tpl_count"
 fi
 echo ""
 

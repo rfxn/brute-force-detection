@@ -37,6 +37,9 @@ override_dh_auto_install:
 	install -D -m 644 files/internals/elog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/elog_lib.sh
 	install -D -m 755 files/tlog $(CURDIR)/debian/bfd/usr/lib/bfd/tlog
 	install -D -m 644 files/internals/alert_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/alert_lib.sh
+	install -D -m 644 files/internals/bfd_alert.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_alert.sh
+	install -D -m 644 files/internals/geoip_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/geoip_lib.sh
+	install -D -m 644 files/internals/pkg_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/pkg_lib.sh
 	install -d -m 755 $(CURDIR)/debian/bfd/usr/lib/bfd/alert
 	for tpl in files/alert/*.tpl; do \
 	    install -m 644 "$$tpl" $(CURDIR)/debian/bfd/usr/lib/bfd/alert/; \
