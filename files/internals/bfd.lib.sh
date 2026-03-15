@@ -2059,7 +2059,7 @@ ip_to_country() {
 			fi
 			if declare -f geoip_ip6_lookup >/dev/null 2>&1; then
 				local v6cc
-				v6cc=$(geoip_ip6_lookup "$ip" "$db6_file") || true
+				v6cc=$(geoip_ip6_lookup "$ip" "$db6_file") || true  # no-match returns 1; empty v6cc is valid
 				# populate cache (use "-" sentinel for empty results)
 				if [ -n "${_COUNTRY_CACHE_FILE:-}" ]; then
 					echo "$ip ${v6cc:--}" >> "$_COUNTRY_CACHE_FILE"
@@ -2218,6 +2218,8 @@ _batch_ip_to_country() {
 	# Dual-stack: partition stdin, run each DB lookup, merge
 	local _tmpdir
 	_tmpdir=$(mktemp -d /tmp/bfd-batch.XXXXXX)
+	# shellcheck disable=SC2064
+	trap "/usr/bin/rm -rf '$_tmpdir'" RETURN
 	local _v4="$_tmpdir/v4" _v6="$_tmpdir/v6"
 
 	# Split input: IPv4 to one file, IPv6 to another
@@ -2275,6 +2277,7 @@ _batch_ip_to_country() {
 		}' "$_v6"
 	fi
 
+	# trap RETURN handles cleanup; explicit rm as belt-and-suspenders
 	/usr/bin/rm -rf "$_tmpdir"
 }
 

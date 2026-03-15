@@ -218,10 +218,23 @@ EOF
 	assert_output "3"
 }
 
-@test "pressure_effective_weight: IPv6 returns weight unchanged" {
+@test "pressure_effective_weight: IPv6 returns weight unchanged when db6 absent" {
 	run pressure_effective_weight "3" "2001:db8::1" "$INSTALL_PATH"
 	assert_success
 	assert_output "3"
+}
+
+@test "pressure_effective_weight: IPv6 applies country multiplier when db6 present" {
+	# Create hex-range db6 with JP entry covering 2001:db8::/32
+	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+EOF
+	# Add JP multiplier (2.0x)
+	echo "JP=20" >> "$INSTALL_PATH/pressure-country.conf"
+	# weight=3, mult=20 (2.0x) → 3*20/10 = 6
+	run pressure_effective_weight "3" "2001:db8::1" "$INSTALL_PATH"
+	assert_success
+	assert_output "6"
 }
 
 @test "pressure_effective_weight: result minimum is 1" {
@@ -479,6 +492,17 @@ EOF
 	local result
 	result=$(printf '2001:db8::1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
 	[ "$result" = "2001:db8::1 -" ]
+}
+
+@test "_batch_ip_to_country: IPv4-only input with db6 present uses dual-stack path" {
+	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+EOF
+	local result
+	result=$(printf '192.0.2.128\n198.51.100.50\n' \
+		| _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	echo "$result" | grep -q "192.0.2.128 CN"
+	echo "$result" | grep -q "198.51.100.50 RU"
 }
 
 @test "_batch_ip_to_country: empty input produces no output" {
