@@ -71,7 +71,49 @@ teardown() {
 	assert_output ""
 }
 
-@test "ip_to_country: returns empty for IPv6" {
+@test "ip_to_country: returns CC for IPv6 when db6 present" {
+	# Create a small hex-range IPv6 database
+	# 2001:0db8:: range = 20010db8 00000000 00000000 00000000
+	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+20010db9000000000000000000000000 20010db9ffffffffffffffffffffffff DE
+EOF
+	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output "JP"
+}
+
+@test "ip_to_country: returns empty for IPv6 when db6 absent" {
+	# No ipcountry6.dat exists
+	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output ""
+}
+
+@test "ip_to_country: IPv6 abbreviation forms resolve correctly" {
+	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+EOF
+	# Full form
+	run ip_to_country "2001:0db8:0000:0000:0000:0000:0000:0001" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output "JP"
+	# ::compressed
+	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output "JP"
+	# Mixed case
+	run ip_to_country "2001:0DB8::1" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output "JP"
+}
+
+@test "ip_to_country: old raw-CIDR ipcountry6.dat returns empty (format guard)" {
+	# Simulate old raw-CIDR format (contains colons)
+	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+2001:db8::/32 JP
+2001:db9::/32 DE
+EOF
 	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
 	assert_success
 	assert_output ""
@@ -176,10 +218,23 @@ teardown() {
 	assert_output "3"
 }
 
-@test "pressure_effective_weight: IPv6 returns weight unchanged" {
+@test "pressure_effective_weight: IPv6 returns weight unchanged when db6 absent" {
 	run pressure_effective_weight "3" "2001:db8::1" "$INSTALL_PATH"
 	assert_success
 	assert_output "3"
+}
+
+@test "pressure_effective_weight: IPv6 applies country multiplier when db6 present" {
+	# Create hex-range db6 with JP entry covering 2001:db8::/32
+	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+EOF
+	# Add JP multiplier (2.0x)
+	echo "JP=20" >> "$INSTALL_PATH/pressure-country.conf"
+	# weight=3, mult=20 (2.0x) → 3*20/10 = 6
+	run pressure_effective_weight "3" "2001:db8::1" "$INSTALL_PATH"
+	assert_success
+	assert_output "6"
 }
 
 @test "pressure_effective_weight: result minimum is 1" {
@@ -245,6 +300,25 @@ teardown() {
 	run ip_to_country "192.0.2.128" "$INSTALL_PATH/ipcountry.dat"
 	assert_success
 	assert_output "CN"
+}
+
+@test "ip_to_country: IPv6 cache hit after first lookup" {
+	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+EOF
+	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
+	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output "JP"
+	# verify cache was populated with IPv6 entry
+	run grep -c "^2001:db8::1 " "$_COUNTRY_CACHE_FILE"
+	assert_output "1"
+	# second lookup should hit cache
+	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
+	assert_success
+	assert_output "JP"
+	rm -f "$_COUNTRY_CACHE_FILE"
+	_COUNTRY_CACHE_FILE=""
 }
 
 # ============================================================
@@ -384,18 +458,50 @@ _run_entry_vars_country() {
 	[ "$result" = "10.0.0.1 -" ]
 }
 
-@test "_batch_ip_to_country: IPv6 address skipped with dash" {
+@test "_batch_ip_to_country: IPv6 returns dash when db6 absent" {
 	local result
 	result=$(printf '2001:db8::1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
 	[ "$result" = "2001:db8::1 -" ]
 }
 
-@test "_batch_ip_to_country: mixed IPv4 and IPv6" {
+@test "_batch_ip_to_country: IPv6 returns CC when db6 present" {
+	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+EOF
+	local result
+	result=$(printf '2001:db8::1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	[ "$result" = "2001:db8::1 JP" ]
+}
+
+@test "_batch_ip_to_country: mixed IPv4+IPv6 returns correct CCs for both" {
+	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+EOF
 	local result
 	result=$(printf '192.0.2.128\n2001:db8::1\n198.51.100.50\n' \
 		| _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
 	echo "$result" | grep -q "192.0.2.128 CN"
-	echo "$result" | grep -q "2001:db8::1 -"
+	echo "$result" | grep -q "2001:db8::1 JP"
+	echo "$result" | grep -q "198.51.100.50 RU"
+}
+
+@test "_batch_ip_to_country: old raw-CIDR ipcountry6.dat falls back to dash" {
+	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+2001:db8::/32 JP
+EOF
+	local result
+	result=$(printf '2001:db8::1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	[ "$result" = "2001:db8::1 -" ]
+}
+
+@test "_batch_ip_to_country: IPv4-only input with db6 present uses dual-stack path" {
+	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+EOF
+	local result
+	result=$(printf '192.0.2.128\n198.51.100.50\n' \
+		| _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	echo "$result" | grep -q "192.0.2.128 CN"
 	echo "$result" | grep -q "198.51.100.50 RU"
 }
 

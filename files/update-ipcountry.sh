@@ -8,7 +8,7 @@
 # update-ipcountry.sh — rebuild ipcountry.dat from CIDR zone data
 #
 # Uses geoip_lib.sh geoip_build_ipdb() for IPv4 (bulk tarball with
-# per-country fallback) and per-country downloads for IPv6.
+# per-country fallback) and geoip_build_ip6db() for IPv6 (hex-range format).
 #
 # Usage: update-ipcountry.sh [output_file]
 #   output_file defaults to $INSTALL_PATH/ipcountry.dat
@@ -44,34 +44,14 @@ chmod 644 "$OUTPUT"
 echo "Updated $OUTPUT ($_GEOIP_BUILD_COUNT countries, $_GEOIP_BUILD_RANGES IPv4 ranges, $_GEOIP_BUILD_FAIL failed)."
 
 # ---------------------------------------------------------------------------
-# IPv6: per-country downloads (no bulk tarball available)
+# IPv6: use geoip_build_ip6db (per-country cascade, hex-range format)
 # ---------------------------------------------------------------------------
-
-# prefer INSTALL_PATH/tmp for temp files; fall back to /tmp
-if [ -d "$INSTALL_PATH/tmp" ] && [ -w "$INSTALL_PATH/tmp" ]; then
-	tmpdir=$(mktemp -d "$INSTALL_PATH/tmp/ipcountry.XXXXXX")
-else
-	tmpdir=$(mktemp -d /tmp/bfd-ipcountry.XXXXXX)
-fi
-trap 'rm -rf "$tmpdir"' EXIT INT TERM
-
-v6_count=0
-while IFS= read -r cc; do
-	cidr6_file="$tmpdir/${cc}.zone6"
-	if geoip_download "$cc" "6" "$cidr6_file"; then
-		"$GEOIP_AWK_BIN" -v cc="$cc" '/^[0-9a-fA-F:]/ { printf "%s %s\n", $0, cc }' \
-			"$cidr6_file" >> "$tmpdir/merged6.dat"
-		v6_count=$(( v6_count + 1 ))
-	fi
-	rm -f "$cidr6_file"
-done < <(geoip_all_cc)
-
-if [ -f "$tmpdir/merged6.dat" ] && [ -s "$tmpdir/merged6.dat" ]; then
-	sort "$tmpdir/merged6.dat" > "$tmpdir/ipcountry6.dat"
-	v6_lines=$(wc -l < "$tmpdir/ipcountry6.dat")
-	cp "$tmpdir/ipcountry6.dat" "$OUTPUT6"
+echo "Building IPv6 country database..."
+if geoip_build_ip6db "$OUTPUT6" 500; then
 	chmod 644 "$OUTPUT6"
-	echo "Updated $OUTPUT6 ($v6_lines IPv6 prefixes)."
+	echo "Updated $OUTPUT6 ($_GEOIP_BUILD6_COUNT countries, $_GEOIP_BUILD6_RANGES IPv6 ranges, $_GEOIP_BUILD6_FAIL failed)."
+else
+	echo "warning: IPv6 database build failed (non-fatal)."
 fi
 
 # Mark update timestamp for staleness tracking

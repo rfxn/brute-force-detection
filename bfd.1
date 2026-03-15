@@ -854,15 +854,19 @@ Per-rule pressure weight and trip overrides.
 Country pressure multiplier table (active when entries are uncommented).
 .TP
 .I /usr/local/bfd/ipcountry.dat
-IP-to-country lookup database.
+IPv4 IP-to-country lookup database (integer-range format).
+.TP
+.I /usr/local/bfd/ipcountry6.dat
+IPv6 IP-to-country lookup database (hex-range format). Built by
+.BR update-ipcountry.sh .
 .TP
 .I /usr/local/bfd/tlog
 Track log \(em byte-offset log reader CLI wrapper.
 .TP
 .I /usr/local/bfd/update-ipcountry.sh
 Script to download per-country CIDR zones (ipverse.net/ipdeny.com cascade) and
-rebuild the IP-to-country database. Run automatically at install time
-(background) and refreshed via cron.daily when data is older than 30 days.
+rebuild the IPv4 and IPv6 IP-to-country databases. Run automatically at install
+time (background) and refreshed via cron.daily when data is older than 30 days.
 .TP
 .I /usr/local/bfd/alert/
 Email template partials directory (8 files: text.*.tpl, html.*.tpl).

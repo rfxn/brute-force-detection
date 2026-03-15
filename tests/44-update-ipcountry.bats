@@ -30,11 +30,16 @@ teardown() {
 # (now in geoip_lib.sh, previously _cidr4_to_ranges in update-ipcountry.sh)
 # ============================================================
 
-# Helper: source geoip_lib to get _geoip_cidr4_to_ranges
-_load_cidr4_to_ranges() {
+# Helper: source geoip_lib to get conversion/build functions
+_load_geoip_lib() {
 	# shellcheck disable=SC1091
 	_GEOIP_LIB_LOADED=""
 	. "$PROJECT_ROOT/files/internals/geoip_lib.sh"
+}
+
+# Alias for existing callers
+_load_cidr4_to_ranges() {
+	_load_geoip_lib
 }
 
 @test "geoip_cidr4_to_ranges: /24 produces correct range" {
@@ -268,4 +273,54 @@ SCRIPT
 		fi
 	fi
 	[ ! -f "$INSTALL_PATH/tmp/.update-ran" ]
+}
+
+# ============================================================
+# _geoip_cidr6_to_ranges — IPv6 CIDR to hex-range conversion
+# ============================================================
+
+@test "geoip_cidr6_to_ranges: /32 produces correct hex range" {
+	_load_geoip_lib
+	echo "2001:db8::/32" > "$TEST_TMPDIR/test.zone6"
+	run _geoip_cidr6_to_ranges "$TEST_TMPDIR/test.zone6" "JP"
+	assert_success
+	# 2001:0db8:0000:... to 2001:0db8:ffff:...
+	assert_output "20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP"
+}
+
+@test "geoip_cidr6_to_ranges: /48 produces correct hex range" {
+	_load_geoip_lib
+	echo "2001:db8:abcd::/48" > "$TEST_TMPDIR/test.zone6"
+	run _geoip_cidr6_to_ranges "$TEST_TMPDIR/test.zone6" "DE"
+	assert_success
+	assert_output "20010db8abcd00000000000000000000 20010db8abcdffffffffffffffffffff DE"
+}
+
+@test "geoip_cidr6_to_ranges: output is hex-range format (no colons)" {
+	_load_geoip_lib
+	echo "2001:db8::/32" > "$TEST_TMPDIR/test.zone6"
+	run _geoip_cidr6_to_ranges "$TEST_TMPDIR/test.zone6" "JP"
+	assert_success
+	# hex-range format must not contain colons
+	refute_output --partial ":"
+	# each field should be 32 chars hex
+	local start end
+	start=$(echo "$output" | awk '{print $1}')
+	end=$(echo "$output" | awk '{print $2}')
+	[ "${#start}" -eq 32 ]
+	[ "${#end}" -eq 32 ]
+}
+
+@test "geoip_ip6_lookup: finds CC in hex-range database" {
+	_load_geoip_lib
+	cat > "$TEST_TMPDIR/ip6db.dat" <<'EOF'
+20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+20010db9000000000000000000000000 20010db9ffffffffffffffffffffffff DE
+EOF
+	run geoip_ip6_lookup "2001:db8::1" "$TEST_TMPDIR/ip6db.dat"
+	assert_success
+	assert_output "JP"
+	run geoip_ip6_lookup "2001:db9::ff" "$TEST_TMPDIR/ip6db.dat"
+	assert_success
+	assert_output "DE"
 }
