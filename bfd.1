@@ -220,6 +220,29 @@ or
 .B \-\-csv
 for structured output.
 .TP
+.BR \-\-report " \fR[" daily | weekly | monthly \fR]
+Generate and deliver a periodic threat report.
+Reports include threat summary (unique IPs, total events, bans), top threat IPs
+with country codes and ban status, per-service breakdown with top country, and
+a trend comparison against the prior equivalent time window.
+Reports are delivered via all configured channels (email, Slack, Telegram,
+Discord) or only those listed in
+.BR REPORT_CHANNELS .
+When run from the CLI, report text is also written to stdout.
+.sp
+Intervals:
+.B daily
+(last 24h, default),
+.B weekly
+(last 7d),
+.B monthly
+(last 30d).
+Scheduled delivery is handled by
+.B cron.daily
+when
+.B REPORT_ENABLED=1
+\(em daily runs every day, weekly on Mondays, monthly on the 1st.
+.TP
 .BR \-S ", " \-\-status " \fR[" \fISERVICE\fR ]
 System status overview, or per-service status when
 .I SERVICE
@@ -672,6 +695,35 @@ Entries older than this are pruned by
 Maximum number of lines in the attack pool file (default: 500000).
 When exceeded, the oldest entries are removed by
 .BR cron.daily .
+.SS Periodic Reports
+.TP
+.B REPORT_ENABLED
+Enable periodic threat reports (default: 0).
+When set to 1 and
+.B cron.daily
+is active, reports are generated and delivered on configured intervals.
+.TP
+.B REPORT_INTERVALS
+Comma-separated list of intervals to generate (default: "daily").
+Valid values: daily, weekly, monthly.
+.TP
+.B REPORT_CHANNELS
+Comma-separated list of delivery channels (default: "" = all enabled alert channels).
+Valid values: email, slack, telegram, discord.
+When empty, reports are delivered to all channels enabled for ban alerts.
+.TP
+.B REPORT_EMAIL_ADDRESS
+Report email recipient (default: "" = use EMAIL_ADDRESS).
+.TP
+.B REPORT_EMAIL_SUBJECT
+Email subject template (default: "BFD {{INTERVAL}} Threat Report for {{HOSTNAME}}").
+.B {{INTERVAL}}
+and
+.B {{HOSTNAME}}
+are expanded at send time.
+.TP
+.B REPORT_TOP_N
+Maximum IPs to include in report tables (default: 25).
 .SH ALERT TEMPLATES
 Alert messages are rendered from customizable template partials in the
 .B alert/

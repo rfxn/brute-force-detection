@@ -717,6 +717,7 @@ _apool_report() {
 	local cnt aip first_ts last_ts mods aip_cc first_fmt last_fmt ban_status _gp _gp_fmt
 	while IFS='|' read -r cnt aip first_ts last_ts mods aip_cc; do
 		[ -z "$cnt" ] && continue
+		aip_cc=$(_resolve_cidr_cc "$aip" "$aip_cc")
 		first_fmt=$(_fmt_ts "$first_ts")
 		last_fmt=$(_fmt_ts "$last_ts")
 		ban_status=$(_apool_ban_status "$aip")
@@ -1152,6 +1153,7 @@ _apool_report_json() {
 		_apool_awk "$source_file" "$search" "$cutoff" | \
 		while IFS='|' read -r cnt aip first_ts last_ts mods aip_cc; do
 			[ -z "$cnt" ] && continue
+			aip_cc=$(_resolve_cidr_cc "$aip" "$aip_cc")
 			local first_fmt last_fmt ban_status _gp _gp_fmt
 			first_fmt=$(_fmt_ts_iso "$first_ts")
 			last_fmt=$(_fmt_ts_iso "$last_ts")
@@ -1190,6 +1192,7 @@ _apool_report_csv() {
 		_apool_awk "$source_file" "$search" "$cutoff" | \
 		while IFS='|' read -r cnt aip first_ts last_ts mods aip_cc; do
 			[ -z "$cnt" ] && continue
+			aip_cc=$(_resolve_cidr_cc "$aip" "$aip_cc")
 			local first_fmt last_fmt ban_status _gp _gp_fmt
 			first_fmt=$(_fmt_ts_iso "$first_ts")
 			last_fmt=$(_fmt_ts_iso "$last_ts")
@@ -1381,6 +1384,7 @@ usage_short() {
 	echo "  bfd -l              list active bans"
 	echo "  bfd -a [IP|STR]     threat activity / investigate IP"
 	echo "  bfd -e [IP|CIDR]    active events / IP or subnet pressure detail"
+	echo "  bfd --report [INTERVAL] periodic threat report (daily|weekly|monthly)"
 	echo ""
 	echo "System:"
 	echo "  bfd -S [SERVICE]    operational status overview"
@@ -1435,6 +1439,9 @@ usage() {
 	echo "  --max-lines=N               max lines per log during scan (default 50000)"
 	echo "  --scan-timeout=N            journal timeout per rule during scan (default 120)"
 	echo ""
+	echo "Reports:"
+	echo "  --report [daily|weekly|monthly]  generate and deliver periodic threat report"
+	echo ""
 	echo "Output Modifiers:"
 	echo "  --json                      JSON output (with -l, -e, -a)"
 	echo "  --csv                       CSV output (with -l, -e, -a)"
@@ -1460,6 +1467,7 @@ usage() {
 	echo "  bfd --scan sshd -d          dry-run full-log scan for sshd only"
 	echo "  bfd -b 10.0.0.5 sshd        manually ban IP for sshd service"
 	echo "  bfd -T sshd /var/log/auth.log  test sshd rule against a log file"
+	echo "  bfd --report weekly             generate and deliver weekly report"
 }
 
 # Pre-process global modifier flags (--json, --csv, --verbose, --max-lines=, --scan-timeout=,
@@ -1682,6 +1690,10 @@ case "${1:-}" in
 	elif [ "$DRY_RUN" = "1" ]; then
 		vout "scan: dry-run — cursors not advanced"
 	fi
+	;;
+--report)
+	vhead; pre
+	report "${2:-daily}" || exit "$?"
 	;;
 --flush-temp)   vhead; pre; flush_bans "$INSTALL_PATH" "temp" "$UTIME" || exit "$?" ;;
 --flush-all)    vhead; pre; flush_bans "$INSTALL_PATH" "all" "$UTIME" || exit "$?" ;;

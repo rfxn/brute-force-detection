@@ -3,7 +3,7 @@
 load 'helpers/bfd-common'
 
 setup() {
-	bfd_standard_setup
+	bfd_common_setup
 	IGNOREREGEX=""
 }
 

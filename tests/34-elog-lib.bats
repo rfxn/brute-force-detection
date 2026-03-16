@@ -243,22 +243,19 @@ teardown() {
 }
 
 @test "_elog_json_escape: handles backslash, double-quote, newline, tab" {
-	local result
-	result=$(_elog_json_escape 'a\b"c
-d	e')
-	[[ "$result" == *'a\\b\"c\nd\te'* ]]
+	_elog_json_escape 'a\b"c
+d	e'
+	[[ "$_ELOG_RET" == *'a\\b\"c\nd\te'* ]]
 }
 
 @test "_elog_extract_tag: returns empty for messages without {tag}" {
-	local result
-	result=$(_elog_extract_tag "no tag here")
-	[ -z "$result" ]
+	_elog_extract_tag "no tag here"
+	[ -z "$_ELOG_RET" ]
 }
 
 @test "_elog_extract_tag: extracts tag from {tag} prefix" {
-	local result
-	result=$(_elog_extract_tag "{sshd} login failed")
-	[ "$result" = "sshd" ]
+	_elog_extract_tag "{sshd} login failed"
+	[ "$_ELOG_RET" = "sshd" ]
 }
 
 # --- Convenience wrappers ---
@@ -309,60 +306,60 @@ d	e')
 # --- _elog_level_num ---
 
 @test "_elog_level_num: maps all standard level names" {
-	run _elog_level_num "debug"
-	assert_output "0"
-	run _elog_level_num "info"
-	assert_output "1"
-	run _elog_level_num "warn"
-	assert_output "2"
-	run _elog_level_num "error"
-	assert_output "3"
-	run _elog_level_num "critical"
-	assert_output "4"
+	_elog_level_num "debug"
+	[ "$_ELOG_RET" = "0" ]
+	_elog_level_num "info"
+	[ "$_ELOG_RET" = "1" ]
+	_elog_level_num "warn"
+	[ "$_ELOG_RET" = "2" ]
+	_elog_level_num "error"
+	[ "$_ELOG_RET" = "3" ]
+	_elog_level_num "critical"
+	[ "$_ELOG_RET" = "4" ]
 }
 
 @test "_elog_level_num: unknown level defaults to 1" {
-	run _elog_level_num "bogus"
-	assert_output "1"
-	run _elog_level_num ""
-	assert_output "1"
+	_elog_level_num "bogus"
+	[ "$_ELOG_RET" = "1" ]
+	_elog_level_num ""
+	[ "$_ELOG_RET" = "1" ]
 }
 
 # --- _elog_level_name ---
 
 @test "_elog_level_name: maps all standard level numbers" {
-	run _elog_level_name "0"
-	assert_output "debug"
-	run _elog_level_name "1"
-	assert_output "info"
-	run _elog_level_name "2"
-	assert_output "warn"
-	run _elog_level_name "3"
-	assert_output "error"
-	run _elog_level_name "4"
-	assert_output "critical"
+	_elog_level_name "0"
+	[ "$_ELOG_RET" = "debug" ]
+	_elog_level_name "1"
+	[ "$_ELOG_RET" = "info" ]
+	_elog_level_name "2"
+	[ "$_ELOG_RET" = "warn" ]
+	_elog_level_name "3"
+	[ "$_ELOG_RET" = "error" ]
+	_elog_level_name "4"
+	[ "$_ELOG_RET" = "critical" ]
 }
 
 @test "_elog_level_name: unknown number defaults to info" {
-	run _elog_level_name "9"
-	assert_output "info"
-	run _elog_level_name ""
-	assert_output "info"
+	_elog_level_name "9"
+	[ "$_ELOG_RET" = "info" ]
+	_elog_level_name ""
+	[ "$_ELOG_RET" = "info" ]
 }
 
 # --- _elog_strip_tag ---
 
 @test "_elog_strip_tag: strips {tag} prefix from message" {
-	run _elog_strip_tag "{sshd} login failed"
-	assert_output "login failed"
+	_elog_strip_tag "{sshd} login failed"
+	[ "$_ELOG_RET" = "login failed" ]
 }
 
 @test "_elog_strip_tag: passes through message without tag" {
-	run _elog_strip_tag "no tag here"
-	assert_output "no tag here"
+	_elog_strip_tag "no tag here"
+	[ "$_ELOG_RET" = "no tag here" ]
 }
 
 @test "_elog_strip_tag: preserves message when braces not at start" {
-	run _elog_strip_tag "some {tag} in middle"
-	assert_output "some {tag} in middle"
+	_elog_strip_tag "some {tag} in middle"
+	[ "$_ELOG_RET" = "some {tag} in middle" ]
 }

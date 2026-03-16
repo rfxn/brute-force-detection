@@ -2,6 +2,35 @@
 
   -- Changes --
 
+[New] Report proof points: ban breakdown (temporary/escalated/permanent),
+      repeat offender count, top countries, ban-failed count
+[New] Comma-formatted numbers in report output for values over 1,000
+[Change] Report HTML tables: styled with striped rows, monospace IPs,
+      first/last seen timestamps, uppercase column headers
+[Change] Remove status column from report top IPs table (redundant)
+[Fix] Report summary card column spacing (equal 25% widths)
+[Change] Report email templates aligned with transactional ban alert design
+      system (rfxn brand bar, cyan accent, zinc color scale, card layout)
+
+[New] Periodic threat report (--report daily|weekly|monthly) with multi-channel
+      delivery; provides threat summary, top IPs with country codes, per-service
+      breakdown, and trend comparison vs prior window
+[New] REPORT_ENABLED, REPORT_INTERVALS, REPORT_CHANNELS config for scheduled
+      reports with per-channel routing independent of ban alerts
+[New] REPORT_EMAIL_ADDRESS, REPORT_EMAIL_SUBJECT, REPORT_TOP_N for report
+      customization; cron.daily triggers daily/weekly/monthly on schedule
+
+[Fix] Report messaging: resolve report-prefixed templates directly instead of
+      delegating to alert_dispatch() which matched ban-alert templates
+[Fix] Report trend: use $4 count field in _report_trend_awk for consistency
+      with _apool_summary_awk weighted totals
+[Fix] Report HTML: entity-escape pool-derived values in report tables
+[Fix] Report temp files: use ALERT_TMPDIR instead of TMPDIR; add .bfd_rpt_*
+      to cron.daily cleanup glob
+[Fix] tlog CLI: add internals/ fallback for library resolution so BFD's layout
+      (tlog_lib.sh in internals/ subdirectory) is found correctly
+[Fix] Test suite: adapt elog_lib internal function tests to v1.0.4 _ELOG_RET
+      return convention (replaces stdout capture with direct variable check)
 [Change] Update vendored tlog_lib.sh and tlog to v2.0.4 (shell alias safety,
       inline comment standards)
 

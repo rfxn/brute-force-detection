@@ -106,9 +106,29 @@ if [ -x "$INSTALL_PATH/update-ipcountry.sh" ] && [ -f "$_dat" ]; then
 	fi
 fi
 
+# --- Periodic threat reports ---
+if [ "${REPORT_ENABLED:-0}" = "1" ]; then
+	case ",${REPORT_INTERVALS:-daily}," in
+		*,daily,*) "$INSTALL_PATH/bfd" --report daily >/dev/null 2>&1 || true ;;  # non-fatal
+	esac
+	_dow=$(date +%u)  # 1=Monday
+	if [ "$_dow" = "1" ]; then
+		case ",${REPORT_INTERVALS:-daily}," in
+			*,weekly,*) "$INSTALL_PATH/bfd" --report weekly >/dev/null 2>&1 || true ;;  # non-fatal
+		esac
+	fi
+	_dom=$(date +%d)
+	if [ "$_dom" = "01" ]; then
+		case ",${REPORT_INTERVALS:-daily}," in
+			*,monthly,*) "$INSTALL_PATH/bfd" --report monthly >/dev/null 2>&1 || true ;;  # non-fatal
+		esac
+	fi
+fi
+
 # clear transient state but preserve ban tracking and event data
 command rm -f "$INSTALL_PATH"/tmp/.alist.*
 command rm -f "$INSTALL_PATH"/tmp/.alerts.*
+command rm -f "$INSTALL_PATH"/tmp/.bfd_rpt_*
 
 # rotate bans.history (append-only, rotated daily)
 if [ -f "$INSTALL_PATH/tmp/bans.history" ]; then

@@ -124,6 +124,30 @@ DISCORD_ALERTS="0"
 DISCORD_WEBHOOK_URL=""
 
 # =============================================
+# Periodic Reports
+# =============================================
+
+# enable periodic threat reports [0 = disabled, 1 = enabled]
+# when enabled, cron.daily triggers reports on configured intervals
+REPORT_ENABLED="0"
+
+# report intervals to generate (comma-separated: daily,weekly,monthly)
+REPORT_INTERVALS="daily"
+
+# delivery channels (comma-separated: email,slack,telegram,discord)
+# empty = use all enabled alert channels above
+REPORT_CHANNELS=""
+
+# report email recipient (defaults to EMAIL_ADDRESS if empty)
+REPORT_EMAIL_ADDRESS=""
+
+# email subject template ({{INTERVAL}} and {{HOSTNAME}} expand at send time)
+REPORT_EMAIL_SUBJECT="BFD {{INTERVAL}} Threat Report for {{HOSTNAME}}"
+
+# maximum IPs to include in report tables (default 25)
+REPORT_TOP_N="25"
+
+# =============================================
 # Banning
 # =============================================
 

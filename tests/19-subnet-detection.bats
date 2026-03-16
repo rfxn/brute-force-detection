@@ -222,7 +222,7 @@ teardown() {
 	assert_output "0"
 }
 
-@test "check_distributed: records action=subnet in bans.history" {
+@test "check_distributed: records action=ban in bans.history" {
 	local now=1000000
 	local events_file="$INSTALL_PATH/tmp/pressure.dat"
 	local alerts_file="$TEST_TMPDIR/alerts"
@@ -241,7 +241,7 @@ teardown() {
 
 	run cat "$INSTALL_PATH/tmp/bans.history"
 	assert_output --partial "203.0.113.0/24"
-	assert_output --partial "subnet"
+	assert_output --partial "ban"
 }
 
 @test "check_distributed: dry run records state but skips firewall command" {
