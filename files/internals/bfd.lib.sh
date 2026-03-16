@@ -4704,7 +4704,7 @@ events_list_cidr_json() {
 	fi
 
 	local _truncated="false"
-	if [ "$limit" -gt 0 ] 2>/dev/null && [ "$row_count" -ge "$limit" ]; then  # 2>/dev/null: suppress non-numeric comparison error when limit is empty  # 2>/dev/null: suppress non-numeric comparison error when limit is empty
+	if [ "$limit" -gt 0 ] 2>/dev/null && [ "$row_count" -ge "$limit" ]; then  # 2>/dev/null: suppress non-numeric comparison error when limit is empty
 		_truncated="true"
 	fi
 	printf '{"cidr": "%s", "summary": {"match_count": %d, "total_count": %d, "banned_count": %d, "truncated": %s}, "ips": [\n' \
