@@ -2,6 +2,10 @@
 
   -- Changes --
 
+[New] Report proof points: ban breakdown (temporary/escalated/permanent),
+      repeat offender count, top countries, ban-failed count
+[Change] Report HTML tables: styled with striped rows, monospace IPs, ban
+      status badges, first/last seen timestamps, uppercase column headers
 [Change] Report email templates aligned with transactional ban alert design
       system (rfxn brand bar, cyan accent, zinc color scale, card layout)
 

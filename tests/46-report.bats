@@ -123,6 +123,62 @@ teardown() {
 	[ -n "$REPORT_TREND_LABEL" ]
 	[ -n "$REPORT_TOP_IPS_TEXT" ]
 	[ -n "$REPORT_SERVICES_TEXT" ]
+	# Ban breakdown stats
+	[ -n "$REPORT_TOTAL_BANS" ]
+	[ -n "$REPORT_TEMP_BANS" ]
+	[ -n "$REPORT_PERM_BANS" ]
+	[ -n "$REPORT_ESCALATIONS" ]
+	[ -n "$REPORT_TOP_COUNTRIES" ]
+}
+
+@test "report_data: ban breakdown counts correct" {
+	bfd_require_bash42
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	APOOL_LIST="$pool"
+	local now
+	now=$(date +%s)
+	# 2 temporary bans (DURATION>0, ACTION=ban)
+	echo "$((now - 100)) 192.0.2.1 sshd 1 CN ban 600 22 15000 service" >> "$pool"
+	echo "$((now - 200)) 192.0.2.2 sshd 1 RU ban 600 22 15000 service" >> "$pool"
+	# 1 permanent ban (DURATION=0, ACTION=ban)
+	echo "$((now - 300)) 192.0.2.3 dovecot 1 BR ban 0 143 20000 service" >> "$pool"
+	# 1 escalation (ACTION=escalate)
+	echo "$((now - 400)) 192.0.2.1 sshd 1 CN escalate 0 22 25000 service" >> "$pool"
+	# 1 observed (not a ban)
+	echo "$((now - 500)) 192.0.2.4 postfix 1 US observed 0 25 5000 service" >> "$pool"
+	# 1 ban-failed
+	echo "$((now - 600)) 192.0.2.5 sshd 1 IN ban-failed 0 22 15000 service" >> "$pool"
+
+	_report_init "daily"
+	_report_data "$pool"
+
+	[ "$REPORT_TOTAL_BANS" = "4" ]
+	[ "$REPORT_TEMP_BANS" = "2" ]
+	[ "$REPORT_ESCALATIONS" = "1" ]
+	[ "$REPORT_PERM_BANS" = "2" ]
+	[ "$REPORT_BAN_FAILED" = "1" ]
+}
+
+@test "report_data: repeat offenders counts only ban actions" {
+	bfd_require_bash42
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	APOOL_LIST="$pool"
+	local now
+	now=$(date +%s)
+	# IP banned twice (repeat offender)
+	echo "$((now - 100)) 192.0.2.1 sshd 1 CN ban 600 22 15000 service" >> "$pool"
+	echo "$((now - 200)) 192.0.2.1 sshd 1 CN ban 600 22 15000 service" >> "$pool"
+	# IP with observed + ban (NOT repeat — only 1 ban)
+	echo "$((now - 300)) 192.0.2.2 sshd 1 RU observed 0 22 10000 service" >> "$pool"
+	echo "$((now - 400)) 192.0.2.2 sshd 1 RU ban 600 22 15000 service" >> "$pool"
+	# IP with only observed (not counted at all)
+	echo "$((now - 500)) 192.0.2.3 sshd 1 BR observed 0 22 5000 service" >> "$pool"
+
+	_report_init "daily"
+	_report_data "$pool"
+
+	# Only 192.0.2.1 is a repeat offender (2 bans)
+	[ "$REPORT_REPEAT_OFFENDERS" = "1" ]
 }
 
 @test "report_data: empty pool sets zero counts" {

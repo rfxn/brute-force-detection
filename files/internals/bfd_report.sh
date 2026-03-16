@@ -142,7 +142,7 @@ _report_data() {
 			if (action == "escalate") { esc++; perm++ }
 			if (action == "ban-failed") failed++
 			if (cc != "" && cc != "--") cc_cnt[cc]++
-			ip_cnt[ip]++
+			if (action == "ban" || action == "escalate") ban_ip[ip]++
 		}
 		END {
 			total = bans + esc + 0
@@ -160,7 +160,7 @@ _report_data() {
 				cstr = cstr (cstr == "" ? "" : ", ") cn[i] "(" cv[i] ")"
 			# repeat offenders (IPs banned >1 time)
 			repeats = 0
-			for (ip in ip_cnt) if (ip_cnt[ip] > 1) repeats++
+			for (ip in ban_ip) if (ban_ip[ip] > 1) repeats++
 			printf "%d|%d|%d|%d|%d|%d|%s\n", total+0, temp+0, esc+0, perm+0, failed+0, repeats+0, cstr
 		}' "$pool_file")
 	fi
