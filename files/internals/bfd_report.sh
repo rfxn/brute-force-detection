@@ -84,11 +84,12 @@ _report_trend_awk() {
 	{
 		ts = $1 + 0
 		ip = $2
+		cnt = ($4+0 > 0) ? $4+0 : 1
 		if (ts >= cur) {
-			ct++
+			ct += cnt
 			if (!ci[ip]++) cu++
 		} else if (ts >= prev) {
-			pt++
+			pt += cnt
 			if (!pi[ip]++) pu++
 		}
 	}
@@ -221,11 +222,11 @@ _report_format_top_ips() {
 	# Initialize ban status batch lookup
 	_batch_ban_status_init "${INSTALL_PATH:-}"
 
-	# Build text table
+	# Build text table, HTML table, and brief in a single pass
 	local text_table="COUNT|IP|COUNTRY|PRESSURE|RULES|STATUS"
-	local brief="" brief_count=0
+	local html_rows="" brief="" brief_count=0 flag=""
 	local cnt ip first_ts last_ts rules_csv cc ban_status
-	local pressure_scaled pressure_fmt trip_val
+	local pressure_scaled pressure_fmt trip_val esc_ip esc_cc esc_rules
 	# shellcheck disable=SC2034  # first_ts/last_ts: positional placeholders for pipe field ordering
 	while IFS='|' read -r cnt ip first_ts last_ts rules_csv cc; do
 		[ -z "$ip" ] && continue
@@ -237,9 +238,15 @@ _report_format_top_ips() {
 		trip_val=$(_resolve_min_trip "$rules_csv")
 		text_table="${text_table}
 ${cnt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}|${ban_status:---}"
+		# HTML row with entity escaping (defense-in-depth)
+		esc_ip="${ip//&/&amp;}"; esc_ip="${esc_ip//</&lt;}"; esc_ip="${esc_ip//>/&gt;}"
+		esc_cc="${cc//&/&amp;}"; esc_cc="${esc_cc//</&lt;}"
+		esc_rules="${rules_csv//&/&amp;}"; esc_rules="${esc_rules//</&lt;}"
+		html_rows="${html_rows}<tr><td>${cnt}</td><td>${esc_ip}</td><td>${esc_cc:---}</td><td>${esc_rules}</td></tr>
+"
 		# Brief: top 5 for messaging
 		if [ "$brief_count" -lt 5 ]; then
-			local flag=""
+			flag=""
 			if [ -n "$cc" ] && [ "$cc" != "--" ] && type _alert_country_flag >/dev/null 2>&1; then
 				flag=$(_alert_country_flag "$cc")
 				flag="${flag:+$flag }"
@@ -256,15 +263,6 @@ ${cnt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}|${ban_status:---
 	REPORT_TOP_IPS_TEXT=$(echo "$text_table" | format_table)
 	export REPORT_TOP_IPS_BRIEF="${brief%
 }"
-
-	# HTML table
-	local html_rows=""
-	# shellcheck disable=SC2034  # first_ts/last_ts: positional placeholders for pipe field ordering
-	while IFS='|' read -r cnt ip first_ts last_ts rules_csv cc; do
-		[ -z "$ip" ] && continue
-		html_rows="${html_rows}<tr><td>${cnt}</td><td>${ip}</td><td>${cc:---}</td><td>${rules_csv}</td></tr>
-"
-	done <<< "$agg_data"
 	export REPORT_TOP_IPS_HTML="<table><tr><th>COUNT</th><th>IP</th><th>COUNTRY</th><th>RULES</th></tr>
 ${html_rows}</table>"
 }
@@ -292,21 +290,24 @@ _report_format_services() {
 	fi
 
 	local text_table="SERVICE|EVENTS|UNIQUE IPS|TOP COUNTRY"
-	local brief="" html_rows=""
-	local svc cnt_a cnt_b uq_a uq_b top_cc
+	local brief="" html_rows="" flag=""
+	local svc cnt_a cnt_b uq_a uq_b top_cc esc_svc esc_cc
 	# shellcheck disable=SC2034  # cnt_b/uq_b: positional placeholders for pipe field ordering
 	while IFS='|' read -r svc cnt_a cnt_b uq_a uq_b top_cc; do
 		[ -z "$svc" ] && continue
 		text_table="${text_table}
 ${svc}|${cnt_a}|${uq_a}|${top_cc:---}"
-		local flag=""
+		flag=""
 		if [ -n "$top_cc" ] && [ "$top_cc" != "--" ] && type _alert_country_flag >/dev/null 2>&1; then
 			flag=$(_alert_country_flag "$top_cc")
 			flag="${flag:+$flag }"
 		fi
 		brief="${brief}${svc} -- ${cnt_a} events . ${uq_a} IPs . ${flag}${top_cc:---}
 "
-		html_rows="${html_rows}<tr><td>${svc}</td><td>${cnt_a}</td><td>${uq_a}</td><td>${top_cc:---}</td></tr>
+		# HTML row with entity escaping (defense-in-depth)
+		esc_svc="${svc//&/&amp;}"; esc_svc="${esc_svc//</&lt;}"
+		esc_cc="${top_cc//&/&amp;}"; esc_cc="${esc_cc//</&lt;}"
+		html_rows="${html_rows}<tr><td>${esc_svc}</td><td>${cnt_a}</td><td>${uq_a}</td><td>${esc_cc:---}</td></tr>
 "
 	done <<< "$svc_data"
 
@@ -363,9 +364,13 @@ _report_deliver_email() {
 }
 
 # _report_dispatch_messaging tpl_dir subject
-# Sends report to enabled messaging channels via alert_dispatch().
+# Sends report to enabled messaging channels by resolving report-prefixed
+# templates (report.slack.message.tpl, etc.) and calling handlers directly.
+# Cannot use alert_dispatch() because it constructs filenames as
+# ${channel}.message.tpl, which resolves ban-alert templates, not report templates.
 _report_dispatch_messaging() {
 	local tpl_dir="$1" subject="$2"
+	local rc=0
 
 	# Early exit if no messaging channels enabled
 	if ! alert_channel_enabled "slack" && \
@@ -374,7 +379,41 @@ _report_dispatch_messaging() {
 		return 0
 	fi
 
-	alert_dispatch "$tpl_dir" "$subject" "slack,telegram,discord"
+	# handler_map_* used via ${!handler_var} indirect expansion below
+	# shellcheck disable=SC2034
+	local handler_map_slack="_alert_handle_slack"
+	# shellcheck disable=SC2034
+	local handler_map_telegram="_alert_handle_telegram"
+	# shellcheck disable=SC2034
+	local handler_map_discord="_alert_handle_discord"
+
+	local ch
+	for ch in slack telegram discord; do
+		alert_channel_enabled "$ch" || continue
+
+		# Resolve report-prefixed template
+		_alert_tpl_resolve "$tpl_dir" "report.${ch}.message.tpl"
+		if [ ! -f "$_ALERT_TPL_RESOLVED" ]; then
+			continue
+		fi
+
+		local text_file
+		text_file=$(mktemp "${ALERT_TMPDIR:-${TMPDIR:-/tmp}}/rpt_${ch}.XXXXXX")
+		_alert_tpl_render "$_ALERT_TPL_RESOLVED" > "$text_file"
+
+		# Create empty html placeholder (handlers expect both files)
+		local html_file
+		html_file=$(mktemp "${ALERT_TMPDIR:-${TMPDIR:-/tmp}}/rpt_${ch}_h.XXXXXX")
+
+		# Call channel handler
+		local handler_var="handler_map_${ch}"
+		if ! "${!handler_var}" "$subject" "$text_file" "$html_file" ""; then
+			rc=1
+		fi
+		command rm -f "$text_file" "$html_file"
+	done
+
+	return $rc
 }
 
 # _report_channel_override — temporarily override channel registry per REPORT_CHANNELS

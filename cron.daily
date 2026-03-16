@@ -128,6 +128,7 @@ fi
 # clear transient state but preserve ban tracking and event data
 command rm -f "$INSTALL_PATH"/tmp/.alist.*
 command rm -f "$INSTALL_PATH"/tmp/.alerts.*
+command rm -f "$INSTALL_PATH"/tmp/.bfd_rpt_*
 
 # rotate bans.history (append-only, rotated daily)
 if [ -f "$INSTALL_PATH/tmp/bans.history" ]; then
