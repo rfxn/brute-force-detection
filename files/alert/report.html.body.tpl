@@ -28,15 +28,33 @@
 <td style="padding:4px 0;color:#71717a;">Active bans</td>
 <td style="padding:4px 0;color:#dc2626;font-weight:bold;">{{REPORT_ACTIVE_BANS}}</td>
 </tr>
+<!-- Temporary / Escalated -->
+<tr>
+<td style="padding:4px 0;color:#71717a;">Temporary</td>
+<td style="padding:4px 0;color:#0891b2;font-weight:bold;">{{REPORT_TEMP_BANS}}</td>
+<td style="padding:4px 0;color:#71717a;">Escalated</td>
+<td style="padding:4px 0;color:#d97706;font-weight:bold;">{{REPORT_ESCALATIONS}}</td>
+</tr>
+<!-- Permanent / Repeat -->
+<tr>
+<td style="padding:4px 0;color:#71717a;">Permanent</td>
+<td style="padding:4px 0;color:#dc2626;font-weight:bold;">{{REPORT_PERM_BANS}}</td>
+<td style="padding:4px 0;color:#71717a;">Repeat offenders</td>
+<td style="padding:4px 0;font-weight:bold;color:#09090b;">{{REPORT_REPEAT_OFFENDERS}} ({{REPORT_REPEAT_PCT}}%)</td>
+</tr>
 </table>
 <!-- Separator -->
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
 <tr><td style="border-top:1px solid #d4d4d8;font-size:0;height:1px;">&nbsp;</td></tr>
 </table>
-<!-- Trend -->
+<!-- Countries + Trend -->
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size:13px;">
 <tr>
-<td style="padding:4px 0;color:#71717a;width:100px;vertical-align:top;">Trend</td>
+<td style="padding:4px 0;color:#71717a;width:100px;vertical-align:top;">Countries</td>
+<td style="padding:4px 0;color:#09090b;">{{REPORT_TOP_COUNTRIES}}</td>
+</tr>
+<tr>
+<td style="padding:4px 0;color:#71717a;vertical-align:top;">Trend</td>
 <td style="padding:4px 0;color:#09090b;">{{REPORT_TREND_LABEL}}</td>
 </tr>
 </table>
@@ -55,7 +73,7 @@
 </td>
 </tr>
 <tr>
-<td style="padding:12px 16px;font-size:13px;">
+<td style="padding:4px 0;">
 {{REPORT_TOP_IPS_HTML}}
 </td>
 </tr>
@@ -72,7 +90,7 @@
 </td>
 </tr>
 <tr>
-<td style="padding:12px 16px;font-size:13px;">
+<td style="padding:4px 0;">
 {{REPORT_SERVICES_HTML}}
 </td>
 </tr>

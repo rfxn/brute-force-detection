@@ -129,14 +129,56 @@ _report_data() {
 	fi
 	export REPORT_ACTIVE_BANS="$active_bans"
 
-	# Total bans in window (ACTION=ban or escalate)
-	local total_bans=0
+	# Ban breakdown — single-pass AWK for all proof-point stats in window
+	local ban_stats="0|0|0|0|0|0|"
 	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
-		total_bans=$(awk -v cutoff="$_RPT_CUTOFF" '
-			$1+0 >= cutoff && ($6 == "ban" || $6 == "escalate") { c++ }
-			END { print c+0 }' "$pool_file")
+		ban_stats=$(awk -v cutoff="$_RPT_CUTOFF" '
+		$1+0 >= cutoff {
+			ip = $2; cc = $5; action = $6
+			if (action == "ban") {
+				bans++
+				if ($7+0 == 0) perm++; else temp++
+			}
+			if (action == "escalate") { esc++; perm++ }
+			if (action == "ban-failed") failed++
+			if (cc != "" && cc != "--") cc_cnt[cc]++
+			ip_cnt[ip]++
+		}
+		END {
+			total = bans + esc + 0
+			# top 5 countries by event count
+			n = 0
+			for (c in cc_cnt) { cn[++n] = c; cv[n] = cc_cnt[c] }
+			for (i = 1; i <= n; i++)
+				for (j = i+1; j <= n; j++)
+					if (cv[j] > cv[i]) {
+						t = cn[i]; cn[i] = cn[j]; cn[j] = t
+						t = cv[i]; cv[i] = cv[j]; cv[j] = t
+					}
+			cstr = ""
+			for (i = 1; i <= n && i <= 5; i++)
+				cstr = cstr (cstr == "" ? "" : ", ") cn[i] "(" cv[i] ")"
+			# repeat offenders (IPs banned >1 time)
+			repeats = 0
+			for (ip in ip_cnt) if (ip_cnt[ip] > 1) repeats++
+			printf "%d|%d|%d|%d|%d|%d|%s\n", total+0, temp+0, esc+0, perm+0, failed+0, repeats+0, cstr
+		}' "$pool_file")
 	fi
-	export REPORT_TOTAL_BANS="$total_bans"
+	local total_bans temp_bans escalations perm_bans ban_failed repeat_offenders top_countries
+	IFS='|' read -r total_bans temp_bans escalations perm_bans ban_failed repeat_offenders top_countries <<< "$ban_stats"
+	export REPORT_TOTAL_BANS="${total_bans:-0}"
+	export REPORT_TEMP_BANS="${temp_bans:-0}"
+	export REPORT_ESCALATIONS="${escalations:-0}"
+	export REPORT_PERM_BANS="${perm_bans:-0}"
+	export REPORT_BAN_FAILED="${ban_failed:-0}"
+	export REPORT_REPEAT_OFFENDERS="${repeat_offenders:-0}"
+	export REPORT_TOP_COUNTRIES="${top_countries:---}"
+	# Repeat offender percentage
+	local repeat_pct=0
+	if [ "${REPORT_UNIQUE_IPS:-0}" -gt 0 ]; then
+		repeat_pct=$(( repeat_offenders * 100 / REPORT_UNIQUE_IPS ))
+	fi
+	export REPORT_REPEAT_PCT="$repeat_pct"
 
 	# --- Interval metadata ---
 	local interval_name
@@ -224,10 +266,11 @@ _report_format_top_ips() {
 
 	# Build text table, HTML table, and brief in a single pass
 	local text_table="COUNT|IP|COUNTRY|PRESSURE|RULES|STATUS"
-	local html_rows="" brief="" brief_count=0 flag=""
-	local cnt ip first_ts last_ts rules_csv cc ban_status
+	local html_rows="" brief="" brief_count=0 flag="" row_bg=""
+	local cnt ip first_ts last_ts rules_csv cc ban_status row_idx=0
 	local pressure_scaled pressure_fmt trip_val esc_ip esc_cc esc_rules
-	# shellcheck disable=SC2034  # first_ts/last_ts: positional placeholders for pipe field ordering
+	local first_fmt last_fmt status_color status_bg
+	# shellcheck disable=SC2034  # first_ts/last_ts used for HTML formatting below
 	while IFS='|' read -r cnt ip first_ts last_ts rules_csv cc; do
 		[ -z "$ip" ] && continue
 		ban_status=$(_batch_ban_status_lookup "$ip")
@@ -238,11 +281,32 @@ _report_format_top_ips() {
 		trip_val=$(_resolve_min_trip "$rules_csv")
 		text_table="${text_table}
 ${cnt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}|${ban_status:---}"
-		# HTML row with entity escaping (defense-in-depth)
+		# HTML row with entity escaping and styling
 		esc_ip="${ip//&/&amp;}"; esc_ip="${esc_ip//</&lt;}"; esc_ip="${esc_ip//>/&gt;}"
 		esc_cc="${cc//&/&amp;}"; esc_cc="${esc_cc//</&lt;}"
 		esc_rules="${rules_csv//&/&amp;}"; esc_rules="${esc_rules//</&lt;}"
-		html_rows="${html_rows}<tr><td>${cnt}</td><td>${esc_ip}</td><td>${esc_cc:---}</td><td>${esc_rules}</td></tr>
+		row_idx=$((row_idx + 1))
+		if [ $((row_idx % 2)) -eq 0 ]; then row_bg="#f4f4f5"; else row_bg="#ffffff"; fi
+		# Format timestamps
+		first_fmt=$(_fmt_ts "$first_ts" 2>/dev/null || echo "$first_ts")  # fallback if _fmt_ts unavailable
+		last_fmt=$(_fmt_ts "$last_ts" 2>/dev/null || echo "$last_ts")  # fallback if _fmt_ts unavailable
+		# Ban status badge color
+		status_color="#71717a"; status_bg="#f4f4f5"
+		case "$ban_status" in
+			BANNED*perm*) status_color="#ffffff"; status_bg="#dc2626" ;;
+			BANNED*)      status_color="#ffffff"; status_bg="#0891b2" ;;
+			prev:*)       status_color="#52525b"; status_bg="#fef3c7" ;;
+		esac
+		html_rows="${html_rows}<tr style=\"background-color:${row_bg};\">
+<td style=\"padding:8px 10px;font-weight:bold;color:#09090b;text-align:center;font-family:'Courier New',Courier,monospace;\">${cnt}</td>
+<td style=\"padding:8px 10px;font-family:'Courier New',Courier,monospace;font-size:13px;\">${esc_ip}</td>
+<td style=\"padding:8px 10px;text-align:center;\">${esc_cc:---}</td>
+<td style=\"padding:8px 10px;font-family:'Courier New',Courier,monospace;font-size:12px;\">${pressure_fmt}/${trip_val}</td>
+<td style=\"padding:8px 10px;font-size:12px;\">${esc_rules}</td>
+<td style=\"padding:8px 10px;font-size:12px;\">${first_fmt}</td>
+<td style=\"padding:8px 10px;font-size:12px;\">${last_fmt}</td>
+<td style=\"padding:8px 10px;text-align:center;\"><span style=\"display:inline-block;background-color:${status_bg};color:${status_color};padding:1px 8px;border-radius:10px;font-size:11px;font-weight:bold;font-family:'Courier New',Courier,monospace;\">${ban_status:---}</span></td>
+</tr>
 "
 		# Brief: top 5 for messaging
 		if [ "$brief_count" -lt 5 ]; then
@@ -263,7 +327,17 @@ ${cnt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}|${ban_status:---
 	REPORT_TOP_IPS_TEXT=$(echo "$text_table" | format_table)
 	export REPORT_TOP_IPS_BRIEF="${brief%
 }"
-	export REPORT_TOP_IPS_HTML="<table><tr><th>COUNT</th><th>IP</th><th>COUNTRY</th><th>RULES</th></tr>
+	export REPORT_TOP_IPS_HTML="<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"font-size:13px;border-collapse:collapse;\">
+<tr style=\"background-color:#f4f4f5;border-bottom:1px solid #d4d4d8;\">
+<th style=\"padding:8px 10px;text-align:center;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Count</th>
+<th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">IP</th>
+<th style=\"padding:8px 10px;text-align:center;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">CC</th>
+<th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Pressure</th>
+<th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Rules</th>
+<th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">First</th>
+<th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Last</th>
+<th style=\"padding:8px 10px;text-align:center;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Status</th>
+</tr>
 ${html_rows}</table>"
 }
 
@@ -290,7 +364,7 @@ _report_format_services() {
 	fi
 
 	local text_table="SERVICE|EVENTS|UNIQUE IPS|TOP COUNTRY"
-	local brief="" html_rows="" flag=""
+	local brief="" html_rows="" flag="" row_bg="" row_idx=0
 	local svc cnt_a cnt_b uq_a uq_b top_cc esc_svc esc_cc
 	# shellcheck disable=SC2034  # cnt_b/uq_b: positional placeholders for pipe field ordering
 	while IFS='|' read -r svc cnt_a cnt_b uq_a uq_b top_cc; do
@@ -304,10 +378,17 @@ ${svc}|${cnt_a}|${uq_a}|${top_cc:---}"
 		fi
 		brief="${brief}${svc} -- ${cnt_a} events . ${uq_a} IPs . ${flag}${top_cc:---}
 "
-		# HTML row with entity escaping (defense-in-depth)
+		# HTML row with entity escaping and striped styling
 		esc_svc="${svc//&/&amp;}"; esc_svc="${esc_svc//</&lt;}"
 		esc_cc="${top_cc//&/&amp;}"; esc_cc="${esc_cc//</&lt;}"
-		html_rows="${html_rows}<tr><td>${esc_svc}</td><td>${cnt_a}</td><td>${uq_a}</td><td>${esc_cc:---}</td></tr>
+		row_idx=$((row_idx + 1))
+		if [ $((row_idx % 2)) -eq 0 ]; then row_bg="#f4f4f5"; else row_bg="#ffffff"; fi
+		html_rows="${html_rows}<tr style=\"background-color:${row_bg};\">
+<td style=\"padding:8px 10px;font-weight:bold;color:#09090b;\">${esc_svc}</td>
+<td style=\"padding:8px 10px;text-align:center;font-family:'Courier New',Courier,monospace;\">${cnt_a}</td>
+<td style=\"padding:8px 10px;text-align:center;font-family:'Courier New',Courier,monospace;\">${uq_a}</td>
+<td style=\"padding:8px 10px;text-align:center;\">${esc_cc:---}</td>
+</tr>
 "
 	done <<< "$svc_data"
 
@@ -315,7 +396,13 @@ ${svc}|${cnt_a}|${uq_a}|${top_cc:---}"
 	REPORT_SERVICES_TEXT=$(echo "$text_table" | format_table)
 	export REPORT_SERVICES_BRIEF="${brief%
 }"
-	export REPORT_SERVICES_HTML="<table><tr><th>SERVICE</th><th>EVENTS</th><th>UNIQUE IPS</th><th>TOP COUNTRY</th></tr>
+	export REPORT_SERVICES_HTML="<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"font-size:13px;border-collapse:collapse;\">
+<tr style=\"background-color:#f4f4f5;border-bottom:1px solid #d4d4d8;\">
+<th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Service</th>
+<th style=\"padding:8px 10px;text-align:center;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Events</th>
+<th style=\"padding:8px 10px;text-align:center;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Unique IPs</th>
+<th style=\"padding:8px 10px;text-align:center;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Top Country</th>
+</tr>
 ${html_rows}</table>"
 }
 
