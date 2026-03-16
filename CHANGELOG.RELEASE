@@ -2,6 +2,14 @@
 
   -- Changes --
 
+[New] Periodic threat report (--report daily|weekly|monthly) with multi-channel
+      delivery; provides threat summary, top IPs with country codes, per-service
+      breakdown, and trend comparison vs prior window
+[New] REPORT_ENABLED, REPORT_INTERVALS, REPORT_CHANNELS config for scheduled
+      reports with per-channel routing independent of ban alerts
+[New] REPORT_EMAIL_ADDRESS, REPORT_EMAIL_SUBJECT, REPORT_TOP_N for report
+      customization; cron.daily triggers daily/weekly/monthly on schedule
+
 [Change] Update vendored tlog_lib.sh and tlog to v2.0.4 (shell alias safety,
       inline comment standards)
 

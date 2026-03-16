@@ -55,6 +55,12 @@ if [ -f "$_internals_dir/geoip_lib.sh" ]; then
 	# shellcheck disable=SC1091
 	. "$_internals_dir/geoip_lib.sh"
 fi
+
+# Source BFD report functions (periodic threat reports)
+if [ -f "$_internals_dir/bfd_report.sh" ]; then
+	# shellcheck disable=SC1091
+	. "$_internals_dir/bfd_report.sh"
+fi
 unset _internals_dir
 
 # _bfd_journal_register_all: populate journal filter mappings for all BFD rules
