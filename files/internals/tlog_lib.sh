@@ -17,11 +17,11 @@
 # GNU General Public License for more details.
 
 # Source guard — prevent double-sourcing
-[[ -n "${_TLOG_LIB_LOADED:-}" ]] && return 0 2>/dev/null
+[[ -n "${_TLOG_LIB_LOADED:-}" ]] && return 0 2>/dev/null  # return may fail at top-level; not an error
 _TLOG_LIB_LOADED=1
 
 # shellcheck disable=SC2034
-TLOG_LIB_VERSION="2.0.3"
+TLOG_LIB_VERSION="2.0.4"
 
 # Journal filter registry — consuming projects populate via tlog_journal_register()
 # Uses parallel indexed arrays instead of declare -A to avoid scope issues
@@ -56,7 +56,7 @@ _tlog_validate_name() {
 _tlog_check_baserun_perms() {
 	local baserun="$1"
 	local perms world_bits
-	perms=$(stat -c '%a' "$baserun" 2>/dev/null) || return 0
+	perms=$(stat -c '%a' "$baserun" 2>/dev/null) || return 0  # stat fails if dir removed; advisory check
 	world_bits="${perms: -1}"
 	if [[ $((world_bits & 2)) -ne 0 ]]; then
 		echo "tlog: warning: baserun directory '$baserun' is world-writable" >&2
@@ -142,9 +142,9 @@ _tlog_write_cursor() {
 	}
 	printf '%s\n' "$formatted" > "$tmp_file"
 
-	if ! mv -f "$tmp_file" "$cursor_file"; then
+	if ! command mv -f "$tmp_file" "$cursor_file"; then
 		echo "tlog: warning: cursor write failed for $tlog_name (rename)" >&2
-		rm -f "$tmp_file"
+		command rm -f "$tmp_file"
 		return 1
 	fi
 
@@ -289,12 +289,12 @@ _tlog_handle_rotation() {
 
 	if _tlog_is_compressed "$rtfile"; then
 		# Try temp-file path: mktemp + decompress + read from temp
-		tmp_decomp=$(mktemp "$baserun/.${tlog_name}.XXXXXX" 2>/dev/null) || tmp_decomp=""
+		tmp_decomp=$(mktemp "$baserun/.${tlog_name}.XXXXXX" 2>/dev/null) || tmp_decomp=""  # fallback to pipe path on failure
 		if [[ -n "$tmp_decomp" ]] && _tlog_cat_file "$rtfile" > "$tmp_decomp"; then
 			rtsize=$(_tlog_get_size "$tmp_decomp" "$mode")
 		else
 			# Temp approach failed — clean up and fall back to pipe
-			[[ -n "$tmp_decomp" ]] && rm -f "$tmp_decomp"
+			[[ -n "$tmp_decomp" ]] && command rm -f "$tmp_decomp"
 			echo "tlog: warning: rotation temp file failed for $tlog_name, using pipe fallback" >&2
 			_tlog_rotation_via_pipe "$rtfile" "$cursor_size" "$mode"
 			return 0
@@ -314,7 +314,7 @@ _tlog_handle_rotation() {
 		fi
 	fi
 
-	[[ -n "$tmp_decomp" ]] && rm -f "$tmp_decomp"
+	[[ -n "$tmp_decomp" ]] && command rm -f "$tmp_decomp"
 	return 0
 }
 
@@ -331,7 +331,7 @@ tlog_get_file_size() {
 		return 1
 	fi
 
-	size=$(stat -c %s "$file" 2>/dev/null) || size=$(wc -c < "$file")
+	size=$(stat -c %s "$file" 2>/dev/null) || size=$(wc -c < "$file")  # stat unavailable on some platforms; wc fallback
 	size="${size## }"
 	printf '%s' "$size"
 }

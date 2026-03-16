@@ -2,6 +2,9 @@
 
   -- Changes --
 
+[Change] Update vendored tlog_lib.sh and tlog to v2.0.4 (shell alias safety,
+      inline comment standards)
+
 [New] Events CLI: --limit=N output modifier caps event list and CIDR output
       (default 100, --limit=0 for unlimited); prevents excessive output when
       attack pool grows large
