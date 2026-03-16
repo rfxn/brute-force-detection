@@ -1,19 +1,20 @@
-  Threat Summary
-  ----------------------------------------
+===============================================================
+Threat Summary
+===============================================================
+
   Unique IPs:      {{REPORT_UNIQUE_IPS}}
   Total Events:    {{REPORT_TOTAL_EVENTS}}
-  Total Bans:      {{REPORT_TOTAL_BANS}}
-  Active Bans:     {{REPORT_ACTIVE_BANS}}
+  Total Bans:      {{REPORT_TOTAL_BANS}} ({{REPORT_ACTIVE_BANS}} active)
+  Trend:           {{REPORT_TREND_LABEL}}
 
-  Trend: {{REPORT_TREND_LABEL}}
+--- Top Threat IPs ({{REPORT_WINDOW}}) ------------------------------------
 
-  Top Threat IPs ({{REPORT_WINDOW}})
-  ----------------------------------------
 {{REPORT_TOP_IPS_TEXT}}
 
-  Service Breakdown ({{REPORT_WINDOW}})
-  ----------------------------------------
+--- Service Breakdown ({{REPORT_WINDOW}}) ----------------------------------
+
 {{REPORT_SERVICES_TEXT}}
 
---------------------------------------------------------------------------------
-  BFD {{BFD_VERSION}} -- https://rfxn.com | GNU GPL v2
+-----------------------------------------------
+BFD (Brute Force Detection) {{BFD_VERSION}} <bfd@rfxn.com>
+https://www.rfxn.com/projects/brute-force-detection

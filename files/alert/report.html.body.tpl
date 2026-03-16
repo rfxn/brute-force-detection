@@ -1,52 +1,107 @@
 <!-- Summary card -->
-<tr><td style="padding:24px 32px;">
-  <h2 style="margin:0 0 16px;font-size:16px;color:#111827;border-bottom:1px solid #e5e7eb;padding-bottom:8px;">Threat Summary</h2>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-  <tr>
-    <td style="padding:8px 12px;background:#f0fdfa;border-radius:6px;text-align:center;width:25%;">
-      <div style="font-size:24px;font-weight:700;color:#0d9488;">{{REPORT_UNIQUE_IPS}}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:2px;">Unique IPs</div>
-    </td>
-    <td style="width:8px;"></td>
-    <td style="padding:8px 12px;background:#f0fdfa;border-radius:6px;text-align:center;width:25%;">
-      <div style="font-size:24px;font-weight:700;color:#0d9488;">{{REPORT_TOTAL_EVENTS}}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:2px;">Events</div>
-    </td>
-    <td style="width:8px;"></td>
-    <td style="padding:8px 12px;background:#f0fdfa;border-radius:6px;text-align:center;width:25%;">
-      <div style="font-size:24px;font-weight:700;color:#0d9488;">{{REPORT_TOTAL_BANS}}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:2px;">Bans</div>
-    </td>
-    <td style="width:8px;"></td>
-    <td style="padding:8px 12px;background:#f0fdfa;border-radius:6px;text-align:center;width:25%;">
-      <div style="font-size:24px;font-weight:700;color:#0d9488;">{{REPORT_ACTIVE_BANS}}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:2px;">Active</div>
-    </td>
-  </tr>
-  </table>
-  <p style="margin:12px 0 0;font-size:13px;color:#4b5563;">Trend: {{REPORT_TREND_LABEL}}</p>
-</td></tr>
-
-<!-- Top IPs -->
-<tr><td style="padding:0 32px 24px;">
-  <h2 style="margin:0 0 12px;font-size:16px;color:#111827;border-bottom:1px solid #e5e7eb;padding-bottom:8px;">Top Threat IPs ({{REPORT_WINDOW}})</h2>
-  {{REPORT_TOP_IPS_HTML}}
-</td></tr>
-
-<!-- Services -->
-<tr><td style="padding:0 32px 24px;">
-  <h2 style="margin:0 0 12px;font-size:16px;color:#111827;border-bottom:1px solid #e5e7eb;padding-bottom:8px;">Service Breakdown ({{REPORT_WINDOW}})</h2>
-  {{REPORT_SERVICES_HTML}}
-</td></tr>
-
-<!-- Footer -->
-<tr><td style="padding:16px 32px;background-color:#f9fafb;border-top:1px solid #e5e7eb;text-align:center;">
-  <p style="margin:0;font-size:12px;color:#9ca3af;">BFD {{BFD_VERSION}} &middot; <a href="https://www.rfxn.com/projects/brute-force-detection" style="color:#0d9488;text-decoration:none;">rfxn.com</a> &middot; GNU GPL v2</p>
-  <p style="margin:4px 0 0;font-size:11px;color:#d1d5db;">R-fx Networks &lt;proj@rfxn.com&gt;</p>
-</td></tr>
-
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:16px;border:1px solid #d4d4d8;border-radius:8px;overflow:hidden;">
+<!-- Accent top line -->
+<tr>
+<td style="background-color:#0891b2;height:3px;font-size:0;line-height:0;">&nbsp;</td>
+</tr>
+<!-- Summary header -->
+<tr>
+<td style="background-color:#f4f4f5;padding:10px 16px;border-bottom:1px solid #d4d4d8;">
+<span style="font-size:11px;font-weight:bold;color:#52525b;text-transform:uppercase;letter-spacing:1px;">Threat Summary</span>
+<span style="color:#71717a;font-size:11px;padding-left:8px;">{{REPORT_DATE_RANGE}}</span>
+</td>
+</tr>
+<tr>
+<td style="padding:12px 16px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size:13px;">
+<!-- Unique IPs / Total Events -->
+<tr>
+<td style="padding:4px 0;color:#71717a;width:50%;">Unique IPs</td>
+<td style="padding:4px 0;font-weight:bold;color:#09090b;">{{REPORT_UNIQUE_IPS}}</td>
+<td style="padding:4px 0;color:#71717a;width:25%;">Total events</td>
+<td style="padding:4px 0;font-weight:bold;color:#09090b;">{{REPORT_TOTAL_EVENTS}}</td>
+</tr>
+<!-- Total Bans / Active Bans -->
+<tr>
+<td style="padding:4px 0;color:#71717a;">Total bans</td>
+<td style="padding:4px 0;color:#0891b2;font-weight:bold;">{{REPORT_TOTAL_BANS}}</td>
+<td style="padding:4px 0;color:#71717a;">Active bans</td>
+<td style="padding:4px 0;color:#dc2626;font-weight:bold;">{{REPORT_ACTIVE_BANS}}</td>
+</tr>
 </table>
-</td></tr>
+<!-- Separator -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0;">
+<tr><td style="border-top:1px solid #d4d4d8;font-size:0;height:1px;">&nbsp;</td></tr>
+</table>
+<!-- Trend -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size:13px;">
+<tr>
+<td style="padding:4px 0;color:#71717a;width:100px;vertical-align:top;">Trend</td>
+<td style="padding:4px 0;color:#09090b;">{{REPORT_TREND_LABEL}}</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+
+<!-- Top IPs card -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:16px;border:1px solid #d4d4d8;border-radius:8px;overflow:hidden;">
+<tr>
+<td style="background-color:#0891b2;height:3px;font-size:0;line-height:0;">&nbsp;</td>
+</tr>
+<tr>
+<td style="background-color:#f4f4f5;padding:10px 16px;border-bottom:1px solid #d4d4d8;">
+<span style="font-size:11px;font-weight:bold;color:#52525b;text-transform:uppercase;letter-spacing:1px;">Top Threat IPs ({{REPORT_WINDOW}})</span>
+</td>
+</tr>
+<tr>
+<td style="padding:12px 16px;font-size:13px;">
+{{REPORT_TOP_IPS_HTML}}
+</td>
+</tr>
+</table>
+
+<!-- Services card -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:16px;border:1px solid #d4d4d8;border-radius:8px;overflow:hidden;">
+<tr>
+<td style="background-color:#0891b2;height:3px;font-size:0;line-height:0;">&nbsp;</td>
+</tr>
+<tr>
+<td style="background-color:#f4f4f5;padding:10px 16px;border-bottom:1px solid #d4d4d8;">
+<span style="font-size:11px;font-weight:bold;color:#52525b;text-transform:uppercase;letter-spacing:1px;">Service Breakdown ({{REPORT_WINDOW}})</span>
+</td>
+</tr>
+<tr>
+<td style="padding:12px 16px;font-size:13px;">
+{{REPORT_SERVICES_HTML}}
+</td>
+</tr>
+</table>
+
+</td>
+</tr>
+<!-- Footer -->
+<tr>
+<td style="padding:16px 24px;border-top:1px solid #d4d4d8;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr>
+<td style="font-size:11px;color:#71717a;">
+<span style="font-family:'Courier New',Courier,monospace;color:#0891b2;">R-fx Networks</span>
+&nbsp;&middot;&nbsp;
+BFD {{BFD_VERSION}}
+&nbsp;&middot;&nbsp;
+GPL v2
+</td>
+<td align="right" style="font-size:11px;">
+<a href="https://www.rfxn.com/projects/brute-force-detection" style="color:#0891b2;text-decoration:none;">rfxn.com</a>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</td>
+</tr>
 </table>
 </body>
 </html>
