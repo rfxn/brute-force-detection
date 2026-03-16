@@ -588,23 +588,25 @@ _alert_compute_summary() {
 	fi
 	export SUMMARY_REPEAT_PCT="$repeat_pct"
 
-	# country breakdown: need ip_to_country for each unique IP
+	# country breakdown: batch lookup all alert IPs (preserving duplicates for counting)
 	local countries_str=""
 	if [ -n "${INSTALL_PATH:-}" ] && [ -f "${INSTALL_PATH}/ipcountry.dat" ]; then
-		# collect unique IPs and look up countries
-		local _ip _cc
-		local -a _cc_counts=()
-		local _cc_list=""
-		while IFS='|' read -r _ip _ _ _ _ _ _ _ _ _ _ _; do
-			[ -z "$_ip" ] && continue
-			_cc=$(ip_to_country "$_ip" "$INSTALL_PATH/ipcountry.dat")
-			_cc="${_cc:---}"
-			_cc_list="${_cc_list}${_cc}
-"
-		done < "$alerts_file"
-		# count and format
-		countries_str=$(echo "$_cc_list" | grep -v '^$' | sort | uniq -c | sort -rn | \
-			awk '{printf "%s(%d), ", $2, $1}' | sed 's/, $//')
+		# extract ALL IPs (one per alert line, including duplicates for per-CC count)
+		local _tmp_ips _batch_out _cc_list=""
+		_tmp_ips=$(mktemp "${ALERT_TMPDIR:-/tmp}/bfd-summary.XXXXXX")
+		awk -F'|' '{print $1}' "$alerts_file" > "$_tmp_ips"
+		# batch lookup: outputs "IP CC" or "IP -" lines
+		_batch_out=$(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_tmp_ips")
+		command rm -f "$_tmp_ips"
+		# extract CC column, replace "-" with "--" for display
+		if [ -n "$_batch_out" ]; then
+			_cc_list=$(echo "$_batch_out" | awk '{print ($2 == "-" ? "--" : $2)}')
+		fi
+		# count and format: "CN(5), US(3)"
+		if [ -n "$_cc_list" ]; then
+			countries_str=$(echo "$_cc_list" | sort | uniq -c | sort -rn | \
+				awk '{printf "%s(%d), ", $2, $1}' | sed 's/, $//')
+		fi
 	fi
 	export SUMMARY_COUNTRIES="${countries_str:---}"
 }

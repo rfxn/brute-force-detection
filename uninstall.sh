@@ -65,6 +65,7 @@ if [ -d "$INSPATH" ]; then
 	if [ -n "$_custom_log" ] && [ "$_custom_log" != "/var/log/bfd_log" ]; then
 		command rm -f "$_custom_log"
 	fi
+	command rmdir /var/log/bfd 2>/dev/null || true  # remove log dir if empty; fails safely if files remain
 
 	# Remove cron files, install directory, symlink, backups, default log
 	pkg_uninstall_cron /etc/cron.d/bfd /etc/cron.daily/bfd

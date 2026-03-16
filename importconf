@@ -113,6 +113,11 @@ fi
 if grep -q '^TRIG_WINDOW=' "$old_conf" 2>/dev/null && ! grep -q '^PRESSURE_HALF_LIFE=' "$old_conf" 2>/dev/null; then
 	_old_val=$(awk -F= '/^TRIG_WINDOW=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
 	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
+		if [ "$_old_val" -gt 600 ]; then
+			echo "  WARNING: TRIG_WINDOW=$_old_val migrated to PRESSURE_HALF_LIFE=$_old_val."
+			echo "  Note: PRESSURE_HALF_LIFE controls exponential decay rate (default 300s)."
+			echo "  Values above 600 produce very slow decay. Review with 'bfd -c'."
+		fi
 		sed -i "s|^PRESSURE_HALF_LIFE=.*|PRESSURE_HALF_LIFE=\"${_old_val}\"|" "$new_conf"
 		_pressure_migrated=1
 	fi
