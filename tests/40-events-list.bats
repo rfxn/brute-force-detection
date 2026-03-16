@@ -11,6 +11,9 @@ load 'helpers/bfd-common'
 # Source apool functions from bfd (needed by events_list functions)
 bfd_load_function _apool_ban_status
 bfd_load_function _apool_awk
+bfd_load_function _batch_ban_status_init
+bfd_load_function _batch_ban_status_lookup
+bfd_load_function _batch_ban_status_cleanup
 
 setup() {
 	bfd_standard_setup

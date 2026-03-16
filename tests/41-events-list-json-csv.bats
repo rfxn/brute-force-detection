@@ -11,6 +11,9 @@ load 'helpers/bfd-common'
 # Source apool functions from bfd (needed by events_list functions)
 bfd_load_function _apool_ban_status
 bfd_load_function _apool_awk
+bfd_load_function _batch_ban_status_init
+bfd_load_function _batch_ban_status_lookup
+bfd_load_function _batch_ban_status_cleanup
 
 setup() {
 	bfd_standard_setup
@@ -321,6 +324,14 @@ _seed_pool() {
 	local ip_count
 	ip_count=$(echo "$output" | grep -c '"ip":')
 	[ "$ip_count" -eq 5 ]
+	assert_output --partial '"truncated": true'
+}
+
+@test "events_list_cidr_json: truncated false when within limit" {
+	_seed_pool
+	run events_list_cidr_json "$INSTALL_PATH" "192.0.2.0/24" "count" "100"
+	assert_success
+	assert_output --partial '"truncated": false'
 }
 
 @test "events_list_cidr_csv: respects limit parameter" {

@@ -4191,8 +4191,9 @@ _events_list_ip_pool_awk() {
 	}' "$pool_file"
 }
 
-# events_list install_path [sort_mode] — event list dashboard from attack.pool
-# Lists all IPs with auth failure events, sorted by count (default), time, or ip.
+# events_list install_path [sort_mode] [limit] — event list dashboard from attack.pool
+# Lists IPs with auth failure events, sorted by count (default), time, or ip.
+# limit: max IPs to return (default 100, 0 = unlimited).
 # Uses _EVENTS_CUTOFF global (set by pre-parse) for time window filtering.
 events_list() {
 	local install_path="$1" sort_mode="${2:-count}" limit="${3:-100}"
@@ -4204,6 +4205,7 @@ events_list() {
 		return 0
 	fi
 
+	_batch_ban_status_init "$install_path"
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.evtlist.XXXXXX")
 	echo "#IP|COUNT|SERVICES|COUNTRY|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
@@ -4213,10 +4215,11 @@ events_list() {
 		local first_fmt last_fmt ban_status
 		first_fmt=$(_fmt_ts "$first_ts")
 		last_fmt=$(_fmt_ts "$last_ts")
-		ban_status=$(_apool_ban_status "$ip")
+		ban_status=$(_batch_ban_status_lookup "$ip")
 		echo "$ip|$cnt|$svcs|${cc:---}|$first_fmt|$last_fmt|$ban_status"
 		row_count=$((row_count + 1))
 	done < <(_apool_awk "$pool_file" "" "$cutoff" "$sort_mode" "$limit") >> "$atmp"
+	_batch_ban_status_cleanup
 
 	if [ "$(wc -l < "$atmp")" -le 1 ]; then
 		command rm -f "$atmp"
@@ -4354,7 +4357,7 @@ events_list_ip() {
 	fi
 }
 
-# events_list_cidr install_path cidr [sort_mode] — subnet event search from attack.pool
+# events_list_cidr install_path cidr [sort_mode] [limit] — subnet event search from attack.pool
 events_list_cidr() {
 	local install_path="$1" cidr="$2" sort_mode="${3:-count}" limit="${4:-100}"
 	local pool_file="$install_path/stats/attack.pool"
@@ -4370,6 +4373,7 @@ events_list_cidr() {
 		return 0
 	fi
 
+	_batch_ban_status_init "$install_path"
 	local atmp
 	atmp=$(mktemp "$install_path/tmp/.evtcidr.XXXXXX")
 	echo "#IP|COUNT|SERVICES|COUNTRY|FIRST_SEEN|LAST_SEEN|STATUS" > "$atmp"
@@ -4381,11 +4385,12 @@ events_list_cidr() {
 		local first_fmt last_fmt ban_status
 		first_fmt=$(_fmt_ts "$first_ts")
 		last_fmt=$(_fmt_ts "$last_ts")
-		ban_status=$(_apool_ban_status "$ip")
+		ban_status=$(_batch_ban_status_lookup "$ip")
 		echo "$ip|$cnt|$svcs|${cc:---}|$first_fmt|$last_fmt|$ban_status"
 		echo "$cnt|${ban_status}" >&3
 		row_count=$((row_count + 1))
 	done 3>"$_cidr_summary" < <(_apool_awk "$pool_file" "" "$cutoff" "$sort_mode" "$limit" "$target_addr" "$target_mask") >> "$atmp"
+	_batch_ban_status_cleanup
 
 	local match_count=0 total_events=0 banned_count=0
 	if [ -f "$_cidr_summary" ] && [ -s "$_cidr_summary" ]; then
@@ -4413,7 +4418,7 @@ events_list_cidr() {
 
 # --- Event list JSON/CSV variants ---
 
-# events_list_json install_path [sort_mode] — JSON array of event list entries
+# events_list_json install_path [sort_mode] [limit] — JSON array of event list entries
 events_list_json() {
 	local install_path="$1" sort_mode="${2:-count}" limit="${3:-100}"
 	local pool_file="$install_path/stats/attack.pool"
@@ -4424,6 +4429,7 @@ events_list_json() {
 		return 0
 	fi
 
+	_batch_ban_status_init "$install_path"
 	local first=1
 	local cnt ip first_ts last_ts svcs cc
 	while IFS='|' read -r cnt ip first_ts last_ts svcs cc; do
@@ -4431,7 +4437,7 @@ events_list_json() {
 		local first_fmt last_fmt ban_status
 		first_fmt=$(_fmt_ts_iso "$first_ts")
 		last_fmt=$(_fmt_ts_iso "$last_ts")
-		ban_status=$(_apool_ban_status "$ip")
+		ban_status=$(_batch_ban_status_lookup "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
 		if [ "$first" -eq 1 ]; then
 			echo "["
@@ -4444,6 +4450,7 @@ events_list_json() {
 			"$(_json_array_from_csv "$svcs")" "$(_json_escape "${cc:---}")" \
 			"$first_fmt" "$last_fmt" "$(_json_escape "$ban_status")"
 	done < <(_apool_awk "$pool_file" "" "$cutoff" "$sort_mode" "$limit")
+	_batch_ban_status_cleanup
 
 	if [ "$first" -eq 1 ]; then
 		echo "[]"
@@ -4453,7 +4460,7 @@ events_list_json() {
 	fi
 }
 
-# events_list_csv install_path [sort_mode] — CSV formatted event list
+# events_list_csv install_path [sort_mode] [limit] — CSV formatted event list
 events_list_csv() {
 	local install_path="$1" sort_mode="${2:-count}" limit="${3:-100}"
 	local pool_file="$install_path/stats/attack.pool"
@@ -4465,16 +4472,18 @@ events_list_csv() {
 		return 0
 	fi
 
+	_batch_ban_status_init "$install_path"
 	local cnt ip first_ts last_ts svcs cc
 	while IFS='|' read -r cnt ip first_ts last_ts svcs cc; do
 		[ -z "$cnt" ] && continue
 		local first_fmt last_fmt ban_status
 		first_fmt=$(_fmt_ts_iso "$first_ts")
 		last_fmt=$(_fmt_ts_iso "$last_ts")
-		ban_status=$(_apool_ban_status "$ip")
+		ban_status=$(_batch_ban_status_lookup "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
 		echo "$ip,$cnt,$svcs,${cc:---},$first_fmt,$last_fmt,$ban_status"
 	done < <(_apool_awk "$pool_file" "" "$cutoff" "$sort_mode" "$limit")
+	_batch_ban_status_cleanup
 }
 
 # events_list_ip_json install_path ip [loglines] — JSON per-IP event detail
@@ -4642,7 +4651,7 @@ events_list_ip_csv() {
 	done <<< "$pool_data"
 }
 
-# events_list_cidr_json install_path cidr [sort_mode] — JSON CIDR event search
+# events_list_cidr_json install_path cidr [sort_mode] [limit] — JSON CIDR event search
 events_list_cidr_json() {
 	local install_path="$1" cidr="$2" sort_mode="${3:-count}" limit="${4:-100}"
 	local pool_file="$install_path/stats/attack.pool"
@@ -4654,23 +4663,24 @@ events_list_cidr_json() {
 	target_mask="${cidr#*/}"
 
 	if [ ! -f "$pool_file" ] || [ ! -s "$pool_file" ]; then
-		printf '{"cidr": "%s", "summary": {"match_count": 0, "total_count": 0, "banned_count": 0}, "ips": []}\n' \
+		printf '{"cidr": "%s", "summary": {"match_count": 0, "total_count": 0, "banned_count": 0, "truncated": false}, "ips": []}\n' \
 			"$(_json_escape "$cidr")"
 		return 0
 	fi
 
+	_batch_ban_status_init "$install_path"
 	local _cidr_summary _cidr_ips
 	_cidr_summary=$(mktemp "$install_path/tmp/.cidr_json_s.XXXXXX")
 	_cidr_ips=$(mktemp "$install_path/tmp/.cidr_json_i.XXXXXX")
 
-	local first=1
+	local first=1 row_count=0
 	local cnt ip first_ts last_ts svcs cc
 	while IFS='|' read -r cnt ip first_ts last_ts svcs cc; do
 		[ -z "$cnt" ] && continue
 		local first_fmt last_fmt ban_status
 		first_fmt=$(_fmt_ts_iso "$first_ts")
 		last_fmt=$(_fmt_ts_iso "$last_ts")
-		ban_status=$(_apool_ban_status "$ip")
+		ban_status=$(_batch_ban_status_lookup "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
 		if [ "$first" -eq 1 ]; then
 			first=0
@@ -4682,7 +4692,9 @@ events_list_cidr_json() {
 			"$(_json_array_from_csv "$svcs")" "$(_json_escape "${cc:---}")" \
 			"$first_fmt" "$last_fmt" "$(_json_escape "$ban_status")"
 		echo "$cnt|${ban_status}" >&3
+		row_count=$((row_count + 1))
 	done 3>"$_cidr_summary" < <(_apool_awk "$pool_file" "" "$cutoff" "$sort_mode" "$limit" "$target_addr" "$target_mask") > "$_cidr_ips"
+	_batch_ban_status_cleanup
 
 	local match_count=0 total_events=0 banned_count=0
 	if [ -f "$_cidr_summary" ] && [ -s "$_cidr_summary" ]; then
@@ -4691,15 +4703,19 @@ events_list_cidr_json() {
 		banned_count=$(awk -F'|' '$2 ~ /BANNED/ {c++} END {print c+0}' "$_cidr_summary")
 	fi
 
-	printf '{"cidr": "%s", "summary": {"match_count": %d, "total_count": %d, "banned_count": %d}, "ips": [\n' \
-		"$(_json_escape "$cidr")" "$match_count" "$total_events" "$banned_count"
+	local _truncated="false"
+	if [ "$limit" -gt 0 ] 2>/dev/null && [ "$row_count" -ge "$limit" ]; then
+		_truncated="true"
+	fi
+	printf '{"cidr": "%s", "summary": {"match_count": %d, "total_count": %d, "banned_count": %d, "truncated": %s}, "ips": [\n' \
+		"$(_json_escape "$cidr")" "$match_count" "$total_events" "$banned_count" "$_truncated"
 	cat "$_cidr_ips" 2>/dev/null
 	echo ""
 	echo "]}"
 	command rm -f "$_cidr_summary" "$_cidr_ips"
 }
 
-# events_list_cidr_csv install_path cidr [sort_mode] — CSV CIDR event search
+# events_list_cidr_csv install_path cidr [sort_mode] [limit] — CSV CIDR event search
 events_list_cidr_csv() {
 	local install_path="$1" cidr="$2" sort_mode="${3:-count}" limit="${4:-100}"
 	local pool_file="$install_path/stats/attack.pool"
@@ -4716,16 +4732,18 @@ events_list_cidr_csv() {
 		return 0
 	fi
 
+	_batch_ban_status_init "$install_path"
 	local cnt ip first_ts last_ts svcs cc
 	while IFS='|' read -r cnt ip first_ts last_ts svcs cc; do
 		[ -z "$cnt" ] && continue
 		local first_fmt last_fmt ban_status
 		first_fmt=$(_fmt_ts_iso "$first_ts")
 		last_fmt=$(_fmt_ts_iso "$last_ts")
-		ban_status=$(_apool_ban_status "$ip")
+		ban_status=$(_batch_ban_status_lookup "$ip")
 		[ -z "$ban_status" ] && ban_status="not banned"
 		echo "$ip,$cnt,$svcs,${cc:---},$first_fmt,$last_fmt,$ban_status"
 	done < <(_apool_awk "$pool_file" "" "$cutoff" "$sort_mode" "$limit" "$target_addr" "$target_mask")
+	_batch_ban_status_cleanup
 }
 
 # search_ip_json install_path ip — JSON formatted unified IP report

@@ -758,6 +758,53 @@ _apool_ban_status() {
 	fi
 }
 
+# _batch_ban_status_init install_path — pre-compute ban status for all IPs into a lookup file.
+# Creates _BAN_STATUS_FILE (caller must clean up) with lines: ip|status
+# One awk pass over bans.active + one over bans.history instead of 2-3 awk
+# spawns per IP. Use with _batch_ban_status_lookup in loops.
+_batch_ban_status_init() {
+	local install_path="$1"
+	local bans_active="$install_path/tmp/bans.active"
+	local bans_history="$install_path/tmp/bans.history"
+	_BAN_STATUS_FILE=$(mktemp "$install_path/tmp/.banstat.XXXXXX")
+	local now
+	now=$(date +"%s")
+	# Active bans: compute BANNED(perm) or BANNED(Nm) per IP
+	if [ -f "$bans_active" ] && [ -s "$bans_active" ]; then
+		awk -v now="$now" '{
+			ip = $3; expiry = $2
+			if (expiry == "0") {
+				print ip "|BANNED(perm)"
+			} else {
+				remain = int((expiry - now) / 60)
+				if (remain < 0) remain = 0
+				print ip "|BANNED(" remain "m)"
+			}
+		}' "$bans_active" >> "$_BAN_STATUS_FILE"
+	fi
+	# History: count prior bans for IPs not currently active
+	if [ -f "$bans_history" ] && [ -s "$bans_history" ]; then
+		awk '($5 == "ban" || $5 == "escalate") { hist[$3]++ }
+		END { for (ip in hist) print ip "|prev:" hist[ip] }' \
+			"$bans_history" >> "$_BAN_STATUS_FILE"
+	fi
+}
+
+# _batch_ban_status_lookup ip — look up pre-computed ban status (requires _batch_ban_status_init)
+# Returns the status string, preferring active ban over history.
+_batch_ban_status_lookup() {
+	local aip="$1"
+	# Active ban takes priority (BANNED lines appear first in the file)
+	local status
+	status=$(awk -F'|' -v ip="$aip" '$1 == ip { print $2; exit }' "$_BAN_STATUS_FILE" 2>/dev/null)  # exits on first match; active bans precede history
+	echo "$status"
+}
+
+# _batch_ban_status_cleanup — remove the lookup file
+_batch_ban_status_cleanup() {
+	command rm -f "${_BAN_STATUS_FILE:-}"
+}
+
 # _apool_service_summary_awk source_file [cutoff] — shared AWK helper for per-service breakdown
 # Outputs pipe-delimited: event_count|service_name|unique_ip_count
 # Sorted by event count descending.
