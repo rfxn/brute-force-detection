@@ -17,7 +17,6 @@ bfd_load_function _batch_ban_status_cleanup
 
 setup() {
 	bfd_standard_setup
-	UTIME=$(date +"%s")
 	# Load report functions
 	# shellcheck disable=SC1091
 	source "$PROJECT_ROOT/files/internals/bfd_report.sh"
@@ -165,7 +164,6 @@ teardown() {
 	APOOL_LIST="$pool"
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_ALERTS="0"
-	REPORT_ENABLED="1"
 	V="2.0.1"
 	local now
 	now=$(date +%s)

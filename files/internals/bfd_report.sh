@@ -429,7 +429,7 @@ _report_deliver() {
 	# Render subject from template
 	local subject_tpl="${REPORT_EMAIL_SUBJECT:-BFD {{INTERVAL}} Threat Report for {{HOSTNAME}}}"
 	local subject_file
-	subject_file=$(mktemp "${TMPDIR:-/tmp}/.bfd_rpt_subj.XXXXXX")
+	subject_file=$(mktemp "${ALERT_TMPDIR:-${TMPDIR:-/tmp}}/.bfd_rpt_subj.XXXXXX")
 	echo "$subject_tpl" > "$subject_file"
 	# Export INTERVAL for subject template rendering
 	export INTERVAL="$_RPT_LABEL"
@@ -456,8 +456,8 @@ _report_deliver() {
 
 	if [ "$send_email" = "1" ]; then
 		local text_file html_file
-		text_file=$(mktemp "${TMPDIR:-/tmp}/.bfd_rpt_text.XXXXXX")
-		html_file=$(mktemp "${TMPDIR:-/tmp}/.bfd_rpt_html.XXXXXX")
+		text_file=$(mktemp "${ALERT_TMPDIR:-${TMPDIR:-/tmp}}/.bfd_rpt_text.XXXXXX")
+		html_file=$(mktemp "${ALERT_TMPDIR:-${TMPDIR:-/tmp}}/.bfd_rpt_html.XXXXXX")
 		_report_render_text "$tpl_dir" > "$text_file"
 		_report_render_html "$tpl_dir" > "$html_file"
 		_report_deliver_email "$subject" "$text_file" "$html_file"
