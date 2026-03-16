@@ -10,6 +10,13 @@
 [New] REPORT_EMAIL_ADDRESS, REPORT_EMAIL_SUBJECT, REPORT_TOP_N for report
       customization; cron.daily triggers daily/weekly/monthly on schedule
 
+[Fix] Report messaging: resolve report-prefixed templates directly instead of
+      delegating to alert_dispatch() which matched ban-alert templates
+[Fix] Report trend: use $4 count field in _report_trend_awk for consistency
+      with _apool_summary_awk weighted totals
+[Fix] Report HTML: entity-escape pool-derived values in report tables
+[Fix] Report temp files: use ALERT_TMPDIR instead of TMPDIR; add .bfd_rpt_*
+      to cron.daily cleanup glob
 [Fix] tlog CLI: add internals/ fallback for library resolution so BFD's layout
       (tlog_lib.sh in internals/ subdirectory) is found correctly
 [Fix] Test suite: adapt elog_lib internal function tests to v1.0.4 _ELOG_RET
