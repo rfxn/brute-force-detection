@@ -10,6 +10,10 @@
 [New] REPORT_EMAIL_ADDRESS, REPORT_EMAIL_SUBJECT, REPORT_TOP_N for report
       customization; cron.daily triggers daily/weekly/monthly on schedule
 
+[Fix] tlog CLI: add internals/ fallback for library resolution so BFD's layout
+      (tlog_lib.sh in internals/ subdirectory) is found correctly
+[Fix] Test suite: adapt elog_lib internal function tests to v1.0.4 _ELOG_RET
+      return convention (replaces stdout capture with direct variable check)
 [Change] Update vendored tlog_lib.sh and tlog to v2.0.4 (shell alias safety,
       inline comment standards)
 
