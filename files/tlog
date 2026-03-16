@@ -27,7 +27,7 @@
 PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin:/usr/local/sbin
 export PATH
 
-TLOG_VERSION="2.0.3"
+TLOG_VERSION="2.0.4"
 
 # BASERUN: cursor storage directory — sed-replaced at install time
 BASERUN="${BASERUN:-/tmp}"
@@ -251,7 +251,7 @@ fi
 
 _SCRIPT_DIR="${0%/*}"
 [[ "$_SCRIPT_DIR" == "$0" ]] && _SCRIPT_DIR="."
-_LIB="${_SCRIPT_DIR}/internals/tlog_lib.sh"
+_LIB="${_SCRIPT_DIR}/tlog_lib.sh"
 
 if [[ ! -f "$_LIB" ]]; then
 	echo "tlog: library not found: $_LIB" >&2
@@ -259,8 +259,8 @@ if [[ ! -f "$_LIB" ]]; then
 fi
 
 # Security check: library must be root-owned and not world-writable
-_lib_owner=$(stat -L -c '%u' "$_LIB" 2>/dev/null)
-_lib_perms=$(stat -L -c '%a' "$_LIB" 2>/dev/null)
+_lib_owner=$(stat -L -c '%u' "$_LIB" 2>/dev/null)  # stat may fail if lib deleted between checks
+_lib_perms=$(stat -L -c '%a' "$_LIB" 2>/dev/null)  # stat may fail if lib deleted between checks
 _lib_world="${_lib_perms: -1}"
 if [[ "$_lib_owner" != "0" ]] || [[ $((_lib_world & 2)) -ne 0 ]]; then
 	echo "tlog: security check failed on $_LIB (owner=$_lib_owner perms=$_lib_perms)" >&2
@@ -356,7 +356,7 @@ _tlog_cmd_status() {
 	if [[ $parse_rc -eq 2 ]]; then
 		# Corrupt cursor: show raw content for diagnosis
 		local raw_value=""
-		read -r raw_value < "$cursor_file" 2>/dev/null || true  # file may be empty or unreadable
+		read -r raw_value < "$cursor_file" 2>/dev/null || true  # read exits 1 on EOF; not an error
 		printf 'raw:    %s\n' "$raw_value"
 		printf 'state:  corrupt (would auto-reset on next read)\n'
 	elif [[ -z "$_tlog_cursor_value" ]]; then
@@ -369,7 +369,7 @@ _tlog_cmd_status() {
 		# Cursor age
 		if [[ -f "$cursor_file" ]]; then
 			local mtime now age_s
-			mtime=$(stat -c %Y "$cursor_file" 2>/dev/null) || mtime=0
+			mtime=$(stat -c %Y "$cursor_file" 2>/dev/null) || mtime=0  # stat fails if cursor removed; default to 0
 			now=$(date +%s)
 			age_s=$((now - mtime))
 			if [[ $age_s -ge 86400 ]]; then
@@ -411,7 +411,7 @@ _tlog_cmd_status() {
 	# Related files
 	if [[ -f "$BASERUN/${name}.jts" ]]; then
 		local jts_val
-		read -r jts_val < "$BASERUN/${name}.jts" 2>/dev/null || true  # file may be empty or unreadable
+		read -r jts_val < "$BASERUN/${name}.jts" 2>/dev/null || true  # read exits 1 on EOF; not an error
 		printf 'jts:    %s\n' "$jts_val"
 	fi
 	if [[ -f "$BASERUN/${name}.lock" ]]; then
