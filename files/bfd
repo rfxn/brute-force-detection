@@ -758,6 +758,55 @@ _apool_ban_status() {
 	fi
 }
 
+# _batch_ban_status_init install_path — pre-compute ban status for all IPs into a lookup file.
+# Creates _BAN_STATUS_FILE (caller must clean up) with lines: ip|status
+# One awk pass over bans.active + one over bans.history instead of 2-3 awk
+# spawns per IP. Use with _batch_ban_status_lookup in loops.
+_batch_ban_status_init() {
+	local install_path="$1"
+	local bans_active="$install_path/tmp/bans.active"
+	local bans_history="$install_path/tmp/bans.history"
+	_BAN_STATUS_FILE=$(mktemp "$install_path/tmp/.banstat.XXXXXX")
+	local now
+	now=$(date +"%s")
+	# Active bans: compute BANNED(perm) or BANNED(Nm) per IP
+	if [ -f "$bans_active" ] && [ -s "$bans_active" ]; then
+		awk -v now="$now" '{
+			ip = $3; expiry = $2
+			if (expiry == "0") {
+				print ip "|BANNED(perm)"
+			} else {
+				remain = int((expiry - now) / 60)
+				if (remain < 0) remain = 0
+				print ip "|BANNED(" remain "m)"
+			}
+		}' "$bans_active" >> "$_BAN_STATUS_FILE"
+	fi
+	# History: count prior bans for IPs not currently active
+	if [ -f "$bans_history" ] && [ -s "$bans_history" ]; then
+		awk '($5 == "ban" || $5 == "escalate") { hist[$3]++ }
+		END { for (ip in hist) print ip "|prev:" hist[ip] }' \
+			"$bans_history" >> "$_BAN_STATUS_FILE"
+	fi
+}
+
+# _batch_ban_status_lookup ip — look up pre-computed ban status (requires _batch_ban_status_init)
+# Returns the status string, preferring active ban over history.
+_batch_ban_status_lookup() {
+	local aip="$1"
+	# File format: ip|status — use awk for exact field match (grep -F "${ip}|"
+	# would substring-match 192.0.2.1 against 192.0.2.10). -m1 stops at first
+	# match; active bans precede history so active takes priority.
+	local line
+	line=$(awk -F'|' -v ip="$aip" '$1 == ip { print; exit }' "$_BAN_STATUS_FILE" 2>/dev/null) || true  # 2>/dev/null: file may not exist if no bans; || true: no match is normal (IP has no ban state)
+	echo "${line#*|}"
+}
+
+# _batch_ban_status_cleanup — remove the lookup file
+_batch_ban_status_cleanup() {
+	command rm -f "${_BAN_STATUS_FILE:-}"
+}
+
 # _apool_service_summary_awk source_file [cutoff] — shared AWK helper for per-service breakdown
 # Outputs pipe-delimited: event_count|service_name|unique_ip_count
 # Sorted by event count descending.
@@ -1390,6 +1439,7 @@ usage() {
 	echo "  --json                      JSON output (with -l, -e, -a)"
 	echo "  --csv                       CSV output (with -l, -e, -a)"
 	echo "  --sort=MODE                 sort events: count (default), time, ip"
+	echo "  --limit=N                   max IPs to display (default 100, 0=all)"
 	echo "  --24h                       events from last 24 hours (default)"
 	echo "  --7d                        events from last 7 days"
 	echo "  --30d                       events from last 30 days"
@@ -1404,21 +1454,23 @@ usage() {
 	echo "  bfd -s                      run detection and show results"
 	echo "  bfd -s -V                   verbose detection (show per-IP pressure)"
 	echo "  bfd -a 203.0.113.100        investigate an IP across all state"
-	echo "  bfd -e --json               event history in JSON"
+	echo "  bfd -e --json               event history in JSON (top 100)"
 	echo "  bfd -e --7d --sort=time     events from last 7 days, newest first"
+	echo "  bfd -e --limit=0 --30d      all events from last 30 days"
 	echo "  bfd --scan sshd -d          dry-run full-log scan for sshd only"
 	echo "  bfd -b 10.0.0.5 sshd        manually ban IP for sshd service"
 	echo "  bfd -T sshd /var/log/auth.log  test sshd rule against a log file"
 }
 
 # Pre-process global modifier flags (--json, --csv, --verbose, --max-lines=, --scan-timeout=,
-# --sort=, --24h, --7d, --30d, --active)
+# --sort=, --24h, --7d, --30d, --limit=, --active)
 VERBOSE=0
 OUTPUT_FORMAT="table"
 _CLI_SCAN_MAX_LINES=""
 _CLI_SCAN_TIMEOUT=""
 _EVENTS_SORT="count"
 _EVENTS_WINDOW="24h"
+_EVENTS_LIMIT="100"
 _RULES_ACTIVE_ONLY=0
 declare -a _bfd_args=()
 # shellcheck disable=SC2034
@@ -1430,6 +1482,7 @@ for _arg in "$@"; do
 		--max-lines=*) _CLI_SCAN_MAX_LINES="${_arg#--max-lines=}" ;;
 		--scan-timeout=*) _CLI_SCAN_TIMEOUT="${_arg#--scan-timeout=}" ;;
 		--sort=*) _EVENTS_SORT="${_arg#--sort=}" ;;
+		--limit=*) _EVENTS_LIMIT="${_arg#--limit=}" ;;
 		--24h) _EVENTS_WINDOW="24h" ;;
 		--7d)  _EVENTS_WINDOW="7d" ;;
 		--30d) _EVENTS_WINDOW="30d" ;;
@@ -1443,6 +1496,11 @@ case "$_EVENTS_SORT" in
 	count|time|ip) ;;
 	*) echo "warning: unknown sort mode '$_EVENTS_SORT', using 'count'" >&2
 	   _EVENTS_SORT="count" ;;
+esac
+# Validate --limit= value (must be non-negative integer)
+case "$_EVENTS_LIMIT" in
+	''|*[!0-9]*) echo "warning: invalid limit '$_EVENTS_LIMIT', using '100'" >&2
+	   _EVENTS_LIMIT="100" ;;
 esac
 # Compute _EVENTS_CUTOFF from window selection
 case "$_EVENTS_WINDOW" in
@@ -1482,15 +1540,15 @@ case "${1:-}" in
 		esac
 	elif [ -n "${2:-}" ] && [[ "$2" == */* ]]; then
 		case "$OUTPUT_FORMAT" in
-			json) events_list_cidr_json "$INSTALL_PATH" "$2" "$_EVENTS_SORT" || exit "$?" ;;
-			csv)  events_list_cidr_csv "$INSTALL_PATH" "$2" "$_EVENTS_SORT" || exit "$?" ;;
-			*)    events_list_cidr "$INSTALL_PATH" "$2" "$_EVENTS_SORT" || exit "$?" ;;
+			json) events_list_cidr_json "$INSTALL_PATH" "$2" "$_EVENTS_SORT" "$_EVENTS_LIMIT" || exit "$?" ;;
+			csv)  events_list_cidr_csv "$INSTALL_PATH" "$2" "$_EVENTS_SORT" "$_EVENTS_LIMIT" || exit "$?" ;;
+			*)    events_list_cidr "$INSTALL_PATH" "$2" "$_EVENTS_SORT" "$_EVENTS_LIMIT" || exit "$?" ;;
 		esac
 	else
 		case "$OUTPUT_FORMAT" in
-			json) events_list_json "$INSTALL_PATH" "$_EVENTS_SORT" ;;
-			csv)  events_list_csv "$INSTALL_PATH" "$_EVENTS_SORT" ;;
-			*)    events_list "$INSTALL_PATH" "$_EVENTS_SORT" ;;
+			json) events_list_json "$INSTALL_PATH" "$_EVENTS_SORT" "$_EVENTS_LIMIT" ;;
+			csv)  events_list_csv "$INSTALL_PATH" "$_EVENTS_SORT" "$_EVENTS_LIMIT" ;;
+			*)    events_list "$INSTALL_PATH" "$_EVENTS_SORT" "$_EVENTS_LIMIT" ;;
 		esac
 	fi
 	;;

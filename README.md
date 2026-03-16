@@ -595,6 +595,7 @@ Output Modifiers:
   --json                      JSON output (with -l, -e, -a)
   --csv                       CSV output (with -l, -e, -a)
   --sort=MODE                 sort events: count (default), time, ip
+  --limit=N                   max IPs to display (default 100, 0=all)
   --24h                       events from last 24 hours (default)
   --7d                        events from last 7 days
   --30d                       events from last 30 days
@@ -763,13 +764,14 @@ After a non-dry-run scan, tlog cursors are advanced to the current log position 
 The `--events` command provides event history and IP investigation, reading from the attack pool which records all detected auth failures (both ban-triggering and sub-trip observations) with configurable retention (default: 365 days):
 
 ```bash
-bfd --events                  # event list — all IPs, last 24h
+bfd --events                  # event list — top 100 IPs, last 24h
 bfd --events --7d --sort=time # last 7 days, newest first
+bfd --events --limit=0 --30d  # all IPs from last 30 days
 bfd --events 192.0.2.1        # IP investigation — history + pressure + logs
 bfd --events 192.0.2.0/24     # CIDR report — subnet-scoped view
 ```
 
-**Event list** (no argument) shows all IPs with failure counts, services, country, first/last seen, and ban status. Default: sorted by count descending, 24-hour window. Use `--sort=time` or `--sort=ip` to change ordering, and `--7d` or `--30d` to expand the time window.
+**Event list** (no argument) shows IPs with failure counts, services, country, first/last seen, and ban status. Default: top 100 IPs sorted by count descending, 24-hour window. Use `--limit=N` to change the output cap (`0` for unlimited), `--sort=time` or `--sort=ip` to change ordering, and `--7d` or `--30d` to expand the time window.
 
 **IP investigation** shows a comprehensive report: historical failure counts from the attack pool (total and per-service breakdown), live pressure detail if the IP has active pressure, and a log sample from the triggering service.
 

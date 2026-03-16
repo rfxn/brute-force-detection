@@ -2,6 +2,14 @@
 
   -- Changes --
 
+[New] Events CLI: --limit=N output modifier caps event list and CIDR output
+      (default 100, --limit=0 for unlimited); prevents excessive output when
+      attack pool grows large
+[Change] Events CLI: batch ban status pre-computes all ban state in 2 awk
+      passes over bans.active/history; per-IP lookup reads the small result
+      file instead of scanning full state files on each iteration
+[New] CIDR JSON: summary object includes "truncated" boolean for API consumers
+      to detect partial result sets programmatically
 [Fix] send_alerts: RETURN trap ensures temp file cleanup on abnormal exit;
       prevents orphaned recip/text/html files when delivery fails mid-loop
 [Change] Alert summary: _alert_compute_summary() uses _batch_ip_to_country()

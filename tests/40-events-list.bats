@@ -11,6 +11,9 @@ load 'helpers/bfd-common'
 # Source apool functions from bfd (needed by events_list functions)
 bfd_load_function _apool_ban_status
 bfd_load_function _apool_awk
+bfd_load_function _batch_ban_status_init
+bfd_load_function _batch_ban_status_lookup
+bfd_load_function _batch_ban_status_cleanup
 
 setup() {
 	bfd_standard_setup
@@ -424,4 +427,81 @@ RULE
 	echo "1000 192.0.2.1 sshd 5 US ban 600 22 15000 service" >> "$pool"
 	run _events_list_ip_pool_awk "$pool" "192.0.2.99"
 	assert_failure
+}
+
+# --- events_list --limit= ---
+
+@test "events_list: default limit=100 truncates large result sets" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 120); do
+		printf '%s 198.51.100.%s sshd %s US observed 0 22 1000 -\n' \
+			"$((now - i))" "$((i % 256))" "$i" >> "$pool"
+	done
+	run events_list "$INSTALL_PATH" "count" "100"
+	assert_success
+	# Table header + 100 data rows + truncation footer
+	assert_output --partial "showing 100 IPs"
+	assert_output --partial "--limit=0"
+}
+
+@test "events_list: explicit limit=10 caps output" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 20); do
+		echo "$now 192.0.2.$i sshd 1 -- observed 0 22 1000 -" >> "$pool"
+	done
+	run events_list "$INSTALL_PATH" "count" "10"
+	assert_success
+	assert_output --partial "showing 10 IPs"
+}
+
+@test "events_list: limit=0 returns all entries" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 30); do
+		echo "$now 192.0.2.$i sshd 1 -- observed 0 22 1000 -" >> "$pool"
+	done
+	run events_list "$INSTALL_PATH" "count" "0"
+	assert_success
+	refute_output --partial "showing"
+	refute_output --partial "--limit="
+	# All 30 IPs present (header + 30 data rows = 31 lines)
+	local data_lines
+	data_lines=$(echo "$output" | grep -c "192\.0\.2\.")
+	[ "$data_lines" -eq 30 ]
+}
+
+@test "events_list: no truncation footer when result fits within limit" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 5); do
+		echo "$now 192.0.2.$i sshd 1 -- observed 0 22 1000 -" >> "$pool"
+	done
+	run events_list "$INSTALL_PATH" "count" "100"
+	assert_success
+	refute_output --partial "showing"
+	refute_output --partial "--limit="
+}
+
+@test "events_list_cidr: respects limit parameter" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 20); do
+		echo "$now 192.0.2.$i sshd 1 -- observed 0 22 1000 -" >> "$pool"
+	done
+	run events_list_cidr "$INSTALL_PATH" "192.0.2.0/24" "count" "5"
+	assert_success
+	assert_output --partial "showing 5"
+	assert_output --partial "--limit=0"
 }
