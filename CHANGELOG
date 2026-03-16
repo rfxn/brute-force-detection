@@ -2,6 +2,13 @@
 
   -- Changes --
 
+[Fix] send_alerts: RETURN trap ensures temp file cleanup on abnormal exit;
+      prevents orphaned recip/text/html files when delivery fails mid-loop
+[Change] Alert summary: _alert_compute_summary() uses _batch_ip_to_country()
+      for O(1) batch country lookup instead of per-IP subprocess calls
+[Change] show_config: webhook URLs and API tokens masked in both single-var
+      and dump-all output (SLACK_WEBHOOK_URL, SLACK_TOKEN, TELEGRAM_BOT_TOKEN,
+      DISCORD_WEBHOOK_URL); SMTP_PASS excluded from output entirely
 [Fix] Packaging: RPM spec and DEB rules missing bfd_alert.sh, geoip_lib.sh,
       pkg_lib.sh in %install, symlink farm, and %files sections; package test
       template count updated from 8 to 14; RPM changelog rule count 42→57

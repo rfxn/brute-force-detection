@@ -2877,6 +2877,13 @@ send_alerts() {
 		return 1
 	fi
 
+	# Cleanup trap: ensures temp files are removed even on unexpected return.
+	# FUNCNAME guard required: BATS sets -T (functrace) which causes RETURN traps
+	# to fire on sub-function returns; without the guard, files are deleted while
+	# still in use by _alert_render_text/_alert_render_html.
+	local -a _cleanup_files=()
+	trap '[ "${FUNCNAME[0]}" = "send_alerts" ] && [ ${#_cleanup_files[@]} -gt 0 ] && command rm -f "${_cleanup_files[@]}"' RETURN
+
 	local format="${EMAIL_FORMAT:-text}"
 
 	# get unique recipients (field 9)
@@ -2889,6 +2896,7 @@ send_alerts() {
 		# create per-recipient temp file
 		local recip_file
 		recip_file=$(mktemp "${alerts_file}.recip.XXXXXX")
+		_cleanup_files+=("$recip_file")
 		awk -F'|' -v r="$recip" '$9 == r' "$alerts_file" > "$recip_file"
 
 		local alert_count
@@ -2904,6 +2912,7 @@ send_alerts() {
 		local text_file=""
 		if [ "$format" = "text" ] || [ "$format" = "both" ]; then
 			text_file=$(mktemp "${alerts_file}.text.XXXXXX")
+			_cleanup_files+=("$text_file")
 			_alert_render_text "$recip_file" "$tpl_dir" "$loglines" > "$text_file"
 		fi
 
@@ -2911,17 +2920,20 @@ send_alerts() {
 		local html_file=""
 		if [ "$format" = "html" ] || [ "$format" = "both" ]; then
 			html_file=$(mktemp "${alerts_file}.html.XXXXXX")
+			_cleanup_files+=("$html_file")
 			_alert_render_html "$recip_file" "$tpl_dir" "$loglines" > "$html_file"
 		fi
 
 		# for text-only: html_file needed by relay path, render it too
 		if [ "$format" = "text" ] && [ -n "${SMTP_RELAY:-}" ]; then
 			html_file=$(mktemp "${alerts_file}.html.XXXXXX")
+			_cleanup_files+=("$html_file")
 			_alert_render_html "$recip_file" "$tpl_dir" "$loglines" > "$html_file"
 		fi
 		# for html-only: text_file needed as sendmail fallback
 		if [ "$format" = "html" ] && [ -z "$text_file" ]; then
 			text_file=$(mktemp "${alerts_file}.text.XXXXXX")
+			_cleanup_files+=("$text_file")
 			_alert_render_text "$recip_file" "$tpl_dir" "$loglines" > "$text_file"
 		fi
 
@@ -3242,6 +3254,20 @@ show_service_status() {
 show_config() {
 	local var="${1:-}"
 	local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES EMAIL_FORMAT EMAIL_DIGEST EMAIL_DIGEST_INTERVAL EMAIL_REPUTATION_LINKS SMTP_RELAY SMTP_FROM SLACK_ALERTS SLACK_MODE SLACK_WEBHOOK_URL SLACK_TOKEN SLACK_CHANNEL TELEGRAM_ALERTS TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID DISCORD_ALERTS DISCORD_WEBHOOK_URL ALERT_TEMPLATE_DIR LOG_FORMAT LOG_LEVEL LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG LOG_IDLE_SUPPRESS OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT APOOL_RETENTION_DAYS APOOL_MAX_LINES PRESSURE_CONF"
+	local _secret_vars="SLACK_WEBHOOK_URL SLACK_TOKEN TELEGRAM_BOT_TOKEN DISCORD_WEBHOOK_URL"
+
+	# _mask_secret val — mask sensitive values for display
+	# Shows first 8 and last 4 chars for long values, "****" for short/empty
+	_mask_secret() {
+		local val="$1"
+		local len=${#val}
+		if [ "$len" -le 12 ] || [ -z "$val" ]; then
+			echo "****"
+		else
+			echo "${val:0:8}...${val: -4}"
+		fi
+	}
+
 	if [ -n "$var" ]; then
 		# validate against whitelist
 		local _found=0 _v
@@ -3265,6 +3291,17 @@ show_config() {
 		esac
 		local val
 		val="${!var}"
+		# mask secrets in single-var lookup
+		local _sv _is_secret=0
+		for _sv in $_secret_vars; do
+			if [ "$var" = "$_sv" ]; then
+				_is_secret=1
+				break
+			fi
+		done
+		if [ "$_is_secret" -eq 1 ] && [ -n "$val" ]; then
+			val=$(_mask_secret "$val")
+		fi
 		echo "$val"
 	else
 		# dump all active config variables
@@ -3278,6 +3315,17 @@ show_config() {
 				UNBAN_COMMAND_V6) v="UNBAN_COMMAND_V6_TEMPLATE" ;;
 			esac
 			val="${!v}"
+			# mask secrets in dump-all output
+			local _sv _is_secret=0
+			for _sv in $_secret_vars; do
+				if [ "$v" = "$_sv" ]; then
+					_is_secret=1
+					break
+				fi
+			done
+			if [ "$_is_secret" -eq 1 ] && [ -n "$val" ]; then
+				val=$(_mask_secret "$val")
+			fi
 			echo "$_display=$val"
 		done
 	fi
