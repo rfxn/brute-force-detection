@@ -19,7 +19,8 @@ case "$1" in
         rm -rf /etc/bfd 2>/dev/null || true
         # Remove state
         rm -rf /var/lib/bfd 2>/dev/null || true
-        # Remove log
+        # Remove logs (new directory + legacy flat file)
+        rm -rf /var/log/bfd 2>/dev/null || true
         rm -f /var/log/bfd_log 2>/dev/null || true
         if command -v systemctl >/dev/null 2>&1; then
             systemctl daemon-reload 2>/dev/null || true

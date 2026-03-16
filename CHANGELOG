@@ -2,6 +2,14 @@
 
   -- Changes --
 
+[Fix] Packaging: RPM spec and DEB rules missing bfd_alert.sh, geoip_lib.sh,
+      pkg_lib.sh in %install, symlink farm, and %files sections; package test
+      template count updated from 8 to 14; RPM changelog rule count 42→57
+[Fix] Logrotate: target path updated from /var/log/bfd_log to
+      /var/log/bfd/bfd.log to match BFD_LOG_PATH consolidation
+[Fix] DEB postrm: purge case now removes /var/log/bfd/ directory
+[Change] Convention compliance: all || true in project-owned shipped files
+      annotated with inline comments explaining why the error is safe to ignore
 [Fix] Documentation: README --attackpool→--activity, stale BFD_LOG_PATH default,
       events section rewritten to match actual output, attack.pool path
       corrected to stats/, backup path format HHMMSS→EPOCH, man page section
