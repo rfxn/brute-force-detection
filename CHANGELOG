@@ -2,6 +2,9 @@
 
   -- Changes --
 
+[Change] Report email templates aligned with transactional ban alert design
+      system (rfxn brand bar, cyan accent, zinc color scale, card layout)
+
 [New] Periodic threat report (--report daily|weekly|monthly) with multi-channel
       delivery; provides threat summary, top IPs with country codes, per-service
       breakdown, and trend comparison vs prior window

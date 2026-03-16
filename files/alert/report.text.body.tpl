@@ -7,7 +7,7 @@ Threat Summary
   Total Bans:      {{REPORT_TOTAL_BANS}} ({{REPORT_ACTIVE_BANS}} active)
   Trend:           {{REPORT_TREND_LABEL}}
 
---- Top Threat IPs ({{REPORT_WINDOW}}) ------------------------------------
+--- Top Threat IPs ({{REPORT_WINDOW}}) -----------------------------------
 
 {{REPORT_TOP_IPS_TEXT}}
 
