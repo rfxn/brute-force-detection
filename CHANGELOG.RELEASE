@@ -9,6 +9,11 @@
 [Change] show_config: webhook URLs and API tokens masked in both single-var
       and dump-all output (SLACK_WEBHOOK_URL, SLACK_TOKEN, TELEGRAM_BOT_TOKEN,
       DISCORD_WEBHOOK_URL); SMTP_PASS excluded from output entirely
+[New] Journal registrations: proxmox (pvedaemon+pveproxy) and phpmyadmin
+      added to _bfd_journal_register_all() (36 -> 38 total)
+[Change] importconf: TRIG_WINDOW migration warns when value > 600 but
+      preserves original value (no silent clamping)
+[Fix] uninstall.sh: remove empty /var/log/bfd/ directory after log cleanup
 [Fix] Packaging: RPM spec and DEB rules missing bfd_alert.sh, geoip_lib.sh,
       pkg_lib.sh in %install, symlink farm, and %files sections; package test
       template count updated from 8 to 14; RPM changelog rule count 42→57

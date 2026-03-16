@@ -96,6 +96,8 @@ _bfd_journal_register_all() {
 	tlog_journal_register "drupal" "SYSLOG_IDENTIFIER=drupal"
 	tlog_journal_register "jellyfin" "SYSLOG_IDENTIFIER=jellyfin"
 	tlog_journal_register "pdns" "SYSLOG_IDENTIFIER=pdns_server"
+	tlog_journal_register "proxmox" "SYSLOG_IDENTIFIER=pvedaemon + SYSLOG_IDENTIFIER=pveproxy"
+	tlog_journal_register "phpmyadmin" "SYSLOG_IDENTIFIER=phpmyadmin"
 }
 # Register at module load
 _bfd_journal_register_all
