@@ -246,3 +246,93 @@ _seed_pool() {
 	assert_output --partial "192.0.2.10"
 	refute_output --partial "198.51.100.5"
 }
+
+# --- JSON/CSV limit tests ---
+
+@test "events_list_json: respects limit parameter" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 20); do
+		echo "$now 192.0.2.$i sshd 1 -- observed 0 22 1000 -" >> "$pool"
+	done
+	run events_list_json "$INSTALL_PATH" "count" "5"
+	assert_success
+	# Count JSON objects (lines with "ip":)
+	local ip_count
+	ip_count=$(echo "$output" | grep -c '"ip":')
+	[ "$ip_count" -eq 5 ]
+}
+
+@test "events_list_json: limit=0 returns all entries" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 30); do
+		echo "$now 192.0.2.$i sshd 1 -- observed 0 22 1000 -" >> "$pool"
+	done
+	run events_list_json "$INSTALL_PATH" "count" "0"
+	assert_success
+	local ip_count
+	ip_count=$(echo "$output" | grep -c '"ip":')
+	[ "$ip_count" -eq 30 ]
+}
+
+@test "events_list_csv: respects limit parameter" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 20); do
+		echo "$now 192.0.2.$i sshd 1 -- observed 0 22 1000 -" >> "$pool"
+	done
+	run events_list_csv "$INSTALL_PATH" "count" "5"
+	assert_success
+	# Header + 5 data rows = 6 lines
+	[ "$(echo "$output" | wc -l)" -eq 6 ]
+}
+
+@test "events_list_csv: limit=0 returns all entries" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 30); do
+		echo "$now 192.0.2.$i sshd 1 -- observed 0 22 1000 -" >> "$pool"
+	done
+	run events_list_csv "$INSTALL_PATH" "count" "0"
+	assert_success
+	# Header + 30 data rows = 31 lines
+	[ "$(echo "$output" | wc -l)" -eq 31 ]
+}
+
+@test "events_list_cidr_json: respects limit parameter" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 20); do
+		echo "$now 192.0.2.$i sshd 1 -- observed 0 22 1000 -" >> "$pool"
+	done
+	run events_list_cidr_json "$INSTALL_PATH" "192.0.2.0/24" "count" "5"
+	assert_success
+	local ip_count
+	ip_count=$(echo "$output" | grep -c '"ip":')
+	[ "$ip_count" -eq 5 ]
+}
+
+@test "events_list_cidr_csv: respects limit parameter" {
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	local now
+	now=$(date +"%s")
+	local i
+	for i in $(seq 1 20); do
+		echo "$now 192.0.2.$i sshd 1 -- observed 0 22 1000 -" >> "$pool"
+	done
+	run events_list_cidr_csv "$INSTALL_PATH" "192.0.2.0/24" "count" "5"
+	assert_success
+	# Header + 5 data rows = 6 lines
+	[ "$(echo "$output" | wc -l)" -eq 6 ]
+}

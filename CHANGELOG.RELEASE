@@ -2,6 +2,9 @@
 
   -- Changes --
 
+[New] Events CLI: --limit=N output modifier caps event list and CIDR output
+      (default 100, --limit=0 for unlimited); prevents excessive output when
+      attack pool grows large
 [Fix] send_alerts: RETURN trap ensures temp file cleanup on abnormal exit;
       prevents orphaned recip/text/html files when delivery fails mid-loop
 [Change] Alert summary: _alert_compute_summary() uses _batch_ip_to_country()
