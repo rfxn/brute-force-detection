@@ -794,10 +794,12 @@ _batch_ban_status_init() {
 # Returns the status string, preferring active ban over history.
 _batch_ban_status_lookup() {
 	local aip="$1"
-	# Active ban takes priority (BANNED lines appear first in the file)
-	local status
-	status=$(awk -F'|' -v ip="$aip" '$1 == ip { print $2; exit }' "$_BAN_STATUS_FILE" 2>/dev/null)  # exits on first match; active bans precede history
-	echo "$status"
+	# File format: ip|status — use awk for exact field match (grep -F "${ip}|"
+	# would substring-match 192.0.2.1 against 192.0.2.10). -m1 stops at first
+	# match; active bans precede history so active takes priority.
+	local line
+	line=$(awk -F'|' -v ip="$aip" '$1 == ip { print; exit }' "$_BAN_STATUS_FILE" 2>/dev/null) || true  # 2>/dev/null: file may not exist if no bans; || true: no match is normal (IP has no ban state)
+	echo "${line#*|}"
 }
 
 # _batch_ban_status_cleanup — remove the lookup file

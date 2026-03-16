@@ -4228,7 +4228,7 @@ events_list() {
 	fi
 
 	format_table < "$atmp"
-	if [ "$limit" -gt 0 ] 2>/dev/null && [ "$row_count" -ge "$limit" ]; then
+	if [ "$limit" -gt 0 ] 2>/dev/null && [ "$row_count" -ge "$limit" ]; then  # 2>/dev/null: suppress non-numeric comparison error when limit is empty
 		echo "(showing $limit IPs -- use --limit=0 for all)"
 	fi
 	command rm -f "$atmp"
@@ -4409,7 +4409,7 @@ events_list_cidr() {
 	format_table < "$atmp"
 	echo ""
 	local _summary="$match_count IPs, $total_events failures, $banned_count banned"
-	if [ "$limit" -gt 0 ] 2>/dev/null && [ "$row_count" -ge "$limit" ]; then
+	if [ "$limit" -gt 0 ] 2>/dev/null && [ "$row_count" -ge "$limit" ]; then  # 2>/dev/null: suppress non-numeric comparison error when limit is empty
 		_summary="$_summary (showing $limit -- use --limit=0 for all)"
 	fi
 	echo "$_summary"
@@ -4704,7 +4704,7 @@ events_list_cidr_json() {
 	fi
 
 	local _truncated="false"
-	if [ "$limit" -gt 0 ] 2>/dev/null && [ "$row_count" -ge "$limit" ]; then
+	if [ "$limit" -gt 0 ] 2>/dev/null && [ "$row_count" -ge "$limit" ]; then  # 2>/dev/null: suppress non-numeric comparison error when limit is empty  # 2>/dev/null: suppress non-numeric comparison error when limit is empty
 		_truncated="true"
 	fi
 	printf '{"cidr": "%s", "summary": {"match_count": %d, "total_count": %d, "banned_count": %d, "truncated": %s}, "ips": [\n' \
