@@ -270,7 +270,6 @@ _report_format_top_ips() {
 	local cnt ip first_ts last_ts rules_csv cc ban_status row_idx=0
 	local pressure_scaled pressure_fmt trip_val esc_ip esc_cc esc_rules
 	local first_fmt last_fmt status_color status_bg
-	# shellcheck disable=SC2034  # first_ts/last_ts used for HTML formatting below
 	while IFS='|' read -r cnt ip first_ts last_ts rules_csv cc; do
 		[ -z "$ip" ] && continue
 		ban_status=$(_batch_ban_status_lookup "$ip")
@@ -290,6 +289,9 @@ ${cnt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}|${ban_status:---
 		# Format timestamps
 		first_fmt=$(_fmt_ts "$first_ts" 2>/dev/null || echo "$first_ts")  # fallback if _fmt_ts unavailable
 		last_fmt=$(_fmt_ts "$last_ts" 2>/dev/null || echo "$last_ts")  # fallback if _fmt_ts unavailable
+		# Entity-escape ban_status for HTML (defense-in-depth)
+		local esc_status="${ban_status//&/&amp;}"
+		esc_status="${esc_status//</&lt;}"
 		# Ban status badge color
 		status_color="#71717a"; status_bg="#f4f4f5"
 		case "$ban_status" in
@@ -305,7 +307,7 @@ ${cnt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}|${ban_status:---
 <td style=\"padding:8px 10px;font-size:12px;\">${esc_rules}</td>
 <td style=\"padding:8px 10px;font-size:12px;\">${first_fmt}</td>
 <td style=\"padding:8px 10px;font-size:12px;\">${last_fmt}</td>
-<td style=\"padding:8px 10px;text-align:center;\"><span style=\"display:inline-block;background-color:${status_bg};color:${status_color};padding:1px 8px;border-radius:10px;font-size:11px;font-weight:bold;font-family:'Courier New',Courier,monospace;\">${ban_status:---}</span></td>
+<td style=\"padding:8px 10px;text-align:center;\"><span style=\"display:inline-block;background-color:${status_bg};color:${status_color};padding:1px 8px;border-radius:10px;font-size:11px;font-weight:bold;font-family:'Courier New',Courier,monospace;\">${esc_status:---}</span></td>
 </tr>
 "
 		# Brief: top 5 for messaging
