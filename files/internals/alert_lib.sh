@@ -21,7 +21,7 @@
 _ALERT_LIB_LOADED=1
 
 # shellcheck disable=SC2034
-ALERT_LIB_VERSION="1.0.4"
+ALERT_LIB_VERSION="1.0.5"
 
 # Channel registry — consuming projects populate via alert_channel_register()
 # Uses parallel indexed arrays instead of declare -A to avoid scope issues
@@ -162,10 +162,10 @@ _alert_tpl_resolve() {
 # Output goes to stdout.
 _alert_html_escape() {
 	if [ -z "$1" ]; then
-		echo ""
+		printf ''
 		return 0
 	fi
-	printf '%s\n' "$1" | sed \
+	printf '%s' "$1" | sed \
 		-e 's/&/\&amp;/g' \
 		-e 's/</\&lt;/g' \
 		-e 's/>/\&gt;/g' \
@@ -270,10 +270,10 @@ _alert_curl_post() {
 		local _err_detail
 		_err_detail=$(head -5 "$curl_stderr" | tr '\n' ' ')
 		echo "alert_lib: POST to $(_alert_redact_url "$url") failed (curl exit $rc): $_err_detail" >&2
-		rm -f "$curl_stderr"
+		command rm -f "$curl_stderr"
 		return 1
 	fi
-	rm -f "$curl_stderr"
+	command rm -f "$curl_stderr"
 	return 0
 }
 
@@ -347,7 +347,7 @@ _alert_email_local() {
 				} > "$_tmpmail"
 				"$sendmail_bin" -t -oi < "$_tmpmail"
 				local _rc=$?
-				rm -f "$_tmpmail"
+				command rm -f "$_tmpmail"
 				return $_rc
 			fi
 			echo "alert_lib: mail binary not found, cannot send alert to $recip." >&2
@@ -462,10 +462,10 @@ _alert_email_relay() {
 		local _err_detail
 		_err_detail=$(head -5 "$curl_stderr" | tr '\n' ' ')
 		echo "alert_lib: SMTP relay to $recip failed (curl exit $rc): $_err_detail" >&2
-		rm -f "$curl_stderr" "$smtp_cfg"
+		command rm -f "$curl_stderr" "$smtp_cfg"
 		return 1
 	fi
-	rm -f "$curl_stderr" "$smtp_cfg"
+	command rm -f "$curl_stderr" "$smtp_cfg"
 	return 0
 }
 
@@ -478,6 +478,11 @@ _alert_email_relay() {
 # Returns 0 on success, 1 on failure.
 _alert_deliver_email() {
 	local recip="$1" subject="$2" text_file="$3" html_file="$4" format="${5:-text}"
+
+	if [ -z "$recip" ]; then
+		echo "alert_lib: email recipient is required." >&2
+		return 1
+	fi
 
 	# Strip CR/LF to prevent email header injection
 	subject="${subject//$'\r'/}"
@@ -503,7 +508,7 @@ _alert_deliver_email() {
 		} > "$msg_file"
 		_alert_email_relay "$recip" "$subject" "$msg_file"
 		local rc=$?
-		rm -f "$msg_file"
+		command rm -f "$msg_file"
 		return $rc
 	fi
 
@@ -565,12 +570,16 @@ _alert_slack_post_message() {
 		echo "alert_lib: Slack channel is required for bot mode." >&2
 		return 1
 	fi
+	if [ ! -f "$payload_file" ]; then
+		echo "alert_lib: payload file not found: ${payload_file:-<empty>}" >&2
+		return 1
+	fi
 	# Inject "channel" field after opening brace
 	# Uses awk instead of sed to avoid delimiter collision if channel
 	# contains / or & (sed s/// treats both as special characters)
 	local modified_payload
 	modified_payload=$(mktemp "${ALERT_TMPDIR}/alert_slack_msg.XXXXXX")
-	awk -v ch="$channel" 'NR==1 && /^\{/ { print "{\"channel\":\"" ch "\"," substr($0,2); next } { print }' \
+	ch="$channel" awk 'NR==1 && /^\{/ { print "{\"channel\":\"" ENVIRON["ch"] "\"," substr($0,2); next } { print }' \
 		"$payload_file" > "$modified_payload"
 	# Write token to config file — keeps it out of /proc/PID/cmdline
 	local auth_cfg
@@ -581,8 +590,8 @@ _alert_slack_post_message() {
 	response=$(_alert_curl_post "https://slack.com/api/chat.postMessage" \
 		-K "$auth_cfg" \
 		-H "Content-Type: application/json" \
-		-d @"$modified_payload") || { rm -f "$modified_payload" "$auth_cfg"; return 1; }
-	rm -f "$modified_payload" "$auth_cfg"
+		-d @"$modified_payload") || { command rm -f "$modified_payload" "$auth_cfg"; return 1; }
+	command rm -f "$modified_payload" "$auth_cfg"
 	# Slack API returns {"ok":true,...} on success
 	case "$response" in
 		*'"ok":true'*) return 0 ;;
@@ -626,14 +635,14 @@ _alert_slack_upload() {
 	url_response=$(_alert_curl_post "https://slack.com/api/files.getUploadURLExternal" \
 		-K "$auth_cfg" \
 		-d "filename=$filename" \
-		-d "length=$fsize") || { rm -f "$auth_cfg"; return 1; }
+		-d "length=$fsize") || { command rm -f "$auth_cfg"; return 1; }
 	case "$url_response" in
 		*'"ok":true'*) ;;
 		*)
 			local api_err
 			api_err=$(printf '%s' "$url_response" | sed -n 's/.*"error" *: *"\([^"]*\)".*/\1/p')
 			echo "alert_lib: Slack getUploadURLExternal error${api_err:+: $api_err}" >&2
-			rm -f "$auth_cfg"
+			command rm -f "$auth_cfg"
 			return 1
 			;;
 	esac
@@ -643,18 +652,20 @@ _alert_slack_upload() {
 	# Step 2: upload file content to presigned URL (no auth header needed)
 	_alert_curl_post "$upload_url" -F "file=@$file_path" > /dev/null || {
 		echo "alert_lib: Slack file upload to presigned URL failed." >&2
-		rm -f "$auth_cfg"
+		command rm -f "$auth_cfg"
 		return 1
 	}
 
 	# Step 3: complete upload and share to channels
-	local escaped_title complete_response
+	local escaped_title escaped_channels escaped_file_id complete_response
 	escaped_title=$(_alert_json_escape "$title")
+	escaped_channels=$(_alert_json_escape "$channels")
+	escaped_file_id=$(_alert_json_escape "$file_id")
 	complete_response=$(_alert_curl_post "https://slack.com/api/files.completeUploadExternal" \
 		-K "$auth_cfg" \
 		-H "Content-Type: application/json" \
-		-d "{\"files\":[{\"id\":\"$file_id\",\"title\":\"$escaped_title\"}],\"channels\":\"$channels\"}") || { rm -f "$auth_cfg"; return 1; }
-	rm -f "$auth_cfg"
+		-d "{\"files\":[{\"id\":\"$escaped_file_id\",\"title\":\"$escaped_title\"}],\"channels\":\"$escaped_channels\"}") || { command rm -f "$auth_cfg"; return 1; }
+	command rm -f "$auth_cfg"
 	case "$complete_response" in
 		*'"ok":true'*) return 0 ;;
 	esac
@@ -746,7 +757,7 @@ _alert_telegram_api() {
 	# API response JSON contains all diagnostic info needed
 	response=$("$curl_bin" -s --connect-timeout "$ALERT_CURL_TIMEOUT" \
 		--max-time "$ALERT_CURL_MAX_TIME" -K "$cfg" "$@" 2>/dev/null) || rc=$?
-	rm -f "$cfg"
+	command rm -f "$cfg"
 	if [ "$rc" -ne 0 ]; then
 		echo "alert_lib: Telegram API curl failed (exit $rc)." >&2
 		return 1
@@ -1056,7 +1067,7 @@ _alert_digest_flush() {
 	) 200>"$lock_file"
 	local sub_rc=$?
 	if [ "$sub_rc" -ne 0 ]; then
-		rm -f "$flush_file"
+		command rm -f "$flush_file"
 		return "$sub_rc"
 	fi
 	# Call callback OUTSIDE lock to avoid holding flock during delivery
@@ -1064,7 +1075,7 @@ _alert_digest_flush() {
 	if [ -s "$flush_file" ]; then
 		"$flush_callback" "$flush_file" || rc=$?
 	fi
-	rm -f "$flush_file"
+	command rm -f "$flush_file"
 	return $rc
 }
 
@@ -1147,7 +1158,7 @@ alert_dispatch() {
 		fi
 
 		# Clean up rendered temp files
-		rm -f "$text_file" "$html_file"
+		command rm -f "$text_file" "$html_file"
 	done
 
 	return $rc
