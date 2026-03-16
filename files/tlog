@@ -356,7 +356,7 @@ _tlog_cmd_status() {
 	if [[ $parse_rc -eq 2 ]]; then
 		# Corrupt cursor: show raw content for diagnosis
 		local raw_value=""
-		read -r raw_value < "$cursor_file" 2>/dev/null || true
+		read -r raw_value < "$cursor_file" 2>/dev/null || true  # file may be empty or unreadable
 		printf 'raw:    %s\n' "$raw_value"
 		printf 'state:  corrupt (would auto-reset on next read)\n'
 	elif [[ -z "$_tlog_cursor_value" ]]; then
@@ -411,7 +411,7 @@ _tlog_cmd_status() {
 	# Related files
 	if [[ -f "$BASERUN/${name}.jts" ]]; then
 		local jts_val
-		read -r jts_val < "$BASERUN/${name}.jts" 2>/dev/null || true
+		read -r jts_val < "$BASERUN/${name}.jts" 2>/dev/null || true  # file may be empty or unreadable
 		printf 'jts:    %s\n' "$jts_val"
 	fi
 	if [[ -f "$BASERUN/${name}.lock" ]]; then

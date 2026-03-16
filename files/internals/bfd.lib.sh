@@ -1282,10 +1282,10 @@ _fw_iptables_setup() {
 		elog error "{glob} iptables binary not found"
 		return 1
 	fi
-	"$_FW_IPT_BIN" -N bfd 2>/dev/null || true
+	"$_FW_IPT_BIN" -N bfd 2>/dev/null || true  # chain may already exist
 	"$_FW_IPT_BIN" -C INPUT -j bfd 2>/dev/null || "$_FW_IPT_BIN" -I INPUT -j bfd
 	if [ -n "$_FW_IP6T_BIN" ]; then
-		"$_FW_IP6T_BIN" -N bfd 2>/dev/null || true
+		"$_FW_IP6T_BIN" -N bfd 2>/dev/null || true  # chain may already exist
 		"$_FW_IP6T_BIN" -C INPUT -j bfd 2>/dev/null || "$_FW_IP6T_BIN" -I INPUT -j bfd
 	else
 		elog warn "{glob} ip6tables not found — IPv6 bans will be skipped"
@@ -1781,7 +1781,7 @@ state_bans_active_remove() {
 	fi
 	(
 		flock -x 200
-		awk -v ip="$host" '$3 != ip' "$bans_file" > "$bans_file.new" || true
+		awk -v ip="$host" '$3 != ip' "$bans_file" > "$bans_file.new" || true  # empty result is valid (last entry removed)
 		command mv "$bans_file.new" "$bans_file"
 		chmod 600 "$bans_file"
 	) 200>>"$bans_file"
@@ -2034,7 +2034,7 @@ ip_to_country() {
 	# per-cycle cache: check before expensive awk/hex scan (both families)
 	if [ -n "${_COUNTRY_CACHE_FILE:-}" ] && [ -f "$_COUNTRY_CACHE_FILE" ]; then
 		local _cached_line
-		_cached_line=$(grep -m1 "^${ip} " "$_COUNTRY_CACHE_FILE" 2>/dev/null) || true
+		_cached_line=$(grep -m1 "^${ip} " "$_COUNTRY_CACHE_FILE" 2>/dev/null) || true  # no match is normal (cache miss)
 		if [ -n "$_cached_line" ]; then
 			local _cached_cc="${_cached_line#* }"
 			if [ "$_cached_cc" = "-" ]; then echo ""; else echo "$_cached_cc"; fi
@@ -2969,9 +2969,9 @@ send_alerts() {
 # timer/systemd, cron, unknown
 detect_run_mode() {
 	local watch_pid=""
-	watch_pid=$(pgrep -f "bfd.*--watch" 2>/dev/null | head -1) || true
+	watch_pid=$(pgrep -f "bfd.*--watch" 2>/dev/null | head -1) || true  # no process is normal
 	if [ -z "$watch_pid" ]; then
-		watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true
+		watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true  # no process is normal
 	fi
 	if [ -n "$watch_pid" ] && [ "$watch_pid" != "$$" ]; then
 		if command -v systemctl >/dev/null 2>&1 && \
@@ -3012,9 +3012,9 @@ show_status() {
 	case "$run_mode" in
 		watch/*)
 			local watch_pid=""
-			watch_pid=$(pgrep -f "bfd.*--watch" 2>/dev/null | head -1) || true
+			watch_pid=$(pgrep -f "bfd.*--watch" 2>/dev/null | head -1) || true  # no process is normal
 			if [ -z "$watch_pid" ]; then
-				watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true
+				watch_pid=$(pgrep -f "bfd.*-w " 2>/dev/null | head -1) || true  # no process is normal
 			fi
 			local uptime_secs=""
 			if [ -n "$watch_pid" ]; then
@@ -3811,12 +3811,12 @@ test_alert_email() {
 		delivery="SMTP relay ($SMTP_RELAY)"
 	else
 		local _sm_bin
-		_sm_bin=$(command -v sendmail 2>/dev/null || true)
+		_sm_bin=$(command -v sendmail 2>/dev/null || true)  # binary may not be installed
 		if [ -n "$_sm_bin" ] && [ "$format" != "text" ]; then
 			delivery="local MTA (sendmail)"
 		else
 			local _ml_bin
-			_ml_bin=$(command -v mail 2>/dev/null || true)
+			_ml_bin=$(command -v mail 2>/dev/null || true)  # binary may not be installed
 			if [ -n "$_ml_bin" ]; then
 				delivery="local MTA (mail)"
 			else
@@ -4189,7 +4189,7 @@ events_list_ip() {
 	# Pool data (durable history)
 	local pool_data=""
 	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
-		pool_data=$(_events_list_ip_pool_awk "$pool_file" "$ip") || true
+		pool_data=$(_events_list_ip_pool_awk "$pool_file" "$ip") || true  # no pool data for IP is normal
 	fi
 
 	# Live pressure data (ephemeral)
@@ -4198,7 +4198,7 @@ events_list_ip() {
 	local now
 	now=$(date +"%s")
 	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
-		pressure_data=$(_events_ip_awk "$events_file" "$ip" "$now" "$half_life") || true
+		pressure_data=$(_events_ip_awk "$events_file" "$ip" "$now" "$half_life") || true  # no pressure data for IP is normal
 	fi
 
 	# If both empty, no data
@@ -4430,7 +4430,7 @@ events_list_ip_json() {
 	# Pool data (durable history)
 	local pool_data=""
 	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
-		pool_data=$(_events_list_ip_pool_awk "$pool_file" "$ip") || true
+		pool_data=$(_events_list_ip_pool_awk "$pool_file" "$ip") || true  # no pool data for IP is normal
 	fi
 
 	# Live pressure data
@@ -4439,7 +4439,7 @@ events_list_ip_json() {
 	local now
 	now=$(date +"%s")
 	if [ -f "$events_file" ] && [ -s "$events_file" ]; then
-		pressure_data=$(_events_ip_awk "$events_file" "$ip" "$now" "$half_life") || true
+		pressure_data=$(_events_ip_awk "$events_file" "$ip" "$now" "$half_life") || true  # no pressure data for IP is normal
 	fi
 
 	# If both empty, return zero-state
@@ -4557,7 +4557,7 @@ events_list_ip_csv() {
 
 	local pool_data=""
 	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
-		pool_data=$(_events_list_ip_pool_awk "$pool_file" "$ip") || true
+		pool_data=$(_events_list_ip_pool_awk "$pool_file" "$ip") || true  # no pool data for IP is normal
 	fi
 	if [ -z "$pool_data" ]; then
 		return 0

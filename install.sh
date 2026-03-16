@@ -90,7 +90,7 @@ install_files(){
 	# Cron: preserve user's existing schedule before overwriting (F-078)
 	local _old_cron_sched=""
 	if [ "${_IS_UPGRADE:-0}" = "1" ] && [ -f /etc/cron.d/bfd ]; then
-		pkg_cron_preserve_schedule /etc/cron.d/bfd _old_cron_sched || true
+		pkg_cron_preserve_schedule /etc/cron.d/bfd _old_cron_sched || true  # non-fatal: schedule parse failure keeps defaults
 	fi
 	# cron.daily rotation script
 	pkg_cron_install "cron.daily" "/etc/cron.daily/bfd"
@@ -155,7 +155,7 @@ install_files(){
 
 	# Restore user-customized cron schedule after all sed operations (F-078)
 	if [ -n "${_old_cron_sched:-}" ] && [ -f /etc/cron.d/bfd ]; then
-		pkg_cron_restore_schedule /etc/cron.d/bfd "$_old_cron_sched" || true
+		pkg_cron_restore_schedule /etc/cron.d/bfd "$_old_cron_sched" || true  # non-fatal: default schedule remains valid
 	fi
 
 	# daemon-reload after sed so systemd sees final paths
@@ -169,7 +169,7 @@ _stop_services(){
 	if command -v systemctl >/dev/null 2>&1; then
 		if systemctl is-active bfd-watch.service >/dev/null 2>&1; then
 			echo -n "Stopping bfd-watch... "
-			systemctl stop bfd-watch.service 2>/dev/null || true
+			systemctl stop bfd-watch.service 2>/dev/null || true  # service may not be running
 			echo "done"
 		fi
 	else
@@ -183,11 +183,11 @@ _stop_services(){
 		if [ -n "$_initdir" ]; then
 			local _pid=""
 			if [ -f /var/run/bfd-watch.pid ]; then
-				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true
+				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true  # pidfile may not exist or be empty
 			fi
 			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
 				echo -n "Stopping bfd-watch... "
-				"$_initdir/bfd-watch" stop 2>/dev/null || true
+				"$_initdir/bfd-watch" stop 2>/dev/null || true  # best-effort stop
 				echo "done"
 			fi
 		fi
@@ -198,18 +198,18 @@ _enable_services(){
 	_WATCH_STATE=""
 	if command -v systemctl >/dev/null 2>&1; then
 		local _watch_enabled _timer_enabled
-		_watch_enabled=$(systemctl is-enabled bfd-watch.service 2>/dev/null) || true
-		_timer_enabled=$(systemctl is-enabled bfd.timer 2>/dev/null) || true
+		_watch_enabled=$(systemctl is-enabled bfd-watch.service 2>/dev/null) || true  # unit may not exist
+		_timer_enabled=$(systemctl is-enabled bfd.timer 2>/dev/null) || true  # unit may not exist
 		if [ "$_watch_enabled" = "enabled" ]; then
 			echo -n "Starting bfd-watch... "
-			systemctl start bfd-watch.service 2>/dev/null || true
+			systemctl start bfd-watch.service 2>/dev/null || true  # best-effort start
 			echo "done"
 			_WATCH_STATE="restarted"
 		elif [ "$_timer_enabled" = "enabled" ]; then
 			_WATCH_STATE="timer-active"
 		else
 			echo -n "Enabling bfd-watch... "
-			systemctl enable --now bfd-watch.service 2>/dev/null || true
+			systemctl enable --now bfd-watch.service 2>/dev/null || true  # best-effort enable
 			echo "done"
 			_WATCH_STATE="enabled"
 		fi
@@ -223,21 +223,21 @@ _enable_services(){
 		done
 		if [ -n "$_initdir" ]; then
 			if [ -f /var/run/bfd-watch.pid ]; then
-				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true
+				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true  # pidfile may not exist or be empty
 			fi
 			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
 				echo -n "Starting bfd-watch... "
-				"$_initdir/bfd-watch" start 2>/dev/null || true
+				"$_initdir/bfd-watch" start 2>/dev/null || true  # best-effort start
 				echo "done"
 				_WATCH_STATE="restarted"
 			else
 				echo -n "Enabling bfd-watch... "
 				if command -v chkconfig >/dev/null 2>&1; then
-					chkconfig bfd-watch on 2>/dev/null || true
+					chkconfig bfd-watch on 2>/dev/null || true  # chkconfig may not support this service
 				elif command -v update-rc.d >/dev/null 2>&1; then
-					update-rc.d bfd-watch defaults 2>/dev/null || true
+					update-rc.d bfd-watch defaults 2>/dev/null || true  # update-rc.d may fail on some distros
 				fi
-				"$_initdir/bfd-watch" start 2>/dev/null || true
+				"$_initdir/bfd-watch" start 2>/dev/null || true  # best-effort start
 				echo "done"
 				_WATCH_STATE="enabled"
 			fi

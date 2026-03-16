@@ -60,7 +60,7 @@ if [ -d "$INSPATH" ]; then
 	local _custom_log=""
 	if [ -f "$INSPATH/conf.bfd" ]; then
 		_custom_log=$(grep -E '^BFD_LOG_PATH=' "$INSPATH/conf.bfd" 2>/dev/null \
-			| tail -1 | sed 's/^BFD_LOG_PATH=//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//') || true
+			| tail -1 | sed 's/^BFD_LOG_PATH=//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//') || true  # no match is valid (uses default)
 	fi
 	if [ -n "$_custom_log" ] && [ "$_custom_log" != "/var/log/bfd_log" ]; then
 		command rm -f "$_custom_log"
