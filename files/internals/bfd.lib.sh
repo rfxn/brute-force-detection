@@ -2391,7 +2391,7 @@ check_distributed() {
 		if execute_ban "$subnet" "$mod" "$DRY_RUN" "all"; then
 			ban_count=$((ban_count + 1))
 			local ban_result
-			ban_result=$(record_ban "$install_path" "$now" "$subnet" "$mod" "all" "subnet")
+			ban_result=$(record_ban "$install_path" "$now" "$subnet" "$mod" "all" "ban")
 			local ban_expiry ban_action recent_bans
 			IFS='|' read -r ban_expiry ban_action recent_bans <<< "$ban_result"
 			local _dist_duration="-1"
@@ -2400,8 +2400,16 @@ check_distributed() {
 			else
 				_dist_duration=$((ban_expiry - now))
 			fi
+			# country lookup for subnet: use network address (strip CIDR suffix)
+			local _dist_cc="--"
+			local _dist_db="$install_path/ipcountry.dat"
+			if [ -f "$_dist_db" ]; then
+				local _dist_base="${subnet%%/*}"
+				_dist_cc=$(ip_to_country "$_dist_base" "$_dist_db")
+				_dist_cc="${_dist_cc:---}"
+			fi
 			state_pool_append "$install_path" "$now" "$subnet" "$mod" \
-				"$unique_count" "--" "$ban_action" "$_dist_duration" "all" \
+				"$unique_count" "$_dist_cc" "$ban_action" "$_dist_duration" "all" \
 				"0" "subnet"
 			if [ "$EMAIL_ALERTS" = "1" ] && [ "$DRY_RUN" != "1" ]; then
 				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}|(multiple)|${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}|1|0" >> "$alerts_file"
