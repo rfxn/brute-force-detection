@@ -118,8 +118,7 @@ _report_trend_awk() {
 # _report_data pool_file — gather all report stats, export REPORT_* vars
 # Requires: _RPT_* vars from _report_init(), INSTALL_PATH, APOOL_LIST
 # Reuses: _apool_summary_awk, _apool_awk, _apool_service_dual_awk,
-#         format_table, pressure_compute,
-#         pressure_format, _resolve_min_trip, _alert_country_flag
+#         format_table, _report_batch_ban_count, _alert_country_flag
 _report_data() {
 	local pool_file="$1"
 	local top_n="${REPORT_TOP_N:-25}"
@@ -273,6 +272,25 @@ _report_data() {
 	_report_format_services "$pool_file" "$_RPT_CUTOFF" "$((_RPT_CUTOFF - (_RPT_NOW - _RPT_CUTOFF)))"
 }
 
+# _report_batch_ban_count pool_file cutoff
+# Single-pass AWK over attack.pool: counts ban + escalate actions per IP
+# within the reporting window. Outputs: ip ban_count
+_report_batch_ban_count() {
+	local pool_file="$1" cutoff="$2"
+	if [ ! -f "$pool_file" ] || [ ! -s "$pool_file" ]; then
+		return 0
+	fi
+	awk -v cutoff="$cutoff" '
+	{
+		ts = $1 + 0
+		if (ts < cutoff) next
+		if ($6 == "ban" || $6 == "escalate") bans[$2]++
+	}
+	END {
+		for (ip in bans) print ip, bans[ip]
+	}' "$pool_file"
+}
+
 # _report_format_top_ips pool_file cutoff limit
 # Exports: REPORT_TOP_IPS_TEXT, REPORT_TOP_IPS_HTML, REPORT_TOP_IPS_BRIEF
 _report_format_top_ips() {
@@ -295,22 +313,24 @@ _report_format_top_ips() {
 		return 0
 	fi
 
+	# Batch-compute ban counts for all IPs in the window
+	local ban_counts
+	ban_counts=$(_report_batch_ban_count "$pool_file" "$cutoff")
+
 	# Build text table, HTML table, and brief in a single pass
-	local text_table="COUNT|IP|COUNTRY|PRESSURE|RULES"
+	local text_table="COUNT|IP|CC|BANS|RULES|FIRST|LAST"
 	local html_rows="" brief="" brief_count=0 flag="" row_bg="" cnt_fmt=""
 	local cnt ip first_ts last_ts rules_csv cc row_idx=0
-	local pressure_scaled pressure_fmt trip_val esc_ip esc_cc esc_rules
+	local ip_bans esc_ip esc_cc esc_rules
 	local first_fmt last_fmt
 	while IFS='|' read -r cnt ip first_ts last_ts rules_csv cc; do
 		[ -z "$ip" ] && continue
 		cnt_fmt=$(_report_fmt_num "$cnt")
-		# Compute live pressure
-		pressure_scaled=$(pressure_compute "${INSTALL_PATH:-}" "$ip" \
-			"${PRESSURE_HALF_LIFE:-300}" "$_RPT_NOW")
-		pressure_fmt=$(pressure_format "$pressure_scaled")
-		trip_val=$(_resolve_min_trip "$rules_csv")
+		# Look up ban count from batch result
+		ip_bans=$(echo "$ban_counts" | awk -v ip="$ip" '$1 == ip { print $2; exit }')
+		ip_bans="${ip_bans:-0}"
 		text_table="${text_table}
-${cnt_fmt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}"
+${cnt_fmt}|${ip}|${cc:---}|${ip_bans}|${rules_csv}"
 		# HTML row with entity escaping and styling
 		esc_ip="${ip//&/&amp;}"; esc_ip="${esc_ip//</&lt;}"; esc_ip="${esc_ip//>/&gt;}"
 		esc_cc="${cc//&/&amp;}"; esc_cc="${esc_cc//</&lt;}"
@@ -324,7 +344,7 @@ ${cnt_fmt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}"
 <td style=\"padding:8px 10px;font-weight:bold;color:#09090b;text-align:center;font-family:'Courier New',Courier,monospace;\">${cnt_fmt}</td>
 <td style=\"padding:8px 10px;font-family:'Courier New',Courier,monospace;font-size:13px;\">${esc_ip}</td>
 <td style=\"padding:8px 10px;text-align:center;\">${esc_cc:---}</td>
-<td style=\"padding:8px 10px;font-family:'Courier New',Courier,monospace;font-size:12px;\">${pressure_fmt}/${trip_val}</td>
+<td style=\"padding:8px 10px;text-align:center;font-family:'Courier New',Courier,monospace;font-size:12px;\">${ip_bans}</td>
 <td style=\"padding:8px 10px;font-size:12px;\">${esc_rules}</td>
 <td style=\"padding:8px 10px;font-size:12px;\">${first_fmt}</td>
 <td style=\"padding:8px 10px;font-size:12px;\">${last_fmt}</td>
@@ -352,7 +372,7 @@ ${cnt_fmt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}"
 <th style=\"padding:8px 10px;text-align:center;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Count</th>
 <th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">IP</th>
 <th style=\"padding:8px 10px;text-align:center;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">CC</th>
-<th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Pressure</th>
+<th style=\"padding:8px 10px;text-align:center;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Bans</th>
 <th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Rules</th>
 <th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">First</th>
 <th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Last</th>
