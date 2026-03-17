@@ -367,6 +367,14 @@ teardown() {
 	# field 8 must be "(multiple)" — not empty — for correct distributed ban labeling
 	run awk -F'|' '{print $8}' "$alerts_file"
 	assert_output "(multiple)"
+
+	# field 4 = pressure_scaled (total_pressure * 1000) — 3 events at weight 1 = 3000
+	run awk -F'|' '{print $4}' "$alerts_file"
+	assert_output "3000"
+
+	# field 13 = total_failures — 3 IPs, 1 event each = 3
+	run awk -F'|' '{print $13}' "$alerts_file"
+	assert_output "3"
 }
 
 @test "check_distributed: ban expiry computed from BAN_DURATION" {
