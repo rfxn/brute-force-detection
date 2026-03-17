@@ -342,6 +342,14 @@ _alert_set_entry_vars() {
 	# this scan's raw pressure contribution: fail_count * weight
 	export PRESSURE_CONTRIB=$(( _fc * ${weight:-1} ))
 
+	# FAIL_COUNT_DISPLAY: human-readable failure count
+	# default: same as FAIL_COUNT (overridden for CIDR below)
+	export FAIL_COUNT_DISPLAY="$_fc"
+	# CIDR-only variables (empty for individual IP alerts)
+	export SUBNET_IP_COUNT=""
+	export SUBNET_HOSTS_SECTION=""
+	export SUBNET_HOSTS_SECTION_TG=""
+
 	# half-life: format seconds to human-readable
 	export HALF_LIFE_FMT
 	HALF_LIFE_FMT=$(format_duration "${half_life:-300}")
@@ -505,13 +513,77 @@ ${indented_logs}"
 			export SOURCE_LOGS_SECTION_HTML
 		fi
 	elif [ "$lp" = "(multiple)" ]; then
-		# distributed subnet ban — no single log source
-		SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (distributed subnet ban)"
-		export SOURCE_LOGS_SECTION_TEXT
-		# shellcheck disable=SC2089  # variable contains HTML with literal quotes, not shell quoting
-		SOURCE_LOGS_SECTION_HTML='<tr><td colspan="2" style="padding:8px 16px;color:#71717a;font-style:italic;">Source logs not available (distributed subnet ban)</td></tr>'
-		# shellcheck disable=SC2090  # variable contains HTML output
-		export SOURCE_LOGS_SECTION_HTML
+		# distributed subnet ban — read sidecar for enriched breakdown
+		local _san_host
+		_san_host=$(printf '%s' "$host" | tr ':' '-' | tr '/' '_')
+		local _sidecar="${INSTALL_PATH:-}/tmp/.cidr_detail_${_san_host}"
+
+		if [ -f "$_sidecar" ]; then
+			# parse header: HEADER subnet unique_count total_failures pressure_scaled
+			local _hdr_tag _hdr_sn _hdr_uc _hdr_tf _hdr_ps
+			IFS=' ' read -r _hdr_tag _hdr_sn _hdr_uc _hdr_tf _hdr_ps < "$_sidecar"
+
+			export SUBNET_IP_COUNT="$_hdr_uc"
+			export FAIL_COUNT_DISPLAY="${_fc} across ${_hdr_uc} IPs"
+
+			# build contributing hosts text table
+			local _hosts_text _hosts_html _hosts_msg _overflow="" _line_data
+			_hosts_text="  Contributing hosts (${_hdr_uc} IPs from ${host}):"
+			_hosts_html='<tr><td colspan="2" style="padding:8px 16px;"><div style="background-color:#f4f4f5;border:1px solid #d4d4d8;border-radius:6px;padding:10px;font-family:'"'"'Courier New'"'"',Courier,monospace;font-size:11px;color:#09090b;">'
+			_hosts_html="${_hosts_html}<strong>Contributing hosts (${_hdr_uc} IPs from ${host}):</strong><br>"
+			_hosts_msg="Contributing hosts (${_hdr_uc} IPs from ${host}):"
+
+			local _r_ip _r_mod _r_fc _r_ps _r_p_fmt
+			while IFS=' ' read -r _r_ip _r_mod _r_fc _r_ps; do
+				[ -z "$_r_ip" ] && continue
+				if [ "$_r_ip" = "OVERFLOW" ]; then
+					_overflow="$_r_mod"
+					continue
+				fi
+				[ "$_r_ip" = "HEADER" ] && continue
+				_r_p_fmt=$(pressure_format "$_r_ps")
+				_hosts_text=$(printf '%s\n    %-18s %-10s %3s failures  %6s pressure' \
+					"$_hosts_text" "$_r_ip" "$_r_mod" "$_r_fc" "$_r_p_fmt")
+				_hosts_html="${_hosts_html}$(printf '%-18s %-10s %3s failures  %6s pressure' \
+					"$_r_ip" "$_r_mod" "$_r_fc" "$_r_p_fmt")<br>"
+				_hosts_msg=$(printf '%s\n  %s  %s  %s failures  %s pressure' \
+					"$_hosts_msg" "$_r_ip" "$_r_mod" "$_r_fc" "$_r_p_fmt")
+			done < "$_sidecar"
+
+			if [ -n "$_overflow" ] && [ "$_overflow" -gt 0 ] 2>/dev/null; then  # suppress non-numeric comparison error
+				_hosts_text="${_hosts_text}
+    ... and ${_overflow} more IP(s)"
+				_hosts_html="${_hosts_html}... and ${_overflow} more IP(s)<br>"
+				_hosts_msg="${_hosts_msg}
+  ... and ${_overflow} more IP(s)"
+			fi
+
+			_hosts_html="${_hosts_html}</div></td></tr>"
+
+			SOURCE_LOGS_SECTION_TEXT="$_hosts_text"
+			export SOURCE_LOGS_SECTION_TEXT
+			SOURCE_LOGS_SECTION_HTML="$_hosts_html"
+			export SOURCE_LOGS_SECTION_HTML
+
+			# channel-specific escaping (follows COUNTRY_DISPLAY / COUNTRY_DISPLAY_TG pattern)
+			# Slack/Discord: JSON templates — literal newlines break JSON string parsing
+			export SUBNET_HOSTS_SECTION
+			SUBNET_HOSTS_SECTION=$(_alert_json_escape "$_hosts_msg")
+			# Telegram: MarkdownV2 — dots, parens, dashes are special chars
+			export SUBNET_HOSTS_SECTION_TG
+			SUBNET_HOSTS_SECTION_TG=$(_alert_telegram_escape "$_hosts_msg")
+
+			# clean up sidecar after reading
+			command rm -f "$_sidecar"
+		else
+			# sidecar missing (race, cleanup) — static fallback
+			SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (distributed subnet ban)"
+			export SOURCE_LOGS_SECTION_TEXT
+			# shellcheck disable=SC2089  # variable contains HTML with literal quotes, not shell quoting
+			SOURCE_LOGS_SECTION_HTML='<tr><td colspan="2" style="padding:8px 16px;color:#71717a;font-style:italic;">Source logs not available (distributed subnet ban)</td></tr>'
+			# shellcheck disable=SC2090  # variable contains HTML output
+			export SOURCE_LOGS_SECTION_HTML
+		fi
 	elif [ -z "$lp" ] || [ ! -f "${lp:-/dev/null}" ]; then
 		# journal-based logs: no log file path available
 		SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (logs via systemd journal)"
