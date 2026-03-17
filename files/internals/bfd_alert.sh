@@ -529,6 +529,7 @@ ${indented_logs}"
 			# build contributing hosts text table
 			local _hosts_text _hosts_html _hosts_msg _overflow="" _line_data
 			_hosts_text="  Contributing hosts (${_hdr_uc} IPs from ${host}):"
+			# shellcheck disable=SC2089  # variable contains HTML with literal quotes, not shell quoting
 			_hosts_html='<tr><td colspan="2" style="padding:8px 16px;"><div style="background-color:#f4f4f5;border:1px solid #d4d4d8;border-radius:6px;padding:10px;font-family:'"'"'Courier New'"'"',Courier,monospace;font-size:11px;color:#09090b;">'
 			_hosts_html="${_hosts_html}<strong>Contributing hosts (${_hdr_uc} IPs from ${host}):</strong><br>"
 			_hosts_msg="Contributing hosts (${_hdr_uc} IPs from ${host}):"
@@ -563,6 +564,7 @@ ${indented_logs}"
 			SOURCE_LOGS_SECTION_TEXT="$_hosts_text"
 			export SOURCE_LOGS_SECTION_TEXT
 			SOURCE_LOGS_SECTION_HTML="$_hosts_html"
+			# shellcheck disable=SC2090  # variable contains HTML output
 			export SOURCE_LOGS_SECTION_HTML
 
 			# channel-specific escaping (follows COUNTRY_DISPLAY / COUNTRY_DISPLAY_TG pattern)
