@@ -129,6 +129,7 @@ fi
 command rm -f "$INSTALL_PATH"/tmp/.alist.*
 command rm -f "$INSTALL_PATH"/tmp/.alerts.*
 command rm -f "$INSTALL_PATH"/tmp/.bfd_rpt_*
+command rm -f "$INSTALL_PATH"/tmp/.cidr_detail_*
 
 # rotate bans.history (append-only, rotated daily)
 if [ -f "$INSTALL_PATH/tmp/bans.history" ]; then
