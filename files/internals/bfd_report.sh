@@ -30,6 +30,23 @@ _BFD_REPORT_LOADED=1
 # shellcheck disable=SC2034  # version checked by health_check and show_config
 BFD_REPORT_VERSION="1.0.0"
 
+# _report_fmt_num n — format integer with commas (e.g., 1234 → 1,234)
+# No-op for numbers < 1000 (avoids fork). mawk-compatible AWK for >= 1000.
+_report_fmt_num() {
+	local n="${1:-0}"
+	[ "$n" -lt 1000 ] 2>/dev/null && [ "$n" -ge 0 ] 2>/dev/null && { echo "$n"; return 0; }
+	echo "$n" | awk '{
+		s = sprintf("%d", $1 < 0 ? -$1 : $1)
+		r = ""; j = 0
+		for (i = length(s); i >= 1; i--) {
+			if (j > 0 && j % 3 == 0) r = "," r
+			r = substr(s, i, 1) r; j++
+		}
+		if ($1 < 0) r = "-" r
+		print r
+	}'
+}
+
 # ---------------------------------------------------------------------------
 # Init Layer — validate interval, compute time windows
 # ---------------------------------------------------------------------------
@@ -101,7 +118,7 @@ _report_trend_awk() {
 # _report_data pool_file — gather all report stats, export REPORT_* vars
 # Requires: _RPT_* vars from _report_init(), INSTALL_PATH, APOOL_LIST
 # Reuses: _apool_summary_awk, _apool_awk, _apool_service_dual_awk,
-#         format_table, _batch_ban_status_init/lookup/cleanup, pressure_compute,
+#         format_table, pressure_compute,
 #         pressure_format, _resolve_min_trip, _alert_country_flag
 _report_data() {
 	local pool_file="$1"
@@ -118,8 +135,9 @@ _report_data() {
 	# shellcheck disable=SC2034  # u_prev/t_prev: positional placeholders for pipe field ordering
 	IFS='|' read -r u_cur t_cur u_prev t_prev <<< "$summary_line"
 
-	export REPORT_UNIQUE_IPS="${u_cur:-0}"
-	export REPORT_TOTAL_EVENTS="${t_cur:-0}"
+	REPORT_UNIQUE_IPS=$(_report_fmt_num "${u_cur:-0}")
+	REPORT_TOTAL_EVENTS=$(_report_fmt_num "${t_cur:-0}")
+	export REPORT_UNIQUE_IPS REPORT_TOTAL_EVENTS
 
 	# Ban counts
 	local bans_active="${INSTALL_PATH:-}/tmp/bans.active"
@@ -127,12 +145,23 @@ _report_data() {
 	if [ -f "$bans_active" ] && [ -s "$bans_active" ]; then
 		active_bans=$(wc -l < "$bans_active")
 	fi
-	export REPORT_ACTIVE_BANS="$active_bans"
+	REPORT_ACTIVE_BANS=$(_report_fmt_num "$active_bans")
+	export REPORT_ACTIVE_BANS
 
 	# Ban breakdown — single-pass AWK for all proof-point stats in window
 	local ban_stats="0|0|0|0|0|0|"
 	if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
 		ban_stats=$(awk -v cutoff="$_RPT_CUTOFF" '
+		function comma_fmt(num,    s, r, j, i) {
+			s = sprintf("%d", num)
+			if (length(s) < 4) return s
+			r = ""; j = 0
+			for (i = length(s); i >= 1; i--) {
+				if (j > 0 && j % 3 == 0) r = "," r
+				r = substr(s, i, 1) r; j++
+			}
+			return r
+		}
 		$1+0 >= cutoff {
 			ip = $2; cc = $5; action = $6
 			if (action == "ban") {
@@ -157,7 +186,7 @@ _report_data() {
 					}
 			cstr = ""
 			for (i = 1; i <= n && i <= 5; i++)
-				cstr = cstr (cstr == "" ? "" : ", ") cn[i] "(" cv[i] ")"
+				cstr = cstr (cstr == "" ? "" : ", ") cn[i] "(" comma_fmt(cv[i]) ")"
 			# repeat offenders (IPs banned >1 time)
 			repeats = 0
 			for (ip in ban_ip) if (ban_ip[ip] > 1) repeats++
@@ -166,12 +195,13 @@ _report_data() {
 	fi
 	local total_bans temp_bans escalations perm_bans ban_failed repeat_offenders top_countries
 	IFS='|' read -r total_bans temp_bans escalations perm_bans ban_failed repeat_offenders top_countries <<< "$ban_stats"
-	export REPORT_TOTAL_BANS="${total_bans:-0}"
-	export REPORT_TEMP_BANS="${temp_bans:-0}"
-	export REPORT_ESCALATIONS="${escalations:-0}"
-	export REPORT_PERM_BANS="${perm_bans:-0}"
-	export REPORT_BAN_FAILED="${ban_failed:-0}"
-	export REPORT_REPEAT_OFFENDERS="${repeat_offenders:-0}"
+	REPORT_TOTAL_BANS=$(_report_fmt_num "${total_bans:-0}")
+	REPORT_TEMP_BANS=$(_report_fmt_num "${temp_bans:-0}")
+	REPORT_ESCALATIONS=$(_report_fmt_num "${escalations:-0}")
+	REPORT_PERM_BANS=$(_report_fmt_num "${perm_bans:-0}")
+	REPORT_BAN_FAILED=$(_report_fmt_num "${ban_failed:-0}")
+	REPORT_REPEAT_OFFENDERS=$(_report_fmt_num "${repeat_offenders:-0}")
+	export REPORT_TOTAL_BANS REPORT_TEMP_BANS REPORT_ESCALATIONS REPORT_PERM_BANS REPORT_BAN_FAILED REPORT_REPEAT_OFFENDERS
 	export REPORT_TOP_COUNTRIES="${top_countries:---}"
 	# Repeat offender percentage
 	local repeat_pct=0
@@ -213,22 +243,26 @@ _report_data() {
 	elif [ "$pt" -eq 0 ]; then
 		export REPORT_TREND_DIRECTION="up"
 		export REPORT_TREND_PCT="100"
-		export REPORT_TREND_LABEL="new activity ($ct events, none in prior $_RPT_WINDOW)"
+		REPORT_TREND_LABEL="new activity ($(_report_fmt_num "$ct") events, none in prior $_RPT_WINDOW)"
+		export REPORT_TREND_LABEL
 	else
 		local pct_change=$(( (ct - pt) * 100 / pt ))
 		local abs_pct=${pct_change#-}
+		local ct_fmt pt_fmt
+		ct_fmt=$(_report_fmt_num "$ct")
+		pt_fmt=$(_report_fmt_num "$pt")
 		if [ "$pct_change" -gt 5 ]; then
 			export REPORT_TREND_DIRECTION="up"
 			export REPORT_TREND_PCT="$abs_pct"
-			export REPORT_TREND_LABEL="${abs_pct}% increase vs prior $_RPT_WINDOW ($ct vs $pt)"
+			export REPORT_TREND_LABEL="${abs_pct}% increase vs prior $_RPT_WINDOW ($ct_fmt vs $pt_fmt)"
 		elif [ "$pct_change" -lt -5 ]; then
 			export REPORT_TREND_DIRECTION="down"
 			export REPORT_TREND_PCT="$abs_pct"
-			export REPORT_TREND_LABEL="${abs_pct}% decrease vs prior $_RPT_WINDOW ($ct vs $pt)"
+			export REPORT_TREND_LABEL="${abs_pct}% decrease vs prior $_RPT_WINDOW ($ct_fmt vs $pt_fmt)"
 		else
 			export REPORT_TREND_DIRECTION="flat"
 			export REPORT_TREND_PCT="$abs_pct"
-			export REPORT_TREND_LABEL="no significant change vs prior $_RPT_WINDOW ($ct vs $pt)"
+			export REPORT_TREND_LABEL="no significant change vs prior $_RPT_WINDOW ($ct_fmt vs $pt_fmt)"
 		fi
 	fi
 
@@ -261,25 +295,22 @@ _report_format_top_ips() {
 		return 0
 	fi
 
-	# Initialize ban status batch lookup
-	_batch_ban_status_init "${INSTALL_PATH:-}"
-
 	# Build text table, HTML table, and brief in a single pass
-	local text_table="COUNT|IP|COUNTRY|PRESSURE|RULES|STATUS"
-	local html_rows="" brief="" brief_count=0 flag="" row_bg=""
-	local cnt ip first_ts last_ts rules_csv cc ban_status row_idx=0
+	local text_table="COUNT|IP|COUNTRY|PRESSURE|RULES"
+	local html_rows="" brief="" brief_count=0 flag="" row_bg="" cnt_fmt=""
+	local cnt ip first_ts last_ts rules_csv cc row_idx=0
 	local pressure_scaled pressure_fmt trip_val esc_ip esc_cc esc_rules
-	local first_fmt last_fmt status_color status_bg
+	local first_fmt last_fmt
 	while IFS='|' read -r cnt ip first_ts last_ts rules_csv cc; do
 		[ -z "$ip" ] && continue
-		ban_status=$(_batch_ban_status_lookup "$ip")
+		cnt_fmt=$(_report_fmt_num "$cnt")
 		# Compute live pressure
 		pressure_scaled=$(pressure_compute "${INSTALL_PATH:-}" "$ip" \
 			"${PRESSURE_HALF_LIFE:-300}" "$_RPT_NOW")
 		pressure_fmt=$(pressure_format "$pressure_scaled")
 		trip_val=$(_resolve_min_trip "$rules_csv")
 		text_table="${text_table}
-${cnt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}|${ban_status:---}"
+${cnt_fmt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}"
 		# HTML row with entity escaping and styling
 		esc_ip="${ip//&/&amp;}"; esc_ip="${esc_ip//</&lt;}"; esc_ip="${esc_ip//>/&gt;}"
 		esc_cc="${cc//&/&amp;}"; esc_cc="${esc_cc//</&lt;}"
@@ -289,25 +320,14 @@ ${cnt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}|${ban_status:---
 		# Format timestamps
 		first_fmt=$(_fmt_ts "$first_ts" 2>/dev/null || echo "$first_ts")  # fallback if _fmt_ts unavailable
 		last_fmt=$(_fmt_ts "$last_ts" 2>/dev/null || echo "$last_ts")  # fallback if _fmt_ts unavailable
-		# Entity-escape ban_status for HTML (defense-in-depth)
-		local esc_status="${ban_status//&/&amp;}"
-		esc_status="${esc_status//</&lt;}"
-		# Ban status badge color
-		status_color="#71717a"; status_bg="#f4f4f5"
-		case "$ban_status" in
-			BANNED*perm*) status_color="#ffffff"; status_bg="#dc2626" ;;
-			BANNED*)      status_color="#ffffff"; status_bg="#0891b2" ;;
-			prev:*)       status_color="#52525b"; status_bg="#fef3c7" ;;
-		esac
 		html_rows="${html_rows}<tr style=\"background-color:${row_bg};\">
-<td style=\"padding:8px 10px;font-weight:bold;color:#09090b;text-align:center;font-family:'Courier New',Courier,monospace;\">${cnt}</td>
+<td style=\"padding:8px 10px;font-weight:bold;color:#09090b;text-align:center;font-family:'Courier New',Courier,monospace;\">${cnt_fmt}</td>
 <td style=\"padding:8px 10px;font-family:'Courier New',Courier,monospace;font-size:13px;\">${esc_ip}</td>
 <td style=\"padding:8px 10px;text-align:center;\">${esc_cc:---}</td>
 <td style=\"padding:8px 10px;font-family:'Courier New',Courier,monospace;font-size:12px;\">${pressure_fmt}/${trip_val}</td>
 <td style=\"padding:8px 10px;font-size:12px;\">${esc_rules}</td>
 <td style=\"padding:8px 10px;font-size:12px;\">${first_fmt}</td>
 <td style=\"padding:8px 10px;font-size:12px;\">${last_fmt}</td>
-<td style=\"padding:8px 10px;text-align:center;\"><span style=\"display:inline-block;background-color:${status_bg};color:${status_color};padding:1px 8px;border-radius:10px;font-size:11px;font-weight:bold;font-family:'Courier New',Courier,monospace;\">${esc_status:---}</span></td>
 </tr>
 "
 		# Brief: top 5 for messaging
@@ -317,13 +337,11 @@ ${cnt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}|${ban_status:---
 				flag=$(_alert_country_flag "$cc")
 				flag="${flag:+$flag }"
 			fi
-			brief="${brief}${flag}${ip} -- ${cc:---} -- ${cnt} hits (${rules_csv})${ban_status:+ $ban_status}
+			brief="${brief}${flag}${ip} -- ${cc:---} -- ${cnt_fmt} hits (${rules_csv})
 "
 			brief_count=$((brief_count + 1))
 		fi
 	done <<< "$agg_data"
-
-	_batch_ban_status_cleanup
 
 	export REPORT_TOP_IPS_TEXT
 	REPORT_TOP_IPS_TEXT=$(echo "$text_table" | format_table)
@@ -338,7 +356,6 @@ ${cnt}|${ip}|${cc:---}|${pressure_fmt}/${trip_val}|${rules_csv}|${ban_status:---
 <th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Rules</th>
 <th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">First</th>
 <th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Last</th>
-<th style=\"padding:8px 10px;text-align:center;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Status</th>
 </tr>
 ${html_rows}</table>"
 }
@@ -368,17 +385,20 @@ _report_format_services() {
 	local text_table="SERVICE|EVENTS|UNIQUE IPS|TOP COUNTRY"
 	local brief="" html_rows="" flag="" row_bg="" row_idx=0
 	local svc cnt_a cnt_b uq_a uq_b top_cc esc_svc esc_cc
+	local cnt_a_fmt uq_a_fmt
 	# shellcheck disable=SC2034  # cnt_b/uq_b: positional placeholders for pipe field ordering
 	while IFS='|' read -r svc cnt_a cnt_b uq_a uq_b top_cc; do
 		[ -z "$svc" ] && continue
+		cnt_a_fmt=$(_report_fmt_num "$cnt_a")
+		uq_a_fmt=$(_report_fmt_num "$uq_a")
 		text_table="${text_table}
-${svc}|${cnt_a}|${uq_a}|${top_cc:---}"
+${svc}|${cnt_a_fmt}|${uq_a_fmt}|${top_cc:---}"
 		flag=""
 		if [ -n "$top_cc" ] && [ "$top_cc" != "--" ] && type _alert_country_flag >/dev/null 2>&1; then
 			flag=$(_alert_country_flag "$top_cc")
 			flag="${flag:+$flag }"
 		fi
-		brief="${brief}${svc} -- ${cnt_a} events . ${uq_a} IPs . ${flag}${top_cc:---}
+		brief="${brief}${svc} -- ${cnt_a_fmt} events . ${uq_a_fmt} IPs . ${flag}${top_cc:---}
 "
 		# HTML row with entity escaping and striped styling
 		esc_svc="${svc//&/&amp;}"; esc_svc="${esc_svc//</&lt;}"
@@ -387,8 +407,8 @@ ${svc}|${cnt_a}|${uq_a}|${top_cc:---}"
 		if [ $((row_idx % 2)) -eq 0 ]; then row_bg="#f4f4f5"; else row_bg="#ffffff"; fi
 		html_rows="${html_rows}<tr style=\"background-color:${row_bg};\">
 <td style=\"padding:8px 10px;font-weight:bold;color:#09090b;\">${esc_svc}</td>
-<td style=\"padding:8px 10px;text-align:center;font-family:'Courier New',Courier,monospace;\">${cnt_a}</td>
-<td style=\"padding:8px 10px;text-align:center;font-family:'Courier New',Courier,monospace;\">${uq_a}</td>
+<td style=\"padding:8px 10px;text-align:center;font-family:'Courier New',Courier,monospace;\">${cnt_a_fmt}</td>
+<td style=\"padding:8px 10px;text-align:center;font-family:'Courier New',Courier,monospace;\">${uq_a_fmt}</td>
 <td style=\"padding:8px 10px;text-align:center;\">${esc_cc:---}</td>
 </tr>
 "

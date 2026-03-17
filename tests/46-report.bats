@@ -7,13 +7,10 @@ load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
-# Load apool/ban-status functions from files/bfd (not in bfd.lib.sh)
+# Load apool functions from files/bfd (not in bfd.lib.sh)
 bfd_load_function _apool_summary_awk
 bfd_load_function _apool_awk
 bfd_load_function _apool_service_dual_awk
-bfd_load_function _batch_ban_status_init
-bfd_load_function _batch_ban_status_lookup
-bfd_load_function _batch_ban_status_cleanup
 
 setup() {
 	bfd_standard_setup

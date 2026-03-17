@@ -16,10 +16,10 @@
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size:13px;">
 <!-- Unique IPs / Total Events -->
 <tr>
-<td style="padding:4px 0;color:#71717a;width:50%;">Unique IPs</td>
-<td style="padding:4px 0;font-weight:bold;color:#09090b;">{{REPORT_UNIQUE_IPS}}</td>
+<td style="padding:4px 0;color:#71717a;width:25%;">Unique IPs</td>
+<td style="padding:4px 0;font-weight:bold;color:#09090b;width:25%;">{{REPORT_UNIQUE_IPS}}</td>
 <td style="padding:4px 0;color:#71717a;width:25%;">Total events</td>
-<td style="padding:4px 0;font-weight:bold;color:#09090b;">{{REPORT_TOTAL_EVENTS}}</td>
+<td style="padding:4px 0;font-weight:bold;color:#09090b;width:25%;">{{REPORT_TOTAL_EVENTS}}</td>
 </tr>
 <!-- Total Bans / Active Bans -->
 <tr>
