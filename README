@@ -36,6 +36,7 @@ Contents:
 6.1 ........... Rule Engine: Rule Catalog
 6.2 ........... Rule Engine: Rule Customization
 7 ............. Ignore Lists
+7.1 ........... Ignore Lists: Periodic Reports
 8 ............. Ban Management
 9 ............. IPv6 Support
 10 ............ Troubleshooting
@@ -267,6 +268,17 @@ EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME" - subject line for alert
   appended automatically.
 
 EMAIL_LOGLINES="5" - number of log lines per host to include in alert body and events view.
+
+EMAIL_FORMAT="auto" - email body format (auto, text, html). Default auto
+  sends multipart text+HTML when supported by the MTA.
+
+EMAIL_DIGEST="0" - enable digest mode (0 = instant, 1 = batch). In digest
+  mode, alerts are spooled and flushed at EMAIL_DIGEST_INTERVAL.
+
+EMAIL_DIGEST_INTERVAL="300" - seconds between digest flushes (default 5 min).
+
+EMAIL_REPUTATION_LINKS="1" - include IP reputation links in alert emails
+  (AbuseIPDB, Shodan, VirusTotal, IPinfo, GreyNoise).
 
 Alerts are batched: multiple bans in one check cycle produce a single email
 per recipient instead of one email per ban. Each alert includes:
@@ -817,6 +829,7 @@ Scheduled delivery is configured in conf.bfd:
   REPORT_INTERVALS="daily,weekly"       # which intervals to generate
   REPORT_CHANNELS="email,slack"         # delivery channels (empty = all)
   REPORT_EMAIL_ADDRESS=""               # recipient (empty = EMAIL_ADDRESS)
+  REPORT_EMAIL_SUBJECT="BFD {{INTERVAL}} Threat Report for {{HOSTNAME}}"
   REPORT_TOP_N="25"                     # max IPs in tables
 
 When REPORT_ENABLED=1, cron.daily triggers daily reports every day, weekly
