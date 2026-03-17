@@ -156,3 +156,114 @@ _create_sidecar() {
 	_alert_set_entry_vars "$line" 1 1
 	[ ! -f "$INSTALL_PATH/tmp/.cidr_detail_192.0.2.0_24" ]
 }
+
+# ============================================================
+# End-to-end integration
+# ============================================================
+
+@test "E2E: CIDR ban produces enriched alert with correct template vars" {
+	local now=1000000
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	local alerts_file="$TEST_TMPDIR/alerts"
+	touch "$alerts_file"
+
+	# 4 IPs in same /24 with varying weights
+	echo "$now 10.0.0.1 sshd 3" >> "$events_file"
+	echo "$now 10.0.0.1 sshd 3" >> "$events_file"
+	echo "$now 10.0.0.2 sshd 2" >> "$events_file"
+	echo "$now 10.0.0.3 sshd 1" >> "$events_file"
+	echo "$now 10.0.0.4 sshd 1" >> "$events_file"
+
+	SUBNET_TRIG="3"
+	SUBNET_MASK="24"
+	SUBNET_MASK_V6="48"
+	TRIG_WINDOW="300"
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="admin@example.com"
+	SUBNET_ALERT_TOP_N="3"
+	BAN_DURATION="600"
+
+	# run check_distributed to generate alert line + sidecar
+	check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$now" "$alerts_file" >/dev/null
+
+	# verify alert line exists
+	[ -s "$alerts_file" ]
+
+	# read the alert line and render template vars
+	local line
+	line=$(head -1 "$alerts_file")
+	_alert_set_entry_vars "$line" 1 1
+
+	# total_failures = 2+1+1+1 = 5
+	[ "$FAIL_COUNT" = "5" ]
+	# FAIL_COUNT_DISPLAY includes IP count
+	[ "$FAIL_COUNT_DISPLAY" = "5 across 4 IPs" ]
+	# total_pressure_raw = 3+3+2+1+1 = 10, field 4 = 10000 -> PRESSURE = "10.0"
+	[ "$PRESSURE" = "10.0" ]
+	# contributing hosts table populated
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Contributing hosts"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"10.0.0.1"* ]]
+	# SUBNET_HOSTS_SECTION populated for messaging (JSON-escaped)
+	[[ "$SUBNET_HOSTS_SECTION" == *"10.0.0.1"* ]]
+	# Telegram variant also populated
+	[[ "$SUBNET_HOSTS_SECTION_TG" == *"10\.0\.0\.1"* ]]
+	# sidecar cleaned up
+	[ ! -f "$INSTALL_PATH/tmp/.cidr_detail_10.0.0.0_24" ]
+
+	# TOP_N=3 with 4 IPs — overflow present
+	# (OVERFLOW is in the text but was consumed when sidecar was read)
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"1 more"* ]]
+}
+
+@test "E2E: SUBNET_TRIG=1 single-IP subnet triggers enriched alert" {
+	local now=1000000
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	local alerts_file="$TEST_TMPDIR/alerts"
+	touch "$alerts_file"
+
+	# single IP, 3 events at weight 2
+	echo "$now 10.0.0.5 sshd 2" >> "$events_file"
+	echo "$now 10.0.0.5 sshd 2" >> "$events_file"
+	echo "$now 10.0.0.5 sshd 2" >> "$events_file"
+
+	SUBNET_TRIG="1"
+	SUBNET_MASK="24"
+	SUBNET_MASK_V6="48"
+	TRIG_WINDOW="300"
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="admin@example.com"
+	SUBNET_ALERT_TOP_N="5"
+	BAN_DURATION="600"
+
+	check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$now" "$alerts_file" >/dev/null
+	[ -s "$alerts_file" ]
+
+	local line
+	line=$(head -1 "$alerts_file")
+	_alert_set_entry_vars "$line" 1 1
+
+	# total_failures = 3 (3 events), total_pressure_raw = 6 (3*2)
+	[ "$FAIL_COUNT" = "3" ]
+	[ "$FAIL_COUNT_DISPLAY" = "3 across 1 IPs" ]
+	[ "$SUBNET_IP_COUNT" = "1" ]
+	[ "$PRESSURE" = "6.0" ]
+	# contributing hosts table has the single IP
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"10.0.0.5"* ]]
+	# no overflow with 1 IP and TOP_N=5
+	[[ "$SOURCE_LOGS_SECTION_TEXT" != *"more"* ]]
+}
+
+@test "E2E: single-IP alert unaffected by CIDR enrichment" {
+	# verify non-CIDR path is clean
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	local line="192.0.2.1|sshd|22|18400|0|ban|0|/dev/null|root|10|300|3|6"
+	_alert_set_entry_vars "$line" 1 1
+	[ "$FAIL_COUNT" = "6" ]
+	[ "$FAIL_COUNT_DISPLAY" = "6" ]
+	[ "$SUBNET_IP_COUNT" = "" ]
+	[ "$SUBNET_HOSTS_SECTION" = "" ]
+	[ "$SUBNET_HOSTS_SECTION_TG" = "" ]
+	[ "$PRESSURE" = "18.4" ]
+	[ "$PRESSURE_CONTRIB" = "18" ]
+}
