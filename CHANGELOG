@@ -107,6 +107,16 @@
 [Fix] Documentation: README/man page synchronized for rule counts,
       template descriptions (8->21), config variables, FILES section,
       section count (ten->eleven), --attackpool→--activity rename
+[Fix] Documentation audit: README.md ToC section 5.8 label corrected
+      (Events and Pressure → Events and Investigation); broken cross-reference
+      in section 3.10 fixed (3.9→7.1 for Periodic Reports anchor); Periodic
+      Reports section added to README.md (§7.1) with CLI examples and config
+      variable table; plain README usage block updated to include --report
+      in Reports group; plain README rule catalog updated from 35→57 rules
+      (postscreen, sogo, drupal, gitea, nextcloud, vaultwarden, jellyfin,
+      cockpit, interworx, guacamole, haproxy, squid, ejabberd, freeswitch,
+      powerdns added with Proxy and Messaging categories); man page SYNOPSIS
+      updated to include --report line
 [Fix] CLI: exit codes propagate correctly; -b rejects service names
       starting with '-'; -a prints empty-pool message; list_bans skips
       corrupt lines; show_config() masks webhook/API/SMTP credentials;

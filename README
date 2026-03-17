@@ -523,6 +523,9 @@ Scan Mode:
   --max-lines=N               max lines per log during scan (default 50000)
   --scan-timeout=N            journal timeout per rule during scan (default 120)
 
+Reports:
+  --report [daily|weekly|monthly]  generate and deliver periodic threat report
+
 Output Modifiers:
   --json                      JSON output (with -l, -e, -a)
   --csv                       CSV output (with -l, -e, -a)
@@ -719,17 +722,21 @@ Use 'bfd -c' to see which rules are active on your system.
 BFD ships with 57 rules:
 
   SSH:      sshd, dropbear
-  Mail:     dovecot, courier, postfix, sendmail, exim_authfail, exim_nxuser,
-            vpopmail, cyrus-imap
+  Mail:     dovecot, courier, postfix, postscreen, sendmail, exim_authfail,
+            exim_nxuser, vpopmail, cyrus-imap, sogo
   FTP:      vsftpd, vsftpd2, proftpd, pure-ftpd
   Web:      apache-auth, nginx-http-auth, mod_sec, wordpress, roundcube,
-            http_401, lighttpd, phpmyadmin
-  Panel:    cpanel, plesk, webmin, directadmin, gitlab, grafana, proxmox
+            http_401, lighttpd, phpmyadmin, gitea, nextcloud, vaultwarden,
+            drupal, jellyfin
+  Panel:    cpanel, plesk, webmin, directadmin, interworx, cockpit, gitlab,
+            grafana, proxmox, guacamole
   Auth:     pam_generic, xrdp
   Database: mysqld-auth, postgresql, mongodb
-  DNS:      named
+  DNS:      named, powerdns
   VPN:      openvpnas, openvpn
-  VoIP:     asterisk_badauth, asterisk_iax, asterisk_nopeer
+  VoIP:     asterisk_badauth, asterisk_iax, asterisk_nopeer, freeswitch
+  Proxy:    haproxy, squid
+  Messaging: ejabberd
   Legacy:   rh_imapd, rh_ipop3d
 
 6.2) Rule Engine: Rule Customization
