@@ -2312,13 +2312,14 @@ _batch_ip_to_country() {
 count_subnet_attackers() {
 	local install_path="$1" window="$2" now="$3"
 	local mask="$4" mask_v6="$5" min_unique="$6"
+	local detail_file="${7:-}"
 	local events_file="$install_path/tmp/pressure.dat"
 	local cutoff=$((now - window))
 	if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
 		return 0
 	fi
 	awk -v cutoff="$cutoff" -v mask="$mask" -v mask_v6="$mask_v6" \
-		-v min_unique="$min_unique" '
+		-v min_unique="$min_unique" -v detail_file="$detail_file" '
 	function pow2(n,    r, i) {
 		r = 1; for (i = 0; i < n; i++) r = r * 2; return r
 	}
@@ -2367,6 +2368,7 @@ count_subnet_attackers() {
 	{
 		if ($1+0 < cutoff) next
 		ip = $2; mod = $3
+		w = ($4+0 > 0) ? $4+0 : 1
 		if (index(ip, ":") > 0)
 			subnet = ipv6_subnet(ip, mask_v6)
 		else
@@ -2380,11 +2382,25 @@ count_subnet_attackers() {
 		}
 		snet[key] = subnet
 		smod[key] = mod
+		# per-IP detail tracking
+		ip_fail[ipkey]++
+		ip_wsum[ipkey] += w
+		ip_addr[ipkey] = ip
 	}
 	END {
-		for (key in unique)
-			if (unique[key] >= min_unique)
+		for (key in unique) {
+			if (unique[key] >= min_unique) {
 				print snet[key] " " smod[key] " " unique[key]
+				if (detail_file != "") {
+					for (ipkey in ip_addr) {
+						split(ipkey, kp, SUBSEP)
+						if (kp[1] SUBSEP kp[2] == key) {
+							print snet[key] " " smod[key] " " ip_addr[ipkey] " " ip_fail[ipkey] " " ip_wsum[ipkey] > detail_file
+						}
+					}
+				}
+			}
+		}
 	}' "$events_file"
 }
 

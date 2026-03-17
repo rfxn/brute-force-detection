@@ -284,6 +284,67 @@ teardown() {
 	assert_output ""
 }
 
+@test "count_subnet_attackers: writes detail file with per-IP rows" {
+	local now=1000000
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	local detail_file="$TEST_TMPDIR/detail.dat"
+	# 3 unique IPs, IP .1 has 2 events (weight 2 and 3), .2 has 1 (weight 1), .3 has 1 (no weight field)
+	echo "$now 192.0.2.1 sshd 2" >> "$events_file"
+	echo "$now 192.0.2.1 sshd 3" >> "$events_file"
+	echo "$now 192.0.2.2 sshd 1" >> "$events_file"
+	echo "$now 192.0.2.3 sshd" >> "$events_file"
+
+	run count_subnet_attackers "$INSTALL_PATH" "300" "$now" "24" "48" "3" "$detail_file"
+	assert_success
+	# stdout contract unchanged
+	assert_output --partial "192.0.2.0/24 sshd 3"
+
+	# detail file must exist with per-IP rows
+	[ -f "$detail_file" ]
+	# 3 unique IPs = 3 rows
+	[ "$(wc -l < "$detail_file")" -eq 3 ]
+	# verify IP .1: 2 failures, weighted sum = 2+3 = 5
+	run grep "192.0.2.1" "$detail_file"
+	assert_output "192.0.2.0/24 sshd 192.0.2.1 2 5"
+	# verify IP .3: 1 failure, weight defaults to 1
+	run grep "192.0.2.3" "$detail_file"
+	assert_output "192.0.2.0/24 sshd 192.0.2.3 1 1"
+}
+
+@test "count_subnet_attackers: no detail file arg = backward compat" {
+	local now=1000000
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 192.0.2.1 sshd" >> "$events_file"
+	echo "$now 192.0.2.2 sshd" >> "$events_file"
+	echo "$now 192.0.2.3 sshd" >> "$events_file"
+
+	# call without 7th arg — must still work
+	run count_subnet_attackers "$INSTALL_PATH" "300" "$now" "24" "48" "3"
+	assert_success
+	assert_output --partial "192.0.2.0/24 sshd 3"
+}
+
+@test "count_subnet_attackers: detail file excludes sub-threshold subnets" {
+	local now=1000000
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	local detail_file="$TEST_TMPDIR/detail.dat"
+	# subnet A: 3 IPs (meets threshold)
+	echo "$now 192.0.2.1 sshd 1" >> "$events_file"
+	echo "$now 192.0.2.2 sshd 1" >> "$events_file"
+	echo "$now 192.0.2.3 sshd 1" >> "$events_file"
+	# subnet B: 2 IPs (below threshold)
+	echo "$now 10.0.0.1 sshd 1" >> "$events_file"
+	echo "$now 10.0.0.2 sshd 1" >> "$events_file"
+
+	run count_subnet_attackers "$INSTALL_PATH" "300" "$now" "24" "48" "3" "$detail_file"
+	assert_success
+	# only subnet A in detail — sub-threshold subnet B excluded
+	[ -f "$detail_file" ]
+	run cat "$detail_file"
+	refute_output --partial "10.0.0"
+	[ "$(wc -l < "$detail_file")" -eq 3 ]
+}
+
 @test "check_distributed: alert entry has (multiple) as LOG_FILE field" {
 	local now=1000000
 	local events_file="$INSTALL_PATH/tmp/pressure.dat"
