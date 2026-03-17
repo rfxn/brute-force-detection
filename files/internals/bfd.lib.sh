@@ -2105,6 +2105,22 @@ ip_to_country() {
 	echo "$cc"
 }
 
+# _resolve_cidr_cc ip cc — resolve country code for CIDR entries missing CC.
+# If cc is already set (non-empty, not "--"), echoes it unchanged.
+# For CIDR IPs (containing "/"), strips the mask and looks up the network
+# address via ip_to_country. Falls back to "--" if lookup fails.
+_resolve_cidr_cc() {
+	local ip="$1" cc="$2"
+	if [ -n "$cc" ] && [ "$cc" != "--" ]; then
+		echo "$cc"
+		return
+	fi
+	if [[ "$ip" == */* ]] && [ -f "$INSTALL_PATH/ipcountry.dat" ]; then
+		cc=$(ip_to_country "${ip%%/*}" "$INSTALL_PATH/ipcountry.dat" 2>/dev/null)  # 2>/dev/null: ipcountry.dat may not exist
+	fi
+	echo "${cc:---}"
+}
+
 # country_weight cc weights_file — look up pressure multiplier for a country code
 # Returns integer multiplier (10 = 1.0x, 20 = 2.0x). Defaults to 10 if unlisted.
 country_weight() {
@@ -2400,14 +2416,8 @@ check_distributed() {
 			else
 				_dist_duration=$((ban_expiry - now))
 			fi
-			# country lookup for subnet: use network address (strip CIDR suffix)
-			local _dist_cc="--"
-			local _dist_db="$install_path/ipcountry.dat"
-			if [ -f "$_dist_db" ]; then
-				local _dist_base="${subnet%%/*}"
-				_dist_cc=$(ip_to_country "$_dist_base" "$_dist_db")
-				_dist_cc="${_dist_cc:---}"
-			fi
+			local _dist_cc
+			_dist_cc=$(_resolve_cidr_cc "$subnet" "--")
 			state_pool_append "$install_path" "$now" "$subnet" "$mod" \
 				"$unique_count" "$_dist_cc" "$ban_action" "$_dist_duration" "all" \
 				"0" "subnet"
@@ -4226,6 +4236,7 @@ events_list() {
 	local cnt ip first_ts last_ts svcs cc row_count=0
 	while IFS='|' read -r cnt ip first_ts last_ts svcs cc; do
 		[ -z "$cnt" ] && continue
+		cc=$(_resolve_cidr_cc "$ip" "$cc")
 		local first_fmt last_fmt ban_status
 		first_fmt=$(_fmt_ts "$first_ts")
 		last_fmt=$(_fmt_ts "$last_ts")
@@ -4448,6 +4459,7 @@ events_list_json() {
 	local cnt ip first_ts last_ts svcs cc
 	while IFS='|' read -r cnt ip first_ts last_ts svcs cc; do
 		[ -z "$cnt" ] && continue
+		cc=$(_resolve_cidr_cc "$ip" "$cc")
 		local first_fmt last_fmt ban_status
 		first_fmt=$(_fmt_ts_iso "$first_ts")
 		last_fmt=$(_fmt_ts_iso "$last_ts")
@@ -4490,6 +4502,7 @@ events_list_csv() {
 	local cnt ip first_ts last_ts svcs cc
 	while IFS='|' read -r cnt ip first_ts last_ts svcs cc; do
 		[ -z "$cnt" ] && continue
+		cc=$(_resolve_cidr_cc "$ip" "$cc")
 		local first_fmt last_fmt ban_status
 		first_fmt=$(_fmt_ts_iso "$first_ts")
 		last_fmt=$(_fmt_ts_iso "$last_ts")

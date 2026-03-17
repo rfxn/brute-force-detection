@@ -325,6 +325,7 @@ _report_format_top_ips() {
 	local first_fmt last_fmt
 	while IFS='|' read -r cnt ip first_ts last_ts rules_csv cc; do
 		[ -z "$ip" ] && continue
+		cc=$(_resolve_cidr_cc "$ip" "$cc")
 		cnt_fmt=$(_report_fmt_num "$cnt")
 		# Look up ban count from batch result
 		ip_bans=$(echo "$ban_counts" | awk -v ip="$ip" '$1 == ip { print $2; exit }')

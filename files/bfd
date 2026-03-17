@@ -717,6 +717,7 @@ _apool_report() {
 	local cnt aip first_ts last_ts mods aip_cc first_fmt last_fmt ban_status _gp _gp_fmt
 	while IFS='|' read -r cnt aip first_ts last_ts mods aip_cc; do
 		[ -z "$cnt" ] && continue
+		aip_cc=$(_resolve_cidr_cc "$aip" "$aip_cc")
 		first_fmt=$(_fmt_ts "$first_ts")
 		last_fmt=$(_fmt_ts "$last_ts")
 		ban_status=$(_apool_ban_status "$aip")
@@ -1152,6 +1153,7 @@ _apool_report_json() {
 		_apool_awk "$source_file" "$search" "$cutoff" | \
 		while IFS='|' read -r cnt aip first_ts last_ts mods aip_cc; do
 			[ -z "$cnt" ] && continue
+			aip_cc=$(_resolve_cidr_cc "$aip" "$aip_cc")
 			local first_fmt last_fmt ban_status _gp _gp_fmt
 			first_fmt=$(_fmt_ts_iso "$first_ts")
 			last_fmt=$(_fmt_ts_iso "$last_ts")
@@ -1190,6 +1192,7 @@ _apool_report_csv() {
 		_apool_awk "$source_file" "$search" "$cutoff" | \
 		while IFS='|' read -r cnt aip first_ts last_ts mods aip_cc; do
 			[ -z "$cnt" ] && continue
+			aip_cc=$(_resolve_cidr_cc "$aip" "$aip_cc")
 			local first_fmt last_fmt ban_status _gp _gp_fmt
 			first_fmt=$(_fmt_ts_iso "$first_ts")
 			last_fmt=$(_fmt_ts_iso "$last_ts")
