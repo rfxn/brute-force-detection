@@ -43,11 +43,12 @@ and IPv4/IPv6 support across 57 service rules.
   - [5.5 Flush Bans](#55-flush-bans)
   - [5.6 Structured Output](#56-structured-output)
   - [5.7 Scan Mode](#57-scan-mode)
-  - [5.8 Events and Pressure](#58-events-and-pressure)
+  - [5.8 Events and Investigation](#58-events-and-investigation)
 - [6. Rule Engine](#6-rule-engine)
   - [6.1 Rule Catalog](#61-rule-catalog)
   - [6.2 Rule Customization](#62-rule-customization)
 - [7. Ignore Lists](#7-ignore-lists)
+  - [7.1 Periodic Reports](#71-periodic-reports)
 - [8. Ban Management](#8-ban-management)
 - [9. IPv6 Support](#9-ipv6-support)
 - [10. Troubleshooting](#10-troubleshooting)
@@ -441,6 +442,18 @@ Messaging channels (Slack, Telegram, Discord) have their own template partials:
 | `telegram.entry.tpl` | Telegram per-ban block |
 | `discord.message.tpl` | Discord embed JSON wrapper |
 | `discord.entry.tpl` | Discord per-ban embed field |
+
+Periodic reports (see [section 7.1](#71-periodic-reports)) use their own template partials:
+
+| File | Description |
+|------|-------------|
+| `report.html.header.tpl` | HTML report header and styles |
+| `report.html.body.tpl` | HTML report body and tables |
+| `report.text.header.tpl` | Plain text report header |
+| `report.text.body.tpl` | Plain text report body |
+| `report.slack.message.tpl` | Slack report summary |
+| `report.telegram.message.tpl` | Telegram report summary |
+| `report.discord.message.tpl` | Discord report summary |
 
 ### 3.11 Slack Alerts
 
@@ -851,6 +864,35 @@ BFD provides two mechanisms for excluding addresses from bans:
 - **`/usr/local/bfd/exclude.files`** — additional files containing IPs to ignore. One file path per line; each referenced file contains IPs to exclude.
 
 BFD automatically detects local IPv4 and IPv6 addresses (including `::1`) and excludes them from bans. No manual configuration is needed for local address exclusion.
+
+### 7.1 Periodic Reports
+
+BFD can generate scheduled threat reports delivered via all configured alerting channels (email, Slack, Telegram, Discord):
+
+```bash
+bfd --report              # daily report (default)
+bfd --report weekly       # last 7 days
+bfd --report monthly      # last 30 days
+```
+
+Reports include:
+- **Threat summary:** unique IPs, total events, bans, active bans
+- **Top threat IPs** with country codes, live pressure, and ban status
+- **Per-service breakdown** with event counts and top country
+- **Trend comparison** vs the prior equivalent time window
+
+**Scheduled delivery** is configured in `conf.bfd`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REPORT_ENABLED` | `0` | Enable periodic reports (0 = off, 1 = on) |
+| `REPORT_INTERVALS` | `"daily"` | Comma-separated intervals: `daily`, `weekly`, `monthly` |
+| `REPORT_CHANNELS` | *(empty)* | Delivery channels (empty = all enabled alert channels) |
+| `REPORT_EMAIL_ADDRESS` | *(empty)* | Report email recipient (empty = `EMAIL_ADDRESS`) |
+| `REPORT_EMAIL_SUBJECT` | *(template)* | Email subject (`{{INTERVAL}}` and `{{HOSTNAME}}` expand at send time) |
+| `REPORT_TOP_N` | `25` | Maximum IPs in report tables |
+
+When `REPORT_ENABLED=1`, `cron.daily` triggers daily reports every day, weekly reports on Mondays, and monthly reports on the 1st. Reports can also be generated on-demand from the CLI at any time.
 
 ---
 

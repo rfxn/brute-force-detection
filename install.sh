@@ -43,7 +43,7 @@ install_files(){
 
 	# Copy source tree and documentation
 	pkg_copy_tree "./files" "$INSPATH"
-	command cp README CHANGELOG COPYING.GPL "$INSPATH"
+	command cp README.md CHANGELOG COPYING.GPL "$INSPATH"
 
 	# Create runtime directories
 	pkg_create_dirs "750" "$INSPATH/tmp" "$INSPATH/stats"

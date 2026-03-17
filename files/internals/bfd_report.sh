@@ -134,8 +134,11 @@ _report_data() {
 	# shellcheck disable=SC2034  # u_prev/t_prev: positional placeholders for pipe field ordering
 	IFS='|' read -r u_cur t_cur u_prev t_prev <<< "$summary_line"
 
-	REPORT_UNIQUE_IPS=$(_report_fmt_num "${u_cur:-0}")
-	REPORT_TOTAL_EVENTS=$(_report_fmt_num "${t_cur:-0}")
+	# Preserve raw integers for arithmetic before comma-formatting for display
+	local _u_cur_raw="${u_cur:-0}" _t_cur_raw="${t_cur:-0}"
+
+	REPORT_UNIQUE_IPS=$(_report_fmt_num "$_u_cur_raw")
+	REPORT_TOTAL_EVENTS=$(_report_fmt_num "$_t_cur_raw")
 	export REPORT_UNIQUE_IPS REPORT_TOTAL_EVENTS
 
 	# Ban counts
@@ -202,10 +205,10 @@ _report_data() {
 	REPORT_REPEAT_OFFENDERS=$(_report_fmt_num "${repeat_offenders:-0}")
 	export REPORT_TOTAL_BANS REPORT_TEMP_BANS REPORT_ESCALATIONS REPORT_PERM_BANS REPORT_BAN_FAILED REPORT_REPEAT_OFFENDERS
 	export REPORT_TOP_COUNTRIES="${top_countries:---}"
-	# Repeat offender percentage
+	# Repeat offender percentage — use raw integer, not comma-formatted display value
 	local repeat_pct=0
-	if [ "${REPORT_UNIQUE_IPS:-0}" -gt 0 ]; then
-		repeat_pct=$(( repeat_offenders * 100 / REPORT_UNIQUE_IPS ))
+	if [ "$_u_cur_raw" -gt 0 ]; then
+		repeat_pct=$(( repeat_offenders * 100 / _u_cur_raw ))
 	fi
 	export REPORT_REPEAT_PCT="$repeat_pct"
 

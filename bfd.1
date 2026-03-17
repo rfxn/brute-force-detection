@@ -49,6 +49,10 @@ bfd \- brute force detection and IP banning
 .RB [ \-\-scan\-timeout= \fIN\fR]
 .br
 .B bfd
+.B \-\-report
+.RI [ daily | weekly | monthly ]
+.br
+.B bfd
 .RB [ \-\-json ]
 .RB [ \-\-csv ]
 .RB [ \-V | \-\-verbose ]
@@ -390,7 +394,7 @@ is run with no arguments, a short summary of common commands is shown instead.
 .SH CONFIGURATION
 Configuration is in
 .BR conf.bfd ,
-organized into ten sections.
+organized into eleven sections.
 The file is sourced as bash; all values are shell variables.
 Additional tuning variables with sensible defaults
 .RB ( LOG_SOURCE ", " LOCK_FILE_TIMEOUT ", " BAN_RETRY_COUNT ", " OUTPUT_SYSLOG_FILE )
@@ -733,7 +737,10 @@ Templates use
 mustache-style placeholders replaced at render time via a safe
 awk-based engine (no shell code execution).
 .PP
-Eight partials are provided (4 plain text + 4 HTML):
+Twenty-one partials are provided across three categories:
+.PP
+.B Email templates
+(4 plain text + 4 HTML):
 .RS 4
 .nf
 text.header.tpl   \(em banner, hostname, timestamp
@@ -744,6 +751,33 @@ html.header.tpl   \(em HTML banner and hostname bar
 html.entry.tpl    \(em per-ban card with pressure detail
 html.summary.tpl  \(em aggregate statistics table
 html.footer.tpl   \(em HTML footer and closing tags
+.fi
+.RE
+.PP
+.B Messaging templates
+(6 files):
+.RS 4
+.nf
+slack.message.tpl     \(em Slack ban notification
+slack.entry.tpl       \(em Slack per-ban detail
+telegram.message.tpl  \(em Telegram ban notification
+telegram.entry.tpl    \(em Telegram per-ban detail
+discord.message.tpl   \(em Discord ban notification
+discord.entry.tpl     \(em Discord per-ban detail
+.fi
+.RE
+.PP
+.B Report templates
+(7 files):
+.RS 4
+.nf
+report.html.header.tpl    \(em HTML report header and styles
+report.html.body.tpl      \(em HTML report body and tables
+report.text.header.tpl    \(em plain text report header
+report.text.body.tpl      \(em plain text report body
+report.slack.message.tpl  \(em Slack report summary
+report.telegram.message.tpl \(em Telegram report summary
+report.discord.message.tpl  \(em Discord report summary
 .fi
 .RE
 .PP
@@ -913,6 +947,10 @@ GeoIP metadata library \(em country names, continent mapping, CIDR download
 .I /usr/local/bfd/internals/pkg_lib.sh
 Packaging utility library (sourced by install.sh and uninstall.sh).
 .TP
+.I /usr/local/bfd/internals/bfd_report.sh
+Periodic threat report functions \(em data collection, rendering, and delivery
+(sourced by bfd.lib.sh).
+.TP
 .I /usr/local/bfd/internals/internals.conf
 Internal/derived variables.
 .TP
@@ -941,7 +979,7 @@ rebuild the IPv4 and IPv6 IP-to-country databases. Run automatically at install
 time (background) and refreshed via cron.daily when data is older than 30 days.
 .TP
 .I /usr/local/bfd/alert/
-Email template partials directory (8 files: text.*.tpl, html.*.tpl).
+Alert template partials directory (21 files: email, messaging, and report templates).
 .TP
 .I /usr/local/bfd/alert/custom.d/
 User template overrides (per-file, preserved across upgrades).
