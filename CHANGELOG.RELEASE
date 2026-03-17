@@ -71,6 +71,9 @@
 
   -- Bug Fixes --
 
+[Fix] Report: repeat-offender percentage silently zero when unique IP count
+      exceeds 999 — integer comparison on comma-formatted string failed;
+      preserve raw integers for arithmetic, format only for display export
 [Fix] Security: eval injection replaced with safe template expansion;
       show_config() whitelist; safe_source() on all sourced files; flock
       on state file operations; mktemp replaces PID-based temp files;

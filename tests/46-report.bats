@@ -178,6 +178,34 @@ teardown() {
 	[ "$REPORT_REPEAT_OFFENDERS" = "1" ]
 }
 
+@test "report_data: repeat_pct correct when unique IPs exceed 999" {
+	bfd_require_bash42
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	APOOL_LIST="$pool"
+	local now
+	now=$(date +%s)
+	# Generate 1100 unique IPs with ban actions — crosses the 999 comma-formatting threshold
+	local i j ip_idx=0
+	for i in $(seq 0 4); do
+		for j in $(seq 1 220); do
+			ip_idx=$((ip_idx + 1))
+			echo "$((now - ip_idx)) 10.${i}.${j}.1 sshd 1 CN ban 600 22 15000 service" >> "$pool"
+		done
+	done
+	# Add 50 repeat offenders (second ban for the first 50 IPs)
+	for j in $(seq 1 50); do
+		echo "$((now - 2000 - j)) 10.0.${j}.1 sshd 1 CN ban 600 22 15000 service" >> "$pool"
+	done
+
+	_report_init "daily"
+	_report_data "$pool"
+
+	# REPORT_UNIQUE_IPS should be comma-formatted (e.g., "1,100")
+	[[ "$REPORT_UNIQUE_IPS" == *,* ]]
+	# REPORT_REPEAT_PCT must be non-zero — 50 repeats out of 1100 IPs = ~4%
+	[ "$REPORT_REPEAT_PCT" -gt 0 ]
+}
+
 @test "report_data: empty pool sets zero counts" {
 	local pool="$INSTALL_PATH/stats/attack.pool"
 	APOOL_LIST="$pool"
