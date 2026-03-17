@@ -554,8 +554,10 @@ _report_channel_restore() {
 _report_deliver() {
 	local interval="$1" tpl_dir="$2"
 
-	# Render subject from template
-	local subject_tpl="${REPORT_EMAIL_SUBJECT:-BFD {{INTERVAL}} Threat Report for {{HOSTNAME}}}"
+	# Render subject from template — default stored in variable to avoid
+	# bash 4.x ${var:-...} brace-matching bug with }} in template tokens
+	local _default_subject="BFD {{INTERVAL}} Threat Report for {{HOSTNAME}}"
+	local subject_tpl="${REPORT_EMAIL_SUBJECT:-$_default_subject}"
 	local subject_file
 	subject_file=$(mktemp "${ALERT_TMPDIR:-${TMPDIR:-/tmp}}/.bfd_rpt_subj.XXXXXX")
 	echo "$subject_tpl" > "$subject_file"
