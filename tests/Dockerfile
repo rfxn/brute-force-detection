@@ -16,7 +16,7 @@ COPY cron /opt/cron
 COPY cron.daily /opt/cron.daily
 COPY install.sh /opt/install.sh
 COPY uninstall.sh /opt/uninstall.sh
-COPY README /opt/README
+COPY README.md /opt/README.md
 COPY CHANGELOG /opt/CHANGELOG
 COPY COPYING.GPL /opt/COPYING.GPL
 COPY logrotate.d.bfd /opt/logrotate.d.bfd
