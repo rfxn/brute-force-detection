@@ -2,6 +2,15 @@
 
   -- Changes --
 
+[Fix] Add bfd_report.sh to RPM and DEB packaging (report feature missing
+      from packaged installations)
+[Fix] Add --report and --limit= to bash completion with context-sensitive
+      daily|weekly|monthly completion for --report
+[Fix] Add REPORT_* config variables and SMTP_USER/SMTP_PASS to show_config()
+      display and bash completion
+[Fix] Man page: add bfd_report.sh to FILES, update template count (8->21),
+      fix section count (ten->eleven), document report templates
+
 [New] Report proof points: ban breakdown (temporary/escalated/permanent),
       repeat offender count, top countries, ban-failed count
 [New] Comma-formatted numbers in report output for values over 1,000

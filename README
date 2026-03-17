@@ -277,7 +277,8 @@ per recipient instead of one email per ban. Each alert includes:
   - reconstructed ban command
   - relevant source log lines per host
 
-Alert emails use customizable template partials in alert/ (4 text + 4 HTML).
+Alerts use 21 customizable template partials in alert/ (8 email, 6 messaging,
+7 report).
 To customize, copy the desired partial(s) into alert/custom.d/ and edit:
 
   cp /usr/local/bfd/alert/html.entry.tpl /usr/local/bfd/alert/custom.d/

@@ -442,6 +442,18 @@ Messaging channels (Slack, Telegram, Discord) have their own template partials:
 | `discord.message.tpl` | Discord embed JSON wrapper |
 | `discord.entry.tpl` | Discord per-ban embed field |
 
+Periodic reports (see [section 3.9](#39-periodic-reports)) use their own template partials:
+
+| File | Description |
+|------|-------------|
+| `report.html.header.tpl` | HTML report header and styles |
+| `report.html.body.tpl` | HTML report body and tables |
+| `report.text.header.tpl` | Plain text report header |
+| `report.text.body.tpl` | Plain text report body |
+| `report.slack.message.tpl` | Slack report summary |
+| `report.telegram.message.tpl` | Telegram report summary |
+| `report.discord.message.tpl` | Discord report summary |
+
 ### 3.11 Slack Alerts
 
 BFD can send alert notifications to Slack channels via incoming webhooks or the Bot API.

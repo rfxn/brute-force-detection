@@ -89,6 +89,7 @@ install -D -m 644 files/internals/alert_lib.sh %{buildroot}/usr/lib/bfd/internal
 install -D -m 644 files/internals/bfd_alert.sh %{buildroot}/usr/lib/bfd/internals/bfd_alert.sh
 install -D -m 644 files/internals/geoip_lib.sh %{buildroot}/usr/lib/bfd/internals/geoip_lib.sh
 install -D -m 644 files/internals/pkg_lib.sh %{buildroot}/usr/lib/bfd/internals/pkg_lib.sh
+install -D -m 644 files/internals/bfd_report.sh %{buildroot}/usr/lib/bfd/internals/bfd_report.sh
 install -d -m 755 %{buildroot}/usr/lib/bfd/alert
 for tpl in files/alert/*.tpl; do
     install -m 644 "$tpl" %{buildroot}/usr/lib/bfd/alert/
@@ -154,6 +155,7 @@ ln -s /usr/lib/bfd/internals/alert_lib.sh %{buildroot}%{legacy_path}/internals/a
 ln -s /usr/lib/bfd/internals/bfd_alert.sh %{buildroot}%{legacy_path}/internals/bfd_alert.sh
 ln -s /usr/lib/bfd/internals/geoip_lib.sh %{buildroot}%{legacy_path}/internals/geoip_lib.sh
 ln -s /usr/lib/bfd/internals/pkg_lib.sh %{buildroot}%{legacy_path}/internals/pkg_lib.sh
+ln -s /usr/lib/bfd/internals/bfd_report.sh %{buildroot}%{legacy_path}/internals/bfd_report.sh
 ln -s /etc/bfd/internals.conf %{buildroot}%{legacy_path}/internals/internals.conf
 ln -s /usr/lib/bfd/tlog %{buildroot}%{legacy_path}/tlog
 ln -s /usr/lib/bfd/alert %{buildroot}%{legacy_path}/alert
@@ -266,6 +268,7 @@ fi
 /usr/lib/bfd/internals/bfd_alert.sh
 /usr/lib/bfd/internals/geoip_lib.sh
 /usr/lib/bfd/internals/pkg_lib.sh
+/usr/lib/bfd/internals/bfd_report.sh
 /usr/lib/bfd/tlog
 /usr/lib/bfd/alert/
 %dir %attr(755,root,root) /usr/lib/bfd/alert/custom.d
@@ -302,6 +305,7 @@ fi
 %{legacy_path}/internals/bfd_alert.sh
 %{legacy_path}/internals/geoip_lib.sh
 %{legacy_path}/internals/pkg_lib.sh
+%{legacy_path}/internals/bfd_report.sh
 %{legacy_path}/internals/internals.conf
 %{legacy_path}/tlog
 %{legacy_path}/alert
