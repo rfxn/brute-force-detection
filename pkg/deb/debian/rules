@@ -80,7 +80,7 @@ override_dh_auto_install:
 	# Bash completion
 	install -D -m 644 bfd.bash-completion $(CURDIR)/debian/bfd/usr/share/bash-completion/completions/bfd
 	# Docs
-	install -D -m 644 README $(CURDIR)/debian/bfd/usr/share/doc/bfd/README
+	install -D -m 644 README.md $(CURDIR)/debian/bfd/usr/share/doc/bfd/README.md
 	install -D -m 644 CHANGELOG $(CURDIR)/debian/bfd/usr/share/doc/bfd/CHANGELOG
 	install -D -m 644 COPYING.GPL $(CURDIR)/debian/bfd/usr/share/doc/bfd/COPYING.GPL
 
