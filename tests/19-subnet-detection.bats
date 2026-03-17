@@ -391,3 +391,150 @@ teardown() {
 	run cat "$INSTALL_PATH/tmp/bans.active"
 	assert_output --partial "1000600"
 }
+
+# ============================================================
+# check_distributed — CIDR alert enrichment
+# ============================================================
+
+@test "check_distributed: alert fields 4+13 carry aggregate values" {
+	local now=1000000
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	local alerts_file="$TEST_TMPDIR/alerts"
+	touch "$alerts_file"
+
+	# 3 IPs: .1 has 2 events (weight 2 each), .2 has 1 (weight 1), .3 has 1 (weight 3)
+	echo "$now 192.0.2.1 sshd 2" >> "$events_file"
+	echo "$now 192.0.2.1 sshd 2" >> "$events_file"
+	echo "$now 192.0.2.2 sshd 1" >> "$events_file"
+	echo "$now 192.0.2.3 sshd 3" >> "$events_file"
+
+	SUBNET_TRIG="3"
+	SUBNET_MASK="24"
+	SUBNET_MASK_V6="48"
+	TRIG_WINDOW="300"
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="admin@example.com"
+
+	check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$now" "$alerts_file" >/dev/null
+
+	# field 4 = total_pressure_raw * 1000 = (2+2+1+3) * 1000 = 8000
+	local f4
+	f4=$(awk -F'|' '{print $4}' "$alerts_file")
+	[ "$f4" = "8000" ]
+
+	# field 13 = total_failures = 4 (2+1+1)
+	local f13
+	f13=$(awk -F'|' '{print $13}' "$alerts_file")
+	[ "$f13" = "4" ]
+}
+
+@test "check_distributed: writes sidecar file for alert renderer" {
+	local now=1000000
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	local alerts_file="$TEST_TMPDIR/alerts"
+	touch "$alerts_file"
+
+	echo "$now 192.0.2.1 sshd 2" >> "$events_file"
+	echo "$now 192.0.2.1 sshd 2" >> "$events_file"
+	echo "$now 192.0.2.2 sshd 1" >> "$events_file"
+	echo "$now 192.0.2.3 sshd 3" >> "$events_file"
+
+	SUBNET_TRIG="3"
+	SUBNET_MASK="24"
+	SUBNET_MASK_V6="48"
+	TRIG_WINDOW="300"
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="admin@example.com"
+	SUBNET_ALERT_TOP_N="5"
+
+	check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$now" "$alerts_file" >/dev/null
+
+	# sidecar file must exist
+	local sidecar="$INSTALL_PATH/tmp/.cidr_detail_192.0.2.0_24"
+	[ -f "$sidecar" ]
+
+	# header line
+	run head -1 "$sidecar"
+	assert_output "HEADER 192.0.2.0/24 3 4 8000"
+
+	# per-IP rows sorted by weighted sum descending — .1 has highest (4000)
+	run sed -n '2p' "$sidecar"
+	assert_output --partial "192.0.2.1"
+}
+
+@test "check_distributed: sidecar has OVERFLOW when IPs > TOP_N" {
+	local now=1000000
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	local alerts_file="$TEST_TMPDIR/alerts"
+	touch "$alerts_file"
+
+	# 4 unique IPs but TOP_N=2
+	local i
+	for i in 1 2 3 4; do
+		echo "$now 192.0.2.${i} sshd 1" >> "$events_file"
+	done
+
+	SUBNET_TRIG="3"
+	SUBNET_MASK="24"
+	SUBNET_MASK_V6="48"
+	TRIG_WINDOW="300"
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="admin@example.com"
+	SUBNET_ALERT_TOP_N="2"
+
+	check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$now" "$alerts_file" >/dev/null
+
+	local sidecar="$INSTALL_PATH/tmp/.cidr_detail_192.0.2.0_24"
+	[ -f "$sidecar" ]
+	# header + 2 IP rows + OVERFLOW line = 4 lines
+	[ "$(wc -l < "$sidecar")" -eq 4 ]
+	run tail -1 "$sidecar"
+	assert_output "OVERFLOW 2"
+}
+
+@test "check_distributed: sidecar filename sanitizes IPv6 colons" {
+	local now=1000000
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	local alerts_file="$TEST_TMPDIR/alerts"
+	touch "$alerts_file"
+
+	echo "$now 2001:db8:1234::1 sshd 1" >> "$events_file"
+	echo "$now 2001:db8:1234::2 sshd 1" >> "$events_file"
+	echo "$now 2001:db8:1234::3 sshd 1" >> "$events_file"
+
+	SUBNET_TRIG="3"
+	SUBNET_MASK="24"
+	SUBNET_MASK_V6="48"
+	TRIG_WINDOW="300"
+	EMAIL_ALERTS="1"
+	EMAIL_ADDRESS="admin@example.com"
+	SUBNET_ALERT_TOP_N="5"
+
+	check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$now" "$alerts_file" >/dev/null
+
+	# colons replaced with -, slash replaced with _
+	local sidecar="$INSTALL_PATH/tmp/.cidr_detail_2001-db8-1234--_48"
+	[ -f "$sidecar" ]
+}
+
+@test "check_distributed: no sidecar when EMAIL_ALERTS=0" {
+	local now=1000000
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	local alerts_file="$TEST_TMPDIR/alerts"
+	touch "$alerts_file"
+
+	for i in 1 2 3; do
+		echo "$now 192.0.2.${i} sshd 1" >> "$events_file"
+	done
+
+	SUBNET_TRIG="3"
+	SUBNET_MASK="24"
+	SUBNET_MASK_V6="48"
+	TRIG_WINDOW="300"
+	EMAIL_ALERTS="0"
+
+	check_distributed "$INSTALL_PATH" "$TRIG_WINDOW" "$now" "$alerts_file" >/dev/null
+
+	# no sidecar written when alerts disabled
+	[ ! -f "$INSTALL_PATH/tmp/.cidr_detail_192.0.2.0_24" ]
+}

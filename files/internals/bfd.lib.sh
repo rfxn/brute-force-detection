@@ -2407,10 +2407,15 @@ count_subnet_attackers() {
 # check_distributed install_path window now alerts_file
 # Post-loop distributed attack detection: bans entire subnets when
 # SUBNET_TRIG unique IPs from the same subnet attack the same service.
+# Writes sidecar files for alert enrichment with per-IP breakdown.
 # Echoes the number of subnet bans executed.
 check_distributed() {
 	local install_path="$1" window="$2" now="$3" alerts_file="$4"
 	local ban_count=0
+
+	# detail file for per-IP data from count_subnet_attackers
+	local detail_file
+	detail_file=$(mktemp "$install_path/tmp/.cidr_detail_raw.XXXXXX")
 
 	local subnet mod unique_count
 	while IFS=' ' read -r subnet mod unique_count; do
@@ -2432,18 +2437,51 @@ check_distributed() {
 			else
 				_dist_duration=$((ban_expiry - now))
 			fi
+
+			# compute aggregates from detail file
+			local total_failures=0 total_pressure_raw=0
+			local _d_ip _d_mod _d_fc _d_ws _d_sn
+			while IFS=' ' read -r _d_sn _d_mod _d_ip _d_fc _d_ws; do
+				[ "$_d_sn" = "$subnet" ] || continue
+				total_failures=$((total_failures + _d_fc))
+				total_pressure_raw=$((total_pressure_raw + _d_ws))
+			done < "$detail_file"
+			local pressure_scaled=$((total_pressure_raw * 1000))
+
+			# write sidecar file for alert renderer
+			if [ "$EMAIL_ALERTS" = "1" ] && [ "$DRY_RUN" != "1" ]; then
+				local _san_subnet
+				_san_subnet=$(printf '%s' "$subnet" | tr ':' '-' | tr '/' '_')
+				local sidecar="$install_path/tmp/.cidr_detail_${_san_subnet}"
+				# header: subnet unique_count total_failures total_pressure_raw_scaled
+				echo "HEADER $subnet $unique_count $total_failures $pressure_scaled" > "$sidecar"
+				# per-IP rows sorted by weighted sum descending, capped at TOP_N
+				local _top_n="${SUBNET_ALERT_TOP_N:-5}"
+				local _ip_count=0 _overflow=0
+				while IFS=' ' read -r _d_sn _d_mod _d_ip _d_fc _d_ws; do
+					_ip_count=$((_ip_count + 1))
+					if [ "$_ip_count" -le "$_top_n" ]; then
+						echo "$_d_ip $_d_mod $_d_fc $((_d_ws * 1000))" >> "$sidecar"
+					fi
+				done < <(awk -v sn="$subnet" '$1 == sn { print }' "$detail_file" | sort -k5 -rn)
+				_overflow=$((_ip_count - _top_n))
+				if [ "$_overflow" -gt 0 ]; then
+					echo "OVERFLOW $_overflow" >> "$sidecar"
+				fi
+
+				echo "${subnet}|${mod}|all|${pressure_scaled}|${ban_expiry}|${ban_action}|${recent_bans}|(multiple)|${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}|1|${total_failures}" >> "$alerts_file"
+			fi
+
 			local _dist_cc
 			_dist_cc=$(_resolve_cidr_cc "$subnet" "--")
 			state_pool_append "$install_path" "$now" "$subnet" "$mod" \
 				"$unique_count" "$_dist_cc" "$ban_action" "$_dist_duration" "all" \
 				"0" "subnet"
-			if [ "$EMAIL_ALERTS" = "1" ] && [ "$DRY_RUN" != "1" ]; then
-				echo "${subnet}|${mod}|all|${unique_count}|${ban_expiry}|${ban_action}|${recent_bans}|(multiple)|${EMAIL_ADDRESS}|${SUBNET_TRIG}|${window}|1|0" >> "$alerts_file"
-			fi
 		fi
 	done < <(count_subnet_attackers "$install_path" "$window" "$now" \
-		"$SUBNET_MASK" "$SUBNET_MASK_V6" "$SUBNET_TRIG")
+		"$SUBNET_MASK" "$SUBNET_MASK_V6" "$SUBNET_TRIG" "$detail_file")
 
+	command rm -f "$detail_file"
 	echo "$ban_count"
 }
 
