@@ -21,7 +21,6 @@
 ###
 #
 INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
-LOG_IDLE_SUPPRESS="${LOG_IDLE_SUPPRESS:-1}"
 
 # BK_LAST is set by install.sh via pkg_backup_path(); fall back to legacy
 # symlink name for manual invocation or pre-pkg_lib upgrades

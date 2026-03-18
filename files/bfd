@@ -475,9 +475,6 @@ check() {
 		# resolve effective weight and trip for this rule
 		local eff_weight="${PRESSURE_WEIGHT:-1}"
 		local eff_trip="${PRESSURE_TRIP:-$GLOB_PRESSURE_TRIP}"
-		if [ -z "$TRIG" ]; then
-			TRIG="$GLOB_TRIG"
-		fi
 		MOD=$(sanitize_mod "$str") || { elog warn "invalid rule name '$str', skipping" le; continue; }
 		validate_rule "$str" || continue
 		active_count=$((active_count + 1))
@@ -537,7 +534,7 @@ check() {
 
 		# batch country lookup: single awk pass over ipcountry.dat
 		declare -A _cc_map  # IP -> CC (or "-")
-		local _cc_line _cc_ip _cc_val
+		local _cc_ip _cc_val
 		while read -r _cc_ip _cc_val; do
 			[ -n "$_cc_ip" ] && _cc_map[$_cc_ip]="$_cc_val"
 		done < <(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_unique_file")
@@ -718,7 +715,6 @@ _apool_report() {
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
-	trip="${GLOB_PRESSURE_TRIP:-20}"
 	local cnt aip first_ts last_ts mods aip_cc first_fmt last_fmt ban_status _gp _gp_fmt
 	while IFS='|' read -r cnt aip first_ts last_ts mods aip_cc; do
 		[ -z "$cnt" ] && continue
@@ -811,41 +807,6 @@ _batch_ban_status_lookup() {
 # _batch_ban_status_cleanup — remove the lookup file
 _batch_ban_status_cleanup() {
 	command rm -f "${_BAN_STATUS_FILE:-}"
-}
-
-# _apool_service_summary_awk source_file [cutoff] — shared AWK helper for per-service breakdown
-# Outputs pipe-delimited: event_count|service_name|unique_ip_count
-# Sorted by event count descending.
-_apool_service_summary_awk() {
-	local source_file="$1"
-	local cutoff="${2:-0}"
-	awk -v cutoff="$cutoff" '{
-		ts = $1 + 0
-		if (cutoff > 0 && ts < cutoff) next
-		cnt = ($4+0 > 0) ? $4+0 : 1
-		svc[$3] += cnt
-		key = $3 " " $2
-		if (!(key in seen)) { seen[key] = 1; uniq[$3]++ }
-	}
-	END {
-		for (s in svc) print svc[s] "|" s "|" uniq[s]
-	}' "$source_file" | sort -t'|' -k1 -nr
-}
-
-# _apool_service_summary source_file [cutoff] — per-service event and unique IP breakdown
-_apool_service_summary() {
-	local source_file="$1"
-	local cutoff="${2:-0}"
-	if [ ! -f "$source_file" ] || [ ! -s "$source_file" ]; then
-		return 0
-	fi
-	local atmp
-	atmp=$(mktemp "$INSTALL_PATH/tmp/.svcsum.XXXXXX")
-	echo "[+] Per-service threat breakdown" && echo
-	echo "SERVICE|COUNT|UNIQUE_IPS" > "$atmp"
-	_apool_service_summary_awk "$source_file" "$cutoff" >> "$atmp"
-	format_table < "$atmp"
-	command rm -f "$atmp"
 }
 
 # _apool_service_dual_awk source_file cutoff_24h cutoff_7d — dual-interval per-service AWK
@@ -1150,7 +1111,6 @@ _apool_report_json() {
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
-	trip="${GLOB_PRESSURE_TRIP:-20}"
 	echo "["
 	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
 		local first=1
@@ -1190,7 +1150,6 @@ _apool_report_csv() {
 	local now half_life trip
 	now=$(date +"%s")
 	half_life="${PRESSURE_HALF_LIFE:-300}"
-	trip="${GLOB_PRESSURE_TRIP:-20}"
 	echo "count,ip,pressure,pressure_trip,country,first_seen,last_seen,rules,status"
 	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
 		local cnt aip first_ts last_ts mods aip_cc
@@ -1207,43 +1166,6 @@ _apool_report_csv() {
 			_gp_fmt=$(pressure_format "$_gp")
 			trip=$(_resolve_min_trip "$mods")
 			echo "$cnt,$aip,$_gp_fmt,$trip,${aip_cc:---},$first_fmt,$last_fmt,$mods,$ban_status"
-		done
-	fi
-}
-
-# _apool_service_summary_json source_file [cutoff] — JSON array of per-service breakdown
-_apool_service_summary_json() {
-	local source_file="$1"
-	local cutoff="${2:-0}"
-	echo "["
-	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
-		local first=1
-		_apool_service_summary_awk "$source_file" "$cutoff" | \
-		while IFS='|' read -r svc_cnt svc_name svc_uniq; do
-			[ -z "$svc_cnt" ] && continue
-			if [ "$first" -eq 1 ]; then
-				first=0
-			else
-				echo ","
-			fi
-			printf '    {"service": "%s", "count": %s, "unique_ips": %s}' \
-				"$(_json_escape "$svc_name")" "$svc_cnt" "$svc_uniq"
-		done
-	fi
-	echo ""
-	echo "  ]"
-}
-
-# _apool_service_summary_csv source_file [cutoff] — CSV formatted per-service breakdown
-_apool_service_summary_csv() {
-	local source_file="$1"
-	local cutoff="${2:-0}"
-	echo "service,count,unique_ips"
-	if [ -f "$source_file" ] && [ -s "$source_file" ]; then
-		_apool_service_summary_awk "$source_file" "$cutoff" | \
-		while IFS='|' read -r svc_cnt svc_name svc_uniq; do
-			[ -z "$svc_cnt" ] && continue
-			echo "$svc_name,$svc_cnt,$svc_uniq"
 		done
 	fi
 }

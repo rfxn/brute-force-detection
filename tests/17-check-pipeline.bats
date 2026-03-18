@@ -362,49 +362,6 @@ EOF
 
 # --- IPv6 pipeline tests ---
 
-@test "pipeline: IPv6 host flows through filter + score + ban" {
-	local ignore_files="$TEST_TMPDIR/exclude.files"
-	local lo_hosts="$TEST_TMPDIR/lo_hosts"
-	touch "$ignore_files" "$lo_hosts"
-
-	local host="2001:db8::1"
-	local hosts_parsed
-	hosts_parsed=$(printf "2001:db8::1\n2001:db8::1\n2001:db8::1\n2001:db8::1\n2001:db8::1\n")
-
-	# host passes filter
-	filter_host "$host" "$ignore_files" "$lo_hosts"
-	local filter_rc=$?
-	[ "$filter_rc" -eq 0 ]
-
-	# record events and compute pressure (5 events * weight 1 at now = 5000)
-	local pressure
-	pressure=$(record_and_score "$host" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
-	[ "$pressure" -ge 5000 ]
-
-	# ban and record
-	state_pool_append "$INSTALL_PATH" "1700000000" "$host" "sshd"
-	state_bans_active_append "$INSTALL_PATH" "1000" "0" "$host" "sshd" "22"
-
-	# verify state
-	run state_bans_active_check "$INSTALL_PATH" "$host"
-	assert_success
-	run cat "$INSTALL_PATH/stats/attack.pool"
-	assert_output --partial "2001:db8::1"
-}
-
-@test "pipeline: mixed IPv4+IPv6 scored independently" {
-	local hosts_parsed
-	hosts_parsed=$(printf "192.0.2.1\n2001:db8::1\n192.0.2.1\n2001:db8::1\n192.0.2.1\n")
-	# record_and_score: 3 v4 events at now → pressure 3000
-	local v4_pressure
-	v4_pressure=$(record_and_score "192.0.2.1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
-	[ "$v4_pressure" -eq 3000 ]
-	# record_and_score: 2 v6 events at now → pressure 2000
-	local v6_pressure
-	v6_pressure=$(record_and_score "2001:db8::1" "$hosts_parsed" "$INSTALL_PATH" "300" "1000" "sshd")
-	[ "$v6_pressure" -eq 2000 ]
-}
-
 # --- IPv6 ban command selection ---
 
 @test "execute_ban: selects V6 command for IPv6 host" {

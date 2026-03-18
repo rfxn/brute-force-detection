@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # Test suite for pressure model functions:
-#   pressure_compute(), pressure_format(), record_and_score(),
+#   pressure_compute(), pressure_format(),
 #   _load_pressure_conf(), _apply_pressure()
 #
 
@@ -179,57 +179,6 @@ teardown() {
 	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
 	assert_success
 	assert_output "1000"
-}
-
-# ============================================================
-# record_and_score()
-# ============================================================
-
-@test "record_and_score: appends events and returns pressure" {
-	local now; now=$(date +%s)
-	PRESSURE_HALF_LIFE="300"
-	local hosts="192.0.2.1
-192.0.2.1
-192.0.2.1"
-	run record_and_score "192.0.2.1" "$hosts" "$INSTALL_PATH" "300" "$now" "sshd" "3"
-	assert_success
-	# 3 events * weight 3 = 9.0 → 9000
-	assert_output "9000"
-}
-
-@test "record_and_score: creates events in pressure.dat" {
-	local now; now=$(date +%s)
-	local hosts="192.0.2.1
-192.0.2.1"
-	record_and_score "192.0.2.1" "$hosts" "$INSTALL_PATH" "300" "$now" "sshd" "2" > /dev/null
-	local lines
-	lines=$(wc -l < "$INSTALL_PATH/tmp/pressure.dat")
-	[ "$lines" -eq 2 ]
-}
-
-@test "record_and_score: weight=1 with single event equals count model" {
-	local now; now=$(date +%s)
-	local hosts="192.0.2.1"
-	run record_and_score "192.0.2.1" "$hosts" "$INSTALL_PATH" "300" "$now" "sshd" "1"
-	assert_success
-	# 1 event * weight 1 at t=0 → 1000
-	assert_output "1000"
-}
-
-@test "record_and_score: pre-computed count (8th arg) skips grep" {
-	local now; now=$(date +%s)
-	# hosts_parsed is irrelevant when count is provided directly
-	run record_and_score "192.0.2.1" "" "$INSTALL_PATH" "300" "$now" "sshd" "3" "3"
-	assert_success
-	# 3 events * weight 3 at t=0 → 9000
-	assert_output "9000"
-}
-
-@test "record_and_score: pre-computed count=0 appends nothing" {
-	local now; now=$(date +%s)
-	record_and_score "192.0.2.1" "" "$INSTALL_PATH" "300" "$now" "sshd" "1" "0" > /dev/null
-	# pressure.dat should not exist or be empty
-	[ ! -s "$INSTALL_PATH/tmp/pressure.dat" ]
 }
 
 # ============================================================

@@ -26,6 +26,10 @@
 [Fix] cron.daily version header updated to 2.0.2 (F-A12)
 [Fix] Remove dead first-attempt rule path in _events_rule_log_file and
       _events_rule_patterns — RULES_PATH already includes subdirectory (F-A13)
+[Change] Remove dead code: _apool_service_summary family (4 functions),
+      record_and_score(), pressure_effective_weight(), dead TRIG fallback,
+      unused _cc_line declaration, dead trip initializations, dead
+      LOG_IDLE_SUPPRESS default in importconf; remove 22 associated tests
 
 2.0.1:
 
