@@ -1,4 +1,9 @@
 2.0.2:
+[Fix] Per-channel ENTRY_BLOCKS dispatch in _bfd_dispatch_messaging prevents
+      Slack JSON and Telegram MarkdownV2 from cross-contaminating when both
+      channels are enabled (F-A01)
+[Fix] Pass entry_total to _alert_set_global_vars in messaging path so
+      ALERT_COUNT reflects actual ban count instead of always "0" (F-A02)
 
 2.0.1:
 

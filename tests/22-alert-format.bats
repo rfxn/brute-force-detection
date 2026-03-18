@@ -648,3 +648,83 @@ RULEEOF
 	# file should still have content
 	[ -s "$spool_file" ]
 }
+
+# --- _bfd_dispatch_messaging bug fixes (F-A01, F-A02) ---
+
+# helper: set up messaging dispatch test environment
+_setup_messaging_dispatch_env() {
+	local tpl_dir="$1"
+	mkdir -p "$tpl_dir"
+	# minimal templates — entry templates produce channel-specific markers
+	echo "SLACK_MARKER" > "$tpl_dir/slack.entry.tpl"
+	echo "TG_MARKER" > "$tpl_dir/telegram.entry.tpl"
+	echo '{"fields": [' > "$tpl_dir/discord.entry.tpl"
+	# outer message templates reference ENTRY_BLOCKS and ALERT_COUNT
+	echo '{"blocks": [{{ENTRY_BLOCKS}}], "count": "{{ALERT_COUNT}}"}' > "$tpl_dir/slack.message.tpl"
+	echo '{{ENTRY_BLOCKS}} count={{ALERT_COUNT}}' > "$tpl_dir/telegram.message.tpl"
+	echo '{"embeds": [{{ENTRY_FIELDS}}]}' > "$tpl_dir/discord.message.tpl"
+	# register and enable messaging channels (alert_lib auto-registers at source time)
+	SLACK_ALERTS="1"
+	TELEGRAM_ALERTS="1"
+	DISCORD_ALERTS="0"
+	_bfd_alert_init
+	# mock curl so handlers don't make real API calls
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/curl"
+	echo 'exit 0' >> "$TEST_TMPDIR/bin/curl"
+	chmod +x "$TEST_TMPDIR/bin/curl"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	# alert_lib tmpdir for rendered template staging
+	export ALERT_TMPDIR="$TEST_TMPDIR"
+}
+
+@test "messaging dispatch: ALERT_COUNT equals actual entry count (F-A02)" {
+	local tpl_dir="$TEST_TMPDIR/tpl"
+	_setup_messaging_dispatch_env "$tpl_dir"
+	# create alerts file with 2 entries
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2|5" >> "$af"
+	# capture ALERT_COUNT by overriding alert_dispatch
+	local capture_file="$TEST_TMPDIR/alert_count_capture"
+	alert_dispatch() {
+		echo "$ALERT_COUNT" >> "$capture_file"
+		return 0
+	}
+	_bfd_dispatch_messaging "$af" "Test Alert" "5" "$tpl_dir"
+	# ALERT_COUNT should be "2" (not "0")
+	[ -f "$capture_file" ]
+	run head -1 "$capture_file"
+	assert_output "2"
+}
+
+@test "messaging dispatch: ENTRY_BLOCKS per-channel isolation (F-A01)" {
+	local tpl_dir="$TEST_TMPDIR/tpl"
+	_setup_messaging_dispatch_env "$tpl_dir"
+	# enable both Slack and Telegram
+	SLACK_ALERTS="1"
+	TELEGRAM_ALERTS="1"
+	_bfd_alert_init
+	# create alerts file with 1 entry
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
+	# capture ENTRY_BLOCKS per alert_dispatch call
+	local capture_dir="$TEST_TMPDIR/captures"
+	mkdir -p "$capture_dir"
+	alert_dispatch() {
+		local _ch="$3"
+		echo "$ENTRY_BLOCKS" > "$capture_dir/${_ch}_blocks"
+		return 0
+	}
+	_bfd_dispatch_messaging "$af" "Test Alert" "5" "$tpl_dir"
+	# Slack's ENTRY_BLOCKS should contain SLACK_MARKER but not TG_MARKER
+	[ -f "$capture_dir/slack_blocks" ]
+	run cat "$capture_dir/slack_blocks"
+	assert_output --partial "SLACK_MARKER"
+	refute_output --partial "TG_MARKER"
+	# Telegram's ENTRY_BLOCKS should contain TG_MARKER but not SLACK_MARKER
+	[ -f "$capture_dir/telegram_blocks" ]
+	run cat "$capture_dir/telegram_blocks"
+	assert_output --partial "TG_MARKER"
+	refute_output --partial "SLACK_MARKER"
+}

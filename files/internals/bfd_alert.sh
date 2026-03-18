@@ -848,13 +848,13 @@ _bfd_dispatch_messaging() {
 		return 0
 	fi
 
-	# Set global template variables (hostname, version, timestamp, etc.)
-	_alert_set_global_vars
-
 	# Build per-entry blocks for each enabled channel
 	local slack_blocks="" telegram_blocks="" discord_fields=""
 	local entry_total
 	entry_total=$(wc -l < "$alerts_file")
+
+	# Set global template variables with correct count (F-A02: must be after entry_total)
+	_alert_set_global_vars "$entry_total"
 	local entry_num=0
 	local pipe_line
 	while IFS= read -r pipe_line; do
@@ -895,13 +895,23 @@ _bfd_dispatch_messaging() {
 	# Compute summary for outer template
 	_alert_compute_summary "$alerts_file"
 
-	# Export accumulated entry blocks as template variables
-	export ENTRY_BLOCKS="${slack_blocks}${telegram_blocks}"
-	export ENTRY_FIELDS="$discord_fields"
-
-	# Dispatch to all enabled channels (excluding email)
-	alert_dispatch "$tpl_dir" "$subject" "slack,telegram,discord"
-	local rc=$?
+	# Dispatch per-channel to prevent cross-channel block contamination (F-A01)
+	local rc=0
+	if alert_channel_enabled "slack"; then
+		export ENTRY_BLOCKS="$slack_blocks"
+		export ENTRY_FIELDS=""
+		alert_dispatch "$tpl_dir" "$subject" "slack" || rc=$?
+	fi
+	if alert_channel_enabled "telegram"; then
+		export ENTRY_BLOCKS="$telegram_blocks"
+		export ENTRY_FIELDS=""
+		alert_dispatch "$tpl_dir" "$subject" "telegram" || rc=$?
+	fi
+	if alert_channel_enabled "discord"; then
+		export ENTRY_BLOCKS=""
+		export ENTRY_FIELDS="$discord_fields"
+		alert_dispatch "$tpl_dir" "$subject" "discord" || rc=$?
+	fi
 
 	# Clean up exported entry variables
 	unset ENTRY_BLOCKS ENTRY_FIELDS
