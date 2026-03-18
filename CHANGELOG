@@ -7,6 +7,14 @@
 [Fix] Defer CIDR sidecar cleanup from _alert_set_entry_vars to send_alerts
       so all rendering passes (text, HTML, messaging) read enriched subnet
       detail instead of falling through to static fallback (F-A04)
+[Fix] Report text table top-IPs rows now emit all 7 columns (FIRST/LAST
+      timestamps were missing from data rows despite being in the header) (F-A09)
+[Fix] Report Slack/Discord templates use JSON-escaped brief vars to prevent
+      literal newlines from breaking JSON string values (F-A05)
+[Fix] Escape BAN_DURATION_DETAIL for Telegram MarkdownV2 — parentheses in
+      temporary ban duration caused malformed messages (F-A10)
+[Fix] Escape REPORT_TREND_LABEL for Telegram MarkdownV2 — parentheses in
+      trend comparison caused malformed report messages (F-A11)
 
 2.0.1:
 

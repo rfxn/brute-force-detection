@@ -374,6 +374,9 @@ _alert_set_entry_vars() {
 	fi
 	export BAN_TYPE="$ban_type"
 	export BAN_DURATION_DETAIL="$ban_duration_detail"
+	# Telegram MarkdownV2-escaped variant — parentheses in "(1h 30m), expires ..." are special chars
+	export BAN_DURATION_DETAIL_TG
+	BAN_DURATION_DETAIL_TG=$(_alert_telegram_escape "$ban_duration_detail")
 	export BAN_TYPE_COLOR
 	BAN_TYPE_COLOR=$(_alert_ban_type_color "$action" "$expiry")
 

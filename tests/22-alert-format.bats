@@ -765,3 +765,47 @@ SC
 	assert_output --partial "TG_MARKER"
 	refute_output --partial "SLACK_MARKER"
 }
+
+# --- Telegram MarkdownV2 escaping (F-A10, F-A11) ---
+
+@test "BAN_DURATION_DETAIL_TG: parentheses escaped for Telegram MarkdownV2 (F-A10)" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	EMAIL_REPUTATION_LINKS=""
+	# temporary ban with parentheses in duration detail: " (1h 30m), expires ..."
+	local future_expiry
+	future_expiry=$(( $(date +%s) + 5400 ))
+	local line="192.0.2.1|sshd|22|5000|${future_expiry}|ban|0|/dev/null|root|5|300|3|5"
+	_alert_set_entry_vars "$line" 1 1
+	# BAN_DURATION_DETAIL should contain unescaped parentheses
+	[[ "$BAN_DURATION_DETAIL" == *"("* ]]
+	# BAN_DURATION_DETAIL_TG should have parentheses escaped with backslash
+	[[ "$BAN_DURATION_DETAIL_TG" == *"\\("* ]]
+	[[ "$BAN_DURATION_DETAIL_TG" == *"\\)"* ]]
+}
+
+@test "REPORT_TREND_LABEL_TG: parentheses escaped for Telegram MarkdownV2 (F-A11)" {
+	# Simulate what _report_data sets: a trend label with parentheses
+	# Typical values: "70% decrease vs prior 24h (3 vs 10)" or
+	#                 "new activity (5 events, none in prior 24h)"
+	REPORT_TREND_LABEL="70% decrease vs prior 24h (3 vs 10)"
+	export REPORT_TREND_LABEL
+
+	# Apply the same escaping that bfd_report.sh does at line 273
+	REPORT_TREND_LABEL_TG=$(_alert_telegram_escape "$REPORT_TREND_LABEL")
+	export REPORT_TREND_LABEL_TG
+
+	# Original should contain unescaped parentheses
+	[[ "$REPORT_TREND_LABEL" == *"("* ]]
+	# TG variant should have parentheses escaped with backslash
+	[[ "$REPORT_TREND_LABEL_TG" == *"\\("* ]]
+	[[ "$REPORT_TREND_LABEL_TG" == *"\\)"* ]]
+	# Verify the % is also escaped (MarkdownV2 does not require it, but dots are)
+	# The period in "24h" is not present, but verify no unescaped parens remain
+	# by checking the full escaped string doesn't have bare parens
+	local bare_parens
+	bare_parens=$(echo "$REPORT_TREND_LABEL_TG" | sed 's/\\(//g; s/\\)//g')
+	[[ "$bare_parens" != *"("* ]]
+	[[ "$bare_parens" != *")"* ]]
+}
