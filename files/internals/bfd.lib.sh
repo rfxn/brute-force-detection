@@ -842,11 +842,11 @@ validate_config() {
 	# periodic report config
 	case "${REPORT_ENABLED:-0}" in
 		0|1) ;;
-		*) elog error "REPORT_ENABLED must be 0 or 1 (got '${REPORT_ENABLED}')."
+		*) echo "error: REPORT_ENABLED must be 0 or 1 (got '${REPORT_ENABLED}')." >&2
 		   return "$EXIT_CONFIG_ERROR" ;;
 	esac
 	if [ -n "${REPORT_TOP_N:-}" ] && ! [ "${REPORT_TOP_N}" -gt 0 ] 2>/dev/null; then  # integer > 0 check
-		elog error "REPORT_TOP_N must be a positive integer (got '${REPORT_TOP_N}')."
+		echo "error: REPORT_TOP_N must be a positive integer (got '${REPORT_TOP_N}')." >&2
 		return "$EXIT_CONFIG_ERROR"
 	fi
 }
@@ -2018,27 +2018,6 @@ _pressure_aggregate_all() {
 		}' "$events_file" | sort -rn
 }
 
-# record_and_score host hosts_parsed install_path half_life now mod weight [count]
-# Replacement for count_failures() using pressure scoring:
-#   1. Count host occurrences in hosts_parsed (grep -cxF), or use pre-computed count
-#   2. Append that many weighted events to pressure.dat
-#   3. Compute per-service pressure (decayed sum)
-#   4. Return pressure * 1000 as integer
-# When count (arg 8) is provided, skips the O(n) grep scan — check() pre-computes
-# counts via uniq -c to avoid O(n^2) repeated grep passes over HOSTS_PARSED.
-record_and_score() {
-	local host="$1" hosts_parsed="$2" install_path="$3"
-	local half_life="$4" now="$5" mod="$6" weight="${7:-1}"
-	local count="${8:-}"
-	if [ -z "$count" ]; then
-		count=$(echo "$hosts_parsed" | grep -cxF "$host")
-	fi
-	if [ "$count" -gt 0 ]; then
-		state_pressure_append "$install_path" "$now" "$host" "$mod" "$count" "$weight"
-	fi
-	pressure_compute "$install_path" "$host" "$half_life" "$now" "$mod"
-}
-
 # --- Country multiplier functions ---
 
 # ip_to_country ip db_file — look up 2-letter country code for an IP address
@@ -2144,33 +2123,6 @@ country_weight() {
 	/^$/ { next }
 	$1 == cc { print $2; found=1; exit }
 	END { if (!found) print 10 }' "$weights_file"
-}
-
-# pressure_effective_weight rule_weight host install_path — apply country multiplier
-# Auto-enabled when pressure-country.conf exists with entries; otherwise passthrough.
-# Returns: rule_weight * country_mult / 10 (integer math, minimum 1).
-pressure_effective_weight() {
-	local rule_weight="$1" host="$2" install_path="$3"
-	local db_file="$install_path/ipcountry.dat"
-	local weights_file="$install_path/pressure-country.conf"
-	if [ ! -f "$db_file" ] || [ ! -f "$weights_file" ]; then
-		echo "$rule_weight"
-		return 0
-	fi
-	local cc
-	cc=$(ip_to_country "$host" "$db_file")
-	if [ -z "$cc" ]; then
-		echo "$rule_weight"
-		return 0
-	fi
-	local mult
-	mult=$(country_weight "$cc" "$weights_file")
-	# integer math: weight * mult / 10, minimum 1
-	local eff=$(( (rule_weight * mult + 5) / 10 ))
-	if [ "$eff" -lt 1 ]; then
-		eff=1
-	fi
-	echo "$eff"
 }
 
 # --- Batch pre-computation functions for check() performance ---
