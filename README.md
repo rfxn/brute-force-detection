@@ -1,15 +1,17 @@
 # Brute Force Detection (BFD)
 
+[![CI](https://github.com/rfxn/brute-force-detection/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/rfxn/brute-force-detection/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](CHANGELOG)
 [![License: GPL v2](https://img.shields.io/badge/license-GPL_v2-green.svg)](COPYING.GPL)
+[![Shell](https://img.shields.io/badge/language-bash-89e051.svg)](https://www.gnu.org/software/bash/)
+[![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)](README.md#11-supported-systems)
 
-**Log-based brute force attack detection and IP banning for Linux servers** — pressure-based
-scoring that lets humans make mistakes while stopping bots cold, automatic ban lifecycle,
-and IPv4/IPv6 support across 57 service rules.
+Log-based brute force detection and automatic IP banning for Linux servers.
+Pressure-based scoring lets humans make mistakes while stopping bots cold —
+57 service rules, 8 firewall backends, IPv4/IPv6, GeoIP enrichment,
+multi-channel alerting, and continuous watch mode with ~10s detection latency.
 
-> (C) 1999-2026, R-fx Networks &lt;proj@rfxn.com&gt;<br>
-> (C) 2026, Ryan MacDonald &lt;ryan@rfxn.com&gt;<br>
-> Licensed under [GNU GPL v2](COPYING.GPL)
+*Copyright (C) 1999-2026 [R-fx Networks](https://www.rfxn.com) · Ryan MacDonald · [GPL v2](COPYING.GPL)*
 
 ---
 
@@ -48,12 +50,12 @@ and IPv4/IPv6 support across 57 service rules.
   - [6.1 Rule Catalog](#61-rule-catalog)
   - [6.2 Rule Customization](#62-rule-customization)
 - [7. Ignore Lists](#7-ignore-lists)
-  - [7.1 Periodic Reports](#71-periodic-reports)
-- [8. Ban Management](#8-ban-management)
-- [9. IPv6 Support](#9-ipv6-support)
-- [10. Troubleshooting](#10-troubleshooting)
-- [11. License](#11-license)
-- [12. Support](#12-support)
+- [8. Periodic Reports](#8-periodic-reports)
+- [9. Ban Management](#9-ban-management)
+- [10. IPv6 Support](#10-ipv6-support)
+- [11. Troubleshooting](#11-troubleshooting)
+- [12. License](#12-license)
+- [13. Support](#13-support)
 
 ---
 
@@ -316,7 +318,7 @@ These four settings form a pipeline: `BAN_ESCALATION` controls how ban duration 
 | `BAN_COMMAND_V6` | *(empty)* | IPv6-specific ban command. When empty, `BAN_COMMAND` is used for both address families |
 | `UNBAN_COMMAND_V6` | *(empty)* | IPv6-specific unban command. When empty, `UNBAN_COMMAND` is used for both |
 
-Leave empty when using tools that handle both protocols natively (nft with `inet` family, APF, ip route). Set explicitly for tools that require separate IPv4/IPv6 commands (iptables/ip6tables). See [section 9](#9-ipv6-support).
+Leave empty when using tools that handle both protocols natively (nft with `inet` family, APF, ip route). Set explicitly for tools that require separate IPv4/IPv6 commands (iptables/ip6tables). See [section 10](#10-ipv6-support).
 
 ### 3.6 Log Paths
 
@@ -422,13 +424,13 @@ To customize, copy the desired partial(s) into `alert/custom.d/` and edit the co
 | `{{HOST}}` | `192.0.2.1` | Banned IP address |
 | `{{SERVICE}}` | `sshd` | Service name |
 | `{{PRESSURE}}` | `21.4` | Pressure score |
-| `{{FAIL_COUNT}}` | `7` | Failed login attempts detected this cycle |
+| `{{FAIL_COUNT_DISPLAY}}` | `7` | Failed login attempts detected this cycle |
 | `{{BAN_TYPE}}` | `Temporary` | Ban type (Temporary/Permanent/Escalated) |
-| `{{BAN_DURATION}}` | `10m` | Human-readable duration |
-| `{{COUNTRY_CODE}}` | `CN` | 2-letter country code |
+| `{{BAN_DURATION_DETAIL}}` | `10m` | Human-readable duration |
+| `{{COUNTRY_FLAG}}` | `CN` | 2-letter country code |
 | `{{COUNTRY_DISPLAY}}` | `China (CN)` | Country name with code (degrades to bare code) |
-| `{{SOURCE_LOGS}}` | *(log lines)* | Sanitized source log excerpt |
-| `{{REPUTATION_LINKS_TEXT}}` | `AbuseIPDB: https://...` | Text-format reputation links |
+| `{{SOURCE_LOGS_SECTION_TEXT}}` | *(log lines)* | Sanitized source log excerpt |
+| `{{REPUTATION_SECTION_TEXT}}` | `AbuseIPDB: https://...` | Text-format reputation links |
 
 See the shipped template files for the complete variable reference.
 
@@ -443,7 +445,7 @@ Messaging channels (Slack, Telegram, Discord) have their own template partials:
 | `discord.message.tpl` | Discord embed JSON wrapper |
 | `discord.entry.tpl` | Discord per-ban embed field |
 
-Periodic reports (see [section 7.1](#71-periodic-reports)) use their own template partials:
+Periodic reports (see [section 8](#8-periodic-reports)) use their own template partials:
 
 | File | Description |
 |------|-------------|
@@ -865,7 +867,9 @@ BFD provides two mechanisms for excluding addresses from bans:
 
 BFD automatically detects local IPv4 and IPv6 addresses (including `::1`) and excludes them from bans. No manual configuration is needed for local address exclusion.
 
-### 7.1 Periodic Reports
+---
+
+## 8. Periodic Reports
 
 BFD can generate scheduled threat reports delivered via all configured alerting channels (email, Slack, Telegram, Discord):
 
@@ -896,7 +900,7 @@ When `REPORT_ENABLED=1`, `cron.daily` triggers daily reports every day, weekly r
 
 ---
 
-## 8. Ban Management
+## 9. Ban Management
 
 Bans can be temporary (auto-expire after `BAN_TTL` seconds) or permanent (`BAN_TTL=0`). Temporary bans require `UNBAN_COMMAND` to be set for the firewall rule to be removed automatically on expiry.
 
@@ -928,7 +932,7 @@ Both `bfd -a` (threat activity) and `bfd -e` (events) read from the attack pool.
 
 ---
 
-## 9. IPv6 Support
+## 10. IPv6 Support
 
 BFD detects and bans both IPv4 and IPv6 addresses automatically. Rules do not need modification — the extraction engine handles both address families. IPv6 addresses are normalized before counting and comparison.
 
@@ -945,7 +949,7 @@ Local IPv6 addresses (including `::1` and all link-local addresses) are auto-det
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 Run `bfd -c` first — it validates config, log paths, firewall binaries, rule status, state directories, and active bans in a single non-destructive check.
 
@@ -960,7 +964,7 @@ Run `bfd -c` first — it validates config, log paths, firewall binaries, rule s
 
 ---
 
-## 11. License
+## 12. License
 
 BFD is developed and supported on a volunteer basis by Ryan MacDonald [ryan@rfxn.com].
 
@@ -968,7 +972,7 @@ BFD (Brute Force Detection) is distributed under the GNU General Public License 
 
 ---
 
-## 12. Support
+## 13. Support
 
 The BFD source repository is at: https://github.com/rfxn/brute-force-detection
 

@@ -20,7 +20,21 @@
 ###
 #
 INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
-LOCK_FILE="$INSTALL_PATH/lock.utime"
+
+# source internals.conf for LOCK_FILE and derived paths (FHS packages
+# transform LOCK_FILE to /var/lib/bfd/lock.utime via internals.conf)
+_int_conf="$INSTALL_PATH/internals/internals.conf"
+if [ -f "$_int_conf" ]; then
+	_int_owner=$(stat -L -c '%u' "$_int_conf" 2>/dev/null)
+	_int_perms=$(stat -L -c '%a' "$_int_conf" 2>/dev/null)
+	if [ "${_int_owner:-}" = "0" ] && \
+	   [ "$(( ${_int_perms:1:1} & 2 ))" -eq 0 ] 2>/dev/null && \
+	   [ "$(( ${_int_perms: -1} & 2 ))" -eq 0 ] 2>/dev/null; then
+		# shellcheck disable=SC1090
+		. "$_int_conf"
+	fi
+fi
+LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
 
 # check if bfd is actively running (mkdir-based lock used by bfd/watch)
 if [ -d "$LOCK_FILE.lk" ]; then

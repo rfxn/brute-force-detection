@@ -1398,7 +1398,8 @@ usage_short() {
 	echo "  bfd --test-alert TYPE   send test alert (email|slack|telegram|discord)"
 	echo "  bfd --scan [RULE]   full-log scan (all or specific rule)"
 	echo ""
-	echo "Output modifiers:    --json  --csv  --sort=  --limit=  --24h  --7d  --30d  --active  -V"
+	echo "Output modifiers:    --json  --csv  --sort=  --limit=  --24h  --7d  --30d"
+	echo "                     --active  -V"
 	echo ""
 	echo "Run 'bfd -h' for full option list, or 'man bfd' for documentation."
 }

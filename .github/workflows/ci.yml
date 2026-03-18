@@ -15,12 +15,12 @@ jobs:
         run: sudo apt-get install -y shellcheck
       - name: Syntax check (bash -n)
         run: |
-          bash -n files/bfd files/internals/bfd.lib.sh files/internals/elog_lib.sh files/internals/alert_lib.sh files/internals/bfd_alert.sh files/internals/pkg_lib.sh files/internals/geoip_lib.sh files/tlog files/internals/tlog_lib.sh files/update-ipcountry.sh
+          bash -n files/bfd files/internals/bfd.lib.sh files/internals/elog_lib.sh files/internals/alert_lib.sh files/internals/bfd_alert.sh files/internals/pkg_lib.sh files/internals/geoip_lib.sh files/internals/bfd_report.sh files/tlog files/internals/tlog_lib.sh files/update-ipcountry.sh
           bash -n install.sh uninstall.sh importconf cron.daily bfd-watch.init
           bash -n pkg/deb/debian/bfd.preinst pkg/deb/debian/bfd.postinst pkg/deb/debian/bfd.prerm pkg/deb/debian/bfd.postrm
       - name: Shellcheck main scripts
         run: |
-          shellcheck -S warning files/bfd files/internals/bfd.lib.sh files/internals/elog_lib.sh files/internals/alert_lib.sh files/internals/bfd_alert.sh files/internals/pkg_lib.sh files/internals/geoip_lib.sh files/tlog files/internals/tlog_lib.sh files/update-ipcountry.sh
+          shellcheck -S warning files/bfd files/internals/bfd.lib.sh files/internals/elog_lib.sh files/internals/alert_lib.sh files/internals/bfd_alert.sh files/internals/pkg_lib.sh files/internals/geoip_lib.sh files/internals/bfd_report.sh files/tlog files/internals/tlog_lib.sh files/update-ipcountry.sh
           shellcheck -S warning install.sh uninstall.sh importconf cron.daily bfd-watch.init
           shellcheck -S warning pkg/deb/debian/bfd.preinst pkg/deb/debian/bfd.postinst pkg/deb/debian/bfd.prerm pkg/deb/debian/bfd.postrm
           shellcheck -S warning -s bash --exclude=SC2207 bfd.bash-completion
