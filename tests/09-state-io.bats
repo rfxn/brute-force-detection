@@ -1,0 +1,119 @@
+#!/usr/bin/env bats
+#
+# Test suite for state file I/O functions
+#
+
+load '/usr/local/lib/bats/bats-support/load'
+load '/usr/local/lib/bats/bats-assert/load'
+load 'helpers/bfd-common'
+
+setup() {
+	bfd_common_setup
+	INSTALL_PATH="$TEST_TMPDIR/bfd"
+	mkdir -p "$INSTALL_PATH"
+}
+
+teardown() {
+	bfd_teardown
+}
+
+# --- state_init ---
+
+@test "state_init: creates tmp and stats directories" {
+	state_init "$INSTALL_PATH"
+	[ -d "$INSTALL_PATH/tmp" ]
+	[ -d "$INSTALL_PATH/stats" ]
+}
+
+@test "state_init: creates pressure.dat, bans.active, bans.history, attack.pool" {
+	state_init "$INSTALL_PATH"
+	[ -f "$INSTALL_PATH/tmp/pressure.dat" ]
+	[ -f "$INSTALL_PATH/tmp/bans.active" ]
+	[ -f "$INSTALL_PATH/tmp/bans.history" ]
+	[ -f "$INSTALL_PATH/stats/attack.pool" ]
+}
+
+@test "state_init: sets 750 permissions on state directories" {
+	state_init "$INSTALL_PATH"
+	local perms
+	perms=$(stat -c '%a' "$INSTALL_PATH/tmp")
+	[ "$perms" = "750" ]
+	perms=$(stat -c '%a' "$INSTALL_PATH/stats")
+	[ "$perms" = "750" ]
+}
+
+@test "state_init: sets 600 permissions on state files" {
+	state_init "$INSTALL_PATH"
+	local perms
+	perms=$(stat -c '%a' "$INSTALL_PATH/tmp/pressure.dat")
+	[ "$perms" = "600" ]
+	perms=$(stat -c '%a' "$INSTALL_PATH/tmp/bans.active")
+	[ "$perms" = "600" ]
+	perms=$(stat -c '%a' "$INSTALL_PATH/stats/attack.pool")
+	[ "$perms" = "600" ]
+}
+
+@test "state_init: idempotent on existing dirs and files" {
+	state_init "$INSTALL_PATH"
+	echo "1000 192.0.2.1 sshd" >> "$INSTALL_PATH/tmp/pressure.dat"
+	state_init "$INSTALL_PATH"
+	# file should not be truncated
+	run cat "$INSTALL_PATH/tmp/pressure.dat"
+	assert_output "1000 192.0.2.1 sshd"
+}
+
+# --- state_pool_append ---
+
+@test "state_pool_append: appends entry to attack.pool" {
+	state_init "$INSTALL_PATH"
+	state_pool_append "$INSTALL_PATH" "1700000000" "192.0.2.1" "sshd"
+	run cat "$INSTALL_PATH/stats/attack.pool"
+	assert_output "1700000000 192.0.2.1 sshd 1 -- ban 0 all 0 service"
+}
+
+@test "state_pool_append: multiple appends accumulate" {
+	state_init "$INSTALL_PATH"
+	state_pool_append "$INSTALL_PATH" "1700000000" "192.0.2.1" "sshd"
+	state_pool_append "$INSTALL_PATH" "1700000001" "192.0.2.2" "dovecot"
+	local line_count
+	line_count=$(wc -l < "$INSTALL_PATH/stats/attack.pool")
+	[ "$line_count" -eq 2 ]
+}
+# --- flock-protected appends ---
+
+@test "state_pool_append: concurrent writes produce correct line count" {
+	state_init "$INSTALL_PATH"
+	# run 10 appends in parallel
+	local i
+	for i in $(seq 1 10); do
+		state_pool_append "$INSTALL_PATH" "1700000$i" "192.0.2.$i" "sshd" &
+	done
+	wait
+	local line_count
+	line_count=$(wc -l < "$INSTALL_PATH/stats/attack.pool")
+	[ "$line_count" -eq 10 ]
+}
+
+@test "state_pressure_append: concurrent writes produce correct line count" {
+	state_init "$INSTALL_PATH"
+	local i
+	for i in $(seq 1 10); do
+		state_pressure_append "$INSTALL_PATH" "100$i" "192.0.2.$i" "sshd" &
+	done
+	wait
+	local line_count
+	line_count=$(wc -l < "$INSTALL_PATH/tmp/pressure.dat")
+	[ "$line_count" -eq 10 ]
+}
+
+@test "state_bans_history_append: concurrent writes produce correct line count" {
+	state_init "$INSTALL_PATH"
+	local i
+	for i in $(seq 1 10); do
+		state_bans_history_append "$INSTALL_PATH" "100$i" "200$i" "192.0.2.$i" "sshd" "ban" &
+	done
+	wait
+	local line_count
+	line_count=$(wc -l < "$INSTALL_PATH/tmp/bans.history")
+	[ "$line_count" -eq 10 ]
+}

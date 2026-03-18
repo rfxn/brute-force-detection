@@ -1,0 +1,29 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# very high trip point — DNS queries are high-volume
+# PRESSURE_WEIGHT="1"
+# PRESSURE_TRIP="200"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/sbin/named"
+
+if [ -f "$PREREQ" ]; then
+	# detect named log path
+	if [ -f "/var/log/named/security.log" ]; then
+		LOG_FILE="/var/log/named/security.log"
+	else
+		LOG_FILE="$KERNEL_LOG_PATH"
+	fi
+	PORTS="53"
+	LOG_TAG="named"
+
+	## BIND/named query denied and zone transfer denied
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"named.* <HOST>[#][0-9]+.*query.*denied" \
+		"named.* <HOST>[#][0-9]+.*zone transfer.*denied")
+fi

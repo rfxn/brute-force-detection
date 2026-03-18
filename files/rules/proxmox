@@ -1,0 +1,23 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="3"
+# PRESSURE_TRIP="15"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/bin/pvesh"
+
+if [ -f "$PREREQ" ]; then
+	PORTS="8006"
+	LOG_FILE="$AUTH_LOG_PATH"
+	LOG_TAG="proxmox"
+
+	## PROXMOX VE
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"pvedaemon.*authentication failure.*rhost=<HOST>" \
+		"pveproxy.*authentication failure.*rhost=<HOST>")
+fi

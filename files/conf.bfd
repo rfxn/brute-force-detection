@@ -1,73 +1,302 @@
 #!/bin/bash
 #
-# BFD 1.5-2 <bfd@rfxn.com>
-# Copyright (C) 1999-2014, R-fx Networks <proj@r-fx.org>
-# Copyright (C) 2014, Ryan MacDonald <ryan@r-fx.org>
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+# Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
+# Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
 # This program may be freely redistributed under the terms of the GNU GPL
 #
-# NOTE: This file should be edited with word/line wrapping off,
-#       if your using pico please start it with the -w switch.
-#       (e.g: pico -w filename)
+
+# =============================================
+# Pressure Model (Detection)
+# =============================================
 #
+# BFD uses exponential-decay pressure scoring: each failed login adds
+# pressure weighted by service severity, and pressure decays over time
+# via a half-life. A ban fires when accumulated pressure crosses a trip
+# point. This naturally differentiates a human typing a wrong password
+# from a bot hammering a service.
+#
+# Pressure formula:
+#   pressure = SUM { weight * 2^(-(now - event_time) / half_life) }
+#
+# Example (SSH, weight=3, trip=15, half-life=300s):
+#   Bot: 7 failures in 1s  -> pressure = 3*7 = 21.0 -> BAN
+#   Human: 5 typos over 4m -> pressure decays to ~11.1 -> NO BAN
+#
+# Quick ref: trip / weight = minimum rapid failures for a ban.
+# Default: 20 / 3 (sshd) = 7 rapid failures triggers a ban.
+# Spread-out failures need more attempts (older ones decay).
 
-# how many failure events must an address have before being blocked?
-# you can override this on a per rule basis in /usr/local/bfd/rules/
-TRIG="15"
+# pressure trip point — accumulated pressure needed to trigger a ban
+# per-rule overrides: edit rules/ files or pressure.conf
+# range: 1-200 (values above 200 effectively disable detection)
+PRESSURE_TRIP="20"
 
-# send email alerts for all events [0 = off; 1 = on]
-EMAIL_ALERTS="0" 
+# pressure half-life in seconds (how fast pressure decays)
+# at 1 half-life, pressure is halved; at 2, quartered; etc.
+# shorter = more forgiving; longer = longer memory (default 5 minutes)
+PRESSURE_HALF_LIFE="300"
 
-# local user or email address alerts are sent to (separate multiple with comma)
+# =============================================
+# Email Alerts
+# =============================================
+
+# send email alerts when hosts are banned [0 = off, 1 = on]
+EMAIL_ALERTS="0"
+
+# alert recipient; comma-separated for multiple addresses
 EMAIL_ADDRESS="root"
 
-# subject of email alerts
+# alert subject line ($HOSTNAME expands at runtime)
 EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
 
-# executable command to block attacking hosts
+# log lines from the offending service included in each alert; must be > 0
+EMAIL_LOGLINES="5"
+
+# email body format [text = plain text, html = HTML only, both = multipart text+HTML]
+# text uses 'mail' command; html/both require 'sendmail' (falls back to text if missing)
+EMAIL_FORMAT="text"
+
+# email digest mode [cycle = one email per run, timed = accumulate and send on interval]
+EMAIL_DIGEST="cycle"
+
+# digest flush interval in seconds (only used when EMAIL_DIGEST="timed")
+EMAIL_DIGEST_INTERVAL="900"
+
+# IP reputation lookup links included in alerts (comma-separated)
+# available: abuseipdb, shodan, virustotal, ipinfo, greynoise
+EMAIL_REPUTATION_LINKS=""
+
+# --- SMTP Relay (optional — leave empty to use local MTA) ---
+# SMTP relay server URL (e.g., smtps://smtp.gmail.com:465, smtp://relay.example.com:587)
+SMTP_RELAY=""
+# sender address for relay mode (required when SMTP_RELAY is set)
+SMTP_FROM=""
+# SMTP authentication credentials (required when SMTP_RELAY is set)
+SMTP_USER=""
+SMTP_PASS=""
+
+# =============================================
+# Slack Alerts
+# =============================================
+
+# enable Slack alerts [0 = disabled, 1 = enabled]
+SLACK_ALERTS="0"
+
+# delivery mode [webhook = incoming webhook, bot = Bot API + file uploads]
+SLACK_MODE="webhook"
+
+# webhook URL (required when SLACK_MODE="webhook")
+# create at: https://api.slack.com/messaging/webhooks
+SLACK_WEBHOOK_URL=""
+
+# Bot API token (required when SLACK_MODE="bot")
+# create at: https://api.slack.com/apps → Bot User OAuth Token (xoxb-...)
+SLACK_TOKEN=""
+
+# channel for Bot API posts (required when SLACK_MODE="bot")
+# use channel ID (e.g., C01ABCDEF) or #channel-name
+SLACK_CHANNEL=""
+
+# =============================================
+# Telegram Alerts
+# =============================================
+
+# enable Telegram alerts [0 = disabled, 1 = enabled]
+TELEGRAM_ALERTS="0"
+
+# bot token from @BotFather (required when TELEGRAM_ALERTS="1")
+TELEGRAM_BOT_TOKEN=""
+
+# chat/group/channel ID (required when TELEGRAM_ALERTS="1")
+# use @userinfobot or the getUpdates API to find your chat ID
+TELEGRAM_CHAT_ID=""
+
+# =============================================
+# Discord Alerts
+# =============================================
+
+# enable Discord alerts [0 = disabled, 1 = enabled]
+DISCORD_ALERTS="0"
+
+# webhook URL (required when DISCORD_ALERTS="1")
+# create at: Server Settings → Integrations → Webhooks
+DISCORD_WEBHOOK_URL=""
+
+# =============================================
+# Periodic Reports
+# =============================================
+
+# enable periodic threat reports [0 = disabled, 1 = enabled]
+# when enabled, cron.daily triggers reports on configured intervals
+REPORT_ENABLED="0"
+
+# report intervals to generate (comma-separated: daily,weekly,monthly)
+REPORT_INTERVALS="daily"
+
+# delivery channels (comma-separated: email,slack,telegram,discord)
+# empty = use all enabled alert channels above
+REPORT_CHANNELS=""
+
+# report email recipient (defaults to EMAIL_ADDRESS if empty)
+REPORT_EMAIL_ADDRESS=""
+
+# email subject template ({{INTERVAL}} and {{HOSTNAME}} expand at send time)
+REPORT_EMAIL_SUBJECT="BFD {{INTERVAL}} Threat Report for {{HOSTNAME}}"
+
+# maximum IPs to include in report tables (default 25)
+REPORT_TOP_N="25"
+
+# =============================================
+# Banning
+# =============================================
+
+# firewall backend for ban/unban operations
+# auto       - auto-detect: APF > CSF > firewalld > UFW > nftables > iptables > route
+# <backend>  - use a specific backend (apf, csf, firewalld, ufw, nftables, iptables, route)
+# custom     - use BAN_COMMAND/UNBAN_COMMAND templates (see next section)
+FIREWALL="auto"
+
+# how long bans last in seconds; 0 = permanent (default 10 minutes)
+# temporary bans auto-expire and the firewall rule is removed
+BAN_TTL="600"
+
+# --- Repeat offender handling ---
+#
+# These four settings work as a pipeline for repeat offenders:
+#   1. BAN_ESCALATION controls how ban duration grows each time
+#   2. BAN_ESCALATION_CAP puts a ceiling on that growth
+#   3. BAN_ESCALATE_AFTER flips to permanent once the count is reached
+#   4. BAN_ESCALATE_WINDOW is the lookback window for all of the above
+#
+# Examples (with BAN_TTL="600"):
+#   Fixed 10m bans, permanent after 5th:
+#     BAN_ESCALATION="none"   BAN_ESCALATE_AFTER="5"
+#     -> 10m, 10m, 10m, 10m, 10m -> permanent
+#
+#   Doubling bans, permanent after 5th:
+#     BAN_ESCALATION="double" BAN_ESCALATE_AFTER="5"
+#     -> 10m, 20m, 40m, 80m, 160m -> permanent
+#
+#   Linear growth, capped at 1h, never permanent:
+#     BAN_ESCALATION="linear" BAN_ESCALATION_CAP="3600" BAN_ESCALATE_AFTER="0"
+#     -> 10m, 20m, 30m, ... 1h, 1h, 1h (always temporary)
+
+# how ban duration grows for repeat offenders
+# none    - same duration every time (default)
+# linear  - duration * ban_count (10m, 20m, 30m, ...)
+# double  - duration doubles each time (10m, 20m, 40m, 80m, ...)
+BAN_ESCALATION="none"
+
+# maximum escalated ban duration in seconds; 0 = no cap (default 24 hours)
+BAN_ESCALATION_CAP="86400"
+
+# temporary bans before flipping to permanent; 0 = never go permanent
+BAN_ESCALATE_AFTER="5"
+
+# lookback window in seconds for counting repeat offenses (default 24 hours)
+BAN_ESCALATE_WINDOW="86400"
+
+# =============================================
+# Custom Firewall Commands
+# =============================================
+
+# --- Only used when FIREWALL="custom" — skip if using auto or a named backend ---
+# $ATTACK_HOST = offending IP, $MOD = service name, $PORTS = rule ports
+
+# command to deny an attacking host
 BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"
+#BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP"
+#BAN_COMMAND="/sbin/ip route add blackhole $ATTACK_HOST/32"
+#BAN_COMMAND="/sbin/iptables -I INPUT -s $ATTACK_HOST -p tcp -m multiport --dports $PORTS -j DROP"
 
-######
-# You should not need to edit any options below this line
-######
+# command to remove a ban; required for temporary ban auto-expiry
+UNBAN_COMMAND="/etc/apf/apf -u $ATTACK_HOST"
+#UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -j DROP"
+#UNBAN_COMMAND="/sbin/ip route del blackhole $ATTACK_HOST/32"
 
-# installation path
-INSTALL_PATH="/usr/local/bfd"
+# IPv6-specific commands; leave empty to use BAN_COMMAND for both protocols
+BAN_COMMAND_V6=""
+UNBAN_COMMAND_V6=""
 
-# rule files path
-RULES_PATH="$INSTALL_PATH/rules"
+# =============================================
+# Log Paths
+# =============================================
 
-# track log script path
-TLOG_PATH="$INSTALL_PATH/tlog"
-
-# syslog kernel log path
-KERNEL_LOG_PATH="/var/log/messages"
-
-# syslog auth log path
+# authentication log (auto-detected: /var/log/auth.log on Debian/Ubuntu)
 AUTH_LOG_PATH="/var/log/secure"
 
-# bfd application log path
-BFD_LOG_PATH="/var/log/bfd_log"
+# system/kernel log (auto-detected: /var/log/syslog on Debian/Ubuntu)
+KERNEL_LOG_PATH="/var/log/messages"
 
-# log all events to syslog [0 = off; 1 = on]
+# mail log (auto-detected: /var/log/mail.log on Debian/Ubuntu)
+MAIL_LOG_PATH="/var/log/maillog"
+
+# BFD's own application log (v1.x used /var/log/bfd_log; auto-migrated on upgrade)
+BFD_LOG_PATH="/var/log/bfd/bfd.log"
+
+# log source: auto (file with journal fallback), file (only), journal (only)
+# auto-detection tries log files first, falls back to journalctl if missing
+#LOG_SOURCE="auto"
+
+# =============================================
+# Advanced
+# =============================================
+
+# cross-service aggregate pressure trip point (0 = disabled)
+# when set, pressure from ALL services counts toward a single threshold
+# range: 0-200 (0 = disabled; values above 200 effectively disable detection)
+PRESSURE_TRIP_GLOBAL="0"
+
+# distributed attack detection — ban entire subnets when N unique IPs
+# from the same subnet attack the same service within the pressure window
+# 0 = disabled; typical value: 3-5
+SUBNET_TRIG="0"
+
+# subnet masks for distributed detection
+SUBNET_MASK="24"          # IPv4: 8-32 (24 = /24 = 256 addresses)
+SUBNET_MASK_V6="48"       # IPv6: 16-128, must be multiple of 16
+
+# watch mode polling interval in seconds (bfd --watch); must be > 0
+WATCH_INTERVAL="10"
+
+# scan mode defaults (bfd --scan); override with --max-lines= / --scan-timeout=
+# max log lines per rule during scan; 0 = unlimited (default 50000)
+SCAN_MAX_LINES="50000"
+
+# journal read timeout in seconds per rule during scan; must be > 0 (default 120)
+SCAN_TIMEOUT="120"
+
+# echo BFD log messages to syslog [0 = off, 1 = on]
 OUTPUT_SYSLOG="1"
 
-# log file path for syslog logging
-OUTPUT_SYSLOG_FILE="$KERNEL_LOG_PATH"
+# suppress idle (0-event) run-complete messages from syslog [0 = off, 1 = on]
+# when enabled, zero-event cycles are still recorded in BFD_LOG_PATH
+# but do not echo to syslog; cycles with events always log to both
+LOG_IDLE_SUPPRESS="1"
 
-# template of the email message body
-EMAIL_TEMPLATE="$INSTALL_PATH/alert.bfd"
+# log output format [classic = syslog-style, json = one JSON object per line]
+LOG_FORMAT="classic"
 
-# contains list of files to search for addresses that are excluded from bans
-IGNORE_HOST_FILES="$INSTALL_PATH/exclude.files"
+# minimum log severity [0 = debug, 1 = info, 2 = warn, 3 = error]
+LOG_LEVEL="1"
 
-# grab the local time zone
-TIME_ZONE=`date +"%z"`
+# stale lock detection threshold in seconds (default 300 = 5 minutes)
+# if a lock file is older than this, it is assumed stale and cleared
+#LOCK_FILE_TIMEOUT="300"
 
-# grab the local unix time
-TIME_UNIX=`date +"%s"`
+# ban/unban command retry count with exponential backoff (default 2)
+# set to 0 to disable retries (useful for testing)
+#BAN_RETRY_COUNT="2"
 
-# lock file path
-LOCK_FILE="$INSTALL_PATH/lock.utime"
+# =============================================
+# Attack Pool (Long-term History)
+# =============================================
 
-# lock file timeout
-LOCK_FILE_TIMEOUT="300"
+# how long to retain attack pool entries in days (default 1 year)
+# entries older than this are pruned daily; 0 = no age limit (size cap still applies)
+APOOL_RETENTION_DAYS="365"
+
+# maximum attack pool entries (safety cap for high-volume servers)
+# oldest entries are dropped when this limit is reached; 0 = no limit
+APOOL_MAX_LINES="500000"

@@ -1,0 +1,17 @@
+FROM debian:12
+
+# Install dependencies that BFD requires at runtime
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        bash coreutils grep mawk findutils util-linux \
+        iproute2 sed procps cron logrotate && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy DEB and test script from build context
+COPY bfd_*.deb /tmp/
+COPY test-pkg-install.sh /test/test-pkg-install.sh
+
+# Install the package
+RUN dpkg -i /tmp/bfd_*.deb || apt-get install -f -y
+
+CMD ["/test/test-pkg-install.sh", "deb"]

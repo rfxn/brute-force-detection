@@ -1,0 +1,23 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="5"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+# InterWorx logs failures to a dedicated log file
+PREREQ="/usr/local/interworx/var/log/login_failures.log"
+
+if [ -f "$PREREQ" ]; then
+	PORTS="2443"
+	LOG_FILE="/usr/local/interworx/var/log/login_failures.log"
+	LOG_TAG="interworx"
+
+	## InterWorx NodeWorx/SiteWorx authentication failures
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"^[0-9-]+ [0-9:]+ [NS]W <HOST>")
+fi

@@ -1,0 +1,31 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="20"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/sbin/lighttpd"
+
+if [ -f "$PREREQ" ]; then
+	PORTS="80,443"
+
+	# dynamic log file detection
+	if [ -f "/var/log/lighttpd/error.log" ]; then
+		LOG_FILE="/var/log/lighttpd/error.log"
+	else
+		LOG_FILE=""
+	fi
+	LOG_TAG="lighttpd"
+
+	## LIGHTTPD
+	if [ -n "$LOG_FILE" ]; then
+		MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+			"password doesn.t match.*IP: <HOST>" \
+			"wrong password.*IP: <HOST>")
+	fi
+fi

@@ -1,18 +1,23 @@
-# failed logins from a single address before ban
-# uncomment to override conf.bfd trig value
-# TRIG="10"
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="20"
 
-# uncomment to disable alerting for this rule 
+# uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
 
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
 # file must exist for rule to be active
-REQ="/var/qmail/bin/qmail-pop3d"
+PREREQ="/var/qmail/bin/qmail-pop3d"
 
-if [ -f "$REQ" ]; then
- PORTS="110,143,993,995"
- LP="/var/log/maillog"
- TLOG_TF="vpopmail"
+if [ -f "$PREREQ" ]; then
+	PORTS="110,143,993,995"
+	LOG_FILE="$MAIL_LOG_PATH"
+	LOG_TAG="vpopmail"
 
- ## vpopmail [qmail]
- ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed -n -e '/vchkpw-pop3: password fail/s/.*password fail \([^ ]*\)\(.*\):\([^ ]*\).*/\3:\1/p' -e '/vchkpw-pop3: system user not found/s/.*system user not found \([^ ]*\)\(.*\):\([^ ]*\).*/\3:\1/p' -e '/vchkpw-pop3: vpopmail user not found/s/.*vpopmail user not found \([^ ]*\)\(.*\):\([^ ]*\).*/\3:\1/p'` 
+	## vpopmail [qmail]
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"vchkpw-pop3.*password fail.*:<HOST>" \
+		"vchkpw-pop3.*user not found.*:<HOST>")
 fi

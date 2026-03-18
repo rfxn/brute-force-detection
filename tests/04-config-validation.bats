@@ -1,0 +1,795 @@
+#!/usr/bin/env bats
+#
+# Test suite for validate_config()
+#
+
+load '/usr/local/lib/bats/bats-support/load'
+load '/usr/local/lib/bats/bats-assert/load'
+load 'helpers/bfd-common'
+
+setup() {
+	bfd_common_setup
+}
+
+teardown() {
+	bfd_teardown
+}
+
+# helper: set all config to valid defaults, then override one field
+# Usage: run_validate 'OVERRIDE_EXPR'           — suppresses output
+#        run_validate_output 'OVERRIDE_EXPR'     — captures stdout+stderr
+_run_validate_impl() {
+	local mode="$1" override="$2"
+	if [ "$mode" = "capture" ]; then
+		(
+			PRESSURE_TRIP="15"
+			PRESSURE_HALF_LIFE="300"
+			PRESSURE_TRIP_GLOBAL="0"
+			BAN_TTL="300"
+			BAN_ESCALATE_AFTER="5"
+			BAN_ESCALATE_WINDOW="86400"
+			UNBAN_COMMAND_TEMPLATE=""
+			EMAIL_ALERTS="0"
+			EMAIL_ADDRESS="root@localhost"
+			LOCK_FILE_TIMEOUT="300"
+			BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
+			FIREWALL="custom"
+			INSTALL_PATH="$TEST_TMPDIR"
+			LOG_FORMAT="classic"
+			LOG_LEVEL="1"
+			eval "$override"
+			validate_config
+		) 2>&1
+	else
+		(
+			PRESSURE_TRIP="15"
+			PRESSURE_HALF_LIFE="300"
+			PRESSURE_TRIP_GLOBAL="0"
+			BAN_TTL="300"
+			BAN_ESCALATE_AFTER="5"
+			BAN_ESCALATE_WINDOW="86400"
+			UNBAN_COMMAND_TEMPLATE=""
+			EMAIL_ALERTS="0"
+			EMAIL_ADDRESS="root@localhost"
+			LOCK_FILE_TIMEOUT="300"
+			BAN_COMMAND_TEMPLATE="/etc/apf/apf -d test"
+			FIREWALL="custom"
+			INSTALL_PATH="$TEST_TMPDIR"
+			LOG_FORMAT="classic"
+			LOG_LEVEL="1"
+			eval "$override"
+			validate_config
+		) >/dev/null 2>&1
+	fi
+}
+
+run_validate() {
+	_run_validate_impl "suppress" "$1"
+}
+
+run_validate_output() {
+	_run_validate_impl "capture" "$1"
+}
+
+@test "validate_config: valid config passes" {
+	run run_validate ""
+	assert_success
+}
+
+@test "validate_config: PRESSURE_TRIP=abc rejects" {
+	run run_validate 'PRESSURE_TRIP="abc"'
+	assert_failure
+}
+
+@test "validate_config: PRESSURE_TRIP=0 rejects" {
+	run run_validate 'PRESSURE_TRIP="0"'
+	assert_failure
+}
+
+@test "validate_config: PRESSURE_TRIP= rejects" {
+	run run_validate 'PRESSURE_TRIP=""'
+	assert_failure
+}
+
+@test "validate_config: PRESSURE_TRIP=1 passes" {
+	run run_validate 'PRESSURE_TRIP="1"'
+	assert_success
+}
+
+@test "validate_config: PRESSURE_TRIP=200 passes (ceiling)" {
+	run run_validate 'PRESSURE_TRIP="200"'
+	assert_success
+}
+
+@test "validate_config: PRESSURE_TRIP=201 rejects (exceeds ceiling)" {
+	run run_validate_output 'PRESSURE_TRIP="201"'
+	assert_failure
+	assert_output --partial "exceeds maximum"
+}
+
+@test "validate_config: EMAIL_ALERTS=2 rejects" {
+	run run_validate 'EMAIL_ALERTS="2"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_ALERTS=abc rejects" {
+	run run_validate 'EMAIL_ALERTS="abc"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_ALERTS=1 passes" {
+	run run_validate 'EMAIL_ALERTS="1"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_ALERTS=1 EMAIL_ADDRESS= rejects" {
+	run run_validate 'EMAIL_ALERTS="1"; EMAIL_ADDRESS=""'
+	assert_failure
+}
+
+@test "validate_config: OUTPUT_SYSLOG=0 passes" {
+	run run_validate 'OUTPUT_SYSLOG="0"'
+	assert_success
+}
+
+@test "validate_config: OUTPUT_SYSLOG=1 passes" {
+	run run_validate 'OUTPUT_SYSLOG="1"'
+	assert_success
+}
+
+@test "validate_config: OUTPUT_SYSLOG=2 rejects" {
+	run run_validate 'OUTPUT_SYSLOG="2"'
+	assert_failure
+}
+
+@test "validate_config: OUTPUT_SYSLOG=abc rejects" {
+	run run_validate 'OUTPUT_SYSLOG="abc"'
+	assert_failure
+}
+
+@test "validate_config: LOG_IDLE_SUPPRESS=0 passes" {
+	run run_validate 'LOG_IDLE_SUPPRESS="0"'
+	assert_success
+}
+
+@test "validate_config: LOG_IDLE_SUPPRESS=1 passes" {
+	run run_validate 'LOG_IDLE_SUPPRESS="1"'
+	assert_success
+}
+
+@test "validate_config: LOG_IDLE_SUPPRESS=2 rejects" {
+	run run_validate 'LOG_IDLE_SUPPRESS="2"'
+	assert_failure
+}
+
+@test "validate_config: TIMEOUT=0 rejects" {
+	run run_validate 'LOCK_FILE_TIMEOUT="0"'
+	assert_failure
+}
+
+@test "validate_config: TIMEOUT=abc rejects" {
+	run run_validate 'LOCK_FILE_TIMEOUT="abc"'
+	assert_failure
+}
+
+@test "validate_config: TIMEOUT= rejects" {
+	run run_validate 'LOCK_FILE_TIMEOUT=""'
+	assert_failure
+}
+
+@test "validate_config: empty BAN_COMMAND rejects" {
+	run run_validate 'BAN_COMMAND_TEMPLATE=""'
+	assert_failure
+}
+
+@test "validate_config: bad INSTALL_PATH rejects" {
+	run run_validate 'INSTALL_PATH="/nonexistent/path"'
+	assert_failure
+}
+
+@test "validate_config: BFD_LOG_PATH= rejects" {
+	run run_validate 'BFD_LOG_PATH=""'
+	assert_failure
+}
+
+# --- PRESSURE_HALF_LIFE ---
+@test "validate_config: PRESSURE_HALF_LIFE=0 rejects" {
+	run run_validate 'PRESSURE_HALF_LIFE="0"'
+	assert_failure
+}
+
+@test "validate_config: PRESSURE_HALF_LIFE=abc rejects" {
+	run run_validate 'PRESSURE_HALF_LIFE="abc"'
+	assert_failure
+}
+
+@test "validate_config: PRESSURE_HALF_LIFE= rejects" {
+	run run_validate 'PRESSURE_HALF_LIFE=""'
+	assert_failure
+}
+
+# --- PRESSURE_TRIP_GLOBAL ---
+@test "validate_config: PRESSURE_TRIP_GLOBAL=10 passes" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL="10"'
+	assert_success
+}
+
+@test "validate_config: PRESSURE_TRIP_GLOBAL=abc rejects" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL="abc"'
+	assert_failure
+}
+
+@test "validate_config: PRESSURE_TRIP_GLOBAL= rejects" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL=""'
+	assert_failure
+}
+
+@test "validate_config: PRESSURE_TRIP_GLOBAL=-1 rejects" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL="-1"'
+	assert_failure
+}
+
+@test "validate_config: PRESSURE_TRIP_GLOBAL=200 passes (ceiling)" {
+	run run_validate 'PRESSURE_TRIP_GLOBAL="200"'
+	assert_success
+}
+
+@test "validate_config: PRESSURE_TRIP_GLOBAL=201 rejects (exceeds ceiling)" {
+	run run_validate_output 'PRESSURE_TRIP_GLOBAL="201"'
+	assert_failure
+	assert_output --partial "exceeds maximum"
+}
+
+
+# --- backward compat: old variable names still accepted ---
+
+@test "validate_config: old TRIG= accepted via fallback to PRESSURE_TRIP" {
+	run run_validate 'unset PRESSURE_TRIP; TRIG="10"'
+	assert_success
+}
+
+@test "validate_config: old TRIG_WINDOW= accepted via fallback to PRESSURE_HALF_LIFE" {
+	run run_validate 'unset PRESSURE_HALF_LIFE; TRIG_WINDOW="300"'
+	assert_success
+}
+
+@test "validate_config: old BAN_DURATION= accepted via fallback to BAN_TTL" {
+	run run_validate 'unset BAN_TTL; BAN_DURATION="300"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+# --- BAN_TTL ---
+
+@test "validate_config: BAN_TTL=300 passes" {
+	run run_validate 'BAN_TTL="300"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_TTL=0 passes (permanent)" {
+	run run_validate 'BAN_TTL="0"'
+	assert_success
+}
+
+@test "validate_config: BAN_TTL=abc rejects" {
+	run run_validate 'BAN_TTL="abc"'
+	assert_failure
+}
+
+# --- BAN_ESCALATE_AFTER ---
+
+@test "validate_config: BAN_ESCALATE_AFTER=5 passes" {
+	run run_validate 'BAN_ESCALATE_AFTER="5"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATE_AFTER=0 passes (disabled)" {
+	run run_validate 'BAN_ESCALATE_AFTER="0"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATE_AFTER=abc rejects" {
+	run run_validate 'BAN_ESCALATE_AFTER="abc"'
+	assert_failure
+}
+
+# --- BAN_ESCALATE_WINDOW ---
+
+@test "validate_config: BAN_ESCALATE_WINDOW=86400 passes" {
+	run run_validate 'BAN_ESCALATE_WINDOW="86400"; UNBAN_COMMAND_TEMPLATE="echo test"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATE_WINDOW=0 rejects" {
+	run run_validate 'BAN_ESCALATE_WINDOW="0"'
+	assert_failure
+}
+
+@test "validate_config: BAN_ESCALATE_WINDOW=abc rejects" {
+	run run_validate 'BAN_ESCALATE_WINDOW="abc"'
+	assert_failure
+}
+
+# --- UNBAN_COMMAND warning ---
+
+@test "validate_config: warns when BAN_TTL>0 and UNBAN_COMMAND empty" {
+	run run_validate_output 'BAN_TTL="300"; UNBAN_COMMAND_TEMPLATE=""'
+	assert_success
+	assert_output --partial "warning"
+	assert_output --partial "UNBAN_COMMAND"
+}
+
+# --- WATCH_INTERVAL ---
+@test "validate_config: WATCH_INTERVAL=1 passes" {
+	run run_validate 'WATCH_INTERVAL="1"'
+	assert_success
+}
+
+@test "validate_config: WATCH_INTERVAL=0 rejects" {
+	run run_validate 'WATCH_INTERVAL="0"'
+	assert_failure
+}
+
+@test "validate_config: WATCH_INTERVAL=abc rejects" {
+	run run_validate 'WATCH_INTERVAL="abc"'
+	assert_failure
+}
+
+@test "validate_config: WATCH_INTERVAL= uses default (passes)" {
+	run run_validate 'WATCH_INTERVAL=""'
+	assert_success
+}
+
+@test "validate_config: WATCH_INTERVAL unset uses default (passes)" {
+	run run_validate 'unset WATCH_INTERVAL'
+	assert_success
+}
+
+# --- BAN_ESCALATION ---
+
+@test "validate_config: BAN_ESCALATION=none passes" {
+	run run_validate 'BAN_ESCALATION="none"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION=linear passes" {
+	run run_validate 'BAN_ESCALATION="linear"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION=double passes" {
+	run run_validate 'BAN_ESCALATION="double"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION=exponential accepted (backward compat)" {
+	run run_validate 'BAN_ESCALATION="exponential"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION=bogus rejects" {
+	run run_validate 'BAN_ESCALATION="bogus"'
+	assert_failure
+}
+
+@test "validate_config: BAN_ESCALATION unset uses default (passes)" {
+	run run_validate 'unset BAN_ESCALATION'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION_CAP=86400 passes" {
+	run run_validate 'BAN_ESCALATION_CAP="86400"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION_CAP=0 passes" {
+	run run_validate 'BAN_ESCALATION_CAP="0"'
+	assert_success
+}
+
+@test "validate_config: BAN_ESCALATION_CAP=abc rejects" {
+	run run_validate 'BAN_ESCALATION_CAP="abc"'
+	assert_failure
+}
+
+# ============================================================
+# SUBNET_TRIG / SUBNET_MASK / SUBNET_MASK_V6 validation
+# ============================================================
+
+@test "validate_config: SUBNET_TRIG=0 passes" {
+	run run_validate 'SUBNET_TRIG="0"'
+	assert_success
+}
+
+@test "validate_config: SUBNET_TRIG=5 passes" {
+	run run_validate 'SUBNET_TRIG="5"'
+	assert_success
+}
+
+@test "validate_config: SUBNET_TRIG=abc rejects" {
+	run run_validate 'SUBNET_TRIG="abc"'
+	assert_failure
+}
+
+@test "validate_config: SUBNET_MASK=24 passes" {
+	run run_validate 'SUBNET_MASK="24"'
+	assert_success
+}
+
+@test "validate_config: SUBNET_MASK=7 rejects (below minimum)" {
+	run run_validate 'SUBNET_MASK="7"'
+	assert_failure
+}
+
+@test "validate_config: SUBNET_MASK=33 rejects (above maximum)" {
+	run run_validate 'SUBNET_MASK="33"'
+	assert_failure
+}
+
+@test "validate_config: SUBNET_MASK_V6=48 passes" {
+	run run_validate 'SUBNET_MASK_V6="48"'
+	assert_success
+}
+
+@test "validate_config: SUBNET_MASK_V6=50 rejects (not multiple of 16)" {
+	run run_validate 'SUBNET_MASK_V6="50"'
+	assert_failure
+}
+
+@test "validate_config: SUBNET_MASK_V6 unset uses default (passes)" {
+	run run_validate 'unset SUBNET_MASK_V6'
+	assert_success
+}
+
+# --- BAN_RETRY_COUNT ---
+
+@test "validate_config: BAN_RETRY_COUNT=0 passes" {
+	run run_validate 'BAN_RETRY_COUNT="0"'
+	assert_success
+}
+
+@test "validate_config: BAN_RETRY_COUNT=abc rejects" {
+	run run_validate 'BAN_RETRY_COUNT="abc"'
+	assert_failure
+}
+
+@test "validate_config: BAN_RETRY_COUNT= uses default (passes)" {
+	run run_validate 'BAN_RETRY_COUNT=""'
+	assert_success
+}
+
+# --- EMAIL_LOGLINES ---
+@test "validate_config: EMAIL_LOGLINES=1 passes" {
+	run run_validate 'EMAIL_LOGLINES="1"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_LOGLINES=0 rejects" {
+	run run_validate 'EMAIL_LOGLINES="0"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_LOGLINES=abc rejects" {
+	run run_validate 'EMAIL_LOGLINES="abc"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_LOGLINES= uses default (passes)" {
+	run run_validate 'EMAIL_LOGLINES=""'
+	assert_success
+}
+
+# --- LOG_FORMAT ---
+@test "validate_config: LOG_FORMAT=json passes" {
+	run run_validate 'LOG_FORMAT="json"'
+	assert_success
+}
+
+@test "validate_config: LOG_FORMAT=xml rejects" {
+	run run_validate 'LOG_FORMAT="xml"'
+	assert_failure
+}
+
+@test "validate_config: LOG_FORMAT= uses default (passes)" {
+	run run_validate 'LOG_FORMAT=""'
+	assert_success
+}
+
+# --- LOG_LEVEL ---
+
+@test "validate_config: LOG_LEVEL=0 passes" {
+	run run_validate 'LOG_LEVEL="0"'
+	assert_success
+}
+
+@test "validate_config: LOG_LEVEL=3 passes" {
+	run run_validate 'LOG_LEVEL="3"'
+	assert_success
+}
+
+@test "validate_config: LOG_LEVEL=4 rejects" {
+	run run_validate 'LOG_LEVEL="4"'
+	assert_failure
+}
+
+@test "validate_config: LOG_LEVEL=abc rejects" {
+	run run_validate 'LOG_LEVEL="abc"'
+	assert_failure
+}
+
+@test "validate_config: LOG_LEVEL= uses default (passes)" {
+	run run_validate 'LOG_LEVEL=""'
+	assert_success
+}
+
+# --- show_config LOG_FORMAT/LOG_LEVEL ---
+
+@test "show_config: LOG_FORMAT returns active value" {
+	LOG_FORMAT="json"
+	run show_config "LOG_FORMAT"
+	assert_success
+	assert_output "json"
+}
+
+@test "show_config: LOG_LEVEL returns active value" {
+	LOG_LEVEL="2"
+	run show_config "LOG_LEVEL"
+	assert_success
+	assert_output "2"
+}
+
+# --- show_config injection tests (Phase 26) ---
+
+@test "show_config: rejects \$(cmd) injection attempt" {
+	PRESSURE_TRIP="15"
+	run show_config '$(touch /tmp/pwned)'
+	assert_failure
+	assert_output --partial "unknown config variable"
+	[ ! -f "/tmp/pwned" ]
+}
+
+@test "show_config: rejects backtick injection attempt" {
+	PRESSURE_TRIP="15"
+	run show_config '`touch /tmp/pwned2`'
+	assert_failure
+	assert_output --partial "unknown config variable"
+	[ ! -f "/tmp/pwned2" ]
+}
+
+# --- show_config with BAN_COMMAND case mapping (F-019 regression) ---
+
+@test "show_config: BAN_COMMAND returns raw template via case mapping" {
+	BAN_COMMAND_TEMPLATE='/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+	run show_config "BAN_COMMAND"
+	assert_success
+	assert_output '/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+}
+
+@test "show_config: dump all includes BAN_COMMAND mapped value" {
+	BAN_COMMAND_TEMPLATE='/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+	UNBAN_COMMAND_TEMPLATE=""
+	BAN_COMMAND_V6_TEMPLATE=""
+	UNBAN_COMMAND_V6_TEMPLATE=""
+	PRESSURE_TRIP="20"
+	run show_config
+	assert_success
+	assert_output --partial 'BAN_COMMAND=/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
+}
+
+# ============================================================
+# validate_email() unit tests (F-022)
+# ============================================================
+
+@test "validate_email: accepts user@domain.tld" {
+	run validate_email "user@domain.tld"
+	assert_success
+}
+
+@test "validate_email: accepts user+tag@sub.domain.com" {
+	run validate_email "user+tag@sub.domain.com"
+	assert_success
+}
+
+@test "validate_email: accepts root@localhost" {
+	run validate_email "root@localhost"
+	assert_success
+}
+
+@test "validate_email: rejects empty string" {
+	run validate_email ""
+	assert_failure
+}
+
+@test "validate_email: rejects address without @" {
+	run validate_email "nodomain"
+	assert_failure
+}
+
+@test "validate_email: rejects address with semicolon" {
+	run validate_email "user@domain.com;rm -rf /"
+	assert_failure
+}
+
+@test "validate_email: rejects address with pipe" {
+	run validate_email "user@domain.com|cat /etc/passwd"
+	assert_failure
+}
+
+@test "validate_email: rejects address with spaces" {
+	run validate_email "user @domain.com"
+	assert_failure
+}
+
+@test "validate_email: rejects address with backtick" {
+	run validate_email 'user@`hostname`'
+	assert_failure
+}
+
+# --- validate_config email integration tests (F-022) ---
+
+@test "validate_config: warns on invalid EMAIL_ADDRESS" {
+	run run_validate_output 'EMAIL_ALERTS="1"; EMAIL_ADDRESS="not-an-email"'
+	assert_success
+	assert_output --partial "warning"
+	assert_output --partial "invalid address"
+}
+
+@test "validate_config: no warning on valid EMAIL_ADDRESS" {
+	run run_validate_output 'EMAIL_ALERTS="1"; EMAIL_ADDRESS="admin@example.com"'
+	assert_success
+	refute_output --partial "invalid address"
+}
+
+@test "validate_config: warns on invalid address in comma list" {
+	run run_validate_output 'EMAIL_ALERTS="1"; EMAIL_ADDRESS="good@example.com,bad addr,ok@test.com"'
+	assert_success
+	assert_output --partial "invalid address 'bad addr'"
+}
+
+# --- EMAIL_FORMAT ---
+
+@test "validate_config: EMAIL_FORMAT=text passes" {
+	run run_validate 'EMAIL_FORMAT="text"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_FORMAT=html passes" {
+	run run_validate 'EMAIL_FORMAT="html"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_FORMAT=both passes" {
+	run run_validate 'EMAIL_FORMAT="both"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_FORMAT=invalid rejects" {
+	run run_validate 'EMAIL_FORMAT="rtf"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_FORMAT empty uses default" {
+	run run_validate 'EMAIL_FORMAT=""'
+	assert_success
+}
+
+# --- EMAIL_DIGEST ---
+
+@test "validate_config: EMAIL_DIGEST=cycle passes" {
+	run run_validate 'EMAIL_DIGEST="cycle"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_DIGEST=timed passes" {
+	run run_validate 'EMAIL_DIGEST="timed"; EMAIL_DIGEST_INTERVAL="600"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_DIGEST=invalid rejects" {
+	run run_validate 'EMAIL_DIGEST="batch"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_DIGEST empty uses default" {
+	run run_validate 'EMAIL_DIGEST=""'
+	assert_success
+}
+
+# --- EMAIL_DIGEST_INTERVAL ---
+
+@test "validate_config: EMAIL_DIGEST_INTERVAL valid with timed passes" {
+	run run_validate 'EMAIL_DIGEST="timed"; EMAIL_DIGEST_INTERVAL="300"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_DIGEST_INTERVAL=0 with timed rejects" {
+	run run_validate 'EMAIL_DIGEST="timed"; EMAIL_DIGEST_INTERVAL="0"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_DIGEST_INTERVAL=abc with timed rejects" {
+	run run_validate 'EMAIL_DIGEST="timed"; EMAIL_DIGEST_INTERVAL="abc"'
+	assert_failure
+}
+
+@test "validate_config: EMAIL_DIGEST_INTERVAL ignored when cycle" {
+	run run_validate 'EMAIL_DIGEST="cycle"; EMAIL_DIGEST_INTERVAL="abc"'
+	assert_success
+}
+
+# --- EMAIL_REPUTATION_LINKS ---
+
+@test "validate_config: EMAIL_REPUTATION_LINKS valid keys pass" {
+	run run_validate 'EMAIL_REPUTATION_LINKS="abuseipdb,shodan,virustotal"'
+	assert_success
+}
+
+@test "validate_config: EMAIL_REPUTATION_LINKS unknown key warns" {
+	run run_validate_output 'EMAIL_REPUTATION_LINKS="abuseipdb,bogus"'
+	assert_success
+	assert_output --partial "unknown provider 'bogus'"
+}
+
+@test "validate_config: EMAIL_REPUTATION_LINKS empty passes" {
+	run run_validate 'EMAIL_REPUTATION_LINKS=""'
+	assert_success
+}
+
+# --- SMTP_RELAY ---
+
+@test "validate_config: SMTP_RELAY valid URL with FROM passes" {
+	run run_validate 'SMTP_RELAY="smtps://smtp.example.com:465"; SMTP_FROM="bfd@example.com"; SMTP_USER="user"; SMTP_PASS="pass"'
+	assert_success
+}
+
+@test "validate_config: SMTP_RELAY no protocol rejects" {
+	run run_validate 'SMTP_RELAY="smtp.example.com:465"; SMTP_FROM="bfd@example.com"'
+	assert_failure
+}
+
+@test "validate_config: SMTP_RELAY set but missing SMTP_FROM rejects" {
+	run run_validate 'SMTP_RELAY="smtps://smtp.example.com:465"; SMTP_FROM=""'
+	assert_failure
+}
+
+@test "validate_config: SMTP_RELAY set with invalid SMTP_FROM rejects" {
+	run run_validate 'SMTP_RELAY="smtps://smtp.example.com:465"; SMTP_FROM="not-an-email"'
+	assert_failure
+}
+
+# --- SMTP_USER/SMTP_PASS ---
+
+@test "validate_config: warns when SMTP_RELAY set without SMTP_USER/PASS" {
+	run run_validate_output 'SMTP_RELAY="smtps://smtp.example.com:465"; SMTP_FROM="bfd@example.com"; SMTP_USER=""; SMTP_PASS=""'
+	assert_success
+	assert_output --partial "SMTP_USER/SMTP_PASS not set"
+}
+
+# --- show_config ---
+
+@test "show_config: EMAIL_FORMAT returns value" {
+	EMAIL_FORMAT="both"
+	run show_config EMAIL_FORMAT
+	assert_success
+	assert_output "both"
+}
+
+@test "show_config: dump includes new email/SMTP vars" {
+	EMAIL_FORMAT="html"
+	EMAIL_DIGEST="timed"
+	EMAIL_DIGEST_INTERVAL="600"
+	SMTP_RELAY="smtps://example.com:465"
+	SMTP_FROM="bfd@example.com"
+	ALERT_TEMPLATE_DIR="/tmp/alert"
+	APOOL_RETENTION_DAYS="365"
+	APOOL_MAX_LINES="500000"
+	run show_config
+	assert_success
+	assert_output --partial "EMAIL_FORMAT=html"
+	assert_output --partial "EMAIL_DIGEST=timed"
+	assert_output --partial "EMAIL_DIGEST_INTERVAL=600"
+	assert_output --partial "SMTP_RELAY=smtps://example.com:465"
+	assert_output --partial "SMTP_FROM=bfd@example.com"
+	assert_output --partial "ALERT_TEMPLATE_DIR=/tmp/alert"
+	assert_output --partial "APOOL_RETENTION_DAYS=365"
+	assert_output --partial "APOOL_MAX_LINES=500000"
+}

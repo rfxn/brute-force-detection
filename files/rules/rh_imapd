@@ -1,18 +1,22 @@
-# failed logins from a single address before ban
-# uncomment to override conf.bfd trig value
-# TRIG="10"
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="20"
 
-# uncomment to disable alerting for this rule 
+# uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
 
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
 # file must exist for rule to be active
-REQ="/usr/sbin/imapd"
+PREREQ="/usr/sbin/imapd"
 
-if [ -f "$REQ" ]; then
- PORTS="110,143,993,995"
- LP="$KERNEL_LOG_PATH"
- TLOG_TF="rh_imapd"
+if [ -f "$PREREQ" ]; then
+	PORTS="110,143,993,995"
+	LOG_FILE="$KERNEL_LOG_PATH"
+	LOG_TAG="rh_imapd"
 
- ## imapd
- ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr '=' ' ' | sed -n -e '/imapd/s/.*user \([^ ]*\)\(.*\) \([^ ]*\).*/\3:\1/p' | tr -d '[]'`
+	## imapd
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"imapd.*Login failed.*\[<HOST>\]")
 fi

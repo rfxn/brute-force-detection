@@ -1,4 +1,142 @@
 #!/bin/bash
-dstamp=`date +"%m%d%y.%H%M"`
-mv -f /usr/local/bfd/stats/attack.pool /usr/local/bfd/stats/attack.pool.$dstamp
-rm -f /usr/local/bfd/tmp/*
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+###
+# Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
+# Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+###
+#
+INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
+LOCK_FILE="$INSTALL_PATH/lock.utime"
+
+# check if bfd is actively running (mkdir-based lock used by bfd/watch)
+if [ -d "$LOCK_FILE.lk" ]; then
+	_lock_pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null)
+	if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null; then
+		exit 0
+	fi
+fi
+
+# source config for retention settings
+if [ -f "$INSTALL_PATH/conf.bfd" ]; then
+	# Validate root-owned and not group/world-writable before sourcing (SF-001)
+	_cfg_owner=$(stat -L -c '%u' "$INSTALL_PATH/conf.bfd" 2>/dev/null)
+	_cfg_perms=$(stat -L -c '%a' "$INSTALL_PATH/conf.bfd" 2>/dev/null)
+	if [ "${_cfg_owner:-}" = "0" ] && \
+	   [ "$(( ${_cfg_perms:1:1} & 2 ))" -eq 0 ] 2>/dev/null && \
+	   [ "$(( ${_cfg_perms: -1} & 2 ))" -eq 0 ] 2>/dev/null; then
+		# shellcheck disable=SC1090,SC1091
+		. "$INSTALL_PATH/conf.bfd"
+	fi
+fi
+APOOL_RETENTION_DAYS="${APOOL_RETENTION_DAYS:-365}"
+APOOL_MAX_LINES="${APOOL_MAX_LINES:-500000}"
+
+# discard stale digest spool — regular bfd runs flush within minutes;
+# if this file survives >24h, its log references are stale
+if [ -f "$INSTALL_PATH/tmp/.alert_spool" ]; then
+	_spool_age=$(( $(date +%s) - $(stat -c %Y "$INSTALL_PATH/tmp/.alert_spool" 2>/dev/null || echo 0) ))
+	if [ "$_spool_age" -gt 86400 ]; then
+		: > "$INSTALL_PATH/tmp/.alert_spool"
+	fi
+fi
+
+# acquire flock for self-contention (multiple cron.daily invocations)
+# uses a dedicated lock file to avoid contention with bfd's lock.utime writes
+CRON_LOCK="$INSTALL_PATH/tmp/.cron.daily.lock"
+(
+flock -x -w 30 200 || exit 0
+
+# --- One-time migration: consolidate rotated archives ---
+pool_file="$INSTALL_PATH/stats/attack.pool"
+if find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' -type f \
+    2>/dev/null | head -1 | grep -q .; then
+	(
+		flock -x 201
+		find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' \
+			-type f -exec cat {} + >> "$pool_file"
+		find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' \
+			-type f -delete
+		sort -n "$pool_file" > "$pool_file.new"
+		cat "$pool_file.new" > "$pool_file"
+		command rm -f "$pool_file.new"
+	) 201>>"$pool_file"
+fi
+
+# --- Age-based attack pool pruning (replaces daily rotation) ---
+if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
+	cutoff=0
+	if [ "$APOOL_RETENTION_DAYS" -gt 0 ] 2>/dev/null; then
+		cutoff=$(date -d "-${APOOL_RETENTION_DAYS} days" +%s 2>/dev/null) || cutoff=0
+	fi
+	(
+		flock -x 201
+		if [ "$cutoff" -gt 0 ]; then
+			awk -v cutoff="$cutoff" '$1+0 >= cutoff' "$pool_file" \
+				| tail -n "$APOOL_MAX_LINES" > "$pool_file.new"
+		elif [ "$APOOL_MAX_LINES" -gt 0 ] 2>/dev/null; then
+			tail -n "$APOOL_MAX_LINES" "$pool_file" > "$pool_file.new"
+		else
+			command cp "$pool_file" "$pool_file.new"
+		fi
+		cat "$pool_file.new" > "$pool_file"
+		command rm -f "$pool_file.new"
+	) 201>>"$pool_file"
+fi
+
+# Refresh country database if stale (>30 days since last update)
+_dat="$INSTALL_PATH/ipcountry.dat"
+if [ -x "$INSTALL_PATH/update-ipcountry.sh" ] && [ -f "$_dat" ]; then
+	_age=$(( $(date +%s) - $(stat -c %Y "$_dat") ))
+	if [ "$_age" -gt 2592000 ]; then
+		"$INSTALL_PATH/update-ipcountry.sh" >/dev/null 2>&1 || true  # non-fatal: network may be unavailable
+	fi
+fi
+
+# --- Periodic threat reports ---
+if [ "${REPORT_ENABLED:-0}" = "1" ]; then
+	case ",${REPORT_INTERVALS:-daily}," in
+		*,daily,*) "$INSTALL_PATH/bfd" --report daily >/dev/null 2>&1 || true ;;  # non-fatal
+	esac
+	_dow=$(date +%u)  # 1=Monday
+	if [ "$_dow" = "1" ]; then
+		case ",${REPORT_INTERVALS:-daily}," in
+			*,weekly,*) "$INSTALL_PATH/bfd" --report weekly >/dev/null 2>&1 || true ;;  # non-fatal
+		esac
+	fi
+	_dom=$(date +%d)
+	if [ "$_dom" = "01" ]; then
+		case ",${REPORT_INTERVALS:-daily}," in
+			*,monthly,*) "$INSTALL_PATH/bfd" --report monthly >/dev/null 2>&1 || true ;;  # non-fatal
+		esac
+	fi
+fi
+
+# clear transient state but preserve ban tracking and event data
+command rm -f "$INSTALL_PATH"/tmp/.alist.*
+command rm -f "$INSTALL_PATH"/tmp/.alerts.*
+command rm -f "$INSTALL_PATH"/tmp/.bfd_rpt_*
+command rm -f "$INSTALL_PATH"/tmp/.cidr_detail_*
+
+# rotate bans.history (append-only, rotated daily)
+if [ -f "$INSTALL_PATH/tmp/bans.history" ]; then
+	command cp "$INSTALL_PATH/tmp/bans.history" "$INSTALL_PATH/tmp/bans.history.$(date +%m%d%y)"
+	: > "$INSTALL_PATH/tmp/bans.history"
+fi
+) 200>"$CRON_LOCK"
+
+# purge rotated bans.history files older than 30 days (outside lock — no race)
+find "$INSTALL_PATH/tmp" -maxdepth 1 -name 'bans.history.*' -type f -mtime +30 -delete 2>/dev/null

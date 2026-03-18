@@ -1,0 +1,24 @@
+Source: bfd
+Section: admin
+Priority: optional
+Maintainer: R-fx Networks <proj@rfxn.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/rfxn/bfd
+
+Package: bfd
+Architecture: all
+Depends: bash (>= 4.1), coreutils, grep, mawk | gawk, findutils,
+ util-linux, iproute2, sed, procps, ${misc:Depends}
+Recommends: cron, logrotate
+Suggests: bsd-mailx | mailutils
+Description: Brute Force Detection - modular shell-based brute force attack monitor
+ BFD is a modular shell-based daemon that parses authentication logs and
+ detects brute-force login attempts. It uses an exponential-decay pressure
+ scoring model to distinguish real attacks from typos, and bans offending
+ IPs via configurable firewall backends (APF, CSF, firewalld, UFW, nftables,
+ iptables, or route blackhole).
+ .
+ BFD runs in watch mode (~10s detection) or via cron (~2m detection) and
+ includes per-rule pressure weights, country-based multipliers, ban
+ escalation, and email alerting.

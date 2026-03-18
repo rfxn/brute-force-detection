@@ -1,0 +1,29 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="3"
+# PRESSURE_TRIP="15"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# detect mysql error log path
+if [ -f "/var/log/mysqld.log" ]; then
+	LOG_FILE="/var/log/mysqld.log"
+elif [ -f "/var/log/mysql/error.log" ]; then
+	LOG_FILE="/var/log/mysql/error.log"
+elif [ -f "/var/log/mariadb/mariadb.log" ]; then
+	LOG_FILE="/var/log/mariadb/mariadb.log"
+fi
+
+# file must exist for rule to be active
+PREREQ="${LOG_FILE:-}"
+if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
+	PORTS="3306"
+	LOG_TAG="mysqld.auth"
+
+	## MySQL/MariaDB authentication failures
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"Access denied for user '[^']+'@'<HOST>'")
+fi

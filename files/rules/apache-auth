@@ -1,0 +1,32 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="20"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# detect apache error log path
+if [ -f "/usr/local/apache/logs/error_log" ]; then
+	LOG_FILE="/usr/local/apache/logs/error_log"
+elif [ -f "/var/log/httpd/error_log" ]; then
+	LOG_FILE="/var/log/httpd/error_log"
+elif [ -f "/var/log/apache2/error.log" ]; then
+	LOG_FILE="/var/log/apache2/error.log"
+fi
+
+# file must exist for rule to be active
+PREREQ="${LOG_FILE:-}"
+if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
+	PORTS="80,443"
+	LOG_TAG="httpd.auth"
+
+	## Apache HTTP authentication failures (2.4 + 2.2)
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"\[client <HOST>.*AH0161[78]" \
+		"\[client <HOST>\].*authentication failure" \
+		"\[client <HOST>.*AH0162[012]" \
+		"\[client <HOST>.*AH02572")
+fi

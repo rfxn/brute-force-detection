@@ -1,0 +1,24 @@
+FROM debian:12
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential debhelper devscripts tar gzip make && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy project source
+COPY . /src/bfd
+
+WORKDIR /src/bfd/pkg
+
+# Build tarball, then DEB — use explicit version to avoid glob issues
+RUN set -e && \
+    VERSION=$(grep '^V=' /src/bfd/files/bfd | head -1 | sed 's/V="//;s/"//') && \
+    make source && \
+    mkdir -p build/deb-build && \
+    cd build/deb-build && \
+    tar xzf "../bfd-${VERSION}.tar.gz" && \
+    cp -a /src/bfd/pkg/deb/debian "bfd-${VERSION}/debian" && \
+    cd "bfd-${VERSION}" && \
+    dpkg-buildpackage -us -uc -b
+
+CMD cp /src/bfd/pkg/build/deb-build/*.deb /output/

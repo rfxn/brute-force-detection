@@ -1,0 +1,22 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="20"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/lib/cyrus-imapd/imapd"
+
+if [ -f "$PREREQ" ]; then
+	PORTS="143,993,110,995"
+	LOG_FILE="$MAIL_LOG_PATH"
+	LOG_TAG="cyrus"
+
+	## Cyrus IMAP authentication failures
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"badlogin:.*\[<HOST>\].*SASL")
+fi

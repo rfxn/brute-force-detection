@@ -1,0 +1,25 @@
+# BFD — Brute Force Detection project manifest for pkg_gen.sh
+# Used by pkg_lib's manifest-driven generator to produce RPM/DEB/Docker/CI artifacts.
+
+PKG_NAME="bfd"
+PKG_VERSION="2.0.1"
+PKG_SUMMARY="Modular brute force detection and blocking system for Linux"
+PKG_DESCRIPTION="BFD is a bash-based intrusion detection system that monitors auth logs \
+for brute-force login attempts across 47+ services (SSH, FTP, SMTP, POP3, IMAP, HTTP, \
+WordPress, cPanel, Plesk, DirectAdmin, etc.) and bans offending IPs via configurable \
+firewall backends. Supports cron batch mode and continuous watch mode with ~10s latency."
+PKG_LICENSE="GPLv2+"
+PKG_URL="https://github.com/rfxn/brute-force-detection"
+PKG_MAINTAINER="R-fx Networks <proj@rfxn.com>"
+PKG_INSTALL_PATH="/usr/local/bfd"
+PKG_BIN_NAME="bfd"
+PKG_BIN_LEGACY="/usr/local/sbin/bfd"
+PKG_SECTION="1"
+PKG_COPYRIGHT_START="1999"
+PKG_VERSION_CMD="/usr/local/sbin/bfd --version 2>/dev/null | head -1"
+
+# Feature flags for conditional template blocks
+PKG_HAS_SYSTEMD_SERVICE="1"
+PKG_HAS_SYSV_INIT="1"
+PKG_HAS_CRON_D="1"
+PKG_HAS_LOGROTATE="1"

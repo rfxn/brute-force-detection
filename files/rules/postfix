@@ -1,15 +1,24 @@
-# failed logins from a single address before ban
-# uncomment to override conf.bfd trig value
-# TRIG="50"
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="20"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
 
 # file must exist for rule to be active
-REQ="/usr/sbin/postfix"
+PREREQ="/usr/sbin/postfix"
 
-if [ -f "$REQ" ]; then
-	PORTS="25,26"
-	LP="/var/log/mail.log"
-	TLOG_TF="postfix"
+if [ -f "$PREREQ" ]; then
+	PORTS="25,26,587,465"
+	LOG_FILE="$MAIL_LOG_PATH"
+	LOG_TAG="postfix"
 
 	## Postfix dictionary attacks
-	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | egrep -w "SASL LOGIN authentication failed:|SASL PLAIN authentication failed:" | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | awk -F '[' '{ print $3 }' | tr -d '[a-z][A-Z]\[\]\:'`
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"\[<HOST>\].*SASL.*authentication failed" \
+		"lost connection after AUTH from.*\[<HOST>\]" \
+		"too many errors after AUTH from.*\[<HOST>\]")
 fi

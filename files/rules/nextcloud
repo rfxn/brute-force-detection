@@ -1,0 +1,30 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# detect nextcloud log path
+if [ -f "/var/log/nextcloud/nextcloud.log" ]; then
+	LOG_FILE="/var/log/nextcloud/nextcloud.log"
+elif [ -f "/var/www/nextcloud/data/nextcloud.log" ]; then
+	LOG_FILE="/var/www/nextcloud/data/nextcloud.log"
+elif [ -f "/var/www/html/nextcloud/data/nextcloud.log" ]; then
+	LOG_FILE="/var/www/html/nextcloud/data/nextcloud.log"
+fi
+
+# file must exist for rule to be active
+PREREQ="${LOG_FILE:-}"
+if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
+	PORTS="80,443"
+	LOG_TAG="nextcloud"
+
+	## Nextcloud authentication failures
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"Login failed:.*Remote IP: '<HOST>'" \
+		"Trusted domain error.*Remote IP: '<HOST>'")
+fi

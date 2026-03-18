@@ -1,0 +1,1125 @@
+.\" Brute Force Detection 2.0.1 man page
+.\" Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
+.\" Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
+.\" Licensed under the GNU General Public License v2
+.\"
+.TH BFD 1 "2026-03-08" "BFD 2.0.1" "Brute Force Detection"
+.SH NAME
+bfd \- brute force detection and IP banning
+.SH SYNOPSIS
+.B bfd
+.RB [ \-s | \-q | \-d | \-w ]
+.br
+.B bfd
+.RB [ \-b
+.IR IP " [" SERVICE ]]
+.RB [ \-u
+.IR IP ]
+.RB [ \-\-flush\-temp ]
+.RB [ \-\-flush\-all ]
+.br
+.B bfd
+.RB [ \-l ]
+.RB [ \-a
+.RI [ IP | STRING ]]
+.RB [ \-e
+.RI [ IP | CIDR ]
+.RI [ N ]]
+.RB [ \-S
+.RI [ SERVICE ]]
+.RB [ \-C
+.RI [ VAR ]]
+.RB [ \-R
+.RI [ RULE ]]
+.RB [ \-c ]
+.br
+.B bfd
+.RB [ \-T
+.IR RULE " [" FILE | \- ]]
+.RB [ \-\-test\-pattern
+.IR PATTERN " [" FILE | \- ]]
+.RB [ \-\-test\-alert
+.IR TYPE ]
+.br
+.B bfd
+.B \-\-scan
+.RI [ RULE ]
+.RB [ \-d ]
+.RB [ \-\-max\-lines= \fIN\fR]
+.RB [ \-\-scan\-timeout= \fIN\fR]
+.br
+.B bfd
+.B \-\-report
+.RI [ daily | weekly | monthly ]
+.br
+.B bfd
+.RB [ \-\-json ]
+.RB [ \-\-csv ]
+.RB [ \-V | \-\-verbose ]
+.br
+.B bfd
+.RB [ \-v ]
+.RB [ \-h ]
+.SH DESCRIPTION
+.B bfd
+(Brute Force Detection) is a shell-based intrusion detection and
+response system that monitors authentication logs for repeated login
+failures and automatically bans offending IP addresses using the
+system firewall.
+.PP
+BFD supports two operating modes.
+In
+.B watch mode
+(enabled automatically on install), BFD runs continuously, polling at a
+configurable interval (default 10 seconds) for near-real-time detection.
+In
+.B batch mode\fR,
+a cron job runs BFD every 2 minutes as an automatic fallback; it is
+silently skipped when watch mode holds the lock and resumes detection
+if the watch daemon exits.
+.PP
+Each detection cycle reads new log lines (via the
+.B tlog
+byte-offset tracker), matches them against 57 service rule files
+using the
+.B extract_hosts()
+engine with fail2ban-compatible
+.I <HOST>
+patterns, computes exponential-decay pressure scores, and bans
+addresses whose accumulated pressure exceeds the trip point.
+Bans are applied via one of 8 firewall backends (auto-detected or
+manually configured) and can be temporary with automatic expiry,
+recidivism escalation, and distributed subnet detection.
+.SH OPTIONS
+.SS Run Modes
+.TP
+.BR \-s ", " \-\-standard
+Run a detection cycle with output to stdout and log.
+.TP
+.BR \-q ", " \-\-quiet
+Run a detection cycle silently (output redirected to /dev/null).
+.TP
+.BR \-d ", " \-\-dryrun
+Run detection without actually executing ban commands.
+Log output shows what would be banned.
+.TP
+.BR \-w ", " \-\-watch
+Run in continuous watch mode (foreground).
+Polls every
+.B WATCH_INTERVAL
+seconds.
+Supports
+.B SIGHUP
+for configuration reload and
+.B SIGTERM/SIGINT
+for clean shutdown.
+.SS Ban Management
+.TP
+.BI \-b " IP" "\fR [" SERVICE \fR]
+Manually ban an IP address (permanent).
+If
+.I SERVICE
+is given, it is recorded as the triggering rule; otherwise
+.BR manual .
+.TP
+.BI \-u " IP"
+Unban an IP address (removes from firewall and active bans).
+.TP
+.B \-\-flush\-temp
+Remove all temporary (non-permanent) bans.
+.TP
+.B \-\-flush\-all
+Remove all bans (temporary and permanent).
+.SS Scan Mode
+.TP
+.BI \-\-scan " \fR[" RULE \fR] " \fR[" \-d \fR]
+Process the full current log file through the detection pipeline.
+Without
+.IR RULE ,
+scans all active rules.
+Combine with
+.BR \-d
+for dry-run (no bans, no cursor advancement).
+Acquires the global lock; stop watch mode first if running.
+.TP
+.BI \-\-max\-lines= N
+Maximum lines per log file during scan; 0 = unlimited (default: 50000).
+.TP
+.BI \-\-scan\-timeout= N
+Journal read timeout in seconds per rule during scan (default: 120).
+.SS Information
+.TP
+.B \-l ", " \-\-list
+List all active bans.
+Combine with
+.B \-\-json
+or
+.B \-\-csv
+for structured output.
+.TP
+.BI \-a ", " \-\-activity " \fR[" IP | STRING \fR]
+Threat activity report.
+Without arguments, shows an aggregate summary (unique IPs, total
+count, active bans for 24h and 7d windows), top 25 threat IPs for
+24h and 7d with live pressure scores, and a per-service breakdown
+with dual-interval columns (24h/7d count, unique IPs, top country).
+With a valid IP, shows an enriched report with ban status, history,
+events, pressure, and attack pool triggers.
+With a string, searches attack pool entries.
+Combine with
+.B \-\-json
+or
+.B \-\-csv
+for structured output.
+.IP
+.B Note:
+Both
+.B \-a
+and
+.B \-e
+read from the same attack pool data store.
+.B \-a
+provides a summary-oriented threat activity overview with dual-interval
+(24h/7d) views and per-service breakdown.
+.B \-e
+provides event-level detail with configurable time windows
+.RB ( \-\-24h ", " \-\-7d ", " \-\-30d )
+and sort modes
+.RB ( \-\-sort=count|time|ip ).
+Use
+.B \-a
+to review aggregate threat patterns and
+.B \-e
+to drill into specific IPs or subnets.
+.TP
+.BI \-e " \fR[" IP | CIDR "\fR] [" N \fR]
+Event history and investigation.
+Reads from the attack pool, which records all detected auth failures
+(both ban-triggering and sub-trip observations) with configurable retention
+(default: 365 days).
+.sp
+Without arguments, shows an event list of all IPs with failure counts,
+services, country, first/last seen, and ban status.
+Default: sorted by count descending, 24-hour window.
+Use
+.BR \-\-sort=time " or " \-\-sort=ip
+to change ordering, and
+.BR \-\-7d " or " \-\-30d
+to expand the time window.
+.sp
+With a valid IP, shows a comprehensive investigation report: historical
+failure counts from the attack pool (total and per-service breakdown),
+live pressure detail if the IP has active pressure, and a log sample.
+The optional
+.I N
+overrides the number of log sample lines shown (default:
+.BR EMAIL_LOGLINES ).
+.sp
+With an IPv4 CIDR (mask 8\-32), shows a subnet-scoped report with
+matching IPs and a summary line.
+.sp
+Combine with
+.B \-\-json
+or
+.B \-\-csv
+for structured output.
+.TP
+.BR \-\-report " \fR[" daily | weekly | monthly \fR]
+Generate and deliver a periodic threat report.
+Reports include threat summary (unique IPs, total events, bans), top threat IPs
+with country codes and ban status, per-service breakdown with top country, and
+a trend comparison against the prior equivalent time window.
+Reports are delivered via all configured channels (email, Slack, Telegram,
+Discord) or only those listed in
+.BR REPORT_CHANNELS .
+When run from the CLI, report text is also written to stdout.
+.sp
+Intervals:
+.B daily
+(last 24h, default),
+.B weekly
+(last 7d),
+.B monthly
+(last 30d).
+Scheduled delivery is handled by
+.B cron.daily
+when
+.B REPORT_ENABLED=1
+\(em daily runs every day, weekly on Mondays, monthly on the 1st.
+.TP
+.BR \-S ", " \-\-status " \fR[" \fISERVICE\fR ]
+System status overview, or per-service status when
+.I SERVICE
+is given.
+Shows run mode, firewall backend, active bans, events, and active rules.
+.TP
+.BR \-C ", " \-\-config " \fR[" \fIVAR\fR ]
+Show all configuration variables, or a single variable value.
+.TP
+.BR \-R ", " \-\-rules " \fR[" \fIRULE\fR "] \fR[" \-\-active \fR]
+List all rules with active/inactive status, or show details for a
+specific rule.
+Use
+.B \-\-active
+to show only active rules.
+The LOG SOURCE column shows the effective source for each rule:
+file path when the log file exists, "journal" when using systemd journal,
+or "file+journal" when both sources are available (file is primary,
+journal is fallback).
+.TP
+.BR \-c ", " \-\-check
+Run health check diagnostics.
+Validates configuration, binaries, rules, state files, and alert
+capability.
+.SS Testing
+.TP
+.BI \-T " RULE" "\fR [" FILE | \- \fR]
+Test a rule's patterns against its configured log file, a specific
+.IR FILE ,
+or stdin
+.RB ( \- ).
+Shows match count and unique IPs.
+.TP
+.BI \-\-test\-pattern " PATTERN" "\fR [" FILE | \- \fR]
+Test a raw
+.I <HOST>
+pattern against a log file or stdin.
+.TP
+.BI \-\-test\-alert " TYPE"
+Send a test alert to verify the delivery pipeline for the specified channel.
+.I TYPE
+is one of:
+.BR email ", " slack ", " telegram ", " discord .
+Uses a synthetic ban entry (RFC 5737 test IP 192.0.2.1, sshd service)
+and calls the real rendering and delivery path.
+.sp
+For
+.BR email :
+requires
+.B EMAIL_ALERTS=1
+and a valid
+.BR EMAIL_ADDRESS .
+Honors all email configuration:
+.BR EMAIL_FORMAT ", " SMTP_RELAY ", " EMAIL_REPUTATION_LINKS ,
+etc.
+.sp
+For
+.BR slack :
+requires
+.BR SLACK_ALERTS=1 ,
+.B curl
+in PATH, and the appropriate webhook URL or bot token/channel.
+.sp
+For
+.BR telegram :
+requires
+.BR TELEGRAM_ALERTS=1 ,
+.BR curl ,
+.BR TELEGRAM_BOT_TOKEN ,
+and
+.BR TELEGRAM_CHAT_ID .
+.sp
+For
+.BR discord :
+requires
+.BR DISCORD_ALERTS=1 ,
+.BR curl ,
+and
+.BR DISCORD_WEBHOOK_URL .
+.sp
+The subject line is prefixed with
+.B [TEST]
+to distinguish from real alerts.
+Bypasses digest mode to always send immediately.
+.SS Output Modifiers
+.TP
+.B \-\-json
+Output in JSON format.
+Supported with
+.BR \-l ", " \-e ", and " \-a .
+.TP
+.B \-\-csv
+Output in CSV format.
+Supported with
+.BR \-l ", " \-e ", and " \-a .
+.TP
+.BI \-\-sort= MODE
+Sort order for event list
+.RB ( \-e
+without IP).
+.I MODE
+is one of:
+.BR count " (default)," " time" ", or " ip .
+.TP
+.BI \-\-limit= N
+Maximum number of IPs to display in event list
+.RB ( \-e )
+and CIDR output.
+Default is 100.
+Use
+.B \-\-limit=0
+for unlimited output.
+.TP
+.B \-\-24h
+Show events from the last 24 hours (default).
+.TP
+.B \-\-7d
+Show events from the last 7 days.
+.TP
+.B \-\-30d
+Show events from the last 30 days.
+.TP
+.B \-\-active
+Show only active rules.
+Supported with
+.BR \-R .
+.TP
+.BR \-V ", " \-\-verbose
+Show detailed output.
+Adds per-rule event counts and pressure details, filtered host details,
+ban execution details, per-unban information, detection method in
+status, and binary paths in health check.
+Silenced by
+.BR \-q .
+.SS General
+.TP
+.BR \-v ", " \-\-version
+Display version information.
+.TP
+.BR \-h ", " \-\-help
+Display full usage help with grouped options and examples.
+When
+.B bfd
+is run with no arguments, a short summary of common commands is shown instead.
+.SH CONFIGURATION
+Configuration is in
+.BR conf.bfd ,
+organized into eleven sections.
+The file is sourced as bash; all values are shell variables.
+Additional tuning variables with sensible defaults
+.RB ( LOG_SOURCE ", " LOCK_FILE_TIMEOUT ", " BAN_RETRY_COUNT ", " OUTPUT_SYSLOG_FILE )
+are in
+.BR internals.conf ;
+add them to
+.B conf.bfd
+to override.
+.SS Pressure Model (Detection)
+BFD uses exponential-decay pressure scoring.
+Each failure adds pressure weighted by service severity;
+pressure decays over time via a half-life.
+A ban fires when accumulated pressure exceeds the trip point.
+.TP
+.B PRESSURE_TRIP
+Accumulated pressure to trigger a ban; must be > 0 (default: 20).
+Per-rule overrides in rule files or
+.BR pressure.conf .
+.TP
+.B PRESSURE_HALF_LIFE
+Half-life in seconds for pressure decay (default: 300).
+Shorter = more forgiving.
+.SS Email Alerts
+.TP
+.B EMAIL_ALERTS
+Enable email alerts: 0 or 1 (default: 0).
+.TP
+.B EMAIL_ADDRESS
+Alert recipient; comma-separated for multiple (default: root).
+.TP
+.B EMAIL_SUBJECT
+Alert subject line; $HOSTNAME expands at runtime.
+.TP
+.B EMAIL_LOGLINES
+Log lines from the offending service included in each alert and events
+view (default: 5).
+.TP
+.B EMAIL_FORMAT
+Email body format:
+.B text
+(plain text via
+.BR mail ),
+.B html
+(HTML only via
+.BR sendmail ),
+or
+.B both
+(multipart text+HTML via
+.BR sendmail ).
+Falls back to text-only if
+.B sendmail
+is not available (default: text).
+.TP
+.B EMAIL_DIGEST
+Email digest mode:
+.B cycle
+(one email per detection run) or
+.B timed
+(accumulate across runs and send on interval).
+Timed mode reduces email volume on active servers (default: cycle).
+.TP
+.B EMAIL_DIGEST_INTERVAL
+Digest flush interval in seconds when
+.BR EMAIL_DIGEST = timed
+(default: 900 = 15 minutes).
+.TP
+.B EMAIL_REPUTATION_LINKS
+IP reputation lookup links included in alerts, comma-separated.
+Available providers:
+.BR abuseipdb ", " shodan ", " virustotal ", " ipinfo ", " greynoise .
+Leave empty to disable (default: empty).
+.SS SMTP Relay
+Optional authenticated SMTP relay for outbound email delivery.
+Leave
+.B SMTP_RELAY
+empty to use the local MTA (default).
+.TP
+.B SMTP_RELAY
+SMTP relay server URL.
+Examples:
+.B smtps://smtp.gmail.com:465
+(implicit TLS),
+.B smtp://relay.example.com:587
+(STARTTLS),
+.B smtp://relay.internal:25
+(plain, internal relays).
+.TP
+.B SMTP_FROM
+Sender address for relay mode (required when
+.B SMTP_RELAY
+is set).
+.TP
+.B SMTP_USER
+SMTP authentication username.
+.TP
+.B SMTP_PASS
+SMTP authentication password.
+Stored in
+.B conf.bfd
+(permissions 640, root-owned).
+.SS Slack Alerts
+Deliver alert notifications to Slack channels.
+Requires
+.B curl
+in PATH.
+.TP
+.B SLACK_ALERTS
+Enable Slack alerts:
+.B 1
+to enable,
+.B 0
+to disable (default: 0).
+.TP
+.B SLACK_MODE
+Delivery mode:
+.B webhook
+(incoming webhook URL) or
+.B bot
+(Bot API with token + channel; supports file uploads).
+Default: webhook.
+.TP
+.B SLACK_WEBHOOK_URL
+Slack incoming webhook URL (required when
+.BR SLACK_MODE = webhook ).
+Create at
+.IR https://api.slack.com/messaging/webhooks .
+.TP
+.B SLACK_TOKEN
+Slack Bot API token, starting with
+.B xoxb-
+(required when
+.BR SLACK_MODE = bot ).
+.TP
+.B SLACK_CHANNEL
+Slack channel ID or
+.B #name
+(required when
+.BR SLACK_MODE = bot ).
+.SS Telegram Alerts
+Deliver alert notifications via Telegram Bot API.
+Requires
+.B curl
+in PATH.
+.TP
+.B TELEGRAM_ALERTS
+Enable Telegram alerts:
+.B 1
+to enable,
+.B 0
+to disable (default: 0).
+.TP
+.B TELEGRAM_BOT_TOKEN
+Telegram bot token from @BotFather (required when
+.BR TELEGRAM_ALERTS = 1 ).
+.TP
+.B TELEGRAM_CHAT_ID
+Telegram chat, group, or channel ID (required when
+.BR TELEGRAM_ALERTS = 1 ).
+.SS Discord Alerts
+Deliver alert notifications to Discord channels via webhooks.
+Requires
+.B curl
+in PATH.
+.TP
+.B DISCORD_ALERTS
+Enable Discord alerts:
+.B 1
+to enable,
+.B 0
+to disable (default: 0).
+.TP
+.B DISCORD_WEBHOOK_URL
+Discord webhook URL (required when
+.BR DISCORD_ALERTS = 1 ).
+Create at Server Settings > Integrations > Webhooks.
+.SS Banning
+.TP
+.B FIREWALL
+Firewall backend: auto, apf, csf, firewalld, ufw, nftables,
+iptables, route, or custom (default: auto).
+.TP
+.B BAN_TTL
+Ban duration in seconds; 0 = permanent (default: 600).
+Temporary bans auto-expire and the firewall rule is removed.
+.PP
+The next four settings form a repeat-offender pipeline:
+.BR BAN_ESCALATION
+controls how ban duration grows,
+.BR BAN_ESCALATION_CAP
+limits that growth,
+.BR BAN_ESCALATE_AFTER
+flips to permanent once the count is reached, and
+.BR BAN_ESCALATE_WINDOW
+is the lookback window for all of the above.
+.TP
+.B BAN_ESCALATION
+How ban duration grows for repeat offenders: none, linear, or double
+(default: none).
+.TP
+.B BAN_ESCALATION_CAP
+Maximum escalated duration in seconds; 0 = no cap (default: 86400).
+.TP
+.B BAN_ESCALATE_AFTER
+Temporary bans before flipping to permanent; 0 = never (default: 5).
+.TP
+.B BAN_ESCALATE_WINDOW
+Lookback window for counting repeat offenses in seconds (default: 86400).
+.SS Custom Firewall Commands
+Only used when
+.BR FIREWALL = custom ;
+skip if using auto or a named backend.
+Supports
+.BR $ATTACK_HOST ", " $MOD ", " $PORTS
+variable substitution.
+.TP
+.B BAN_COMMAND
+Command to deny an attacking host.
+.TP
+.B UNBAN_COMMAND
+Command to remove a ban; required for temporary ban auto-expiry.
+.TP
+.B BAN_COMMAND_V6 ", " UNBAN_COMMAND_V6
+IPv6-specific command templates (empty = use standard commands).
+.SS Log Paths
+.TP
+.B AUTH_LOG_PATH
+Auth log path (default: /var/log/secure; auto-detected on Debian/Ubuntu).
+.TP
+.B KERNEL_LOG_PATH
+Kernel/messages log path (default: /var/log/messages).
+.TP
+.B MAIL_LOG_PATH
+Mail log path (default: /var/log/maillog).
+.TP
+.B BFD_LOG_PATH
+BFD application log path (default: /var/log/bfd/bfd.log).
+Upgraded from v1.x, the legacy /var/log/bfd_log is automatically symlinked.
+.SS Advanced
+.TP
+.B PRESSURE_TRIP_GLOBAL
+Cross-service aggregate pressure trip point (default: 0, disabled).
+.TP
+.B SUBNET_TRIG
+Unique IPs from same subnet to trigger subnet ban (default: 0, disabled).
+.TP
+.B SUBNET_MASK
+IPv4 subnet mask for distributed detection, 8\-32 (default: 24).
+.TP
+.B SUBNET_MASK_V6
+IPv6 subnet mask, multiple of 16 (default: 48).
+.TP
+.B WATCH_INTERVAL
+Watch mode polling interval in seconds (default: 10).
+.TP
+.B SCAN_MAX_LINES
+Maximum lines per log file during scan mode; 0 = unlimited (default: 50000).
+Override with
+.BR \-\-max\-lines= .
+.TP
+.B SCAN_TIMEOUT
+Journal read timeout in seconds per rule during scan mode (default: 120).
+Override with
+.BR \-\-scan\-timeout= .
+.TP
+.B OUTPUT_SYSLOG
+Echo BFD log messages to syslog: 0 or 1 (default: 1).
+.TP
+.B LOG_IDLE_SUPPRESS
+Suppress idle (zero\-event) run\-complete messages from syslog: 0 or 1
+(default: 1).
+When enabled, zero\-event cycles are still recorded in
+.B BFD_LOG_PATH
+but do not echo to syslog.
+Cycles with events always log to both regardless of this setting.
+Reduces syslog noise by ~8,640 lines/day in watch mode.
+.TP
+.B LOG_FORMAT
+Log output format (default: classic).
+.B classic
+produces traditional syslog\-style lines.
+.B json
+produces one JSON object per line (JSONL) with fields:
+.IR ts ", " host ", " app ", " pid ", " level ", " tag " (optional), " msg .
+Suitable for ELK, Graylog, or similar log aggregation systems.
+.TP
+.B LOG_LEVEL
+Minimum log severity threshold (default: 1).
+0\ =\ debug, 1\ =\ info, 2\ =\ warn, 3\ =\ error.
+Messages below the threshold are suppressed.
+Debug messages are stdout\-only and controlled by
+.B \-\-verbose
+rather than
+.BR LOG_LEVEL .
+.SS Attack Pool
+.TP
+.B APOOL_RETENTION_DAYS
+Maximum age in days for attack pool entries (default: 365).
+Entries older than this are pruned by
+.BR cron.daily .
+.TP
+.B APOOL_MAX_LINES
+Maximum number of lines in the attack pool file (default: 500000).
+When exceeded, the oldest entries are removed by
+.BR cron.daily .
+.SS Periodic Reports
+.TP
+.B REPORT_ENABLED
+Enable periodic threat reports (default: 0).
+When set to 1 and
+.B cron.daily
+is active, reports are generated and delivered on configured intervals.
+.TP
+.B REPORT_INTERVALS
+Comma-separated list of intervals to generate (default: "daily").
+Valid values: daily, weekly, monthly.
+.TP
+.B REPORT_CHANNELS
+Comma-separated list of delivery channels (default: "" = all enabled alert channels).
+Valid values: email, slack, telegram, discord.
+When empty, reports are delivered to all channels enabled for ban alerts.
+.TP
+.B REPORT_EMAIL_ADDRESS
+Report email recipient (default: "" = use EMAIL_ADDRESS).
+.TP
+.B REPORT_EMAIL_SUBJECT
+Email subject template (default: "BFD {{INTERVAL}} Threat Report for {{HOSTNAME}}").
+.B {{INTERVAL}}
+and
+.B {{HOSTNAME}}
+are expanded at send time.
+.TP
+.B REPORT_TOP_N
+Maximum IPs to include in report tables (default: 25).
+.SH ALERT TEMPLATES
+Alert messages are rendered from customizable template partials in the
+.B alert/
+directory under the BFD install path.
+Templates use
+.B {{VAR}}
+mustache-style placeholders replaced at render time via a safe
+awk-based engine (no shell code execution).
+.PP
+Twenty-one partials are provided across three categories:
+.PP
+.B Email templates
+(4 plain text + 4 HTML):
+.RS 4
+.nf
+text.header.tpl   \(em banner, hostname, timestamp
+text.entry.tpl    \(em per-ban detail block
+text.summary.tpl  \(em digest summary statistics
+text.footer.tpl   \(em version, project link
+html.header.tpl   \(em HTML banner and hostname bar
+html.entry.tpl    \(em per-ban card with pressure detail
+html.summary.tpl  \(em aggregate statistics table
+html.footer.tpl   \(em HTML footer and closing tags
+.fi
+.RE
+.PP
+.B Messaging templates
+(6 files):
+.RS 4
+.nf
+slack.message.tpl     \(em Slack ban notification
+slack.entry.tpl       \(em Slack per-ban detail
+telegram.message.tpl  \(em Telegram ban notification
+telegram.entry.tpl    \(em Telegram per-ban detail
+discord.message.tpl   \(em Discord ban notification
+discord.entry.tpl     \(em Discord per-ban detail
+.fi
+.RE
+.PP
+.B Report templates
+(7 files):
+.RS 4
+.nf
+report.html.header.tpl    \(em HTML report header and styles
+report.html.body.tpl      \(em HTML report body and tables
+report.text.header.tpl    \(em plain text report header
+report.text.body.tpl      \(em plain text report body
+report.slack.message.tpl  \(em Slack report summary
+report.telegram.message.tpl \(em Telegram report summary
+report.discord.message.tpl  \(em Discord report summary
+.fi
+.RE
+.PP
+The entry template is rendered once per ban.
+The summary template is included only when multiple bans are batched
+in one email.
+Users can edit any partial without bash expertise; only
+.B {{VAR}}
+substitution is supported, not arbitrary code.
+.PP
+To customize templates, copy the desired partial(s) into the
+.B alert/custom.d/
+directory and edit the copies.
+BFD checks
+.B custom.d/
+first for each partial and falls back to the shipped default.
+Only the overridden partials need to be present in
+.B custom.d/
+\(em the remaining partials use shipped defaults.
+Custom templates in
+.B custom.d/
+are preserved across upgrades automatically.
+Shipped templates are always updated to the latest version.
+Run
+.B bfd \-c
+to verify which templates have custom overrides.
+.PP
+Available template variables include:
+.B {{HOSTNAME}}\fR,
+.B {{TIMESTAMP}}\fR,
+.B {{HOST}}\fR,
+.B {{SERVICE}}\fR,
+.B {{PRESSURE}}\fR,
+.B {{FAIL_COUNT}}\fR,
+.B {{BAN_TYPE}}\fR,
+.B {{BAN_DURATION}}\fR,
+.B {{COUNTRY_CODE}}\fR,
+.B {{COUNTRY_DISPLAY}}\fR,
+.B {{SOURCE_LOGS}}\fR,
+.B {{REPUTATION_LINKS_TEXT}}\fR,
+and others.
+See the shipped template files for the full set.
+.SS Messaging Templates
+When messaging channels (Slack, Telegram, Discord) are enabled, additional
+templates are used for channel-specific formatting:
+.RS 4
+.nf
+slack.message.tpl     \(em Slack Block Kit JSON wrapper
+slack.entry.tpl       \(em per-ban Block Kit section
+telegram.message.tpl  \(em Telegram MarkdownV2 wrapper
+telegram.entry.tpl    \(em per-ban MarkdownV2 block
+discord.message.tpl   \(em Discord embed JSON wrapper
+discord.entry.tpl     \(em per-ban embed field
+.fi
+.RE
+.PP
+Entry templates are rendered once per ban and accumulated into
+.B {{ENTRY_BLOCKS}}
+(Slack, Telegram) or
+.B {{ENTRY_FIELDS}}
+(Discord) for inclusion in the outer message template.
+These templates can be customized via
+.B custom.d/
+like email templates.
+.SH PRESSURE MODEL
+BFD uses a three-tier pressure precedence system:
+.IP 1. 3
+.B Rule file
+\(em uncomment
+.B PRESSURE_WEIGHT=
+and/or
+.B PRESSURE_TRIP=
+in the rule file for per-rule override.
+.IP 2.
+.B pressure.conf
+\(em centralized per-rule overrides without editing rule files.
+Format:
+.IR rule_name ": PRESSURE_WEIGHT=" N ": PRESSURE_TRIP=" N .
+Also supports
+.BR SKIP_ALERT " and " RULE_EMAIL .
+.IP 3.
+.B conf.bfd
+\(em global
+.B PRESSURE_TRIP
+value used when neither rule file nor pressure.conf sets a value.
+.PP
+Pressure formula:
+pressure = SUM { weight * 2^(\-(now \- event_time) / half_life) }.
+A ban fires when pressure >= PRESSURE_TRIP.
+.PP
+In practical terms, PRESSURE_TRIP divided by weight gives the minimum number of
+rapid failures needed to trigger a ban.
+With the default trip of 20 and sshd weight of 3, at least 7 rapid failures are
+needed.
+Failures spread over time require more attempts because older events decay.
+.SH FIREWALL INTEGRATION
+The
+.B FIREWALL
+variable in
+.B conf.bfd
+selects the ban/unban backend.
+When set to
+.B auto
+(default), BFD probes in priority order:
+APF > CSF > firewalld > UFW > nftables > iptables > route.
+.PP
+Named backends manage their own ban/unban commands.
+The
+.B custom
+backend uses the
+.B BAN_COMMAND
+and
+.B UNBAN_COMMAND
+templates with
+.BR $ATTACK_HOST ", " $MOD ", and " $PORTS
+variable substitution.
+.SH RULES
+Rule files in
+.I /usr/local/bfd/rules/
+define service-specific detection patterns.
+Each rule sets:
+.TP
+.B PREREQ
+Path to a binary or file that must exist for the rule to be active.
+.TP
+.B LOG_FILE
+Log file path to scan for authentication failures.
+.TP
+.B LOG_TAG
+Tracking tag for tlog byte-offset state and journal filter dispatch.
+.TP
+.B MATCHED_HOSTS
+Set by the detection engine; contains extracted IPs from log matching.
+.PP
+Optional per-rule variables:
+.BR PRESSURE_WEIGHT ", " PRESSURE_TRIP ", " PORTS ", " SKIP_ALERT ", " RULE_EMAIL ", " IGNOREREGEX .
+.PP
+Rules use
+.I <HOST>
+placeholder patterns processed by
+.BR extract_hosts() ,
+which generates dual IPv4/IPv6 boundary-aware regular expressions.
+.SH FILES
+.TP
+.I /usr/local/bfd/bfd
+Main executable.
+.TP
+.I /usr/local/bfd/internals/bfd.lib.sh
+Function library (sourced by bfd).
+.TP
+.I /usr/local/bfd/internals/elog_lib.sh
+Structured logging library (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/tlog_lib.sh
+Log tracking library for incremental reads (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/alert_lib.sh
+Alert delivery library (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_alert.sh
+BFD-specific alert functions and country display enrichment (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/geoip_lib.sh
+GeoIP metadata library \(em country names, continent mapping, CIDR download
+(sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/pkg_lib.sh
+Packaging utility library (sourced by install.sh and uninstall.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_report.sh
+Periodic threat report functions \(em data collection, rendering, and delivery
+(sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/internals.conf
+Internal/derived variables.
+.TP
+.I /usr/local/bfd/conf.bfd
+User configuration.
+.TP
+.I /usr/local/bfd/pressure.conf
+Per-rule pressure weight and trip overrides.
+.TP
+.I /usr/local/bfd/pressure-country.conf
+Country pressure multiplier table (active when entries are uncommented).
+.TP
+.I /usr/local/bfd/ipcountry.dat
+IPv4 IP-to-country lookup database (integer-range format).
+.TP
+.I /usr/local/bfd/ipcountry6.dat
+IPv6 IP-to-country lookup database (hex-range format). Built by
+.BR update-ipcountry.sh .
+.TP
+.I /usr/local/bfd/tlog
+Track log \(em byte-offset log reader CLI wrapper.
+.TP
+.I /usr/local/bfd/update-ipcountry.sh
+Script to download per-country CIDR zones (ipverse.net/ipdeny.com cascade) and
+rebuild the IPv4 and IPv6 IP-to-country databases. Run automatically at install
+time (background) and refreshed via cron.daily when data is older than 30 days.
+.TP
+.I /usr/local/bfd/alert/
+Alert template partials directory (21 files: email, messaging, and report templates).
+.TP
+.I /usr/local/bfd/alert/custom.d/
+User template overrides (per-file, preserved across upgrades).
+.TP
+.I /usr/local/bfd/rules/
+Service rule files (57 rules).
+.TP
+.I /usr/local/bfd/tmp/pressure.dat
+Pressure scoring workspace (timestamp, IP, service, weight). Pruned every ~10 half-lives.
+.TP
+.I /usr/local/bfd/tmp/bans.active
+Currently active bans.
+.TP
+.I /usr/local/bfd/tmp/bans.history
+Historical ban/unban records.
+.TP
+.I /usr/local/bfd/stats/attack.pool
+Threat activity pool \(em unified event store recording all detected auth
+failures (ban, escalate, observed) and outcomes.
+10-field format: timestamp, IP, service, count, country, action, duration,
+ports, pressure, trip type.
+Sub-trip observations (ACTION=observed) are recorded alongside ban decisions
+so event history persists across pressure decay cycles.
+.TP
+.I /usr/local/bfd/ignore.hosts
+User-managed IP ignore list.
+.TP
+.I /usr/local/bfd/exclude.files
+List of files containing hosts to ignore.
+.TP
+.I /etc/cron.d/bfd
+Cron job (batch mode, every 2 minutes).
+.TP
+.I /etc/cron.daily/bfd
+Daily maintenance (state rotation, cleanup).
+.TP
+.I /etc/logrotate.d/bfd
+Log rotation configuration (copytruncate, weekly).
+.TP
+.I /etc/systemd/system/bfd-watch.service
+Systemd unit for watch mode (recommended).
+.TP
+.I /etc/systemd/system/bfd.service
+Systemd unit for batch mode.
+.TP
+.I /etc/systemd/system/bfd.timer
+Systemd timer for batch mode (alternative to cron).
+.TP
+.I /etc/init.d/bfd-watch
+SysVinit init script for watch mode (CentOS 6/7, Ubuntu 14.04).
+.TP
+.I /etc/bash_completion.d/bfd
+Bash tab completion for bfd commands.
+.TP
+.I /var/log/bfd/bfd.log
+Application log (v1.x: /var/log/bfd_log, auto-migrated with symlink).
+.SH UPGRADING
+When upgrading from a previous BFD installation (including v1.5\-2),
+.B install.sh
+automatically backs up the existing installation to
+.I /usr/local/bfd.bk.DDMMYYYY\-EPOCH
+(symlinked as
+.IR /usr/local/bfd.bk.last )
+and runs
+.B importconf
+to merge configuration and preserve state.
+.PP
+.B importconf
+migrates: user configuration (conf.bfd values), legacy variable name
+translations (TRIG \(-> PRESSURE_TRIP, BAN_DURATION \(-> BAN_TTL, etc.),
+per\-rule overrides (thresholds.conf \(-> pressure.conf), firewall backend
+detection, ban state (bans.active, bans.history, pressure.dat), attack pool
+(attack.pool), log tracking state (tlog byte\-offsets, journal cursors),
+user\-customized alert template partials, and ignore lists.
+.PP
+.B Note:
+In 2.0.1, the internal pressure workspace was renamed from
+.I events.dat
+to
+.IR pressure.dat .
+.B importconf
+handles this automatically \(em if the backup contains
+.I events.dat
+but not
+.IR pressure.dat ,
+the file is migrated under the new name.
+.PP
+Post\-upgrade verification:
+.RS 4
+.nf
+bfd \-c          # health check and diagnostics
+bfd \-\-status    # show current ban/event summary
+.fi
+.RE
+.PP
+To roll back, flush any new bans and restore the backup:
+.RS 4
+.nf
+bfd \-\-flush\-all
+rm \-rf /usr/local/bfd
+cp \-a /usr/local/bfd.bk.last /usr/local/bfd
+.fi
+.RE
+.SH SIGNALS
+In watch mode
+.RB ( "bfd \-w" ):
+.TP
+.B SIGHUP
+Reload configuration (conf.bfd, internals.conf, pressure.conf)
+without restarting.
+.TP
+.B SIGTERM\fR, \fBSIGINT
+Clean shutdown: release lock, exit gracefully.
+.SH EXIT CODES
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Configuration error (invalid config, unknown option).
+.TP
+.B 2
+Lock error (another instance running).
+.TP
+.B 3
+Prerequisite error (missing tlog, rules directory, etc.).
+.SH SEE ALSO
+.BR fail2ban (1),
+.BR iptables (8),
+.BR nft (8),
+.BR firewall-cmd (1),
+.BR ufw (8),
+.BR apf (1),
+.BR csf (1)
+.SH AUTHORS
+R-fx Networks
+.RI < proj@rfxn.com >,
+Ryan MacDonald
+.RI < ryan@rfxn.com >
+.SH BUGS
+Report bugs at
+.UR https://github.com/rfxn/brute-force-detection/issues
+.UE .

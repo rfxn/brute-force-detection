@@ -1,0 +1,23 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/sbin/grafana-server"
+
+if [ -f "$PREREQ" ]; then
+	PORTS="3000"
+	LOG_FILE="/var/log/grafana/grafana.log"
+	LOG_TAG="grafana"
+
+	## GRAFANA
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"Invalid username or password.*remote_addr=<HOST>" \
+		"invalid username or password.*remote_addr=<HOST>")
+fi

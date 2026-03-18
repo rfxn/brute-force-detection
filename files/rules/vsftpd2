@@ -1,17 +1,21 @@
-# failed logins from a single address before ban
-# uncomment to override conf.bfd trig value
-# TRIG="10"
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="20"
 
-# uncomment to disable alerting for this rule 
+# uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
 
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
 # file must exist for rule to be active
-REQ="/usr/sbin/vsftpd"
-if [ -f "$REQ" ]; then
+PREREQ="/usr/sbin/vsftpd"
+if [ -f "$PREREQ" ]; then
 	PORTS="20,21"
-	LP="/var/log/vsftpd.log"
-	TLOG_TF="vsftpd"
+	LOG_FILE="/var/log/vsftpd.log"
+	LOG_TAG="vsftpd2"
 
 	## VSFTPD
-	ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | grep -w 'FAIL LOGIN:' | tr '[]' ' ' | tr -d '()' | awk '{print$12" "$8}' | tr -d ':' | tr -d '"' | awk '{print$1":"$2}' | grep -E '[0-9]+'`
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		'FAIL LOGIN: Client "<HOST>"')
 fi

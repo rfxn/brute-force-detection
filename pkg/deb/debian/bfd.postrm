@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    remove)
+        # Clean up the symlink farm directory (links are removed by dpkg,
+        # but the directory itself and any runtime-created files remain)
+        rm -rf /usr/local/bfd 2>/dev/null || true
+        rm -f /usr/local/sbin/bfd 2>/dev/null || true
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl daemon-reload 2>/dev/null || true
+        fi
+        ;;
+    purge)
+        # Clean up symlink farm
+        rm -rf /usr/local/bfd 2>/dev/null || true
+        rm -f /usr/local/sbin/bfd 2>/dev/null || true
+        # Remove config directory on purge
+        rm -rf /etc/bfd 2>/dev/null || true
+        # Remove state
+        rm -rf /var/lib/bfd 2>/dev/null || true
+        # Remove logs (new directory + legacy flat file)
+        rm -rf /var/log/bfd 2>/dev/null || true
+        rm -f /var/log/bfd_log 2>/dev/null || true
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl daemon-reload 2>/dev/null || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

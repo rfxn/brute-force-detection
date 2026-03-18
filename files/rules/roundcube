@@ -1,0 +1,30 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# detect roundcube log path
+if [ -f "/var/log/roundcube/errors.log" ]; then
+	LOG_FILE="/var/log/roundcube/errors.log"
+elif [ -f "/var/log/roundcubemail/errors.log" ]; then
+	LOG_FILE="/var/log/roundcubemail/errors.log"
+elif [ -f "/var/log/roundcube/errors" ]; then
+	LOG_FILE="/var/log/roundcube/errors"
+fi
+
+# file must exist for rule to be active
+PREREQ="${LOG_FILE:-}"
+if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
+	PORTS="80,443"
+	LOG_TAG="roundcube"
+
+	## Roundcube webmail authentication failures
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"Login failed for .+ from <HOST>" \
+		"Failed login for .+ from <HOST>")
+fi

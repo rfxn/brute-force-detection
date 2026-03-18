@@ -1,0 +1,23 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="5"
+# PRESSURE_TRIP="10"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/share/webmin/miniserv.pl"
+
+if [ -f "$PREREQ" ]; then
+	PORTS="10000,20000"
+	LOG_FILE="$AUTH_LOG_PATH"
+	LOG_TAG="webmin"
+
+	## Webmin authentication failures
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"webmin.*Invalid login as .* from <HOST>" \
+		"webmin.*Non-existent login as .* from <HOST>")
+fi

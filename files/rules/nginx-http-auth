@@ -1,0 +1,29 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="20"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# detect nginx error log path
+if [ -f "/var/log/nginx/error.log" ]; then
+	LOG_FILE="/var/log/nginx/error.log"
+elif [ -f "/usr/local/nginx/logs/error.log" ]; then
+	LOG_FILE="/usr/local/nginx/logs/error.log"
+fi
+
+# file must exist for rule to be active
+PREREQ="${LOG_FILE:-}"
+if [ -n "$PREREQ" ] && [ -f "$PREREQ" ]; then
+	PORTS="80,443"
+	LOG_TAG="nginx.auth"
+
+	## nginx HTTP authentication failures
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"password mismatch, client: <HOST>" \
+		"was not found in .*, client: <HOST>" \
+		"no user/password was provided.*, client: <HOST>")
+fi

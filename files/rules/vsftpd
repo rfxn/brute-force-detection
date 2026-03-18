@@ -1,18 +1,22 @@
-# failed logins from a single address before ban
-# uncomment to override conf.bfd trig value
-# TRIG="10"
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="20"
 
-# uncomment to disable alerting for this rule 
+# uncomment to disable alerting for this rule
 # SKIP_ALERT="1"
 
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
 # file must exist for rule to be active
-REQ="/usr/sbin/vsftpd"
+PREREQ="/usr/sbin/vsftpd"
 
-if [ -f "$REQ" ]; then
- PORTS="20,21"
- LP="$AUTH_LOG_PATH"
- TLOG_TF="vsftpd"
+if [ -f "$PREREQ" ]; then
+	PORTS="20,21"
+	LOG_FILE="$AUTH_LOG_PATH"
+	LOG_TAG="vsftpd"
 
- ## VSFTPD
- ARG_VAL=`$TLOG_PATH $LP $TLOG_TF | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed -e 's/::ffff://' | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed -n -e '/vsftpd:/s/.*authentication failure.* \([^ ]*\)\(.*\)ruser=\([^ ]*\).*rhost=/\3:\1/p' | tr ':' ' ' | awk '{print$2":"$1}'`
+	## VSFTPD
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"vsftpd.*authentication failure.*rhost=<HOST>")
 fi

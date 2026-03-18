@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# BFD 1.5-2 importconf [bfd_ic@r-fx.org]
+# Brute Force Detection 2.0.1 importconf <bfd@rfxn.com>
 ###
-# Copyright (C) 1999-2008, R-fx Networks <proj@r-fx.org>
-# Copyright (C) 2008, Ryan MacDonald <ryan@r-fx.org>
+# Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
+# Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -20,25 +20,354 @@
 #    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 ###
 #
-INSTALL_PATH="/usr/local/bfd"
-DEF=".ca.def"
-DOUT=".conf.bfd"
+INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
+LOG_IDLE_SUPPRESS="${LOG_IDLE_SUPPRESS:-1}"
 
-if [ -d "/usr/local/bfd.bk.last" ]; then
-# get all the vars from current release
-. /usr/local/bfd/conf.bfd
-# replace with any vars old release had
-. /usr/local/bfd.bk.last/conf.bfd
-# generate new conf
-. $DEF
+# BK_LAST is set by install.sh via pkg_backup_path(); fall back to legacy
+# symlink name for manual invocation or pre-pkg_lib upgrades
+BK_LAST=${BK_LAST:-"${INSTALL_PATH}.bk.last"}
 
-cp -f $INSTALL_PATH/conf.bfd $INSTALL_PATH/conf.bfd.orig
-cp -f $DOUT $INSTALL_PATH/conf.bfd
-cp -f /usr/local/bfd.bk.last/ignore.hosts $INSTALL_PATH >> /dev/null 2>&1
-cp -f /usr/local/bfd.bk.last/tmp/* $INSTALL_PATH/tmp >> /dev/null 2>&1
-rm -f $INSTALL_PATH/tmp/*
-
-OV=`tac /usr/local/bfd.bk.last/conf.bfd  | tail -n 3 | grep BFD | awk '{print$3}'`
-NV=`tac /usr/local/bfd/conf.bfd  | tail -n 3 | grep BFD | awk '{print$3}'`
-        echo "  Imported tracking and options from BFD $OV to $NV."
+if [ ! -d "$BK_LAST" ]; then
+	exit 0
 fi
+
+old_conf="$BK_LAST/conf.bfd"
+new_conf="$INSTALL_PATH/conf.bfd"
+
+if [ ! -f "$old_conf" ] || [ ! -f "$new_conf" ]; then
+	exit 0
+fi
+
+# source pkg_lib for pkg_config_merge (installed by install.sh before importconf runs)
+# shellcheck disable=SC1090,SC1091
+if [ -f "$INSTALL_PATH/internals/pkg_lib.sh" ]; then
+	. "$INSTALL_PATH/internals/pkg_lib.sh"
+else
+	echo "importconf: error: $INSTALL_PATH/internals/pkg_lib.sh not found" >&2
+	exit 1
+fi
+
+# extract old/new version from file header comment
+OV=$(awk '/^# Brute Force Detection/ {print $5; exit}' "$old_conf")
+NV=$(awk '/^# Brute Force Detection/ {print $5; exit}' "$new_conf")
+
+# define merge targets before trap so cleanup paths are valid
+new_int="$INSTALL_PATH/internals/internals.conf"
+
+# build combined old source: concatenate old conf.bfd + old internals.conf
+# (for pre-split installs, all variables are in conf.bfd; for post-split,
+# internals.conf has the internal variables)
+old_combined=$(mktemp "$INSTALL_PATH/tmp/.importconf.XXXXXX")
+trap 'command rm -f "$old_combined" "$new_conf.tmp" "$new_int.tmp"' EXIT INT TERM  # cleanup temp files on exit
+cat "$old_conf" > "$old_combined"
+# support both new (internals/) and old (flat) backup layouts
+if [ -f "$BK_LAST/internals/internals.conf" ]; then
+	cat "$BK_LAST/internals/internals.conf" >> "$old_combined"
+elif [ -f "$BK_LAST/internals.conf" ]; then
+	cat "$BK_LAST/internals.conf" >> "$old_combined"
+fi
+
+# merge conf.bfd — overlay old user values onto new config template
+pkg_config_merge "$old_combined" "$new_conf" "$new_conf.tmp" \
+	&& command mv -f "$new_conf.tmp" "$new_conf"
+
+# merge internals.conf if new install has it
+if [ -f "$new_int" ]; then
+	pkg_config_merge "$old_combined" "$new_int" "$new_int.tmp" \
+		&& command mv -f "$new_int.tmp" "$new_int"
+fi
+
+command rm -f "$old_combined"
+
+# Clamp PRESSURE_TRIP values inherited from previous install
+# (catches prior bad migrations, e.g., old TRIG=500 that was already carried forward)
+_existing_pt=$(awk -F= '/^PRESSURE_TRIP=/{gsub(/"/, "", $2); print $2; exit}' "$new_conf")
+if [ -n "$_existing_pt" ] && [[ "$_existing_pt" =~ ^[0-9]+$ ]] && [ "$_existing_pt" -gt 200 ]; then
+	echo "  WARNING: PRESSURE_TRIP=$_existing_pt exceeds maximum (200), clamped to 200."
+	echo "  Values above 200 effectively disable detection in the pressure model."
+	sed -i "s|^PRESSURE_TRIP=.*|PRESSURE_TRIP=\"200\"|" "$new_conf"
+fi
+_existing_ptg=$(awk -F= '/^PRESSURE_TRIP_GLOBAL=/{gsub(/"/, "", $2); print $2; exit}' "$new_conf")
+if [ -n "$_existing_ptg" ] && [[ "$_existing_ptg" =~ ^[0-9]+$ ]] && [ "$_existing_ptg" -gt 200 ]; then
+	echo "  WARNING: PRESSURE_TRIP_GLOBAL=$_existing_ptg exceeds maximum (200), clamped to 200."
+	sed -i "s|^PRESSURE_TRIP_GLOBAL=.*|PRESSURE_TRIP_GLOBAL=\"200\"|" "$new_conf"
+fi
+
+# Migrate old variable names → new pressure model names in conf.bfd
+# Only if old config used legacy names (TRIG, BAN_DURATION, etc.)
+_pressure_migrated=0
+if grep -q '^TRIG=' "$old_conf" 2>/dev/null && ! grep -q '^PRESSURE_TRIP=' "$old_conf" 2>/dev/null; then
+	# map old → new variable names in the merged conf.bfd
+	_old_val=$(awk -F= '/^TRIG=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
+		if [ "$_old_val" -gt 200 ]; then
+			echo "  WARNING: TRIG=$_old_val exceeds pressure model maximum (200), clamped to 200."
+			echo "  Old TRIG counted raw failures; the pressure model uses exponential decay."
+			echo "  Review PRESSURE_TRIP in conf.bfd and per-rule overrides in pressure.conf."
+			_old_val=200
+		fi
+		sed -i "s|^PRESSURE_TRIP=.*|PRESSURE_TRIP=\"${_old_val}\"|" "$new_conf"
+		_pressure_migrated=1
+	fi
+fi
+if grep -q '^TRIG_WINDOW=' "$old_conf" 2>/dev/null && ! grep -q '^PRESSURE_HALF_LIFE=' "$old_conf" 2>/dev/null; then
+	_old_val=$(awk -F= '/^TRIG_WINDOW=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
+		if [ "$_old_val" -gt 600 ]; then
+			echo "  WARNING: TRIG_WINDOW=$_old_val migrated to PRESSURE_HALF_LIFE=$_old_val."
+			echo "  Note: PRESSURE_HALF_LIFE controls exponential decay rate (default 300s)."
+			echo "  Values above 600 produce very slow decay. Review with 'bfd -c'."
+		fi
+		sed -i "s|^PRESSURE_HALF_LIFE=.*|PRESSURE_HALF_LIFE=\"${_old_val}\"|" "$new_conf"
+		_pressure_migrated=1
+	fi
+fi
+if grep -q '^TRIG_GLOBAL=' "$old_conf" 2>/dev/null && ! grep -q '^PRESSURE_TRIP_GLOBAL=' "$old_conf" 2>/dev/null; then
+	_old_val=$(awk -F= '/^TRIG_GLOBAL=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
+		if [ "$_old_val" -gt 200 ]; then
+			echo "  WARNING: TRIG_GLOBAL=$_old_val exceeds pressure model maximum (200), clamped to 200."
+			_old_val=200
+		fi
+		sed -i "s|^PRESSURE_TRIP_GLOBAL=.*|PRESSURE_TRIP_GLOBAL=\"${_old_val}\"|" "$new_conf"
+		_pressure_migrated=1
+	fi
+fi
+if grep -q '^BAN_DURATION=' "$old_conf" 2>/dev/null && ! grep -q '^BAN_TTL=' "$old_conf" 2>/dev/null; then
+	_old_val=$(awk -F= '/^BAN_DURATION=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
+		sed -i "s|^BAN_TTL=.*|BAN_TTL=\"${_old_val}\"|" "$new_conf"
+		_pressure_migrated=1
+	fi
+fi
+if grep -q '^BAN_PERMANENT_AFTER=' "$old_conf" 2>/dev/null && ! grep -q '^BAN_ESCALATE_AFTER=' "$old_conf" 2>/dev/null; then
+	_old_val=$(awk -F= '/^BAN_PERMANENT_AFTER=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
+		sed -i "s|^BAN_ESCALATE_AFTER=.*|BAN_ESCALATE_AFTER=\"${_old_val}\"|" "$new_conf"
+		_pressure_migrated=1
+	fi
+fi
+if grep -q '^BAN_PERMANENT_WINDOW=' "$old_conf" 2>/dev/null && ! grep -q '^BAN_ESCALATE_WINDOW=' "$old_conf" 2>/dev/null; then
+	_old_val=$(awk -F= '/^BAN_PERMANENT_WINDOW=/{gsub(/"/, "", $2); print $2; exit}' "$old_conf")
+	if [ -n "$_old_val" ] && [[ "$_old_val" =~ ^[0-9]+$ ]]; then
+		sed -i "s|^BAN_ESCALATE_WINDOW=.*|BAN_ESCALATE_WINDOW=\"${_old_val}\"|" "$new_conf"
+		_pressure_migrated=1
+	fi
+fi
+if [ "$_pressure_migrated" -eq 1 ]; then
+	echo "  Migrated legacy config (TRIG/BAN_DURATION) to pressure model (weights=1). Run 'bfd -c' to verify."
+fi
+
+# Phase 25: if upgrading from pre-firewall-backend config, set custom mode
+# to preserve existing BAN_COMMAND behavior
+if ! grep -q '^FIREWALL=' "$old_conf" 2>/dev/null; then
+	sed -i 's/^FIREWALL="auto"/FIREWALL="custom"/' "$new_conf"
+	echo "  Note: FIREWALL set to 'custom' (preserves existing BAN_COMMAND/UNBAN_COMMAND). Run 'bfd -c' to verify."
+fi
+
+# migrate per-rule overrides to pressure.conf
+new_press="$INSTALL_PATH/pressure.conf"
+if [ -f "$BK_LAST/pressure.conf" ]; then
+	# already has pressure.conf — preserve it
+	command cp -f "$BK_LAST/pressure.conf" "$new_press"
+	# rename rule entries for rules that changed names (modsec -> mod_sec)
+	if grep -q '^modsec:' "$new_press" 2>/dev/null; then
+		sed -i 's/^modsec:/mod_sec:/' "$new_press"
+	fi
+	echo "  Preserved pressure.conf from previous install."
+elif [ -f "$BK_LAST/thresholds.conf" ]; then
+	# translate thresholds.conf TRIG entries → pressure.conf PRESSURE_TRIP entries
+	_migrated=0
+	while IFS=: read -r _rule_name _rest; do
+		[ -z "$_rule_name" ] && continue
+		# skip comments
+		case "$_rule_name" in \#*) continue ;; esac
+		# extract TRIG value
+		_old_trig=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^TRIG=/){sub(/^TRIG=/,"",$i); print $i; exit}}}')
+		[[ "$_old_trig" =~ ^[0-9]+$ ]] || _old_trig=""
+		if [ -n "$_old_trig" ] && [ "$_old_trig" -gt 200 ]; then
+			_old_trig=200
+		fi
+		if [ -n "$_old_trig" ] && [ -f "$new_press" ]; then
+			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
+				# update existing entry — replace or add PRESSURE_TRIP
+				if grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then
+					sed -i "s|^\(${_rule_name}:.*PRESSURE_TRIP=\)[^:]*|\1${_old_trig}|" "$new_press"
+				else
+					sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:PRESSURE_TRIP=${_old_trig}|" "$new_press"
+				fi
+			else
+				echo "${_rule_name}:PRESSURE_TRIP=${_old_trig}" >> "$new_press"
+			fi
+			_migrated=$((_migrated + 1))
+		fi
+		# extract SKIP_ALERT value
+		_skip=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^SKIP_ALERT=/){sub(/^SKIP_ALERT=/,"",$i); print $i; exit}}}')
+		[[ "$_skip" =~ ^[01]$ ]] || _skip=""
+		if [ -n "$_skip" ] && [ -f "$new_press" ]; then
+			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null && \
+			   ! grep -q "^${_rule_name}:.*SKIP_ALERT=" "$new_press" 2>/dev/null; then
+				sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:SKIP_ALERT=${_skip}|" "$new_press"
+			fi
+		fi
+		# extract RULE_EMAIL value
+		_email=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^RULE_EMAIL=/){sub(/^RULE_EMAIL=/,"",$i); print $i; exit}}}')
+		[[ "$_email" =~ ^[a-zA-Z0-9@._+,-]+$ ]] || _email=""
+		if [ -n "$_email" ] && [ -f "$new_press" ]; then
+			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null && \
+			   ! grep -q "^${_rule_name}:.*RULE_EMAIL=" "$new_press" 2>/dev/null; then
+				sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:RULE_EMAIL=${_email}|" "$new_press"
+			fi
+		fi
+	done < "$BK_LAST/thresholds.conf"
+	if [ "$_migrated" -gt 0 ]; then
+		echo "  Migrated $_migrated per-rule thresholds from thresholds.conf to pressure.conf."
+	fi
+elif [ -f "$new_press" ] && [ -d "$BK_LAST/rules" ]; then
+	# pre-thresholds upgrade: extract uncommented TRIG/PRESSURE values from old rules
+	_migrated=0
+	for _rule_file in "$BK_LAST/rules"/*; do
+		[ ! -f "$_rule_file" ] && continue
+		_rule_name=$(basename "$_rule_file")
+		_old_trig=$(grep -E '^TRIG="[0-9]+"' "$_rule_file" 2>/dev/null | head -1)
+		if [ -n "$_old_trig" ]; then
+			_old_trig="${_old_trig#TRIG=\"}"
+			_old_trig="${_old_trig%\"}"
+			[[ "$_old_trig" =~ ^[0-9]+$ ]] || continue
+			if [ "$_old_trig" -gt 200 ]; then
+				_old_trig=200
+			fi
+			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
+				# replace or add PRESSURE_TRIP from old rule TRIG
+				if grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then
+					sed -i "s|^\(${_rule_name}:.*PRESSURE_TRIP=\)[^:]*|\1${_old_trig}|" "$new_press"
+				else
+					sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:PRESSURE_TRIP=${_old_trig}|" "$new_press"
+				fi
+			else
+				echo "${_rule_name}:PRESSURE_TRIP=${_old_trig}" >> "$new_press"
+			fi
+			_migrated=$((_migrated + 1))
+		fi
+	done
+	if [ "$_migrated" -gt 0 ]; then
+		echo "  Migrated $_migrated per-rule thresholds to pressure.conf."
+	fi
+fi
+
+# preserve user's country pressure multiplier customizations
+if [ -f "$BK_LAST/pressure-country.conf" ]; then
+	command cp -f "$BK_LAST/pressure-country.conf" "$INSTALL_PATH/pressure-country.conf"
+	echo "  Preserved pressure-country.conf from previous install."
+fi
+
+# preserve user's ignore lists
+command cp -f "$BK_LAST/ignore.hosts" "$INSTALL_PATH" 2>/dev/null
+
+# preserve ban tracking state
+command cp -f "$BK_LAST/tmp/bans.active" "$INSTALL_PATH/tmp/" 2>/dev/null
+command cp -f "$BK_LAST/tmp/bans.history"* "$INSTALL_PATH/tmp/" 2>/dev/null
+# pressure.dat (renamed from events.dat in 2.0.1)
+if [ -f "$BK_LAST/tmp/pressure.dat" ]; then
+	command cp -f "$BK_LAST/tmp/pressure.dat" "$INSTALL_PATH/tmp/" 2>/dev/null
+elif [ -f "$BK_LAST/tmp/events.dat" ]; then
+	command cp -f "$BK_LAST/tmp/events.dat" "$INSTALL_PATH/tmp/pressure.dat" 2>/dev/null
+fi
+command cp -f "$BK_LAST/stats/"* "$INSTALL_PATH/stats/" 2>/dev/null
+
+# preserve journal cursor/timestamp state
+command cp -f "$BK_LAST/tmp/"*.cursor "$INSTALL_PATH/tmp/" 2>/dev/null
+command cp -f "$BK_LAST/tmp/"*.jts "$INSTALL_PATH/tmp/" 2>/dev/null
+
+# preserve tlog byte-offset tracking state
+# (files named by LOG_TAG: sshd, dovecot, postfix, etc. — no dots in name)
+for _f in "$BK_LAST/tmp/"*; do
+	[ -f "$_f" ] || continue
+	_bn="${_f##*/}"
+	# skip dotfiles, extension files, and already-preserved patterns
+	case "$_bn" in
+		.*|*.*) continue ;;
+	esac
+	command cp -f "$_f" "$INSTALL_PATH/tmp/" 2>/dev/null
+done
+
+# preserve custom.d/ template overrides from backup
+if [ -d "$BK_LAST/alert/custom.d" ] && [ -d "$INSTALL_PATH/alert" ]; then
+	mkdir -p "$INSTALL_PATH/alert/custom.d"
+	chmod 750 "$INSTALL_PATH/alert/custom.d"
+	_custom_tpl=0
+	for _old_custom in "$BK_LAST/alert/custom.d"/*.tpl; do
+		[ -f "$_old_custom" ] || continue
+		_tpl_name="${_old_custom##*/}"
+		command cp -f "$_old_custom" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+		chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+		_custom_tpl=$((_custom_tpl + 1))
+	done
+	if [ "$_custom_tpl" -gt 0 ]; then
+		echo "  Preserved $_custom_tpl custom template override(s) in alert/custom.d/."
+	fi
+fi
+
+# one-time migration: move user-modified templates from alert/ to alert/custom.d/
+# (pre-custom.d installs stored customizations in-place; migrate on first upgrade)
+if [ -d "$BK_LAST/alert" ] && [ ! -d "$BK_LAST/alert/custom.d" ]; then
+	_migrated_tpl=0
+	for _old_tpl in "$BK_LAST/alert"/*.tpl; do
+		[ -f "$_old_tpl" ] || continue
+		_tpl_name="${_old_tpl##*/}"
+		_new_tpl="$INSTALL_PATH/alert/$_tpl_name"
+		# only migrate if old template differs from new shipped version
+		if [ -f "$_new_tpl" ] && ! cmp -s "$_old_tpl" "$_new_tpl"; then
+			mkdir -p "$INSTALL_PATH/alert/custom.d"
+			chmod 750 "$INSTALL_PATH/alert/custom.d"
+			command cp -f "$_old_tpl" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+			chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+			_migrated_tpl=$((_migrated_tpl + 1))
+		fi
+	done
+	if [ "$_migrated_tpl" -gt 0 ]; then
+		echo "  Migrated $_migrated_tpl customized template(s) to alert/custom.d/."
+		echo "  Custom templates now persist across upgrades without manual restore."
+	fi
+fi
+
+# preserve legacy alert.bfd for users upgrading from pre-2.0.1 with custom templates
+if [ -f "$BK_LAST/alert.bfd" ] && [ ! -d "$BK_LAST/alert" ]; then
+	command cp -f "$BK_LAST/alert.bfd" "$INSTALL_PATH/alert.bfd" 2>/dev/null || true  # non-fatal: legacy file may be unreadable
+fi
+
+# preserve custom rule files from backup (user-added rules not in shipped set)
+# rules renamed or removed in this version — do not restore from backup
+_REMOVED_RULES="modsec"
+if [ -d "$BK_LAST/rules" ]; then
+	_custom_rules=0
+	for _old_rule in "$BK_LAST/rules"/*; do
+		[ -f "$_old_rule" ] || continue
+		_rule_name="${_old_rule##*/}"
+		# skip rules that exist in the new install (shipped rules — use new version)
+		[ -f "$INSTALL_PATH/rules/$_rule_name" ] && continue
+		# skip rules that were renamed or removed
+		case " $_REMOVED_RULES " in
+			*" $_rule_name "*) continue ;;
+		esac
+		command cp -f "$_old_rule" "$INSTALL_PATH/rules/$_rule_name"
+		chmod 640 "$INSTALL_PATH/rules/$_rule_name"
+		_custom_rules=$((_custom_rules + 1))
+	done
+	if [ "$_custom_rules" -gt 0 ]; then
+		echo "  Restored $_custom_rules custom rule(s) from previous install."
+	fi
+fi
+
+# preserve user's custom exclude.files entries
+if [ -f "$BK_LAST/exclude.files" ]; then
+	command cp -f "$BK_LAST/exclude.files" "$INSTALL_PATH/exclude.files"
+fi
+
+# Migrate BFD_LOG_PATH from legacy flat file to log directory
+if grep -q '^BFD_LOG_PATH="/var/log/bfd_log"' "$new_conf" 2>/dev/null; then
+	sed -i 's|^BFD_LOG_PATH="/var/log/bfd_log"|BFD_LOG_PATH="/var/log/bfd/bfd.log"|' "$new_conf"
+	echo "  Migrated BFD_LOG_PATH: /var/log/bfd_log -> /var/log/bfd/bfd.log (symlink preserved)."
+fi
+
+echo "  Imported config and state from BFD $OV to $NV."

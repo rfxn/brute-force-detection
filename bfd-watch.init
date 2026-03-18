@@ -1,0 +1,228 @@
+#!/bin/bash
+# chkconfig: 2345 55 25
+# description: BFD watch mode - continuous brute-force detection daemon
+### BEGIN INIT INFO
+# Provides:          bfd-watch
+# Required-Start:    $network $local_fs $remote_fs $syslog
+# Required-Stop:     $network $local_fs $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: BFD continuous watch mode daemon
+# Description:       Brute Force Detection (BFD) watch mode - continuously
+#                    monitors auth logs for brute-force attacks with ~10s
+#                    detection latency.
+### END INIT INFO
+#
+# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+###
+# Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
+# Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+###
+
+BFD_BIN="/usr/local/sbin/bfd"
+PIDFILE="/var/run/bfd-watch.pid"
+LOCKFILE="/var/lock/subsys/bfd-watch"
+prog="bfd-watch"
+
+# Source init function library (cross-distro)
+if [ -f /etc/init.d/functions ]; then
+	# RHEL/CentOS: provides daemon, killproc, status, etc.
+	. /etc/init.d/functions
+	INITSTYLE="rhel"
+elif [ -f /lib/lsb/init-functions ]; then
+	# Debian/Ubuntu: provides start-stop-daemon, log_*, etc.
+	. /lib/lsb/init-functions
+	INITSTYLE="debian"
+else
+	INITSTYLE="bare"
+fi
+
+start() {
+	# check if already running
+	if [ -f "$PIDFILE" ]; then
+		local _pid
+		_pid=$(cat "$PIDFILE" 2>/dev/null)
+		if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+			echo "$prog is already running (pid $_pid)"
+			return 0
+		fi
+		# stale pidfile
+		command rm -f "$PIDFILE"
+	fi
+
+	if [ ! -x "$BFD_BIN" ]; then
+		echo "$prog: $BFD_BIN not found or not executable"
+		return 5
+	fi
+
+	echo -n "Starting $prog: "
+	"$BFD_BIN" --watch </dev/null >/dev/null 2>&1 &
+	local _pid=$!
+	echo "$_pid" > "$PIDFILE"
+
+	# brief wait to verify process started
+	sleep 1
+	if kill -0 "$_pid" 2>/dev/null; then
+		# touch subsys lock if directory exists (RHEL convention)
+		if [ -d /var/lock/subsys ]; then
+			touch "$LOCKFILE"
+		fi
+		if [ "$INITSTYLE" = "rhel" ]; then
+			success
+			echo
+		elif [ "$INITSTYLE" = "debian" ]; then
+			log_success_msg "started"
+		else
+			echo "OK"
+		fi
+		return 0
+	else
+		command rm -f "$PIDFILE"
+		if [ "$INITSTYLE" = "rhel" ]; then
+			failure
+			echo
+		elif [ "$INITSTYLE" = "debian" ]; then
+			log_failure_msg "failed to start"
+		else
+			echo "FAILED"
+		fi
+		return 1
+	fi
+}
+
+stop() {
+	if [ ! -f "$PIDFILE" ]; then
+		echo "$prog is not running"
+		return 0
+	fi
+
+	local _pid
+	_pid=$(cat "$PIDFILE" 2>/dev/null)
+	if [ -z "$_pid" ]; then
+		command rm -f "$PIDFILE" "$LOCKFILE"
+		return 0
+	fi
+
+	echo -n "Stopping $prog: "
+	kill "$_pid" 2>/dev/null
+
+	# wait up to 10 seconds for graceful shutdown
+	local _waited=0
+	while [ "$_waited" -lt 10 ]; do
+		if ! kill -0 "$_pid" 2>/dev/null; then
+			break
+		fi
+		sleep 1
+		_waited=$((_waited + 1))
+	done
+
+	# escalate to SIGKILL if still running
+	if kill -0 "$_pid" 2>/dev/null; then
+		kill -9 "$_pid" 2>/dev/null
+		sleep 1
+	fi
+
+	command rm -f "$PIDFILE" "$LOCKFILE"
+
+	if [ "$INITSTYLE" = "rhel" ]; then
+		success
+		echo
+	elif [ "$INITSTYLE" = "debian" ]; then
+		log_success_msg "stopped"
+	else
+		echo "OK"
+	fi
+	return 0
+}
+
+reload_bfd() {
+	if [ ! -f "$PIDFILE" ]; then
+		echo "$prog is not running"
+		return 7
+	fi
+
+	local _pid
+	_pid=$(cat "$PIDFILE" 2>/dev/null)
+	if [ -z "$_pid" ] || ! kill -0 "$_pid" 2>/dev/null; then
+		echo "$prog is not running (stale pidfile)"
+		command rm -f "$PIDFILE"
+		return 7
+	fi
+
+	echo -n "Reloading $prog: "
+	kill -HUP "$_pid"
+	if [ "$INITSTYLE" = "rhel" ]; then
+		success
+		echo
+	elif [ "$INITSTYLE" = "debian" ]; then
+		log_success_msg "reloaded"
+	else
+		echo "OK"
+	fi
+	return 0
+}
+
+status_bfd() {
+	if [ -f "$PIDFILE" ]; then
+		local _pid
+		_pid=$(cat "$PIDFILE" 2>/dev/null)
+		if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+			echo "$prog is running (pid $_pid)"
+			return 0
+		else
+			echo "$prog dead but pidfile exists"
+			return 1
+		fi
+	fi
+	if [ -f "$LOCKFILE" ]; then
+		echo "$prog dead but subsys locked"
+		return 2
+	fi
+	echo "$prog is stopped"
+	return 3
+}
+
+restart() {
+	stop
+	start
+}
+
+condrestart() {
+	if [ -f "$PIDFILE" ]; then
+		local _pid
+		_pid=$(cat "$PIDFILE" 2>/dev/null)
+		if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+			restart
+			return $?
+		fi
+	fi
+	return 0
+}
+
+case "$1" in
+	start)                   start ;;
+	stop)                    stop ;;
+	restart)                 restart ;;
+	reload)                  reload_bfd ;;
+	status)                  status_bfd ;;
+	condrestart|try-restart) condrestart ;;
+	*)
+		echo "Usage: $0 {start|stop|restart|reload|status|condrestart}"
+		exit 2
+		;;
+esac
+exit $?

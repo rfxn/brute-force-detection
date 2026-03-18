@@ -1,0 +1,20 @@
+FROM rockylinux:9
+
+RUN dnf install -y rpm-build tar gzip make && \
+    dnf clean all
+
+# Copy project source
+COPY . /src/bfd
+
+WORKDIR /src/bfd/pkg
+
+# Build tarball and RPMs for el8, el9, el10
+RUN make source && \
+    mkdir -p /root/rpmbuild/{SOURCES,SPECS,BUILD,RPMS,SRPMS} && \
+    cp build/bfd-*.tar.gz /root/rpmbuild/SOURCES/ && \
+    cp rpm/bfd.spec /root/rpmbuild/SPECS/ && \
+    rpmbuild -bb --define "dist .el8" /root/rpmbuild/SPECS/bfd.spec && \
+    rpmbuild -bb --define "dist .el9" /root/rpmbuild/SPECS/bfd.spec && \
+    rpmbuild -bb --define "dist .el10" /root/rpmbuild/SPECS/bfd.spec
+
+CMD cp /root/rpmbuild/RPMS/noarch/*.rpm /output/

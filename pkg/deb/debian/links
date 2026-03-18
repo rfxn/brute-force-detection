@@ -1,0 +1,30 @@
+# Symlink farm at /usr/local/bfd for backward compatibility
+# Library files (internals/ subdirectory)
+usr/lib/bfd/internals/bfd.lib.sh          usr/local/bfd/internals/bfd.lib.sh
+usr/lib/bfd/internals/tlog_lib.sh         usr/local/bfd/internals/tlog_lib.sh
+usr/lib/bfd/internals/elog_lib.sh         usr/local/bfd/internals/elog_lib.sh
+usr/lib/bfd/internals/alert_lib.sh        usr/local/bfd/internals/alert_lib.sh
+usr/lib/bfd/internals/bfd_alert.sh       usr/local/bfd/internals/bfd_alert.sh
+usr/lib/bfd/internals/geoip_lib.sh       usr/local/bfd/internals/geoip_lib.sh
+usr/lib/bfd/internals/pkg_lib.sh         usr/local/bfd/internals/pkg_lib.sh
+usr/lib/bfd/internals/bfd_report.sh      usr/local/bfd/internals/bfd_report.sh
+etc/bfd/internals.conf                    usr/local/bfd/internals/internals.conf
+# Top-level executables and directories
+usr/lib/bfd/tlog                usr/local/bfd/tlog
+usr/lib/bfd/alert               usr/local/bfd/alert
+usr/lib/bfd/update-ipcountry.sh usr/local/bfd/update-ipcountry.sh
+usr/lib/bfd/importconf          usr/local/bfd/importconf
+# Config files
+etc/bfd/conf.bfd                usr/local/bfd/conf.bfd
+etc/bfd/pressure.conf           usr/local/bfd/pressure.conf
+etc/bfd/pressure-country.conf   usr/local/bfd/pressure-country.conf
+etc/bfd/exclude.files           usr/local/bfd/exclude.files
+etc/bfd/ignore.hosts            usr/local/bfd/ignore.hosts
+# Data files
+usr/share/bfd/ipcountry.dat     usr/local/bfd/ipcountry.dat
+usr/share/bfd/rules             usr/local/bfd/rules
+# State directories
+var/lib/bfd/tmp                 usr/local/bfd/tmp
+var/lib/bfd/stats               usr/local/bfd/stats
+# Executable
+usr/sbin/bfd                    usr/local/sbin/bfd

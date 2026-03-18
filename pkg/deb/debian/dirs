@@ -1,0 +1,9 @@
+usr/sbin
+usr/lib/bfd
+usr/lib/bfd/internals
+etc/bfd
+usr/share/bfd/rules
+var/lib/bfd/tmp
+var/lib/bfd/stats
+usr/local/bfd
+usr/local/sbin

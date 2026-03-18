@@ -1,0 +1,92 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_build:
+	# Apply FHS path transforms to copies — never modify source files
+	cp files/internals/internals.conf files/internals.conf.pkg
+	sed -i \
+	    -e 's|\$$INSTALL_PATH/rules|/usr/share/bfd/rules|' \
+	    -e 's|\$$INSTALL_PATH/tlog|/usr/lib/bfd/tlog|' \
+	    -e 's|\$$INSTALL_PATH/tmp|/var/lib/bfd/tmp|' \
+	    -e 's|\$$INSTALL_PATH/alert"|/usr/lib/bfd/alert"|' \
+	    -e 's|\$$INSTALL_PATH/exclude\.files|/etc/bfd/exclude.files|' \
+	    -e 's|\$$INSTALL_PATH/lock\.utime|/var/lib/bfd/lock.utime|' \
+	    -e 's|\$$INSTALL_PATH/pressure\.conf|/etc/bfd/pressure.conf|' \
+	    -e 's|\$$INSTALL_PATH/thresholds\.conf|/etc/bfd/thresholds.conf|' \
+	    files/internals.conf.pkg
+	cp files/exclude.files files/exclude.files.pkg
+	sed -i 's|/usr/local/bfd/ignore\.hosts|/etc/bfd/ignore.hosts|g' files/exclude.files.pkg
+	cp cron cron.pkg
+	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' cron.pkg
+	cp cron.daily cron.daily.pkg
+	sed -i 's|INSTALL_PATH="$${INSTALL_PATH:-/usr/local/bfd}"|INSTALL_PATH="$${INSTALL_PATH:-/var/lib/bfd}"|' cron.daily.pkg
+	cp bfd.service bfd.service.pkg
+	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd.service.pkg
+	cp bfd-watch.service bfd-watch.service.pkg
+	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.service.pkg
+	cp bfd-watch.init bfd-watch.init.pkg
+	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.init.pkg
+
+override_dh_auto_install:
+	# Executable
+	install -D -m 755 files/bfd $(CURDIR)/debian/bfd/usr/sbin/bfd
+	# Library files
+	install -D -m 644 files/internals/bfd.lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd.lib.sh
+	install -D -m 644 files/internals/tlog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/tlog_lib.sh
+	install -D -m 644 files/internals/elog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/elog_lib.sh
+	install -D -m 755 files/tlog $(CURDIR)/debian/bfd/usr/lib/bfd/tlog
+	install -D -m 644 files/internals/alert_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/alert_lib.sh
+	install -D -m 644 files/internals/bfd_alert.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_alert.sh
+	install -D -m 644 files/internals/geoip_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/geoip_lib.sh
+	install -D -m 644 files/internals/pkg_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/pkg_lib.sh
+	install -D -m 644 files/internals/bfd_report.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_report.sh
+	install -d -m 755 $(CURDIR)/debian/bfd/usr/lib/bfd/alert
+	for tpl in files/alert/*.tpl; do \
+	    install -m 644 "$$tpl" $(CURDIR)/debian/bfd/usr/lib/bfd/alert/; \
+	done
+	install -d -m 755 $(CURDIR)/debian/bfd/usr/lib/bfd/alert/custom.d
+	install -D -m 755 files/update-ipcountry.sh $(CURDIR)/debian/bfd/usr/lib/bfd/update-ipcountry.sh
+	install -D -m 755 importconf $(CURDIR)/debian/bfd/usr/lib/bfd/importconf
+	# Config files
+	install -D -m 640 files/conf.bfd $(CURDIR)/debian/bfd/etc/bfd/conf.bfd
+	install -D -m 640 files/internals.conf.pkg $(CURDIR)/debian/bfd/etc/bfd/internals.conf
+	install -D -m 640 files/pressure.conf $(CURDIR)/debian/bfd/etc/bfd/pressure.conf
+	install -D -m 640 files/pressure-country.conf $(CURDIR)/debian/bfd/etc/bfd/pressure-country.conf
+	install -D -m 640 files/exclude.files.pkg $(CURDIR)/debian/bfd/etc/bfd/exclude.files
+	install -D -m 640 files/ignore.hosts $(CURDIR)/debian/bfd/etc/bfd/ignore.hosts
+	# Data files
+	install -D -m 644 files/ipcountry.dat $(CURDIR)/debian/bfd/usr/share/bfd/ipcountry.dat
+	install -d -m 755 $(CURDIR)/debian/bfd/usr/share/bfd/rules
+	for rule in files/rules/*; do \
+	    install -m 644 "$$rule" $(CURDIR)/debian/bfd/usr/share/bfd/rules/; \
+	done
+	# State directories
+	install -d -m 750 $(CURDIR)/debian/bfd/var/lib/bfd/tmp
+	install -d -m 750 $(CURDIR)/debian/bfd/var/lib/bfd/stats
+	# Systemd units (DEB convention: /lib/systemd/system/)
+	install -D -m 644 bfd.service.pkg $(CURDIR)/debian/bfd/lib/systemd/system/bfd.service
+	install -D -m 644 bfd.timer $(CURDIR)/debian/bfd/lib/systemd/system/bfd.timer
+	install -D -m 644 bfd-watch.service.pkg $(CURDIR)/debian/bfd/lib/systemd/system/bfd-watch.service
+	# SysVinit script (Ubuntu 14.04 and other non-systemd targets)
+	install -D -m 755 bfd-watch.init.pkg $(CURDIR)/debian/bfd/etc/init.d/bfd-watch
+	# Cron
+	install -D -m 644 cron.pkg $(CURDIR)/debian/bfd/etc/cron.d/bfd
+	install -D -m 755 cron.daily.pkg $(CURDIR)/debian/bfd/etc/cron.daily/bfd
+	# Logrotate
+	install -D -m 644 logrotate.d.bfd $(CURDIR)/debian/bfd/etc/logrotate.d/bfd
+	# Man page
+	install -D -m 644 bfd.1 $(CURDIR)/debian/bfd/usr/share/man/man1/bfd.1
+	# Bash completion
+	install -D -m 644 bfd.bash-completion $(CURDIR)/debian/bfd/usr/share/bash-completion/completions/bfd
+	# Docs
+	install -D -m 644 README.md $(CURDIR)/debian/bfd/usr/share/doc/bfd/README.md
+	install -D -m 644 CHANGELOG $(CURDIR)/debian/bfd/usr/share/doc/bfd/CHANGELOG
+	install -D -m 644 COPYING.GPL $(CURDIR)/debian/bfd/usr/share/doc/bfd/COPYING.GPL
+
+override_dh_auto_test:
+	# Skip — tests require privileged Docker environment
+
+override_dh_auto_clean:
+	rm -f files/internals.conf.pkg files/exclude.files.pkg
+	rm -f cron.pkg cron.daily.pkg bfd.service.pkg bfd-watch.service.pkg bfd-watch.init.pkg

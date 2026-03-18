@@ -1,0 +1,34 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# PRESSURE_WEIGHT="2"
+# PRESSURE_TRIP="30"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="/usr/sbin/haproxy"
+if [ ! -f "$PREREQ" ]; then
+	PREREQ="/usr/local/sbin/haproxy"
+fi
+
+if [ -f "$PREREQ" ]; then
+	PORTS="80,443"
+
+	# detect log file path (haproxy logs to syslog or its own file)
+	if [ -f "/var/log/haproxy.log" ]; then
+		LOG_FILE="/var/log/haproxy.log"
+	else
+		LOG_FILE="$KERNEL_LOG_PATH"
+	fi
+	LOG_TAG="haproxy"
+
+	## HAPROXY — HTTP 401 responses in HTTP log format
+	# Format: IP:PORT [timestamp] frontend backend/server T/T/T/T/T STATUS BYTES
+	# Higher trip (30) because HTTP basic auth sends initial 401 challenge
+	# before client provides credentials — even successful logins generate one 401
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"<HOST>:[0-9]+.* 401 [0-9]")
+fi

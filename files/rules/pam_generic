@@ -1,0 +1,24 @@
+# per-rule pressure override (uncomment to override pressure.conf / conf.bfd)
+# high trip point — pam_generic intentionally overlaps with service-specific rules
+# (sshd, dovecot, etc.) that also match PAM lines. It acts as a catch-all for
+# services without dedicated rules. The high trip point prevents double-banning.
+PRESSURE_WEIGHT="1"
+PRESSURE_TRIP="40"
+
+# uncomment to disable alerting for this rule
+# SKIP_ALERT="1"
+
+# uncomment to route alerts for this rule to a different address
+# RULE_EMAIL=""
+
+# file must exist for rule to be active
+PREREQ="$AUTH_LOG_PATH"
+
+if [ -f "$PREREQ" ]; then
+	LOG_FILE="$AUTH_LOG_PATH"
+	LOG_TAG="pam"
+
+	## Generic PAM authentication failures (catches any PAM service)
+	MATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts \
+		"pam_unix.*authentication failure.*rhost=<HOST>")
+fi
