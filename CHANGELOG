@@ -9,6 +9,7 @@
       (symlink farm provides the indirection; /var/lib/bfd has no conf.bfd or bfd)
 [Fix] Packaging: alert template count assertion updated from 14 to 21
 [Fix] Packaging: DEB changelog rule count corrected from 42 to 57
+[Fix] CI: add bfd_report.sh to bash -n and shellcheck lint targets
 [New] Pressure-to-response scoring model: exponential-decay replaces fixed
       count thresholds; per-rule weights, trip points, and half-life via
       pressure.conf; cross-service aggregate trip; old TRIG/TRIG_WINDOW
