@@ -268,6 +268,10 @@ _report_data() {
 		fi
 	fi
 
+	# Telegram MarkdownV2-escaped variant — parentheses in "(1,234 vs 567)" are special chars
+	export REPORT_TREND_LABEL_TG
+	REPORT_TREND_LABEL_TG=$(_alert_telegram_escape "$REPORT_TREND_LABEL")
+
 	# --- Top IPs (text + HTML + brief) ---
 	_report_format_top_ips "$pool_file" "$_RPT_CUTOFF" "$top_n"
 
@@ -295,7 +299,8 @@ _report_batch_ban_count() {
 }
 
 # _report_format_top_ips pool_file cutoff limit
-# Exports: REPORT_TOP_IPS_TEXT, REPORT_TOP_IPS_HTML, REPORT_TOP_IPS_BRIEF
+# Exports: REPORT_TOP_IPS_TEXT, REPORT_TOP_IPS_HTML, REPORT_TOP_IPS_BRIEF,
+#          REPORT_TOP_IPS_BRIEF_JSON
 _report_format_top_ips() {
 	local pool_file="$1" cutoff="$2" limit="$3"
 
@@ -303,6 +308,7 @@ _report_format_top_ips() {
 		export REPORT_TOP_IPS_TEXT=""
 		export REPORT_TOP_IPS_HTML=""
 		export REPORT_TOP_IPS_BRIEF="No activity."
+		export REPORT_TOP_IPS_BRIEF_JSON="No activity."
 		return 0
 	fi
 
@@ -313,6 +319,7 @@ _report_format_top_ips() {
 		export REPORT_TOP_IPS_TEXT="No threat IPs in this period."
 		export REPORT_TOP_IPS_HTML="<p>No threat IPs in this period.</p>"
 		export REPORT_TOP_IPS_BRIEF="No threat IPs."
+		export REPORT_TOP_IPS_BRIEF_JSON="No threat IPs."
 		return 0
 	fi
 
@@ -333,17 +340,17 @@ _report_format_top_ips() {
 		# Look up ban count from batch result
 		ip_bans=$(echo "$ban_counts" | awk -v ip="$ip" '$1 == ip { print $2; exit }')
 		ip_bans="${ip_bans:-0}"
+		# Format timestamps (used by both text and HTML rows)
+		first_fmt=$(_fmt_ts "$first_ts" 2>/dev/null || echo "$first_ts")  # fallback if _fmt_ts unavailable
+		last_fmt=$(_fmt_ts "$last_ts" 2>/dev/null || echo "$last_ts")  # fallback if _fmt_ts unavailable
 		text_table="${text_table}
-${cnt_fmt}|${ip}|${cc:---}|${ip_bans}|${rules_csv}"
+${cnt_fmt}|${ip}|${cc:---}|${ip_bans}|${rules_csv}|${first_fmt}|${last_fmt}"
 		# HTML row with entity escaping and styling
 		esc_ip="${ip//&/&amp;}"; esc_ip="${esc_ip//</&lt;}"; esc_ip="${esc_ip//>/&gt;}"
 		esc_cc="${cc//&/&amp;}"; esc_cc="${esc_cc//</&lt;}"
 		esc_rules="${rules_csv//&/&amp;}"; esc_rules="${esc_rules//</&lt;}"
 		row_idx=$((row_idx + 1))
 		if [ $((row_idx % 2)) -eq 0 ]; then row_bg="#f4f4f5"; else row_bg="#ffffff"; fi
-		# Format timestamps
-		first_fmt=$(_fmt_ts "$first_ts" 2>/dev/null || echo "$first_ts")  # fallback if _fmt_ts unavailable
-		last_fmt=$(_fmt_ts "$last_ts" 2>/dev/null || echo "$last_ts")  # fallback if _fmt_ts unavailable
 		html_rows="${html_rows}<tr style=\"background-color:${row_bg};\">
 <td style=\"padding:8px 10px;font-weight:bold;color:#09090b;text-align:center;font-family:'Courier New',Courier,monospace;\">${cnt_fmt}</td>
 <td style=\"padding:8px 10px;font-family:'Courier New',Courier,monospace;font-size:13px;\">${esc_ip}</td>
@@ -371,6 +378,8 @@ ${cnt_fmt}|${ip}|${cc:---}|${ip_bans}|${rules_csv}"
 	REPORT_TOP_IPS_TEXT=$(echo "$text_table" | format_table)
 	export REPORT_TOP_IPS_BRIEF="${brief%
 }"
+	export REPORT_TOP_IPS_BRIEF_JSON
+	REPORT_TOP_IPS_BRIEF_JSON=$(_alert_json_escape "$REPORT_TOP_IPS_BRIEF")
 	export REPORT_TOP_IPS_HTML="<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"font-size:13px;border-collapse:collapse;\">
 <tr style=\"background-color:#f4f4f5;border-bottom:1px solid #d4d4d8;\">
 <th style=\"padding:8px 10px;text-align:center;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Count</th>
@@ -385,7 +394,8 @@ ${html_rows}</table>"
 }
 
 # _report_format_services pool_file cutoff_a cutoff_b
-# Exports: REPORT_SERVICES_TEXT, REPORT_SERVICES_HTML, REPORT_SERVICES_BRIEF
+# Exports: REPORT_SERVICES_TEXT, REPORT_SERVICES_HTML, REPORT_SERVICES_BRIEF,
+#          REPORT_SERVICES_BRIEF_JSON
 _report_format_services() {
 	local pool_file="$1" cutoff_a="$2" cutoff_b="$3"
 
@@ -393,6 +403,7 @@ _report_format_services() {
 		export REPORT_SERVICES_TEXT=""
 		export REPORT_SERVICES_HTML=""
 		export REPORT_SERVICES_BRIEF="No services."
+		export REPORT_SERVICES_BRIEF_JSON="No services."
 		return 0
 	fi
 
@@ -403,6 +414,7 @@ _report_format_services() {
 		export REPORT_SERVICES_TEXT="No service activity."
 		export REPORT_SERVICES_HTML="<p>No service activity.</p>"
 		export REPORT_SERVICES_BRIEF="No services."
+		export REPORT_SERVICES_BRIEF_JSON="No services."
 		return 0
 	fi
 
@@ -442,6 +454,8 @@ ${svc}|${cnt_a_fmt}|${uq_a_fmt}|${top_cc:---}"
 	REPORT_SERVICES_TEXT=$(echo "$text_table" | format_table)
 	export REPORT_SERVICES_BRIEF="${brief%
 }"
+	export REPORT_SERVICES_BRIEF_JSON
+	REPORT_SERVICES_BRIEF_JSON=$(_alert_json_escape "$REPORT_SERVICES_BRIEF")
 	export REPORT_SERVICES_HTML="<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"font-size:13px;border-collapse:collapse;\">
 <tr style=\"background-color:#f4f4f5;border-bottom:1px solid #d4d4d8;\">
 <th style=\"padding:8px 10px;text-align:left;color:#52525b;font-size:11px;font-weight:bold;text-transform:uppercase;\">Service</th>

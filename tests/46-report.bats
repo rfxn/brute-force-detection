@@ -309,3 +309,62 @@ teardown() {
 	assert_success
 	assert_output --partial "Monthly Threat Report"
 }
+
+# --- F-A09: text table column count ---
+
+@test "format_top_ips: text table data rows have 7 columns matching header" {
+	bfd_require_bash42
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	APOOL_LIST="$pool"
+	local now
+	now=$(date +%s)
+	echo "$((now - 100)) 192.0.2.1 sshd 1 CN ban 600 22 15000 service" >> "$pool"
+	echo "$((now - 200)) 192.0.2.2 dovecot 1 RU ban 600 143 12000 service" >> "$pool"
+	echo "$((now - 300)) 192.0.2.1 sshd 1 CN observed 0 22 8000 service" >> "$pool"
+
+	_report_init "daily"
+	_report_format_top_ips "$pool" "$_RPT_CUTOFF" 25
+
+	# Header is first line — verify 7 columns
+	local header
+	header=$(echo "$REPORT_TOP_IPS_TEXT" | head -1)
+	local header_cols
+	header_cols=$(echo "$header" | awk '{ print NF }')
+	[ "$header_cols" -eq 7 ]
+
+	# Every data row (lines after the header) must also have 7 columns
+	local line col_count
+	while IFS= read -r line; do
+		[ -z "$line" ] && continue
+		col_count=$(echo "$line" | awk '{ print NF }')
+		[ "$col_count" -eq 7 ]
+	done < <(echo "$REPORT_TOP_IPS_TEXT" | tail -n +2)
+}
+
+# --- F-A05: JSON-escaped brief vars ---
+
+@test "format_top_ips: REPORT_TOP_IPS_BRIEF_JSON escapes newlines" {
+	bfd_require_bash42
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	APOOL_LIST="$pool"
+	local now
+	now=$(date +%s)
+	# Two IPs to produce multi-line brief
+	echo "$((now - 100)) 192.0.2.1 sshd 1 CN ban 600 22 15000 service" >> "$pool"
+	echo "$((now - 200)) 192.0.2.2 dovecot 1 RU ban 600 143 12000 service" >> "$pool"
+
+	_report_init "daily"
+	_report_format_top_ips "$pool" "$_RPT_CUTOFF" 25
+
+	# BRIEF should contain literal newlines
+	local nl_count
+	nl_count=$(printf '%s' "$REPORT_TOP_IPS_BRIEF" | grep -c $'\n' || true)
+	[ "$nl_count" -ge 1 ]
+
+	# BRIEF_JSON should have no literal newlines — they become \n
+	nl_count=$(printf '%s' "$REPORT_TOP_IPS_BRIEF_JSON" | grep -c $'\n' || true)
+	[ "$nl_count" -eq 0 ]
+
+	# BRIEF_JSON should contain the literal string \n
+	[[ "$REPORT_TOP_IPS_BRIEF_JSON" == *'\n'* ]]
+}
