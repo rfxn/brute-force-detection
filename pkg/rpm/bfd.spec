@@ -63,7 +63,6 @@ cp cron cron.pkg
 sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' cron.pkg
 
 cp cron.daily cron.daily.pkg
-sed -i 's|INSTALL_PATH="\${INSTALL_PATH:-/usr/local/bfd}"|INSTALL_PATH="${INSTALL_PATH:-/var/lib/bfd}"|' cron.daily.pkg
 
 cp bfd.service bfd.service.pkg
 sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd.service.pkg

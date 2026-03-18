@@ -5,6 +5,10 @@
 [New] CIDR subnet ban alerts enriched with aggregate pressure and failure stats
 [New] Contributing hosts breakdown in all alert channels (email, Slack, Telegram, Discord)
 [Fix] CIDR alert pipeline fields 4 and 13 now carry real aggregate values (was broken)
+[Fix] Packaging: cron.daily keeps /usr/local/bfd INSTALL_PATH in FHS packages
+      (symlink farm provides the indirection; /var/lib/bfd has no conf.bfd or bfd)
+[Fix] Packaging: alert template count assertion updated from 14 to 21
+[Fix] Packaging: DEB changelog rule count corrected from 42 to 57
 [New] Pressure-to-response scoring model: exponential-decay replaces fixed
       count thresholds; per-rule weights, trip points, and half-life via
       pressure.conf; cross-service aggregate trip; old TRIG/TRIG_WINDOW

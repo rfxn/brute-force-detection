@@ -165,10 +165,10 @@ echo ""
 # --- Test 4: Lock coordination ---
 echo "--- Test 4: Lock file coordination ---"
 cron_lock=$(grep 'INSTALL_PATH=' /etc/cron.daily/bfd | head -1)
-if echo "$cron_lock" | grep -q '/var/lib/bfd'; then
-	pass "cron.daily INSTALL_PATH defaults to /var/lib/bfd"
+if echo "$cron_lock" | grep -q '/usr/local/bfd'; then
+	pass "cron.daily INSTALL_PATH defaults to /usr/local/bfd"
 else
-	fail "cron.daily INSTALL_PATH does not default to /var/lib/bfd: $cron_lock"
+	fail "cron.daily INSTALL_PATH does not default to /usr/local/bfd: $cron_lock"
 fi
 echo ""
 
@@ -202,10 +202,10 @@ echo ""
 # --- Test 7b: Alert template files ---
 echo "--- Test 7b: Alert templates ---"
 tpl_count=$(find /usr/lib/bfd/alert/ -maxdepth 1 -name '*.tpl' -type f 2>/dev/null | wc -l)
-if [ "$tpl_count" -eq 14 ]; then
+if [ "$tpl_count" -eq 21 ]; then
 	pass "Alert template files present ($tpl_count templates)"
 else
-	fail "Expected 14 alert templates, found $tpl_count"
+	fail "Expected 21 alert templates, found $tpl_count"
 fi
 echo ""
 

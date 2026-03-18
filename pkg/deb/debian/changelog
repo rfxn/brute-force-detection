@@ -4,7 +4,7 @@ bfd (2.0.1-1) unstable; urgency=medium
   * Pressure model with exponential-decay scoring
   * 8 firewall backends with auto-detection
   * Watch mode daemon with ~10s detection latency
-  * 42 service detection rules
+  * 57 service detection rules
   * Country-based pressure multipliers
 
  -- R-fx Networks <proj@rfxn.com>  Thu, 26 Feb 2026 00:00:00 +0000
