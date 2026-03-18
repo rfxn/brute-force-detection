@@ -10,6 +10,11 @@
 [Fix] Packaging: alert template count assertion updated from 14 to 21
 [Fix] Packaging: DEB changelog rule count corrected from 42 to 57
 [Fix] CI: add bfd_report.sh to bash -n and shellcheck lint targets
+[Fix] Man page: add --ban, --unban, --events, --test long forms to OPTIONS;
+      fix template variable names (FAIL_COUNT_DISPLAY, BAN_DURATION_DETAIL,
+      COUNTRY_FLAG, SOURCE_LOGS_SECTION_TEXT, REPUTATION_SECTION_TEXT);
+      add --sort, --limit, --24h/--7d/--30d, --active to SYNOPSIS modifiers;
+      update .TH date to 2026-03-17
 [New] Pressure-to-response scoring model: exponential-decay replaces fixed
       count thresholds; per-rule weights, trip points, and half-life via
       pressure.conf; cross-service aggregate trip; old TRIG/TRIG_WINDOW

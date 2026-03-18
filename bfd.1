@@ -3,7 +3,7 @@
 .\" Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
 .\" Licensed under the GNU General Public License v2
 .\"
-.TH BFD 1 "2026-03-08" "BFD 2.0.1" "Brute Force Detection"
+.TH BFD 1 "2026-03-17" "BFD 2.0.1" "Brute Force Detection"
 .SH NAME
 bfd \- brute force detection and IP banning
 .SH SYNOPSIS
@@ -55,6 +55,10 @@ bfd \- brute force detection and IP banning
 .B bfd
 .RB [ \-\-json ]
 .RB [ \-\-csv ]
+.RB [ \-\-sort= \fIMODE\fR]
+.RB [ \-\-limit= \fIN\fR]
+.RB [ \-\-24h | \-\-7d | \-\-30d ]
+.RB [ \-\-active ]
 .RB [ \-V | \-\-verbose ]
 .br
 .B bfd
@@ -115,14 +119,14 @@ for configuration reload and
 for clean shutdown.
 .SS Ban Management
 .TP
-.BI \-b " IP" "\fR [" SERVICE \fR]
+.BI \-b ", " \-\-ban " IP" "\fR [" SERVICE \fR]
 Manually ban an IP address (permanent).
 If
 .I SERVICE
 is given, it is recorded as the triggering rule; otherwise
 .BR manual .
 .TP
-.BI \-u " IP"
+.BI \-u ", " \-\-unban " IP"
 Unban an IP address (removes from firewall and active bans).
 .TP
 .B \-\-flush\-temp
@@ -192,7 +196,7 @@ to review aggregate threat patterns and
 .B \-e
 to drill into specific IPs or subnets.
 .TP
-.BI \-e " \fR[" IP | CIDR "\fR] [" N \fR]
+.BI \-e ", " \-\-events " \fR[" IP | CIDR "\fR] [" N \fR]
 Event history and investigation.
 Reads from the attack pool, which records all detected auth failures
 (both ban-triggering and sub-trip observations) with configurable retention
@@ -273,7 +277,7 @@ Validates configuration, binaries, rules, state files, and alert
 capability.
 .SS Testing
 .TP
-.BI \-T " RULE" "\fR [" FILE | \- \fR]
+.BI \-T ", " \-\-test " RULE" "\fR [" FILE | \- \fR]
 Test a rule's patterns against its configured log file, a specific
 .IR FILE ,
 or stdin
@@ -811,13 +815,13 @@ Available template variables include:
 .B {{HOST}}\fR,
 .B {{SERVICE}}\fR,
 .B {{PRESSURE}}\fR,
-.B {{FAIL_COUNT}}\fR,
+.B {{FAIL_COUNT_DISPLAY}}\fR,
 .B {{BAN_TYPE}}\fR,
-.B {{BAN_DURATION}}\fR,
-.B {{COUNTRY_CODE}}\fR,
+.B {{BAN_DURATION_DETAIL}}\fR,
+.B {{COUNTRY_FLAG}}\fR,
 .B {{COUNTRY_DISPLAY}}\fR,
-.B {{SOURCE_LOGS}}\fR,
-.B {{REPUTATION_LINKS_TEXT}}\fR,
+.B {{SOURCE_LOGS_SECTION_TEXT}}\fR,
+.B {{REPUTATION_SECTION_TEXT}}\fR,
 and others.
 See the shipped template files for the full set.
 .SS Messaging Templates
