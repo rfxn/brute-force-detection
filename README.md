@@ -1,7 +1,7 @@
 # Brute Force Detection (BFD)
 
 [![CI](https://github.com/rfxn/brute-force-detection/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/rfxn/brute-force-detection/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](CHANGELOG)
+[![Version](https://img.shields.io/badge/version-2.0.2-blue.svg)](CHANGELOG)
 [![License: GPL v2](https://img.shields.io/badge/license-GPL_v2-green.svg)](COPYING.GPL)
 [![Shell](https://img.shields.io/badge/language-bash-89e051.svg)](https://www.gnu.org/software/bash/)
 [![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)](README.md#11-supported-systems)
