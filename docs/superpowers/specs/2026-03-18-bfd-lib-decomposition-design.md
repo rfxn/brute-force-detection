@@ -9,8 +9,8 @@
 
 ## Problem Statement
 
-`bfd.lib.sh` is a 4,932-line monolith containing 139 functions across 28 functional
-domains. The `bfd` executable adds another 37 functions (1,707 lines) that belong in
+`bfd.lib.sh` is a 4,932-line monolith containing ~150 functions across 28 functional
+domains. The `bfd` executable adds another ~36 functions (1,707 lines) that belong in
 libraries. This makes the codebase difficult to navigate, review, and maintain.
 
 Two sub-libraries have already been successfully extracted (`bfd_alert.sh` at 970 lines,
@@ -23,7 +23,7 @@ to decompose the remaining code.
 2. `bfd` becomes a thin CLI wrapper (args + case dispatch only)
 3. All critical functionality lives in sub-libraries under `files/internals/`
 4. Function signatures and behavior are unchanged — internal reorganization only
-5. Eliminate identified duplication (~1,100 line net reduction)
+5. Eliminate identified duplication (~800 line net reduction)
 6. All 1,651 tests + 86 UAT tests pass without modification
 
 ## Non-Goals
@@ -50,7 +50,7 @@ files/internals/
   bfd_detect.sh              (~300 lines)  Detection pipeline (extract/filter)
   bfd_core.sh                (~800 lines)  Orchestration + init + watch mode
   bfd_events.sh            (~1100 lines)   Event queries + attack pool (merged)
-  bfd_diag.sh                (~750 lines)  Health check + status + inspection
+  bfd_diag.sh              (~1050 lines)   Health check + status + inspection
   bfd_alert.sh             (~1080 lines)   Alert rendering + delivery (existing)
   bfd_report.sh              (~693 lines)  Periodic reports (unchanged)
 ```
@@ -60,9 +60,9 @@ files/internals/
 | Metric | Before | After |
 |--------|--------|-------|
 | Files | 4 | 12 |
-| Total lines | ~8,300 | ~7,200 |
+| Total lines | ~8,300 | ~7,500 |
 | Largest file | 4,932 | ~1,100 |
-| Net reduction | — | ~1,100 lines |
+| Net reduction | — | ~800 lines |
 
 ### Sourcing Order
 
@@ -115,7 +115,7 @@ No circular dependencies exist in this order.
 - `vhead()` — version header
 - `usage_short()`, `usage()` — help text (documents the CLI they live next to)
 
-**Moves out:** All 33 non-CLI functions (config_init, check, run, watch, pre,
+**Moves out:** All non-CLI functions (config_init, check, run, watch, pre,
 get_state, all `_apool_*`, `_batch_ban_status_*`, cleanup handlers).
 
 ### `bfd.lib.sh` — Sourcing Hub + Shared Utilities (~200 lines)
@@ -347,6 +347,51 @@ pressure_format, _resolve_trip, _resolve_min_trip, _resolve_cidr_cc,
 _save_rule_vars, _restore_rule_vars, _clear_rule_vars, _compat_rule_vars,
 _apply_pressure, _apply_thresholds).
 
+### `bfd_diag.sh` — Health Check + Status + Inspection (~1050 lines)
+
+Above the ~1,000-line flexible ceiling, justified by functional coherence: all
+read-only system inspection and testing operations belong together.
+
+**Health check (~420 lines):**
+- `health_check()` — orchestrator: calls all `_hc_*` sub-functions, prints summary
+- `_hc_config()` — validate config + log paths
+- `_hc_binaries()` — validate firewall backend, system binaries, journalctl
+- `_hc_rules()` — scan rules dir, validate each, report active/inactive
+- `_hc_state()` — validate tlog, state dirs, lock, active ban count
+- `_hc_alerts()` — validate email (MTA/SMTP), Slack, Telegram, Discord channels
+
+**Status display (~190 lines):**
+- `detect_run_mode()` — detect execution context (watch/cron/systemd/manual)
+- `show_status()` — global system status snapshot (mode, bans, events, top IPs,
+  pressure, rules)
+- `show_service_status()` — per-service status (log source, weight, trip, events, bans)
+
+**Config display (~80 lines):**
+- `show_config()` — dump active config with secret masking (SMTP_*, SLACK_*, etc.),
+  optional single-var lookup. Includes `_mask_secret()` local helper.
+
+**Rule inspection (~195 lines):**
+- `list_rules()` — tabular rule listing (status, weight, trip, ports, log source)
+  with optional active-only filter
+- `show_rule()` — detailed single-rule info
+
+**Rule and pattern testing (~95 lines):**
+- `test_rule()` — test a rule against a log file or stdin
+- `test_pattern()` — test raw `<HOST>` pattern against input
+
+**Alert testing (~160 lines):**
+- `test_alert()` — dispatcher: routes to email or messaging test
+- `test_alert_email()` — send test email through full pipeline (synthetic RFC 5737
+  test IP 192.0.2.1)
+- `test_alert_messaging()` — send test alert to Slack/Telegram/Discord
+
+**Dependencies:** All sub-libraries. Alert testing calls `send_alerts()` and
+`_bfd_dispatch_messaging()` from `bfd_alert.sh`. Rule inspection calls
+`_save_rule_vars()`, `_apply_pressure()` etc. from `bfd_pressure.sh`. Status calls
+`_pressure_aggregate_all()` from `bfd_pressure.sh` and `detect_run_mode()` checks
+systemd units. Health check validates config (`bfd_validate.sh`), firewall
+(`bfd_fw.sh`), state (`bfd_state.sh`), and alerts (`bfd_alert.sh`).
+
 ### `bfd_alert.sh` — Alert Rendering + Delivery (~1080 lines, existing + 1 function)
 
 **Existing 16 functions unchanged.** One function moves in:
@@ -379,10 +424,9 @@ inside, batch cleanup after. Delete `_apool_ban_status()` entirely.
 
 ### 2. `_apool_summary_awk()` cross-module usage (NO ACTION)
 
-`_apool_summary_awk()` moves to `bfd_events.sh` and is called by `bfd_alert.sh`
-(`_alert_compute_summary`) and `bfd_report.sh` (`_report_data`). This cross-module
-call pattern is intentional and matches existing conventions — both callers already
-reference functions across module boundaries.
+`_apool_summary_awk()` moves to `bfd_events.sh` and is called by `bfd_report.sh`
+(`_report_data`). This cross-module call pattern is intentional and matches existing
+conventions — callers already reference functions across module boundaries.
 
 ### 3. Deprecated threshold functions (KEEP, document deprecation)
 
@@ -399,18 +443,19 @@ All new sub-libraries follow the pattern established by `bfd_alert.sh` and
 
 ```bash
 #!/bin/bash
-# GPL v2 header
-# (C) 1999-2026, R-fx Networks <proj@rfxn.com>
-# Ryan MacDonald <ryan@rfxn.com>
+# GPL v2 full header (see bfd_alert.sh for exact text)
+# Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
+# Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
 # Description of module purpose
 
-# Source guard
-[[ -n "${_BFD_MODULE_LOADED:-}" ]] && return 0 2>/dev/null
-_BFD_MODULE_LOADED=1
+# Source guard — replace STEM with file stem in UPPER_CASE
+# e.g., bfd_fw.sh → _BFD_FW_LOADED / BFD_FW_VERSION
+[[ -n "${_BFD_STEM_LOADED:-}" ]] && return 0 2>/dev/null
+_BFD_STEM_LOADED=1
 
 # Module version
 # shellcheck disable=SC2034
-BFD_MODULE_VERSION="1.0.0"
+BFD_STEM_VERSION="1.0.0"
 
 # Functions...
 ```
@@ -435,7 +480,11 @@ modification.
 ### Install Path
 
 `install.sh` bulk-copies `files/internals/` to the install directory. New `bfd_*.sh`
-files are automatically included — no installer changes needed.
+files are automatically included — no installer changes needed. Note:
+`pkg_sed_replace` in `install.sh` currently only runs on `bfd.lib.sh` and
+`internals.conf` for custom install paths. If any new sub-library references
+`$INSTALL_PATH` in a way that gets baked in at install time, it would need adding
+to the sed list — verify during implementation.
 
 ### Existing Users
 
@@ -485,3 +534,10 @@ Full test suite on Debian 12 + Rocky 9 after final phase.
    which triggers the full source chain. Since the chain is preserved, no test
    changes needed. If any test sources individual internals files directly, those
    would need updating — grep for this during implementation.
+
+4. **`_internals_dir` lifecycle:** The current `bfd.lib.sh` sets `_internals_dir`
+   at line 27 and `unset _internals_dir` at line 64 after sourcing its sub-libraries.
+   In the new design, `_internals_dir` is needed throughout the expanded sourcing
+   chain (14 files). The `unset` must be removed or moved to after the final source
+   statement. This is a required migration step — if an implementer moves files
+   incrementally, they must address this early to avoid silent breakage.
