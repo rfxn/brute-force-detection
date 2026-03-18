@@ -15,6 +15,17 @@
       temporary ban duration caused malformed messages (F-A10)
 [Fix] Escape REPORT_TREND_LABEL for Telegram MarkdownV2 — parentheses in
       trend comparison caused malformed report messages (F-A11)
+[Fix] Add 8 missing config vars (REPORT_*, LOG_IDLE_SUPPRESS, SUBNET_ALERT_TOP_N)
+      to config_init(1) unset block so SIGHUP reload gets clean re-read (F-A06)
+[New] Add REPORT_ENABLED and REPORT_TOP_N validation in validate_config() to
+      reject non-boolean and non-integer values at config load time (F-A08)
+[Fix] Replace mawk-incompatible length(array) with portable flag in
+      _events_ip_awk AWK block (F-A03)
+[Fix] test_alert_messaging now isolates the target channel by saving and
+      disabling non-target channels before dispatch (F-A07)
+[Fix] cron.daily version header updated to 2.0.2 (F-A12)
+[Fix] Remove dead first-attempt rule path in _events_rule_log_file and
+      _events_rule_patterns — RULES_PATH already includes subdirectory (F-A13)
 
 2.0.1:
 

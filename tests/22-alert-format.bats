@@ -785,6 +785,37 @@ SC
 	[[ "$BAN_DURATION_DETAIL_TG" == *"\\)"* ]]
 }
 
+@test "test_alert_messaging: only dispatches to target channel (F-A07)" {
+	local tpl_dir="$TEST_TMPDIR/tpl"
+	_setup_messaging_dispatch_env "$tpl_dir"
+	# enable all three channels
+	SLACK_ALERTS="1"
+	TELEGRAM_ALERTS="1"
+	DISCORD_ALERTS="1"
+	_bfd_alert_init
+	# capture which channels alert_dispatch is called with
+	local capture_file="$TEST_TMPDIR/dispatch_channels"
+	alert_dispatch() {
+		echo "$3" >> "$capture_file"
+		return 0
+	}
+	# test_alert_messaging for slack only
+	test_alert_messaging "$INSTALL_PATH" "slack" "SLACK_ALERTS"
+	[ -f "$capture_file" ]
+	# only "slack" should appear in dispatch calls
+	run grep -c "slack" "$capture_file"
+	assert_output "1"
+	# telegram and discord should NOT appear
+	run grep -c "telegram" "$capture_file"
+	assert_output "0"
+	run grep -c "discord" "$capture_file"
+	assert_output "0"
+	# after call, all channels should be restored to 1
+	[ "$SLACK_ALERTS" = "1" ]
+	[ "$TELEGRAM_ALERTS" = "1" ]
+	[ "$DISCORD_ALERTS" = "1" ]
+}
+
 @test "REPORT_TREND_LABEL_TG: parentheses escaped for Telegram MarkdownV2 (F-A11)" {
 	# Simulate what _report_data sets: a trend label with parentheses
 	# Typical values: "70% decrease vs prior 24h (3 vs 10)" or
