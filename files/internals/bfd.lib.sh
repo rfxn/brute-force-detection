@@ -839,6 +839,16 @@ validate_config() {
 		echo "error: LOG_LEVEL must be 0, 1, 2, or 3 (got '${LOG_LEVEL:-}')." >&2
 		return $EXIT_CONFIG_ERROR
 	fi
+	# periodic report config
+	case "${REPORT_ENABLED:-0}" in
+		0|1) ;;
+		*) elog error "REPORT_ENABLED must be 0 or 1 (got '${REPORT_ENABLED}')."
+		   return "$EXIT_CONFIG_ERROR" ;;
+	esac
+	if [ -n "${REPORT_TOP_N:-}" ] && ! [ "${REPORT_TOP_N}" -gt 0 ] 2>/dev/null; then  # integer > 0 check
+		elog error "REPORT_TOP_N must be a positive integer (got '${REPORT_TOP_N}')."
+		return "$EXIT_CONFIG_ERROR"
+	fi
 }
 
 # detect_log_paths requires: AUTH_LOG_PATH, KERNEL_LOG_PATH, MAIL_LOG_PATH,
@@ -4051,7 +4061,27 @@ test_alert_messaging() {
 	subject="[TEST] BFD Alert ($(hostname))"
 	local tpl_dir="${ALERT_TEMPLATE_DIR:-$INSTALL_PATH/alert}"
 
+	# Save and disable non-target channels for isolated test dispatch (F-A07)
+	local _saved_slack="${SLACK_ALERTS:-0}" _saved_tg="${TELEGRAM_ALERTS:-0}" _saved_dc="${DISCORD_ALERTS:-0}"
+	case "$channel" in
+		slack)    TELEGRAM_ALERTS=0; DISCORD_ALERTS=0 ;;
+		telegram) SLACK_ALERTS=0; DISCORD_ALERTS=0 ;;
+		discord)  SLACK_ALERTS=0; TELEGRAM_ALERTS=0 ;;
+	esac
+	_bfd_alert_init
+
+	local _dispatch_rc=0
 	if _bfd_dispatch_messaging "$alerts_file" "$subject" "${EMAIL_LOGLINES:-5}" "$tpl_dir"; then
+		_dispatch_rc=0
+	else
+		_dispatch_rc=1
+	fi
+
+	# Restore channel states
+	SLACK_ALERTS="$_saved_slack"; TELEGRAM_ALERTS="$_saved_tg"; DISCORD_ALERTS="$_saved_dc"
+	_bfd_alert_init
+
+	if [ "$_dispatch_rc" -eq 0 ]; then
 		echo "Test $channel alert sent successfully."
 		command rm -f "$alerts_file"
 		return 0
@@ -4175,6 +4205,7 @@ _events_ip_awk() {
 		gp += decay
 		sp[mod] += decay
 		cnt[mod]++
+		found = 1
 		if (w > wt[mod]) wt[mod] = w
 		if (!(mod in sfirst) || ts < sfirst[mod]) sfirst[mod] = ts
 		if (ts > slast[mod]) slast[mod] = ts
@@ -4182,7 +4213,7 @@ _events_ip_awk() {
 		if (ts > glast) glast = ts
 	}
 	END {
-		if (length(cnt) == 0) exit
+		if (!found) exit
 		for (mod in cnt) {
 			printf "S|%s|%d|%d|%d\n", mod, (wt[mod] > 0 ? wt[mod] : 1), cnt[mod], int(sp[mod] * 1000)
 		}
@@ -4196,11 +4227,7 @@ _events_ip_awk() {
 # Returns 1 if the rule file does not exist or LOG_FILE is empty.
 _events_rule_log_file() {
 	local rule="$1"
-	local rule_file="${RULES_PATH:-}/rules/$rule"
-	# if RULES_PATH already includes the project root, try both forms
-	if [ ! -f "$rule_file" ]; then
-		rule_file="${RULES_PATH:-}/$rule"
-	fi
+	local rule_file="${RULES_PATH:-}/$rule"
 	[ ! -f "$rule_file" ] && return 1
 	(
 		# no-op the tlog function so sourcing the rule doesn't run detection
@@ -4218,10 +4245,7 @@ _events_rule_log_file() {
 # Returns 1 if the rule file does not exist or no patterns are found.
 _events_rule_patterns() {
 	local rule="$1"
-	local rule_file="${RULES_PATH:-}/rules/$rule"
-	if [ ! -f "$rule_file" ]; then
-		rule_file="${RULES_PATH:-}/$rule"
-	fi
+	local rule_file="${RULES_PATH:-}/$rule"
 	[ ! -f "$rule_file" ] && return 1
 	local patterns
 	patterns=$(

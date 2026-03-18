@@ -766,6 +766,60 @@ run_validate_output() {
 
 # --- show_config ---
 
+# --- REPORT_ENABLED ---
+
+@test "validate_config: REPORT_ENABLED=0 passes" {
+	run run_validate 'REPORT_ENABLED="0"'
+	assert_success
+}
+
+@test "validate_config: REPORT_ENABLED=1 passes" {
+	run run_validate 'REPORT_ENABLED="1"'
+	assert_success
+}
+
+@test "validate_config: REPORT_ENABLED=yes rejects" {
+	run run_validate 'REPORT_ENABLED="yes"'
+	assert_failure
+}
+
+@test "validate_config: REPORT_ENABLED unset uses default (passes)" {
+	run run_validate 'unset REPORT_ENABLED'
+	assert_success
+}
+
+# --- REPORT_TOP_N ---
+
+@test "validate_config: REPORT_TOP_N=10 passes" {
+	run run_validate 'REPORT_TOP_N="10"'
+	assert_success
+}
+
+@test "validate_config: REPORT_TOP_N=abc rejects" {
+	run run_validate 'REPORT_TOP_N="abc"'
+	assert_failure
+}
+
+@test "validate_config: REPORT_TOP_N=0 rejects" {
+	run run_validate 'REPORT_TOP_N="0"'
+	assert_failure
+}
+
+@test "validate_config: REPORT_TOP_N=-1 rejects" {
+	run run_validate 'REPORT_TOP_N="-1"'
+	assert_failure
+}
+
+@test "validate_config: REPORT_TOP_N unset passes (optional)" {
+	run run_validate 'unset REPORT_TOP_N'
+	assert_success
+}
+
+@test "validate_config: REPORT_TOP_N empty passes (optional)" {
+	run run_validate 'REPORT_TOP_N=""'
+	assert_success
+}
+
 @test "show_config: EMAIL_FORMAT returns value" {
 	EMAIL_FORMAT="both"
 	run show_config EMAIL_FORMAT
