@@ -50,7 +50,7 @@ EMAIL_ADDRESS="root"
 # alert subject line ($HOSTNAME expands at runtime)
 EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
 
-# log lines from the offending service included in each alert; must be > 0
+# log lines from the offending service included in each alert and event view; must be > 0
 EMAIL_LOGLINES="5"
 
 # email body format [text = plain text, html = HTML only, both = multipart text+HTML]

@@ -15,6 +15,11 @@
       COUNTRY_FLAG, SOURCE_LOGS_SECTION_TEXT, REPUTATION_SECTION_TEXT);
       add --sort, --limit, --24h/--7d/--30d, --active to SYNOPSIS modifiers;
       update .TH date to 2026-03-17
+[Fix] README: promote Periodic Reports to top-level section (§7.1→§8),
+      renumber sections 8-12→9-13, update TOC and cross-references;
+      fix template variable names in variable table
+[Fix] usage_short() output line split to fit 80 columns
+[Fix] conf.bfd EMAIL_LOGLINES comment: add "and event view"
 [New] Pressure-to-response scoring model: exponential-decay replaces fixed
       count thresholds; per-rule weights, trip points, and half-life via
       pressure.conf; cross-service aggregate trip; old TRIG/TRIG_WINDOW
