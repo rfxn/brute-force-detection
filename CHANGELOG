@@ -1,4 +1,6 @@
 2.0.2:
+[Change] Move ~40 firewall backend functions (detect_firewall, 8 backends,
+      dispatch layer, retry logic) to new bfd_fw.sh sub-library
 [Change] Move 14 validation functions (validate_ip/ip6/cidr, sanitize_mod/ports,
       validate_config, detect_log_paths, etc.) to new bfd_validate.sh sub-library
 [Change] Remove unset _internals_dir to support expanded source chain
