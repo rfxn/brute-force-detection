@@ -20,6 +20,8 @@
       fix template variable names in variable table
 [Fix] usage_short() output line split to fit 80 columns
 [Fix] conf.bfd EMAIL_LOGLINES comment: add "and event view"
+[Fix] cron.daily sources internals.conf for correct LOCK_FILE in FHS packages
+      (lock.utime is at /var/lib/bfd/ not /usr/local/bfd/ after pkg transform)
 [New] Pressure-to-response scoring model: exponential-decay replaces fixed
       count thresholds; per-rule weights, trip points, and half-life via
       pressure.conf; cross-service aggregate trip; old TRIG/TRIG_WINDOW
