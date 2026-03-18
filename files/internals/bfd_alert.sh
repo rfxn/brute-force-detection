@@ -575,8 +575,8 @@ ${indented_logs}"
 			export SUBNET_HOSTS_SECTION_TG
 			SUBNET_HOSTS_SECTION_TG=$(_alert_telegram_escape "$_hosts_msg")
 
-			# clean up sidecar after reading
-			command rm -f "$_sidecar"
+			# sidecar cleanup deferred to send_alerts() — multiple rendering
+			# passes (text, HTML, messaging) need the file intact (F-A04)
 		else
 			# sidecar missing (race, cleanup) — static fallback
 			SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (distributed subnet ban)"

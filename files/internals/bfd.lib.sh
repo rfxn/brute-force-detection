@@ -3052,6 +3052,9 @@ send_alerts() {
 
 	# --- Messaging delivery (per-batch, not per-recipient) ---
 	_bfd_dispatch_messaging "$alerts_file" "$subject" "$loglines" "$tpl_dir"
+
+	# Clean up CIDR sidecar files after all rendering passes complete (F-A04)
+	command rm -f "${INSTALL_PATH}/tmp/.cidr_detail_"* 2>/dev/null  # alert sidecars consumed
 }
 
 # --- Phase 18: CLI Evolution functions ---

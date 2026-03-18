@@ -4,6 +4,9 @@
       channels are enabled (F-A01)
 [Fix] Pass entry_total to _alert_set_global_vars in messaging path so
       ALERT_COUNT reflects actual ban count instead of always "0" (F-A02)
+[Fix] Defer CIDR sidecar cleanup from _alert_set_entry_vars to send_alerts
+      so all rendering passes (text, HTML, messaging) read enriched subnet
+      detail instead of falling through to static fallback (F-A04)
 
 2.0.1:
 

@@ -678,6 +678,43 @@ _setup_messaging_dispatch_env() {
 	export ALERT_TMPDIR="$TEST_TMPDIR"
 }
 
+# --- CIDR sidecar lifecycle (F-A04) ---
+
+@test "CIDR sidecar: available on second _alert_set_entry_vars call (F-A04)" {
+	# sidecar must survive multiple rendering passes (text then HTML)
+	# sanitization: tr ':' '-' | tr '/' '_' — dots are preserved
+	local sidecar="$INSTALL_PATH/tmp/.cidr_detail_192.168.1.0_24"
+	mkdir -p "$INSTALL_PATH/tmp"
+	# create sidecar with HEADER + 2 contributing IPs
+	cat > "$sidecar" <<'SC'
+HEADER 192.168.1.0/24 2 10 10000
+192.168.1.5 sshd 6 6000
+192.168.1.9 sshd 4 4000
+SC
+
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	EMAIL_REPUTATION_LINKS=""
+
+	local line="192.168.1.0/24|sshd|all|10000|0|ban|0|(multiple)|root|5|300|1|10"
+
+	# first pass (simulating text render)
+	_alert_set_entry_vars "$line" 1 1
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Contributing hosts"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"192.168.1.5"* ]]
+	[ "$SUBNET_IP_COUNT" = "2" ]
+
+	# second pass (simulating HTML render) — sidecar must still be readable
+	_alert_set_entry_vars "$line" 1 1
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Contributing hosts"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"192.168.1.9"* ]]
+	[ "$SUBNET_IP_COUNT" = "2" ]
+
+	# sidecar still exists (cleanup deferred to send_alerts)
+	[ -f "$sidecar" ]
+}
+
 @test "messaging dispatch: ALERT_COUNT equals actual entry count (F-A02)" {
 	local tpl_dir="$TEST_TMPDIR/tpl"
 	_setup_messaging_dispatch_env "$tpl_dir"
