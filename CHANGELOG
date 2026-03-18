@@ -1,4 +1,36 @@
 2.0.2:
+[Change] Move 11 orchestration functions (config_init, pre, get_state, check,
+      bfd_run, watch, reload_watch, cleanup_watch, _cleanup_common, cleanup,
+      _bfd_journal_register_all) to new bfd_core.sh sub-library; slim bfd to
+      ~440-line CLI wrapper; bfd.lib.sh reduced to ~220-line sourcing hub
+[Change] Rename run() to bfd_run() to avoid shadowing BATS test runner
+[Change] Update ci.yml bash -n and shellcheck lint targets to include all
+      bfd_*.sh sub-library files
+[Change] Move send_alerts() (~110 lines) from bfd.lib.sh to bfd_alert.sh where
+      all its callees already reside (alert rendering, email delivery, messaging
+      dispatch)
+[Change] Move 18 diagnostic functions (health_check, _hc_*, detect_run_mode,
+      show_status, show_service_status, show_config, list_rules, show_rule,
+      test_rule, test_pattern, test_alert, test_alert_email,
+      test_alert_messaging, format_duration) to new bfd_diag.sh sub-library
+[Change] Merge event query functions (from bfd.lib.sh) and attack pool reporting
+      functions (from bfd) into new bfd_events.sh sub-library (~37 functions)
+[Change] Replace per-IP _apool_ban_status with batch pattern in _apool_report,
+      _apool_report_json, _apool_report_csv — eliminates ~50-75 AWK spawns per
+      invocation
+[Change] Move 6 detection pipeline functions (extract_hosts, filter_host,
+      _build_ignore_cache, _rule_tlog, count_subnet_attackers, check_distributed)
+      to new bfd_detect.sh sub-library
+[Change] Move 20 pressure model and rule infrastructure functions (pressure_compute,
+      ip_to_country, rule var management, validate_rule, batch helpers) to new
+      bfd_pressure.sh sub-library
+[Change] Move 24 state I/O and ban execution functions (state_*, execute_ban,
+      record_ban, manual_ban/unban, list/flush_bans) to new bfd_state.sh sub-library
+[Change] Move ~40 firewall backend functions (detect_firewall, 8 backends,
+      dispatch layer, retry logic) to new bfd_fw.sh sub-library
+[Change] Move 14 validation functions (validate_ip/ip6/cidr, sanitize_mod/ports,
+      validate_config, detect_log_paths, etc.) to new bfd_validate.sh sub-library
+[Change] Remove unset _internals_dir to support expanded source chain
 [Fix] Per-channel ENTRY_BLOCKS dispatch in _bfd_dispatch_messaging prevents
       Slack JSON and Telegram MarkdownV2 from cross-contaminating when both
       channels are enabled (F-A01)

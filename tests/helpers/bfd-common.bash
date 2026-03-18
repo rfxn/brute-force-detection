@@ -109,10 +109,17 @@ bfd_standard_setup() {
 
 # bfd_load_function: extract and eval a single function from a source file.
 # Usage: bfd_load_function "func_name" [source_file]
-# Default source: $PROJECT_ROOT/files/bfd
+# Default source: $PROJECT_ROOT/files/bfd, with fallback to bfd_core.sh
 bfd_load_function() {
 	local func="$1" src="${2:-$PROJECT_ROOT/files/bfd}"
-	eval "$(awk "/^${func}\\(\\)/ { p=1 } p { print; if (/^\\}\$/) exit }" "$src")"
+	local extracted
+	extracted="$(awk "/^${func}\\(\\)/ { p=1 } p { print; if (/^\\}\$/) exit }" "$src")"
+	# fallback: if not found in default source, try bfd_core.sh
+	if [ -z "$extracted" ] && [ "$src" = "$PROJECT_ROOT/files/bfd" ]; then
+		extracted="$(awk "/^${func}\\(\\)/ { p=1 } p { print; if (/^\\}\$/) exit }" \
+			"$PROJECT_ROOT/files/internals/bfd_core.sh")"
+	fi
+	eval "$extracted"
 }
 
 # bfd_teardown: cleanup test environment
