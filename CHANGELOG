@@ -1,4 +1,7 @@
 2.0.2:
+[Change] Move 14 validation functions (validate_ip/ip6/cidr, sanitize_mod/ports,
+      validate_config, detect_log_paths, etc.) to new bfd_validate.sh sub-library
+[Change] Remove unset _internals_dir to support expanded source chain
 [Fix] Per-channel ENTRY_BLOCKS dispatch in _bfd_dispatch_messaging prevents
       Slack JSON and Telegram MarkdownV2 from cross-contaminating when both
       channels are enabled (F-A01)
