@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # Test suite for country multiplier functions:
-#   ip_to_country(), country_weight(), pressure_effective_weight()
+#   ip_to_country(), country_weight()
 #
 
 load '/usr/local/lib/bats/bats-support/load'
@@ -170,80 +170,6 @@ EOF
 	run country_weight "CN" "/nonexistent/pressure-country.conf"
 	assert_success
 	assert_output "10"
-}
-
-# ============================================================
-# pressure_effective_weight()
-# ============================================================
-
-@test "pressure_effective_weight: multiplies by country factor" {
-	# CN = 20 (2.0x), rule weight = 3 → 3*20/10 = 6
-	run pressure_effective_weight "3" "192.0.2.128" "$INSTALL_PATH"
-	assert_success
-	assert_output "6"
-}
-
-@test "pressure_effective_weight: RU factor applied" {
-	# RU = 15 (1.5x), rule weight = 2 → 2*15/10 = 3
-	run pressure_effective_weight "2" "198.51.100.50" "$INSTALL_PATH"
-	assert_success
-	assert_output "3"
-}
-
-@test "pressure_effective_weight: US factor is 1.0x (no change)" {
-	# US = 10 (1.0x), rule weight = 3 → 3*10/10 = 3
-	run pressure_effective_weight "3" "203.0.113.100" "$INSTALL_PATH"
-	assert_success
-	assert_output "3"
-}
-
-@test "pressure_effective_weight: unknown IP returns weight unchanged" {
-	# unknown IP → no country → passthrough
-	run pressure_effective_weight "3" "198.51.100.200" "$INSTALL_PATH"
-	assert_success
-	assert_output "3"
-}
-
-@test "pressure_effective_weight: missing DB returns weight unchanged" {
-	rm -f "$INSTALL_PATH/ipcountry.dat"
-	run pressure_effective_weight "3" "192.0.2.128" "$INSTALL_PATH"
-	assert_success
-	assert_output "3"
-}
-
-@test "pressure_effective_weight: missing weights file returns weight unchanged" {
-	rm -f "$INSTALL_PATH/pressure-country.conf"
-	run pressure_effective_weight "3" "192.0.2.128" "$INSTALL_PATH"
-	assert_success
-	assert_output "3"
-}
-
-@test "pressure_effective_weight: IPv6 returns weight unchanged when db6 absent" {
-	run pressure_effective_weight "3" "2001:db8::1" "$INSTALL_PATH"
-	assert_success
-	assert_output "3"
-}
-
-@test "pressure_effective_weight: IPv6 applies country multiplier when db6 present" {
-	# Create hex-range db6 with JP entry covering 2001:db8::/32
-	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
-20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
-EOF
-	# Add JP multiplier (2.0x)
-	echo "JP=20" >> "$INSTALL_PATH/pressure-country.conf"
-	# weight=3, mult=20 (2.0x) → 3*20/10 = 6
-	run pressure_effective_weight "3" "2001:db8::1" "$INSTALL_PATH"
-	assert_success
-	assert_output "6"
-}
-
-@test "pressure_effective_weight: result minimum is 1" {
-	# set a very low multiplier
-	echo "XX=1" > "$INSTALL_PATH/pressure-country.conf"
-	# weight=1, mult=1 → 1*1/10 = 0 → minimum 1
-	run pressure_effective_weight "1" "192.0.2.1" "$INSTALL_PATH"
-	assert_success
-	assert_output "1"
 }
 
 # ============================================================

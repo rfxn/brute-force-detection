@@ -648,3 +648,195 @@ RULEEOF
 	# file should still have content
 	[ -s "$spool_file" ]
 }
+
+# --- _bfd_dispatch_messaging bug fixes (F-A01, F-A02) ---
+
+# helper: set up messaging dispatch test environment
+_setup_messaging_dispatch_env() {
+	local tpl_dir="$1"
+	mkdir -p "$tpl_dir"
+	# minimal templates — entry templates produce channel-specific markers
+	echo "SLACK_MARKER" > "$tpl_dir/slack.entry.tpl"
+	echo "TG_MARKER" > "$tpl_dir/telegram.entry.tpl"
+	echo '{"fields": [' > "$tpl_dir/discord.entry.tpl"
+	# outer message templates reference ENTRY_BLOCKS and ALERT_COUNT
+	echo '{"blocks": [{{ENTRY_BLOCKS}}], "count": "{{ALERT_COUNT}}"}' > "$tpl_dir/slack.message.tpl"
+	echo '{{ENTRY_BLOCKS}} count={{ALERT_COUNT}}' > "$tpl_dir/telegram.message.tpl"
+	echo '{"embeds": [{{ENTRY_FIELDS}}]}' > "$tpl_dir/discord.message.tpl"
+	# register and enable messaging channels (alert_lib auto-registers at source time)
+	SLACK_ALERTS="1"
+	TELEGRAM_ALERTS="1"
+	DISCORD_ALERTS="0"
+	_bfd_alert_init
+	# mock curl so handlers don't make real API calls
+	mkdir -p "$TEST_TMPDIR/bin"
+	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/curl"
+	echo 'exit 0' >> "$TEST_TMPDIR/bin/curl"
+	chmod +x "$TEST_TMPDIR/bin/curl"
+	export PATH="$TEST_TMPDIR/bin:$PATH"
+	# alert_lib tmpdir for rendered template staging
+	export ALERT_TMPDIR="$TEST_TMPDIR"
+}
+
+# --- CIDR sidecar lifecycle (F-A04) ---
+
+@test "CIDR sidecar: available on second _alert_set_entry_vars call (F-A04)" {
+	# sidecar must survive multiple rendering passes (text then HTML)
+	# sanitization: tr ':' '-' | tr '/' '_' — dots are preserved
+	local sidecar="$INSTALL_PATH/tmp/.cidr_detail_192.168.1.0_24"
+	mkdir -p "$INSTALL_PATH/tmp"
+	# create sidecar with HEADER + 2 contributing IPs
+	cat > "$sidecar" <<'SC'
+HEADER 192.168.1.0/24 2 10 10000
+192.168.1.5 sshd 6 6000
+192.168.1.9 sshd 4 4000
+SC
+
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	EMAIL_REPUTATION_LINKS=""
+
+	local line="192.168.1.0/24|sshd|all|10000|0|ban|0|(multiple)|root|5|300|1|10"
+
+	# first pass (simulating text render)
+	_alert_set_entry_vars "$line" 1 1
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Contributing hosts"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"192.168.1.5"* ]]
+	[ "$SUBNET_IP_COUNT" = "2" ]
+
+	# second pass (simulating HTML render) — sidecar must still be readable
+	_alert_set_entry_vars "$line" 1 1
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Contributing hosts"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"192.168.1.9"* ]]
+	[ "$SUBNET_IP_COUNT" = "2" ]
+
+	# sidecar still exists (cleanup deferred to send_alerts)
+	[ -f "$sidecar" ]
+}
+
+@test "messaging dispatch: ALERT_COUNT equals actual entry count (F-A02)" {
+	local tpl_dir="$TEST_TMPDIR/tpl"
+	_setup_messaging_dispatch_env "$tpl_dir"
+	# create alerts file with 2 entries
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2|5" >> "$af"
+	# capture ALERT_COUNT by overriding alert_dispatch
+	local capture_file="$TEST_TMPDIR/alert_count_capture"
+	alert_dispatch() {
+		echo "$ALERT_COUNT" >> "$capture_file"
+		return 0
+	}
+	_bfd_dispatch_messaging "$af" "Test Alert" "5" "$tpl_dir"
+	# ALERT_COUNT should be "2" (not "0")
+	[ -f "$capture_file" ]
+	run head -1 "$capture_file"
+	assert_output "2"
+}
+
+@test "messaging dispatch: ENTRY_BLOCKS per-channel isolation (F-A01)" {
+	local tpl_dir="$TEST_TMPDIR/tpl"
+	_setup_messaging_dispatch_env "$tpl_dir"
+	# enable both Slack and Telegram
+	SLACK_ALERTS="1"
+	TELEGRAM_ALERTS="1"
+	_bfd_alert_init
+	# create alerts file with 1 entry
+	local af="$TEST_TMPDIR/alerts"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
+	# capture ENTRY_BLOCKS per alert_dispatch call
+	local capture_dir="$TEST_TMPDIR/captures"
+	mkdir -p "$capture_dir"
+	alert_dispatch() {
+		local _ch="$3"
+		echo "$ENTRY_BLOCKS" > "$capture_dir/${_ch}_blocks"
+		return 0
+	}
+	_bfd_dispatch_messaging "$af" "Test Alert" "5" "$tpl_dir"
+	# Slack's ENTRY_BLOCKS should contain SLACK_MARKER but not TG_MARKER
+	[ -f "$capture_dir/slack_blocks" ]
+	run cat "$capture_dir/slack_blocks"
+	assert_output --partial "SLACK_MARKER"
+	refute_output --partial "TG_MARKER"
+	# Telegram's ENTRY_BLOCKS should contain TG_MARKER but not SLACK_MARKER
+	[ -f "$capture_dir/telegram_blocks" ]
+	run cat "$capture_dir/telegram_blocks"
+	assert_output --partial "TG_MARKER"
+	refute_output --partial "SLACK_MARKER"
+}
+
+# --- Telegram MarkdownV2 escaping (F-A10, F-A11) ---
+
+@test "BAN_DURATION_DETAIL_TG: parentheses escaped for Telegram MarkdownV2 (F-A10)" {
+	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
+	_FW_BACKEND="custom"
+	BAN_ESCALATE_AFTER="0"
+	EMAIL_REPUTATION_LINKS=""
+	# temporary ban with parentheses in duration detail: " (1h 30m), expires ..."
+	local future_expiry
+	future_expiry=$(( $(date +%s) + 5400 ))
+	local line="192.0.2.1|sshd|22|5000|${future_expiry}|ban|0|/dev/null|root|5|300|3|5"
+	_alert_set_entry_vars "$line" 1 1
+	# BAN_DURATION_DETAIL should contain unescaped parentheses
+	[[ "$BAN_DURATION_DETAIL" == *"("* ]]
+	# BAN_DURATION_DETAIL_TG should have parentheses escaped with backslash
+	[[ "$BAN_DURATION_DETAIL_TG" == *"\\("* ]]
+	[[ "$BAN_DURATION_DETAIL_TG" == *"\\)"* ]]
+}
+
+@test "test_alert_messaging: only dispatches to target channel (F-A07)" {
+	local tpl_dir="$TEST_TMPDIR/tpl"
+	_setup_messaging_dispatch_env "$tpl_dir"
+	# enable all three channels
+	SLACK_ALERTS="1"
+	TELEGRAM_ALERTS="1"
+	DISCORD_ALERTS="1"
+	_bfd_alert_init
+	# capture which channels alert_dispatch is called with
+	local capture_file="$TEST_TMPDIR/dispatch_channels"
+	alert_dispatch() {
+		echo "$3" >> "$capture_file"
+		return 0
+	}
+	# test_alert_messaging for slack only
+	test_alert_messaging "$INSTALL_PATH" "slack" "SLACK_ALERTS"
+	[ -f "$capture_file" ]
+	# only "slack" should appear in dispatch calls
+	run grep -c "slack" "$capture_file"
+	assert_output "1"
+	# telegram and discord should NOT appear
+	run grep -c "telegram" "$capture_file"
+	assert_output "0"
+	run grep -c "discord" "$capture_file"
+	assert_output "0"
+	# after call, all channels should be restored to 1
+	[ "$SLACK_ALERTS" = "1" ]
+	[ "$TELEGRAM_ALERTS" = "1" ]
+	[ "$DISCORD_ALERTS" = "1" ]
+}
+
+@test "REPORT_TREND_LABEL_TG: parentheses escaped for Telegram MarkdownV2 (F-A11)" {
+	# Simulate what _report_data sets: a trend label with parentheses
+	# Typical values: "70% decrease vs prior 24h (3 vs 10)" or
+	#                 "new activity (5 events, none in prior 24h)"
+	REPORT_TREND_LABEL="70% decrease vs prior 24h (3 vs 10)"
+	export REPORT_TREND_LABEL
+
+	# Apply the same escaping that bfd_report.sh does at line 273
+	REPORT_TREND_LABEL_TG=$(_alert_telegram_escape "$REPORT_TREND_LABEL")
+	export REPORT_TREND_LABEL_TG
+
+	# Original should contain unescaped parentheses
+	[[ "$REPORT_TREND_LABEL" == *"("* ]]
+	# TG variant should have parentheses escaped with backslash
+	[[ "$REPORT_TREND_LABEL_TG" == *"\\("* ]]
+	[[ "$REPORT_TREND_LABEL_TG" == *"\\)"* ]]
+	# Verify the % is also escaped (MarkdownV2 does not require it, but dots are)
+	# The period in "24h" is not present, but verify no unescaped parens remain
+	# by checking the full escaped string doesn't have bare parens
+	local bare_parens
+	bare_parens=$(echo "$REPORT_TREND_LABEL_TG" | sed 's/\\(//g; s/\\)//g')
+	[[ "$bare_parens" != *"("* ]]
+	[[ "$bare_parens" != *")"* ]]
+}

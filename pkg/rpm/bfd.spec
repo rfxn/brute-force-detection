@@ -1,5 +1,5 @@
 %define name    bfd
-%define version 2.0.1
+%define version 2.0.2
 %define release 1%{?dist}
 
 # Legacy install path used by install.sh — symlink farm target
@@ -322,6 +322,9 @@ fi
 /usr/local/sbin/bfd
 
 %changelog
+* Wed Mar 18 2026 R-fx Networks <proj@rfxn.com> - 2.0.2-1
+-
+
 * Thu Feb 26 2026 R-fx Networks <proj@rfxn.com> - 2.0.1-1
 - Initial RPM package with FHS layout and symlink farm
 - Pressure model with exponential-decay scoring

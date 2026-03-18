@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Brute Force Detection 2.0.1 - Function Library
+# Brute Force Detection 2.0.2 - Function Library
 ###
 # Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
@@ -838,6 +838,16 @@ validate_config() {
 	if ! [[ "$_ll" =~ $int_pattern ]] || [ "$_ll" -gt 3 ]; then
 		echo "error: LOG_LEVEL must be 0, 1, 2, or 3 (got '${LOG_LEVEL:-}')." >&2
 		return $EXIT_CONFIG_ERROR
+	fi
+	# periodic report config
+	case "${REPORT_ENABLED:-0}" in
+		0|1) ;;
+		*) echo "error: REPORT_ENABLED must be 0 or 1 (got '${REPORT_ENABLED}')." >&2
+		   return "$EXIT_CONFIG_ERROR" ;;
+	esac
+	if [ -n "${REPORT_TOP_N:-}" ] && ! [ "${REPORT_TOP_N}" -gt 0 ] 2>/dev/null; then  # integer > 0 check
+		echo "error: REPORT_TOP_N must be a positive integer (got '${REPORT_TOP_N}')." >&2
+		return "$EXIT_CONFIG_ERROR"
 	fi
 }
 
@@ -2008,27 +2018,6 @@ _pressure_aggregate_all() {
 		}' "$events_file" | sort -rn
 }
 
-# record_and_score host hosts_parsed install_path half_life now mod weight [count]
-# Replacement for count_failures() using pressure scoring:
-#   1. Count host occurrences in hosts_parsed (grep -cxF), or use pre-computed count
-#   2. Append that many weighted events to pressure.dat
-#   3. Compute per-service pressure (decayed sum)
-#   4. Return pressure * 1000 as integer
-# When count (arg 8) is provided, skips the O(n) grep scan — check() pre-computes
-# counts via uniq -c to avoid O(n^2) repeated grep passes over HOSTS_PARSED.
-record_and_score() {
-	local host="$1" hosts_parsed="$2" install_path="$3"
-	local half_life="$4" now="$5" mod="$6" weight="${7:-1}"
-	local count="${8:-}"
-	if [ -z "$count" ]; then
-		count=$(echo "$hosts_parsed" | grep -cxF "$host")
-	fi
-	if [ "$count" -gt 0 ]; then
-		state_pressure_append "$install_path" "$now" "$host" "$mod" "$count" "$weight"
-	fi
-	pressure_compute "$install_path" "$host" "$half_life" "$now" "$mod"
-}
-
 # --- Country multiplier functions ---
 
 # ip_to_country ip db_file — look up 2-letter country code for an IP address
@@ -2134,33 +2123,6 @@ country_weight() {
 	/^$/ { next }
 	$1 == cc { print $2; found=1; exit }
 	END { if (!found) print 10 }' "$weights_file"
-}
-
-# pressure_effective_weight rule_weight host install_path — apply country multiplier
-# Auto-enabled when pressure-country.conf exists with entries; otherwise passthrough.
-# Returns: rule_weight * country_mult / 10 (integer math, minimum 1).
-pressure_effective_weight() {
-	local rule_weight="$1" host="$2" install_path="$3"
-	local db_file="$install_path/ipcountry.dat"
-	local weights_file="$install_path/pressure-country.conf"
-	if [ ! -f "$db_file" ] || [ ! -f "$weights_file" ]; then
-		echo "$rule_weight"
-		return 0
-	fi
-	local cc
-	cc=$(ip_to_country "$host" "$db_file")
-	if [ -z "$cc" ]; then
-		echo "$rule_weight"
-		return 0
-	fi
-	local mult
-	mult=$(country_weight "$cc" "$weights_file")
-	# integer math: weight * mult / 10, minimum 1
-	local eff=$(( (rule_weight * mult + 5) / 10 ))
-	if [ "$eff" -lt 1 ]; then
-		eff=1
-	fi
-	echo "$eff"
 }
 
 # --- Batch pre-computation functions for check() performance ---
@@ -3052,6 +3014,9 @@ send_alerts() {
 
 	# --- Messaging delivery (per-batch, not per-recipient) ---
 	_bfd_dispatch_messaging "$alerts_file" "$subject" "$loglines" "$tpl_dir"
+
+	# Clean up CIDR sidecar files after all rendering passes complete (F-A04)
+	command rm -f "${INSTALL_PATH}/tmp/.cidr_detail_"* 2>/dev/null  # alert sidecars consumed
 }
 
 # --- Phase 18: CLI Evolution functions ---
@@ -4048,7 +4013,27 @@ test_alert_messaging() {
 	subject="[TEST] BFD Alert ($(hostname))"
 	local tpl_dir="${ALERT_TEMPLATE_DIR:-$INSTALL_PATH/alert}"
 
+	# Save and disable non-target channels for isolated test dispatch (F-A07)
+	local _saved_slack="${SLACK_ALERTS:-0}" _saved_tg="${TELEGRAM_ALERTS:-0}" _saved_dc="${DISCORD_ALERTS:-0}"
+	case "$channel" in
+		slack)    TELEGRAM_ALERTS=0; DISCORD_ALERTS=0 ;;
+		telegram) SLACK_ALERTS=0; DISCORD_ALERTS=0 ;;
+		discord)  SLACK_ALERTS=0; TELEGRAM_ALERTS=0 ;;
+	esac
+	_bfd_alert_init
+
+	local _dispatch_rc=0
 	if _bfd_dispatch_messaging "$alerts_file" "$subject" "${EMAIL_LOGLINES:-5}" "$tpl_dir"; then
+		_dispatch_rc=0
+	else
+		_dispatch_rc=1
+	fi
+
+	# Restore channel states
+	SLACK_ALERTS="$_saved_slack"; TELEGRAM_ALERTS="$_saved_tg"; DISCORD_ALERTS="$_saved_dc"
+	_bfd_alert_init
+
+	if [ "$_dispatch_rc" -eq 0 ]; then
 		echo "Test $channel alert sent successfully."
 		command rm -f "$alerts_file"
 		return 0
@@ -4172,6 +4157,7 @@ _events_ip_awk() {
 		gp += decay
 		sp[mod] += decay
 		cnt[mod]++
+		found = 1
 		if (w > wt[mod]) wt[mod] = w
 		if (!(mod in sfirst) || ts < sfirst[mod]) sfirst[mod] = ts
 		if (ts > slast[mod]) slast[mod] = ts
@@ -4179,7 +4165,7 @@ _events_ip_awk() {
 		if (ts > glast) glast = ts
 	}
 	END {
-		if (length(cnt) == 0) exit
+		if (!found) exit
 		for (mod in cnt) {
 			printf "S|%s|%d|%d|%d\n", mod, (wt[mod] > 0 ? wt[mod] : 1), cnt[mod], int(sp[mod] * 1000)
 		}
@@ -4193,11 +4179,7 @@ _events_ip_awk() {
 # Returns 1 if the rule file does not exist or LOG_FILE is empty.
 _events_rule_log_file() {
 	local rule="$1"
-	local rule_file="${RULES_PATH:-}/rules/$rule"
-	# if RULES_PATH already includes the project root, try both forms
-	if [ ! -f "$rule_file" ]; then
-		rule_file="${RULES_PATH:-}/$rule"
-	fi
+	local rule_file="${RULES_PATH:-}/$rule"
 	[ ! -f "$rule_file" ] && return 1
 	(
 		# no-op the tlog function so sourcing the rule doesn't run detection
@@ -4215,10 +4197,7 @@ _events_rule_log_file() {
 # Returns 1 if the rule file does not exist or no patterns are found.
 _events_rule_patterns() {
 	local rule="$1"
-	local rule_file="${RULES_PATH:-}/rules/$rule"
-	if [ ! -f "$rule_file" ]; then
-		rule_file="${RULES_PATH:-}/$rule"
-	fi
+	local rule_file="${RULES_PATH:-}/$rule"
 	[ ! -f "$rule_file" ] && return 1
 	local patterns
 	patterns=$(

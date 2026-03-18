@@ -178,3 +178,28 @@ RULE
 	# per-service pressure line uses per-rule trip
 	assert_output --regexp "sshd:.*\/8"
 }
+
+# --- _events_ip_awk (F-A03: mawk-compatible) ---
+
+@test "_events_ip_awk: returns per-service and summary output for populated events (F-A03)" {
+	local now
+	now=$(date +"%s")
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	state_pressure_append "$INSTALL_PATH" "$((now - 10))" "192.0.2.50" "sshd" "3" "2"
+	state_pressure_append "$INSTALL_PATH" "$((now - 5))" "192.0.2.50" "dovecot" "1" "1"
+	run _events_ip_awk "$events_file" "192.0.2.50" "$now" "300"
+	assert_success
+	# should have S| lines for both services and an H| summary
+	assert_output --partial "S|"
+	assert_output --partial "H|"
+}
+
+@test "_events_ip_awk: returns empty output for unknown IP (F-A03)" {
+	local now
+	now=$(date +"%s")
+	local events_file="$INSTALL_PATH/tmp/pressure.dat"
+	state_pressure_append "$INSTALL_PATH" "$((now - 10))" "192.0.2.50" "sshd" "1" "1"
+	run _events_ip_awk "$events_file" "198.51.100.99" "$now" "300"
+	assert_success
+	assert_output ""
+}

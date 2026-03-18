@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# Test suite for timestamped event tracking and record_and_score()
+# Test suite for timestamped event tracking
 #
 
 load '/usr/local/lib/bats/bats-support/load'

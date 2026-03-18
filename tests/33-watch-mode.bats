@@ -263,6 +263,16 @@ INTEOF
 	[ "${#_TLOG_JOURNAL_NAMES[@]}" -ge 23 ]
 }
 
+@test "reload_watch: config_init 1 clears LOG_IDLE_SUPPRESS (F-A06)" {
+	# set canary value before reload
+	LOG_IDLE_SUPPRESS="1"
+	# remove from conf.bfd so it won't be re-set by sourcing
+	sed -i '/LOG_IDLE_SUPPRESS/d' "$CNF"
+	reload_watch
+	# canary should be gone — config_init(1) unset block cleared it
+	[ -z "${LOG_IDLE_SUPPRESS:-}" ]
+}
+
 @test "reload_watch: config validation failure returns non-zero (F-014)" {
 	# set PRESSURE_TRIP to invalid value
 	sed -i 's/PRESSURE_TRIP="20"/PRESSURE_TRIP="abc"/' "$CNF"

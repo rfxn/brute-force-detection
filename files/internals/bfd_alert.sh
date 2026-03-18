@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Brute Force Detection 2.0.1 - BFD Alert Functions
+# Brute Force Detection 2.0.2 - BFD Alert Functions
 ###
 # Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
@@ -374,6 +374,9 @@ _alert_set_entry_vars() {
 	fi
 	export BAN_TYPE="$ban_type"
 	export BAN_DURATION_DETAIL="$ban_duration_detail"
+	# Telegram MarkdownV2-escaped variant — parentheses in "(1h 30m), expires ..." are special chars
+	export BAN_DURATION_DETAIL_TG
+	BAN_DURATION_DETAIL_TG=$(_alert_telegram_escape "$ban_duration_detail")
 	export BAN_TYPE_COLOR
 	BAN_TYPE_COLOR=$(_alert_ban_type_color "$action" "$expiry")
 
@@ -575,8 +578,8 @@ ${indented_logs}"
 			export SUBNET_HOSTS_SECTION_TG
 			SUBNET_HOSTS_SECTION_TG=$(_alert_telegram_escape "$_hosts_msg")
 
-			# clean up sidecar after reading
-			command rm -f "$_sidecar"
+			# sidecar cleanup deferred to send_alerts() — multiple rendering
+			# passes (text, HTML, messaging) need the file intact (F-A04)
 		else
 			# sidecar missing (race, cleanup) — static fallback
 			SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (distributed subnet ban)"
@@ -848,13 +851,13 @@ _bfd_dispatch_messaging() {
 		return 0
 	fi
 
-	# Set global template variables (hostname, version, timestamp, etc.)
-	_alert_set_global_vars
-
 	# Build per-entry blocks for each enabled channel
 	local slack_blocks="" telegram_blocks="" discord_fields=""
 	local entry_total
 	entry_total=$(wc -l < "$alerts_file")
+
+	# Set global template variables with correct count (F-A02: must be after entry_total)
+	_alert_set_global_vars "$entry_total"
 	local entry_num=0
 	local pipe_line
 	while IFS= read -r pipe_line; do
@@ -895,13 +898,23 @@ _bfd_dispatch_messaging() {
 	# Compute summary for outer template
 	_alert_compute_summary "$alerts_file"
 
-	# Export accumulated entry blocks as template variables
-	export ENTRY_BLOCKS="${slack_blocks}${telegram_blocks}"
-	export ENTRY_FIELDS="$discord_fields"
-
-	# Dispatch to all enabled channels (excluding email)
-	alert_dispatch "$tpl_dir" "$subject" "slack,telegram,discord"
-	local rc=$?
+	# Dispatch per-channel to prevent cross-channel block contamination (F-A01)
+	local rc=0
+	if alert_channel_enabled "slack"; then
+		export ENTRY_BLOCKS="$slack_blocks"
+		export ENTRY_FIELDS=""
+		alert_dispatch "$tpl_dir" "$subject" "slack" || rc=$?
+	fi
+	if alert_channel_enabled "telegram"; then
+		export ENTRY_BLOCKS="$telegram_blocks"
+		export ENTRY_FIELDS=""
+		alert_dispatch "$tpl_dir" "$subject" "telegram" || rc=$?
+	fi
+	if alert_channel_enabled "discord"; then
+		export ENTRY_BLOCKS=""
+		export ENTRY_FIELDS="$discord_fields"
+		alert_dispatch "$tpl_dir" "$subject" "discord" || rc=$?
+	fi
 
 	# Clean up exported entry variables
 	unset ENTRY_BLOCKS ENTRY_FIELDS

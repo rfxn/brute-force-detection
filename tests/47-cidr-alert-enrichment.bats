@@ -147,14 +147,15 @@ _create_sidecar() {
 	[ "$SUBNET_IP_COUNT" = "6" ]
 }
 
-@test "CIDR alert: sidecar cleaned up after reading" {
+@test "CIDR alert: sidecar preserved after _alert_set_entry_vars (cleaned by send_alerts)" {
 	_create_sidecar "192.0.2.0/24" 2 10 10000 \
 		"192.0.2.1 sshd 6 6000" \
 		"192.0.2.2 sshd 4 4000"
 
 	local line="192.0.2.0/24|sshd|all|10000|0|ban|0|(multiple)|root|5|300|1|10"
 	_alert_set_entry_vars "$line" 1 1
-	[ ! -f "$INSTALL_PATH/tmp/.cidr_detail_192.0.2.0_24" ]
+	# sidecar must persist — cleanup is now in send_alerts, not _alert_set_entry_vars (F-A04)
+	[ -f "$INSTALL_PATH/tmp/.cidr_detail_192.0.2.0_24" ]
 }
 
 # ============================================================
@@ -207,8 +208,8 @@ _create_sidecar() {
 	[[ "$SUBNET_HOSTS_SECTION" == *"10.0.0.1"* ]]
 	# Telegram variant also populated
 	[[ "$SUBNET_HOSTS_SECTION_TG" == *"10\.0\.0\.1"* ]]
-	# sidecar cleaned up
-	[ ! -f "$INSTALL_PATH/tmp/.cidr_detail_10.0.0.0_24" ]
+	# sidecar preserved (cleanup deferred to send_alerts, F-A04)
+	[ -f "$INSTALL_PATH/tmp/.cidr_detail_10.0.0.0_24" ]
 
 	# TOP_N=3 with 4 IPs — overflow present
 	# (OVERFLOW is in the text but was consumed when sidecar was read)

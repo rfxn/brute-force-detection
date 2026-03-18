@@ -1,3 +1,36 @@
+2.0.2:
+[Fix] Per-channel ENTRY_BLOCKS dispatch in _bfd_dispatch_messaging prevents
+      Slack JSON and Telegram MarkdownV2 from cross-contaminating when both
+      channels are enabled (F-A01)
+[Fix] Pass entry_total to _alert_set_global_vars in messaging path so
+      ALERT_COUNT reflects actual ban count instead of always "0" (F-A02)
+[Fix] Defer CIDR sidecar cleanup from _alert_set_entry_vars to send_alerts
+      so all rendering passes (text, HTML, messaging) read enriched subnet
+      detail instead of falling through to static fallback (F-A04)
+[Fix] Report text table top-IPs rows now emit all 7 columns (FIRST/LAST
+      timestamps were missing from data rows despite being in the header) (F-A09)
+[Fix] Report Slack/Discord templates use JSON-escaped brief vars to prevent
+      literal newlines from breaking JSON string values (F-A05)
+[Fix] Escape BAN_DURATION_DETAIL for Telegram MarkdownV2 — parentheses in
+      temporary ban duration caused malformed messages (F-A10)
+[Fix] Escape REPORT_TREND_LABEL for Telegram MarkdownV2 — parentheses in
+      trend comparison caused malformed report messages (F-A11)
+[Fix] Add 8 missing config vars (REPORT_*, LOG_IDLE_SUPPRESS, SUBNET_ALERT_TOP_N)
+      to config_init(1) unset block so SIGHUP reload gets clean re-read (F-A06)
+[New] Add REPORT_ENABLED and REPORT_TOP_N validation in validate_config() to
+      reject non-boolean and non-integer values at config load time (F-A08)
+[Fix] Replace mawk-incompatible length(array) with portable flag in
+      _events_ip_awk AWK block (F-A03)
+[Fix] test_alert_messaging now isolates the target channel by saving and
+      disabling non-target channels before dispatch (F-A07)
+[Fix] cron.daily version header updated to 2.0.2 (F-A12)
+[Fix] Remove dead first-attempt rule path in _events_rule_log_file and
+      _events_rule_patterns — RULES_PATH already includes subdirectory (F-A13)
+[Change] Remove dead code: _apool_service_summary family (4 functions),
+      record_and_score(), pressure_effective_weight(), dead TRIG fallback,
+      unused _cc_line declaration, dead trip initializations, dead
+      LOG_IDLE_SUPPRESS default in importconf; remove 22 associated tests
+
 2.0.1:
 
   -- New Features --

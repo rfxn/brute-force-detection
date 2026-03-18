@@ -1,5 +1,5 @@
 #!/bin/bash
-# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+# Brute Force Detection 2.0.2 <bfd@rfxn.com>
 ###
 # Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
@@ -24,7 +24,7 @@ cd "$(dirname "$0")"
 
 INSPATH="${INSTALL_PATH:-/usr/local/bfd}"
 BINPATH="${BIN_PATH:-/usr/local/sbin/bfd}"
-VER="2.0.1"
+VER="2.0.2"
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "error: install.sh must be run as root."
