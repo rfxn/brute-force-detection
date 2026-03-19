@@ -1,4 +1,7 @@
 2.0.2:
+[Change] Move send_alerts() (~110 lines) from bfd.lib.sh to bfd_alert.sh where
+      all its callees already reside (alert rendering, email delivery, messaging
+      dispatch)
 [Change] Move 18 diagnostic functions (health_check, _hc_*, detect_run_mode,
       show_status, show_service_status, show_config, list_rules, show_rule,
       test_rule, test_pattern, test_alert, test_alert_email,
