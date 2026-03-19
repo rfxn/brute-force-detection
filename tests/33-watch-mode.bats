@@ -319,6 +319,8 @@ _start_watch() {
 	chmod 640 "$inst/internals/bfd_validate.sh"
 	cp "$PROJECT_ROOT/files/internals/bfd_fw.sh" "$inst/internals/bfd_fw.sh"
 	chmod 640 "$inst/internals/bfd_fw.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_state.sh" "$inst/internals/bfd_state.sh"
+	chmod 640 "$inst/internals/bfd_state.sh"
 	touch "$inst/exclude.files"
 	mkdir -p "$inst/alert"
 	cp "$PROJECT_ROOT/files/alert/"*.tpl "$inst/alert/"
