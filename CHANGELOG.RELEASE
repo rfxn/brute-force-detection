@@ -1,4 +1,7 @@
 2.0.2:
+[Change] Move 20 pressure model and rule infrastructure functions (pressure_compute,
+      ip_to_country, rule var management, validate_rule, batch helpers) to new
+      bfd_pressure.sh sub-library
 [Change] Move 24 state I/O and ban execution functions (state_*, execute_ban,
       record_ban, manual_ban/unban, list/flush_bans) to new bfd_state.sh sub-library
 [Change] Move ~40 firewall backend functions (detect_firewall, 8 backends,
