@@ -1,4 +1,7 @@
 2.0.2:
+[Change] Move 6 detection pipeline functions (extract_hosts, filter_host,
+      _build_ignore_cache, _rule_tlog, count_subnet_attackers, check_distributed)
+      to new bfd_detect.sh sub-library
 [Change] Move 20 pressure model and rule infrastructure functions (pressure_compute,
       ip_to_country, rule var management, validate_rule, batch helpers) to new
       bfd_pressure.sh sub-library
