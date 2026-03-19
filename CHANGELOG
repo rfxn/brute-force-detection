@@ -1,4 +1,11 @@
 2.0.2:
+[Change] Move 11 orchestration functions (config_init, pre, get_state, check,
+      bfd_run, watch, reload_watch, cleanup_watch, _cleanup_common, cleanup,
+      _bfd_journal_register_all) to new bfd_core.sh sub-library; slim bfd to
+      ~440-line CLI wrapper; bfd.lib.sh reduced to ~220-line sourcing hub
+[Change] Rename run() to bfd_run() to avoid shadowing BATS test runner
+[Change] Update ci.yml bash -n and shellcheck lint targets to include all
+      bfd_*.sh sub-library files
 [Change] Move send_alerts() (~110 lines) from bfd.lib.sh to bfd_alert.sh where
       all its callees already reside (alert rendering, email delivery, messaging
       dispatch)
