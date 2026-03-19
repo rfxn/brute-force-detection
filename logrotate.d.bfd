@@ -1,4 +1,5 @@
-/var/log/bfd/bfd.log {
+/var/log/bfd/bfd.log
+/var/log/bfd/audit.log {
     weekly
     rotate 4
     compress

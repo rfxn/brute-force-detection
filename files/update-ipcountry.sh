@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+# Brute Force Detection 2.0.2 <bfd@rfxn.com>
 # Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
 # This program may be freely redistributed under the terms of the GNU GPL
@@ -30,6 +30,17 @@ fi
 
 # Export download timeout for geoip_lib
 export GEOIP_DL_TIMEOUT="$DL_TIMEOUT"
+
+# Clean stale IPv6 build directories from prior interrupted runs.
+# geoip_build_ip6db creates tmpdir="${OUTPUT6}.build6-XXXXXX"; if the
+# script is interrupted (SIGKILL, OOM), the directory is orphaned.
+for _stale in "${OUTPUT6}".build6-*; do
+	[ -d "$_stale" ] || continue
+	_stale_age=$(( $(date +%s) - $(stat -c %Y "$_stale" 2>/dev/null || echo 0) ))
+	if [ "$_stale_age" -gt 3600 ]; then
+		command rm -rf "$_stale"
+	fi
+done
 
 # ---------------------------------------------------------------------------
 # IPv4: use geoip_build_ipdb (bulk tarball + per-country fallback)

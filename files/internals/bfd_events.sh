@@ -60,18 +60,22 @@ _search_ip_data() {
 		fi
 	fi
 
-	# Ban history (bans.history) — single AWK for both 24h and total
+	# Ban history (bans.history + rotated archives) — single AWK pass
 	local hist_24h=0 hist_total=0
-	local history_file="$install_path/tmp/bans.history"
 	local cutoff_24h=$((now - 86400))
-	if [ -f "$history_file" ] && [ -s "$history_file" ]; then
+	local _hist_files=()
+	local _hf
+	for _hf in "$install_path/tmp"/bans.history*; do
+		[ -f "$_hf" ] && [ -s "$_hf" ] && _hist_files+=("$_hf")
+	done
+	if [ ${#_hist_files[@]} -gt 0 ]; then
 		local hist_raw
 		hist_raw=$(awk -v ip="$ip" -v cutoff="$cutoff_24h" '
 			$3 == ip && ($5 == "ban" || $5 == "escalate") {
 				total++
 				if ($1+0 >= cutoff) recent++
 			}
-			END { print recent+0 "|" total+0 }' "$history_file")
+			END { print recent+0 "|" total+0 }' "${_hist_files[@]}")
 		IFS='|' read -r hist_24h hist_total <<< "$hist_raw"
 	fi
 
@@ -1027,7 +1031,6 @@ search_ip_csv() {
 _apool_ban_status() {
 	local aip="$1"
 	local bans_active="$INSTALL_PATH/tmp/bans.active"
-	local bans_history="$INSTALL_PATH/tmp/bans.history"
 	if awk -v ip="$aip" '$3 == ip {found=1; exit} END {exit !found}' "$bans_active" 2>/dev/null; then
 		local ban_expiry
 		ban_expiry=$(awk -v ip="$aip" '$3 == ip {print $2; exit}' "$bans_active")
@@ -1042,24 +1045,30 @@ _apool_ban_status() {
 			fi
 			echo "BANNED(${remain}m)"
 		fi
-	elif [ -f "$bans_history" ]; then
-		local hist_count
-		hist_count=$(awk -v ip="$aip" '$3 == ip && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
-			"$bans_history")
-		if [ "$hist_count" -gt 0 ]; then
-			echo "prev:$hist_count"
+	else
+		local _hist_files=()
+		local _hf
+		for _hf in "$INSTALL_PATH/tmp"/bans.history*; do
+			[ -f "$_hf" ] && [ -s "$_hf" ] && _hist_files+=("$_hf")
+		done
+		if [ ${#_hist_files[@]} -gt 0 ]; then
+			local hist_count
+			hist_count=$(awk -v ip="$aip" '$3 == ip && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
+				"${_hist_files[@]}")
+			if [ "$hist_count" -gt 0 ]; then
+				echo "prev:$hist_count"
+			fi
 		fi
 	fi
 }
 
 # _batch_ban_status_init install_path — pre-compute ban status for all IPs into a lookup file.
 # Creates _BAN_STATUS_FILE (caller must clean up) with lines: ip|status
-# One awk pass over bans.active + one over bans.history instead of 2-3 awk
-# spawns per IP. Use with _batch_ban_status_lookup in loops.
+# One awk pass over bans.active + one over bans.history (incl. rotated archives)
+# instead of 2-3 awk spawns per IP. Use with _batch_ban_status_lookup in loops.
 _batch_ban_status_init() {
 	local install_path="$1"
 	local bans_active="$install_path/tmp/bans.active"
-	local bans_history="$install_path/tmp/bans.history"
 	_BAN_STATUS_FILE=$(mktemp "$install_path/tmp/.banstat.XXXXXX")
 	local now
 	now=$(date +"%s")
@@ -1076,11 +1085,16 @@ _batch_ban_status_init() {
 			}
 		}' "$bans_active" >> "$_BAN_STATUS_FILE"
 	fi
-	# History: count prior bans for IPs not currently active
-	if [ -f "$bans_history" ] && [ -s "$bans_history" ]; then
+	# History: count prior bans from current + rotated archives
+	local _hist_files=()
+	local _hf
+	for _hf in "$install_path/tmp"/bans.history*; do
+		[ -f "$_hf" ] && [ -s "$_hf" ] && _hist_files+=("$_hf")
+	done
+	if [ ${#_hist_files[@]} -gt 0 ]; then
 		awk '($5 == "ban" || $5 == "escalate") { hist[$3]++ }
 		END { for (ip in hist) print ip "|prev:" hist[ip] }' \
-			"$bans_history" >> "$_BAN_STATUS_FILE"
+			"${_hist_files[@]}" >> "$_BAN_STATUS_FILE"
 	fi
 }
 

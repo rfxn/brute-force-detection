@@ -110,12 +110,12 @@ teardown() {
 	assert_failure
 }
 
-@test "_check_file_safety: sets _CSAF_UID and _CSAF_PERMS" {
+@test "_check_file_safety: sets _CSAF_UID and _CSAF_PERMS (zero-padded 4 digits)" {
 	echo 'test' > "$TEST_TMPDIR/check_vars.conf"
 	chmod 640 "$TEST_TMPDIR/check_vars.conf"
 	_check_file_safety "$TEST_TMPDIR/check_vars.conf"
 	[ "$_CSAF_UID" = "0" ]
-	[ "$_CSAF_PERMS" = "640" ]
+	[ "$_CSAF_PERMS" = "0640" ]
 }
 
 @test "_check_file_safety: group-writable 660 returns failure" {
@@ -129,6 +129,27 @@ teardown() {
 	echo 'test' > "$TEST_TMPDIR/gw670.conf"
 	chmod 670 "$TEST_TMPDIR/gw670.conf"
 	run _check_file_safety "$TEST_TMPDIR/gw670.conf"
+	assert_failure
+}
+
+@test "_check_file_safety: setuid 4750 accepted (group=5, world=0 not writable)" {
+	echo 'test' > "$TEST_TMPDIR/suid4750.conf"
+	chmod 4750 "$TEST_TMPDIR/suid4750.conf"
+	run _check_file_safety "$TEST_TMPDIR/suid4750.conf"
+	assert_success
+}
+
+@test "_check_file_safety: setgid 2770 rejected (group=7, world=0 writable)" {
+	echo 'test' > "$TEST_TMPDIR/sgid2770.conf"
+	chmod 2770 "$TEST_TMPDIR/sgid2770.conf"
+	run _check_file_safety "$TEST_TMPDIR/sgid2770.conf"
+	assert_failure
+}
+
+@test "_check_file_safety: sticky+world-writable 1777 rejected" {
+	echo 'test' > "$TEST_TMPDIR/sticky1777.conf"
+	chmod 1777 "$TEST_TMPDIR/sticky1777.conf"
+	run _check_file_safety "$TEST_TMPDIR/sticky1777.conf"
 	assert_failure
 }
 

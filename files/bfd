@@ -32,9 +32,9 @@ UTIME=$(date +"%s")
 
 # inline: _check_file_safety unavailable before bfd.lib.sh is sourced
 _lib_owner=$(stat -L -c '%u' "$INSTALL_PATH/internals/bfd.lib.sh")
-_lib_perms=$(stat -L -c '%a' "$INSTALL_PATH/internals/bfd.lib.sh")
-_lib_group="${_lib_perms:1:1}"
-_lib_world="${_lib_perms: -1}"
+_lib_perms=$(stat -L -c '%04a' "$INSTALL_PATH/internals/bfd.lib.sh")
+_lib_group="${_lib_perms:2:1}"
+_lib_world="${_lib_perms:3:1}"
 if [ "$_lib_owner" != "0" ] || [ "$((_lib_group & 2))" -ne 0 ] || [ "$((_lib_world & 2))" -ne 0 ]; then
 	echo "bfd.lib.sh has unsafe ownership (uid=$_lib_owner) or group/world-writable permissions ($_lib_perms), aborting."
 	exit 1

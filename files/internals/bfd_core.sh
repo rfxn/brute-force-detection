@@ -383,7 +383,7 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 					exit "$EXIT_LOCK_ERROR"
 				}
 			else
-				elog warn "locked subsystem, already running ? ($LOCK_FILE is $DIFF seconds old), aborting."
+				eout "locked subsystem, already running (pid=$_lock_pid, $DIFF seconds old), skipping." "l"
 				exit "$EXIT_LOCK_ERROR"
 			fi
 		fi
@@ -394,6 +394,7 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 fi
 echo "$$" > "$LOCK_FILE.lk/pid"
 echo "$UTIME" > "$LOCK_FILE"
+chmod 640 "$LOCK_FILE" 2>/dev/null || true  # non-fatal: content is an epoch timestamp
 }
 
 check() {

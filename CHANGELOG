@@ -1,67 +1,43 @@
 2.0.2:
-[Change] Move 11 orchestration functions (config_init, pre, get_state, check,
-      bfd_run, watch, reload_watch, cleanup_watch, _cleanup_common, cleanup,
-      _bfd_journal_register_all) to new bfd_core.sh sub-library; slim bfd to
-      ~440-line CLI wrapper; bfd.lib.sh reduced to ~220-line sourcing hub
-[Change] Rename run() to bfd_run() to avoid shadowing BATS test runner
-[Change] Update ci.yml bash -n and shellcheck lint targets to include all
-      bfd_*.sh sub-library files
-[Change] Move send_alerts() (~110 lines) from bfd.lib.sh to bfd_alert.sh where
-      all its callees already reside (alert rendering, email delivery, messaging
-      dispatch)
-[Change] Move 18 diagnostic functions (health_check, _hc_*, detect_run_mode,
-      show_status, show_service_status, show_config, list_rules, show_rule,
-      test_rule, test_pattern, test_alert, test_alert_email,
-      test_alert_messaging, format_duration) to new bfd_diag.sh sub-library
-[Change] Merge event query functions (from bfd.lib.sh) and attack pool reporting
-      functions (from bfd) into new bfd_events.sh sub-library (~37 functions)
-[Change] Replace per-IP _apool_ban_status with batch pattern in _apool_report,
-      _apool_report_json, _apool_report_csv — eliminates ~50-75 AWK spawns per
-      invocation
-[Change] Move 6 detection pipeline functions (extract_hosts, filter_host,
-      _build_ignore_cache, _rule_tlog, count_subnet_attackers, check_distributed)
-      to new bfd_detect.sh sub-library
-[Change] Move 20 pressure model and rule infrastructure functions (pressure_compute,
-      ip_to_country, rule var management, validate_rule, batch helpers) to new
-      bfd_pressure.sh sub-library
-[Change] Move 24 state I/O and ban execution functions (state_*, execute_ban,
-      record_ban, manual_ban/unban, list/flush_bans) to new bfd_state.sh sub-library
-[Change] Move ~40 firewall backend functions (detect_firewall, 8 backends,
-      dispatch layer, retry logic) to new bfd_fw.sh sub-library
-[Change] Move 14 validation functions (validate_ip/ip6/cidr, sanitize_mod/ports,
-      validate_config, detect_log_paths, etc.) to new bfd_validate.sh sub-library
-[Change] Remove unset _internals_dir to support expanded source chain
-[Fix] Per-channel ENTRY_BLOCKS dispatch in _bfd_dispatch_messaging prevents
-      Slack JSON and Telegram MarkdownV2 from cross-contaminating when both
-      channels are enabled (F-A01)
-[Fix] Pass entry_total to _alert_set_global_vars in messaging path so
-      ALERT_COUNT reflects actual ban count instead of always "0" (F-A02)
-[Fix] Defer CIDR sidecar cleanup from _alert_set_entry_vars to send_alerts
-      so all rendering passes (text, HTML, messaging) read enriched subnet
-      detail instead of falling through to static fallback (F-A04)
-[Fix] Report text table top-IPs rows now emit all 7 columns (FIRST/LAST
-      timestamps were missing from data rows despite being in the header) (F-A09)
-[Fix] Report Slack/Discord templates use JSON-escaped brief vars to prevent
-      literal newlines from breaking JSON string values (F-A05)
-[Fix] Escape BAN_DURATION_DETAIL for Telegram MarkdownV2 — parentheses in
-      temporary ban duration caused malformed messages (F-A10)
-[Fix] Escape REPORT_TREND_LABEL for Telegram MarkdownV2 — parentheses in
-      trend comparison caused malformed report messages (F-A11)
-[Fix] Add 8 missing config vars (REPORT_*, LOG_IDLE_SUPPRESS, SUBNET_ALERT_TOP_N)
-      to config_init(1) unset block so SIGHUP reload gets clean re-read (F-A06)
-[New] Add REPORT_ENABLED and REPORT_TOP_N validation in validate_config() to
-      reject non-boolean and non-integer values at config load time (F-A08)
-[Fix] Replace mawk-incompatible length(array) with portable flag in
-      _events_ip_awk AWK block (F-A03)
-[Fix] test_alert_messaging now isolates the target channel by saving and
-      disabling non-target channels before dispatch (F-A07)
-[Fix] cron.daily version header updated to 2.0.2 (F-A12)
-[Fix] Remove dead first-attempt rule path in _events_rule_log_file and
-      _events_rule_patterns — RULES_PATH already includes subdirectory (F-A13)
-[Change] Remove dead code: _apool_service_summary family (4 functions),
-      record_and_score(), pressure_effective_weight(), dead TRIG fallback,
-      unused _cc_line declaration, dead trip initializations, dead
-      LOG_IDLE_SUPPRESS default in importconf; remove 22 associated tests
+[Change] Decompose bfd.lib.sh (~4,900 lines) into 8 functionally-organized
+      sub-libraries (bfd_validate.sh, bfd_fw.sh, bfd_state.sh, bfd_pressure.sh,
+      bfd_detect.sh, bfd_events.sh, bfd_diag.sh, bfd_core.sh); bfd slimmed to
+      ~440-line CLI wrapper; send_alerts() moved to bfd_alert.sh
+[Change] Replace per-IP ban status lookup with batch pattern in attack pool
+      reporting — eliminates ~50-75 AWK spawns per invocation
+[Change] Remove dead code: 6 unused functions, dead variables, stale rule
+      path fallbacks, and 22 associated tests
+[New] Add REPORT_ENABLED and REPORT_TOP_N validation in validate_config()
+      to reject non-boolean and non-integer values at config load time
+[Fix] Per-channel alert dispatch prevents Slack JSON and Telegram MarkdownV2
+      from cross-contaminating when both channels are enabled
+[Fix] ALERT_COUNT in messaging alerts reflects actual ban count instead of
+      always "0"
+[Fix] CIDR sidecar enrichment data preserved across all rendering passes
+      (text, HTML, messaging) instead of falling through to static fallback
+[Fix] Report text table top-IPs rows emit all 7 columns; Slack/Discord
+      templates use JSON-escaped brief vars to prevent broken JSON
+[Fix] Escape BAN_DURATION_DETAIL and REPORT_TREND_LABEL for Telegram
+      MarkdownV2 — parentheses caused malformed messages
+[Fix] Add 8 missing config vars (REPORT_*, LOG_IDLE_SUPPRESS,
+      SUBNET_ALERT_TOP_N) to SIGHUP reload unset block for clean re-read
+[Fix] Replace mawk-incompatible length(array) with portable flag in events
+      AWK block
+[Fix] cron.daily version header updated to 2.0.2
+[Fix] Temp file creation in extract_hosts and _batch_ip_to_country uses
+      $INSTALL_PATH/tmp (root-owned 750) instead of /tmp fallback
+[Fix] _check_file_safety permission parsing uses zero-padded stat output
+      (%04a) to correctly handle setuid/setgid/sticky 4-digit permissions
+[Fix] IP report and list views now search rotated bans.history archives —
+      previously showed "Ban history: none" for IPs banned >1 day ago
+[Fix] show_status "Top services" trailing comma when fewer than 3 services
+[Fix] Lock contention message downgraded to log-file-only when holder is
+      alive — eliminates syslog noise from cron during watch mode
+[Fix] Stale IPv6 GeoIP build directories cleaned up at update-ipcountry.sh
+      startup (orphaned by prior interrupted builds)
+[New] audit.log added to logrotate configuration (was growing unbounded)
+[New] install.sh creates /usr/local/sbin/tlog symlink for PATH accessibility
+[Change] lock.utime created with mode 640 (was inheriting umask 644)
 
 2.0.1:
 

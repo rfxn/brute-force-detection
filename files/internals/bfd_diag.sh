@@ -647,7 +647,7 @@ show_status() {
 		top_svcs=$(awk -v cutoff="$cutoff_24h" \
 			'$1+0 >= cutoff {s[$3]++} END {for(k in s) print s[k], k}' \
 			"$events_file" | sort -rn | head -3 \
-			| awk '{printf "%s (%s)", $2, $1; if(NR<3) printf ", "}')
+			| awk '{if(NR>1) printf ", "; printf "%s (%s)", $2, $1}')
 		if [ -n "$top_svcs" ]; then
 			echo "  Top services:   $top_svcs"
 		fi

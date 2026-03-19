@@ -184,22 +184,20 @@ SCRIPT
 # APF backend (mocked)
 # ============================================================
 
-@test "_fw_apf_ban: calls apf -d with host and comment" {
+@test "_fw_apf_ban+unban: ban calls apf -d, unban calls apf -u" {
 	local log="$MOCK_DIR/apf.log"
 	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/apf"
 	chmod +x "$MOCK_DIR/apf"
 	_FW_APF_BIN="$MOCK_DIR/apf"
+
+	# ban
 	run _fw_apf_ban "192.0.2.1" "sshd"
 	assert_success
 	run cat "$log"
 	assert_output "-d 192.0.2.1 {bfd.sshd}"
-}
 
-@test "_fw_apf_unban: calls apf -u with host" {
-	local log="$MOCK_DIR/apf.log"
-	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/apf"
-	chmod +x "$MOCK_DIR/apf"
-	_FW_APF_BIN="$MOCK_DIR/apf"
+	# reset log for unban
+	: > "$log"
 	run _fw_apf_unban "192.0.2.1"
 	assert_success
 	run cat "$log"
@@ -216,22 +214,20 @@ SCRIPT
 # CSF backend (mocked)
 # ============================================================
 
-@test "_fw_csf_ban: calls csf -d with host and comment" {
+@test "_fw_csf_ban+unban: ban calls csf -d, unban calls csf -dr" {
 	local log="$MOCK_DIR/csf.log"
 	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/csf"
 	chmod +x "$MOCK_DIR/csf"
 	_FW_CSF_BIN="$MOCK_DIR/csf"
+
+	# ban
 	run _fw_csf_ban "192.0.2.1" "sshd"
 	assert_success
 	run cat "$log"
 	assert_output "-d 192.0.2.1 bfd.sshd"
-}
 
-@test "_fw_csf_unban: calls csf -dr with host" {
-	local log="$MOCK_DIR/csf.log"
-	printf '#!/bin/bash\necho "$@" >> "%s"\n' "$log" > "$MOCK_DIR/csf"
-	chmod +x "$MOCK_DIR/csf"
-	_FW_CSF_BIN="$MOCK_DIR/csf"
+	# reset log for unban
+	: > "$log"
 	run _fw_csf_unban "192.0.2.1"
 	assert_success
 	run cat "$log"
@@ -248,24 +244,21 @@ SCRIPT
 # firewalld backend (mocked)
 # ============================================================
 
-@test "_fw_firewalld_ban: adds IPv4 rich rule" {
-	# shadow firewall-cmd with logging function
+@test "_fw_firewalld_ban: adds IPv4 and IPv6 rich rules" {
 	firewall-cmd() {
 		echo "firewall-cmd $*" >> "$TEST_TMPDIR/fwd.log"
 	}
 	export -f firewall-cmd
+
+	# IPv4
 	_fw_firewalld_ban "192.0.2.1"
 	run cat "$TEST_TMPDIR/fwd.log"
 	assert_output --partial "family=ipv4"
 	assert_output --partial "192.0.2.1"
 	assert_output --partial "drop"
-}
 
-@test "_fw_firewalld_ban: adds IPv6 rich rule" {
-	firewall-cmd() {
-		echo "firewall-cmd $*" >> "$TEST_TMPDIR/fwd.log"
-	}
-	export -f firewall-cmd
+	# IPv6
+	: > "$TEST_TMPDIR/fwd.log"
 	_fw_firewalld_ban "2001:db8::1"
 	run cat "$TEST_TMPDIR/fwd.log"
 	assert_output --partial "family=ipv6"
@@ -317,24 +310,21 @@ SCRIPT
 # nftables backend (mocked)
 # ============================================================
 
-@test "_fw_nftables_ban: adds IPv4 to blocked4 set" {
+@test "_fw_nftables_ban: adds IPv4 to blocked4 and IPv6 to blocked6 set" {
 	nft() {
 		echo "nft $*" >> "$TEST_TMPDIR/nft.log"
 		return 0
 	}
 	export -f nft
+
+	# IPv4
 	_fw_nftables_ban "192.0.2.1"
 	run cat "$TEST_TMPDIR/nft.log"
 	assert_output --partial "add element inet bfd blocked4"
 	assert_output --partial "192.0.2.1"
-}
 
-@test "_fw_nftables_ban: adds IPv6 to blocked6 set" {
-	nft() {
-		echo "nft $*" >> "$TEST_TMPDIR/nft.log"
-		return 0
-	}
-	export -f nft
+	# IPv6
+	: > "$TEST_TMPDIR/nft.log"
 	_fw_nftables_ban "2001:db8::1"
 	run cat "$TEST_TMPDIR/nft.log"
 	assert_output --partial "add element inet bfd blocked6"
@@ -384,7 +374,8 @@ SCRIPT
 # iptables backend (mocked)
 # ============================================================
 
-@test "_fw_iptables_ban: adds DROP rule to bfd chain" {
+@test "_fw_iptables_ban: adds DROP rule for IPv4 and IPv6" {
+	# IPv4
 	cat > "$MOCK_DIR/mock_iptables" <<SCRIPT
 #!/bin/bash
 echo "iptables \$*" >> "$TEST_TMPDIR/ipt.log"
@@ -395,9 +386,9 @@ SCRIPT
 	_fw_iptables_ban "192.0.2.1"
 	run cat "$TEST_TMPDIR/ipt.log"
 	assert_output --partial "-A bfd -s 192.0.2.1 -j DROP"
-}
 
-@test "_fw_iptables_ban: uses ip6tables for IPv6" {
+	# IPv6
+	: > "$TEST_TMPDIR/ipt.log"
 	cat > "$MOCK_DIR/mock_ip6tables" <<SCRIPT
 #!/bin/bash
 echo "ip6tables \$*" >> "$TEST_TMPDIR/ipt.log"
@@ -427,22 +418,29 @@ SCRIPT
 # route backend (mocked)
 # ============================================================
 
-@test "_fw_route_ban: adds blackhole route /32" {
+@test "_fw_route_ban: IPv4 /32, IPv6 /128, and CIDR pass-through" {
 	printf '#!/bin/bash\necho "ip $*" >> "%s/ip.log"\n' "$TEST_TMPDIR" > "$MOCK_DIR/ip"
 	chmod +x "$MOCK_DIR/ip"
 	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
+
+	# IPv4 gets /32 suffix
 	_fw_route_ban "192.0.2.1"
 	run cat "$TEST_TMPDIR/ip.log"
 	assert_output --partial "route add blackhole 192.0.2.1/32"
-}
 
-@test "_fw_route_ban: adds blackhole route /128 for IPv6" {
-	printf '#!/bin/bash\necho "ip $*" >> "%s/ip.log"\n' "$TEST_TMPDIR" > "$MOCK_DIR/ip"
-	chmod +x "$MOCK_DIR/ip"
-	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
+	# IPv6 gets /128 suffix
+	: > "$TEST_TMPDIR/ip.log"
 	_fw_route_ban "2001:db8::1"
 	run cat "$TEST_TMPDIR/ip.log"
 	assert_output --partial "route add blackhole 2001:db8::1/128"
+
+	# CIDR passed through without extra suffix
+	: > "$TEST_TMPDIR/ip.log"
+	_fw_route_ban "192.0.2.0/24"
+	run cat "$TEST_TMPDIR/ip.log"
+	assert_output --partial "route add blackhole 192.0.2.0/24"
+	# must NOT have double suffix like /24/32
+	refute_output --partial "/24/32"
 }
 
 @test "_fw_route_unban: removes blackhole route" {
@@ -452,17 +450,6 @@ SCRIPT
 	_fw_route_unban "192.0.2.1"
 	run cat "$TEST_TMPDIR/ip.log"
 	assert_output --partial "route del blackhole 192.0.2.1/32"
-}
-
-@test "_fw_route_ban: CIDR passed through without extra suffix" {
-	printf '#!/bin/bash\necho "ip $*" >> "%s/ip.log"\n' "$TEST_TMPDIR" > "$MOCK_DIR/ip"
-	chmod +x "$MOCK_DIR/ip"
-	_FW_ROUTE_IP_BIN="$MOCK_DIR/ip"
-	_fw_route_ban "192.0.2.0/24"
-	run cat "$TEST_TMPDIR/ip.log"
-	assert_output --partial "route add blackhole 192.0.2.0/24"
-	# must NOT have double suffix like /24/32
-	refute_output --partial "/24/32"
 }
 
 # ============================================================
@@ -624,49 +611,12 @@ _run_validate() {
 	) >/dev/null 2>&1
 }
 
-@test "validate_config: accepts FIREWALL=auto" {
-	run _run_validate 'FIREWALL="auto"'
-	assert_success
-}
-
-@test "validate_config: accepts FIREWALL=iptables" {
-	run _run_validate 'FIREWALL="iptables"'
-	assert_success
-}
-
-@test "validate_config: accepts FIREWALL=nftables" {
-	run _run_validate 'FIREWALL="nftables"'
-	assert_success
-}
-
-@test "validate_config: accepts FIREWALL=firewalld" {
-	run _run_validate 'FIREWALL="firewalld"'
-	assert_success
-}
-
-@test "validate_config: accepts FIREWALL=ufw" {
-	run _run_validate 'FIREWALL="ufw"'
-	assert_success
-}
-
-@test "validate_config: accepts FIREWALL=route" {
-	run _run_validate 'FIREWALL="route"'
-	assert_success
-}
-
-@test "validate_config: accepts FIREWALL=custom" {
-	run _run_validate 'FIREWALL="custom"'
-	assert_success
-}
-
-@test "validate_config: accepts FIREWALL=apf" {
-	run _run_validate 'FIREWALL="apf"'
-	assert_success
-}
-
-@test "validate_config: accepts FIREWALL=csf" {
-	run _run_validate 'FIREWALL="csf"'
-	assert_success
+@test "validate_config: accepts all valid FIREWALL values" {
+	local val
+	for val in auto iptables nftables firewalld ufw route custom apf csf; do
+		run _run_validate "FIREWALL=\"$val\""
+		assert_success
+	done
 }
 
 @test "validate_config: rejects invalid FIREWALL value" {
@@ -743,7 +693,8 @@ NEWCONF
 # Backend binary discovery (command -v)
 # ============================================================
 
-@test "detect_firewall: finds apf via PATH (command -v)" {
+@test "detect_firewall: finds apf and csf via PATH (command -v)" {
+	# apf
 	cat > "$MOCK_DIR/apf" <<'SCRIPT'
 #!/bin/bash
 exit 0
@@ -756,9 +707,9 @@ SCRIPT
 	"
 	assert_success
 	assert_output "apf"
-}
 
-@test "detect_firewall: finds csf via PATH (command -v)" {
+	# csf (remove apf so csf is discovered)
+	rm "$MOCK_DIR/apf"
 	cat > "$MOCK_DIR/csf" <<'SCRIPT'
 #!/bin/bash
 exit 0
@@ -773,7 +724,8 @@ SCRIPT
 	assert_output "csf"
 }
 
-@test "_fw_apf_setup: sets _FW_APF_BIN via command -v" {
+@test "backend setup: apf, csf, route set BIN var via command -v" {
+	# apf
 	cat > "$MOCK_DIR/apf" <<'SCRIPT'
 #!/bin/bash
 exit 0
@@ -790,21 +742,8 @@ SCRIPT
 	"
 	assert_success
 	assert_output "$MOCK_DIR/apf"
-}
 
-@test "_fw_apf_setup: fails when apf not in PATH" {
-	run bash -c "
-		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
-		BFD_LOG_PATH='$BFD_LOG_PATH'
-		OUTPUT_SYSLOG='0'
-		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
-		export PATH='$MOCK_DIR'
-		_fw_apf_setup
-	"
-	assert_failure
-}
-
-@test "_fw_csf_setup: sets _FW_CSF_BIN via command -v" {
+	# csf
 	cat > "$MOCK_DIR/csf" <<'SCRIPT'
 #!/bin/bash
 exit 0
@@ -821,18 +760,37 @@ SCRIPT
 	"
 	assert_success
 	assert_output "$MOCK_DIR/csf"
-}
 
-@test "_fw_csf_setup: fails when csf not in PATH" {
+	# route (ip)
+	printf '#!/bin/bash\nexit 0\n' > "$MOCK_DIR/ip"
+	chmod +x "$MOCK_DIR/ip"
 	run bash -c "
 		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
 		BFD_LOG_PATH='$BFD_LOG_PATH'
 		OUTPUT_SYSLOG='0'
 		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
-		export PATH='$MOCK_DIR'
-		_fw_csf_setup
+		export PATH='$MOCK_DIR:/usr/bin:/bin'
+		_fw_route_setup
+		echo \"\$_FW_ROUTE_IP_BIN\"
 	"
-	assert_failure
+	assert_success
+	assert_output "$MOCK_DIR/ip"
+}
+
+@test "backend setup: apf, csf, iptables, route fail when binary not in PATH" {
+	local setup_fn
+	for setup_fn in _fw_apf_setup _fw_csf_setup _fw_iptables_setup _fw_route_setup; do
+		echo "# Testing $setup_fn" >&3
+		run bash -c "
+			source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
+			BFD_LOG_PATH='$BFD_LOG_PATH'
+			OUTPUT_SYSLOG='0'
+			OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
+			export PATH='$MOCK_DIR'
+			$setup_fn
+		"
+		assert_failure
+	done
 }
 
 @test "_fw_iptables_setup: sets _FW_IPT_BIN via command -v" {
@@ -878,50 +836,6 @@ SCRIPT
 	"
 	assert_success
 	assert_output "$MOCK_DIR/ip6tables"
-}
-
-@test "_fw_iptables_setup: fails when iptables not in PATH" {
-	run bash -c "
-		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
-		BFD_LOG_PATH='$BFD_LOG_PATH'
-		OUTPUT_SYSLOG='0'
-		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
-		export PATH='$MOCK_DIR'
-		_fw_iptables_setup
-	"
-	assert_failure
-}
-
-# ============================================================
-# _fw_route_setup
-# ============================================================
-
-@test "_fw_route_setup: sets _FW_ROUTE_IP_BIN when ip exists" {
-	printf '#!/bin/bash\nexit 0\n' > "$MOCK_DIR/ip"
-	chmod +x "$MOCK_DIR/ip"
-	run bash -c "
-		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
-		BFD_LOG_PATH='$BFD_LOG_PATH'
-		OUTPUT_SYSLOG='0'
-		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
-		export PATH='$MOCK_DIR:/usr/bin:/bin'
-		_fw_route_setup
-		echo \"\$_FW_ROUTE_IP_BIN\"
-	"
-	assert_success
-	assert_output "$MOCK_DIR/ip"
-}
-
-@test "_fw_route_setup: fails when ip not in PATH" {
-	run bash -c "
-		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'
-		BFD_LOG_PATH='$BFD_LOG_PATH'
-		OUTPUT_SYSLOG='0'
-		OUTPUT_SYSLOG_FILE='$TEST_TMPDIR/syslog'
-		export PATH='$MOCK_DIR'
-		_fw_route_setup
-	"
-	assert_failure
 }
 
 # ============================================================

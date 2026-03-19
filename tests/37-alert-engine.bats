@@ -151,49 +151,38 @@ EOF
 # _alert_html_escape
 # ===================================================================
 
-@test "_alert_html_escape: escapes ampersand" {
+@test "_alert_html_escape: escapes all HTML entities and passes through safe strings" {
+	# ampersand
 	run _alert_html_escape "foo & bar"
 	assert_success
 	assert_output "foo &amp; bar"
-}
 
-@test "_alert_html_escape: escapes less-than and greater-than" {
+	# less-than and greater-than
 	run _alert_html_escape "<script>alert('xss')</script>"
 	assert_success
 	assert_output "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"
-}
 
-@test "_alert_html_escape: escapes double quotes" {
+	# double quotes
 	run _alert_html_escape 'value="test"'
 	assert_success
 	assert_output 'value=&quot;test&quot;'
-}
 
-@test "_alert_html_escape: escapes single quotes" {
+	# single quotes
 	run _alert_html_escape "it's a test"
 	assert_success
 	assert_output "it&#39;s a test"
-}
 
-@test "_alert_html_escape: handles multiple special chars together" {
+	# multiple special chars together
 	run _alert_html_escape '<b>"A & B"</b>'
 	assert_success
 	assert_output '&lt;b&gt;&quot;A &amp; B&quot;&lt;/b&gt;'
-}
 
-@test "_alert_html_escape: empty string" {
+	# empty string
 	run _alert_html_escape ""
 	assert_success
 	assert_output ""
-}
 
-@test "_alert_html_escape: plain text passes through" {
-	run _alert_html_escape "hello world 123"
-	assert_success
-	assert_output "hello world 123"
-}
-
-@test "_alert_html_escape: IP address passes through" {
+	# IP address passes through
 	run _alert_html_escape "192.0.2.1"
 	assert_success
 	assert_output "192.0.2.1"
@@ -331,40 +320,33 @@ EOF
 # _alert_country_flag
 # ===================================================================
 
-@test "_alert_country_flag: US produces non-empty output" {
+@test "_alert_country_flag: input validation for valid CCs, lowercase, empty, and invalid inputs" {
+	# US produces non-empty output
 	run _alert_country_flag "US"
 	assert_success
-	# should produce 8 bytes (two 4-byte UTF-8 codepoints)
-	local len=${#output}
-	# byte length check: depends on locale but the string should be non-empty
 	[ -n "$output" ]
-}
 
-@test "_alert_country_flag: lowercase input works" {
+	# lowercase input works
 	run _alert_country_flag "cn"
 	assert_success
 	[ -n "$output" ]
-}
 
-@test "_alert_country_flag: empty input returns empty" {
+	# empty input returns empty
 	run _alert_country_flag ""
 	assert_success
 	assert_output ""
-}
 
-@test "_alert_country_flag: single char returns empty" {
+	# single char returns empty
 	run _alert_country_flag "X"
 	assert_success
 	assert_output ""
-}
 
-@test "_alert_country_flag: three chars returns empty" {
+	# three chars returns empty
 	run _alert_country_flag "USA"
 	assert_success
 	assert_output ""
-}
 
-@test "_alert_country_flag: numeric input returns empty" {
+	# numeric input returns empty
 	run _alert_country_flag "12"
 	assert_success
 	assert_output ""
@@ -461,44 +443,32 @@ EOF
 # _alert_pressure_bar
 # ===================================================================
 
-@test "_alert_pressure_bar: 0% produces empty bar" {
+@test "_alert_pressure_bar: produces correct visualization for all percentages" {
 	run _alert_pressure_bar 0
 	assert_success
 	assert_output "[                    ] 0%"
-}
 
-@test "_alert_pressure_bar: 50% fills half" {
 	run _alert_pressure_bar 50
 	assert_success
 	assert_output "[==========          ] 50%"
-}
 
-@test "_alert_pressure_bar: 100% fills fully" {
 	run _alert_pressure_bar 100
 	assert_success
 	assert_output "[====================] 100%"
-}
 
-@test "_alert_pressure_bar: 150% caps at full but shows actual pct" {
 	run _alert_pressure_bar 150
 	assert_success
 	assert_output "[====================] 150%"
-}
 
-@test "_alert_pressure_bar: 25% fills 5 chars" {
 	run _alert_pressure_bar 25
 	assert_success
 	assert_output "[=====               ] 25%"
-}
 
-@test "_alert_pressure_bar: 1% fills 0 chars" {
+	# 1 * 20 / 100 = 0
 	run _alert_pressure_bar 1
 	assert_success
-	# 1 * 20 / 100 = 0
 	assert_output "[                    ] 1%"
-}
 
-@test "_alert_pressure_bar: 5% fills 1 char" {
 	run _alert_pressure_bar 5
 	assert_success
 	assert_output "[=                   ] 5%"
@@ -508,43 +478,34 @@ EOF
 # _alert_pressure_color
 # ===================================================================
 
-@test "_alert_pressure_color: low pressure is green" {
-	run _alert_pressure_color 30
-	assert_success
-	assert_output "#16a34a"
-}
-
-@test "_alert_pressure_color: 0% is green" {
+@test "_alert_pressure_color: correct color tier for all pressure percentages" {
+	# green tier: 0-69%
 	run _alert_pressure_color 0
 	assert_success
 	assert_output "#16a34a"
-}
 
-@test "_alert_pressure_color: 69% is green" {
+	run _alert_pressure_color 30
+	assert_success
+	assert_output "#16a34a"
+
 	run _alert_pressure_color 69
 	assert_success
 	assert_output "#16a34a"
-}
 
-@test "_alert_pressure_color: 70% is amber" {
+	# amber tier: 70-99%
 	run _alert_pressure_color 70
 	assert_success
 	assert_output "#d97706"
-}
 
-@test "_alert_pressure_color: 99% is amber" {
 	run _alert_pressure_color 99
 	assert_success
 	assert_output "#d97706"
-}
 
-@test "_alert_pressure_color: 100% is red" {
+	# red tier: 100%+
 	run _alert_pressure_color 100
 	assert_success
 	assert_output "#dc2626"
-}
 
-@test "_alert_pressure_color: 200% is red" {
 	run _alert_pressure_color 200
 	assert_success
 	assert_output "#dc2626"
@@ -554,26 +515,23 @@ EOF
 # _alert_ban_type_color
 # ===================================================================
 
-@test "_alert_ban_type_color: escalate is amber" {
+@test "_alert_ban_type_color: correct color for escalate, permanent, temporary, and escalate-override" {
+	# escalate is amber
 	run _alert_ban_type_color "escalate" "0"
 	assert_success
 	assert_output "#d97706"
-}
 
-@test "_alert_ban_type_color: permanent (expiry=0) is red" {
+	# permanent (expiry=0) is red
 	run _alert_ban_type_color "ban" "0"
 	assert_success
 	assert_output "#dc2626"
-}
 
-@test "_alert_ban_type_color: temporary is teal" {
+	# temporary is teal
 	run _alert_ban_type_color "ban" "1709553600"
 	assert_success
 	assert_output "#0891b2"
-}
 
-@test "_alert_ban_type_color: escalate overrides expiry check" {
-	# even with non-zero expiry, escalate action should be amber
+	# escalate overrides expiry check — even with non-zero expiry, amber
 	run _alert_ban_type_color "escalate" "1709553600"
 	assert_success
 	assert_output "#d97706"
@@ -583,38 +541,26 @@ EOF
 # Template partials — file existence and structure
 # ===================================================================
 
-@test "template partials: all 8 files exist" {
+@test "template partials: all 8 files exist, contain tokens, and text has no HTML" {
 	local tpl_dir="${PROJECT_ROOT}/files/alert"
 	local expected=(
 		text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl
 		html.header.tpl html.entry.tpl html.summary.tpl html.footer.tpl
 	)
 	local f
+	# all 8 files exist
 	for f in "${expected[@]}"; do
 		[ -f "$tpl_dir/$f" ]
 	done
-}
-
-@test "template partials: text templates contain {{VAR}} tokens" {
-	local tpl_dir="${PROJECT_ROOT}/files/alert"
-	# each text template should have at least one {{VAR}} token
-	local f
+	# text templates contain {{VAR}} tokens
 	for f in text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl; do
 		grep -qE '\{\{[A-Z_][A-Z0-9_]*\}\}' "$tpl_dir/$f"
 	done
-}
-
-@test "template partials: HTML templates contain {{VAR}} tokens" {
-	local tpl_dir="${PROJECT_ROOT}/files/alert"
-	local f
+	# HTML templates contain {{VAR}} tokens
 	for f in html.header.tpl html.entry.tpl html.summary.tpl html.footer.tpl; do
 		grep -qE '\{\{[A-Z_][A-Z0-9_]*\}\}' "$tpl_dir/$f"
 	done
-}
-
-@test "template partials: text templates have no HTML tags" {
-	local tpl_dir="${PROJECT_ROOT}/files/alert"
-	local f
+	# text templates have no HTML tags
 	for f in text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl; do
 		! grep -qE '<[a-z]+[> ]' "$tpl_dir/$f"
 	done
@@ -882,7 +828,8 @@ EOF
 # _alert_set_global_vars
 # ===================================================================
 
-@test "_alert_set_global_vars: sets HOSTNAME and TIMESTAMP" {
+@test "_alert_set_global_vars: sets globals, timestamp formats, timezone, and version fallback" {
+	# Call with V set — verify all global variables
 	V="2.0.1"
 	_alert_set_global_vars 3
 	[ -n "$HOSTNAME" ]
@@ -890,20 +837,14 @@ EOF
 	[[ "$TIMESTAMP" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]]
 	[ "$ALERT_COUNT" = "3" ]
 	[ "$BFD_VERSION" = "2.0.1" ]
-}
 
-@test "_alert_set_global_vars: TIMESTAMP_ISO has ISO 8601 format" {
-	V="2.0.1"
-	_alert_set_global_vars 1
+	# TIMESTAMP_ISO has ISO 8601 format
 	[[ "$TIMESTAMP_ISO" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2} ]]
-}
 
-@test "_alert_set_global_vars: TIME_ZONE is exported" {
-	_alert_set_global_vars 0
+	# TIME_ZONE is exported
 	[ -n "$TIME_ZONE" ]
-}
 
-@test "_alert_set_global_vars: BFD_VERSION falls back to ALERT_LIB_VERSION" {
+	# BFD_VERSION falls back to ALERT_LIB_VERSION when V unset
 	unset V 2>/dev/null || true
 	unset BFD_VERSION 2>/dev/null || true
 	_alert_set_global_vars 0
@@ -1504,7 +1445,8 @@ _create_test_bodies() {
 # _alert_email_relay — SMTP relay delivery
 # ===================================================================
 
-@test "_alert_email_relay: calls curl with correct arguments" {
+@test "_alert_email_relay: port/TLS behavior for smtps, port 25, and port 587" {
+	# smtps://...465 — includes --ssl-reqd plus full argument check
 	_setup_mock_curl
 	ALERT_SMTP_RELAY="smtps://smtp.example.com:465"
 	ALERT_SMTP_FROM="alerts@example.com"
@@ -1523,6 +1465,26 @@ _create_test_bodies() {
 	assert_output --partial "root"
 	assert_output --partial "-K"
 	assert_output --partial "--upload-file"
+
+	# smtp://...25 — skips --ssl-reqd
+	> "$CURL_LOG"
+	ALERT_SMTP_RELAY="smtp://relay.internal:25"
+	echo "msg" > "$TEST_TMPDIR/msg_file"
+	_alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
+	[ -f "$CURL_LOG" ]
+	run grep "CURL_CALL:" "$CURL_LOG"
+	assert_output --partial "smtp://relay.internal:25"
+	refute_output --partial "--ssl-reqd"
+
+	# smtp://...587 — includes --ssl-reqd
+	> "$CURL_LOG"
+	ALERT_SMTP_RELAY="smtp://relay.example.com:587"
+	echo "msg" > "$TEST_TMPDIR/msg_file"
+	_alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
+	[ -f "$CURL_LOG" ]
+	run grep "CURL_CALL:" "$CURL_LOG"
+	assert_output --partial "--ssl-reqd"
+
 	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
 }
 
@@ -1571,35 +1533,6 @@ _create_test_bodies() {
 	echo "msg" > "$TEST_TMPDIR/msg_file"
 	run _alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
 	assert_failure
-	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-@test "_alert_email_relay: smtp port 25 skips --ssl-reqd" {
-	_setup_mock_curl
-	ALERT_SMTP_RELAY="smtp://relay.internal:25"
-	ALERT_SMTP_FROM="alerts@example.com"
-	ALERT_SMTP_USER="user"
-	ALERT_SMTP_PASS="pass"
-	echo "msg" > "$TEST_TMPDIR/msg_file"
-	_alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
-	[ -f "$CURL_LOG" ]
-	run grep "CURL_CALL:" "$CURL_LOG"
-	assert_output --partial "smtp://relay.internal:25"
-	refute_output --partial "--ssl-reqd"
-	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-@test "_alert_email_relay: smtp port 587 includes --ssl-reqd" {
-	_setup_mock_curl
-	ALERT_SMTP_RELAY="smtp://relay.example.com:587"
-	ALERT_SMTP_FROM="alerts@example.com"
-	ALERT_SMTP_USER="user"
-	ALERT_SMTP_PASS="pass"
-	echo "msg" > "$TEST_TMPDIR/msg_file"
-	_alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
-	[ -f "$CURL_LOG" ]
-	run grep "CURL_CALL:" "$CURL_LOG"
-	assert_output --partial "--ssl-reqd"
 	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
 }
 
@@ -1773,7 +1706,8 @@ _setup_mock_send_alerts() {
 	}
 }
 
-@test "_bfd_spool_append: appends timestamped entries to spool" {
+@test "_bfd_spool_append: append, no-op on empty, and append to existing" {
+	# Scenario 1: appends timestamped entries to spool
 	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
 	local af="$TEST_TMPDIR/alerts"
 	cat > "$af" <<'EOF'
@@ -1790,25 +1724,22 @@ EOF
 	while IFS= read -r line; do
 		[[ "$line" =~ $_ep_pat ]]
 	done < "$ALERT_SPOOL_FILE"
-}
 
-@test "_bfd_spool_append: no-op on empty file" {
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	local af="$TEST_TMPDIR/empty_alerts"
-	: > "$af"
-	_bfd_spool_append "$af"
+	# Scenario 2: no-op on empty file
+	rm -f "$ALERT_SPOOL_FILE"
+	local af2="$TEST_TMPDIR/empty_alerts"
+	: > "$af2"
+	_bfd_spool_append "$af2"
 	# spool should not exist (never written)
 	[ ! -f "$ALERT_SPOOL_FILE" ]
-}
 
-@test "_bfd_spool_append: appends to existing spool" {
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
+	# Scenario 3: appends to existing spool
+	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool3"
 	# pre-populate with one line
 	echo "1000000000|203.0.113.1|postfix|25|3000|0|ban|0||root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5" > "$af"
-	_bfd_spool_append "$af"
-	local count
+	local af3="$TEST_TMPDIR/alerts3"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5" > "$af3"
+	_bfd_spool_append "$af3"
 	count=$(wc -l < "$ALERT_SPOOL_FILE")
 	[ "$count" -eq 2 ]
 }

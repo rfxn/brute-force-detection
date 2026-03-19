@@ -203,6 +203,10 @@ BAN_ESCALATE_WINDOW="86400"
 
 # --- Only used when FIREWALL="custom" — skip if using auto or a named backend ---
 # $ATTACK_HOST = offending IP, $MOD = service name, $PORTS = rule ports
+#
+# SECURITY: These templates are executed as root via eval. Ensure this file
+# remains root-owned and not group/world-writable (default: mode 640, uid 0).
+# BFD validates file ownership and permissions before sourcing.
 
 # command to deny an attacking host
 BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"

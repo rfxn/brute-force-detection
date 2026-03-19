@@ -31,21 +31,16 @@ teardown() {
 
 # --- execute_ban ---
 
-@test "execute_ban: dry run logs without executing" {
-	run execute_ban "192.0.2.1" "sshd" "1"
-	assert_success
-	assert_output --partial "dry-run"
-	assert_output --partial "192.0.2.1"
-}
-
-@test "execute_ban: sets ATTACK_HOST global" {
-	execute_ban "192.0.2.1" "sshd" "1" >/dev/null
-	[ "$ATTACK_HOST" = "192.0.2.1" ]
-}
-
-@test "execute_ban: sets BAN_COMMAND global for custom backend" {
+@test "execute_ban: dry-run sets globals and logs without executing" {
 	BAN_COMMAND_TEMPLATE="echo test_cmd"
-	execute_ban "192.0.2.1" "sshd" "1" >/dev/null
+	# call directly (not via run) so globals persist; tee output to file
+	local outfile="$TEST_TMPDIR/dryrun_out"
+	execute_ban "192.0.2.1" "sshd" "1" > "$outfile"
+	# verify output contains dry-run message
+	grep -q "dry-run" "$outfile"
+	grep -q "192.0.2.1" "$outfile"
+	# globals set even in dry-run
+	[ "$ATTACK_HOST" = "192.0.2.1" ]
 	[ "$BAN_COMMAND" = "echo test_cmd" ]
 }
 
@@ -56,22 +51,11 @@ teardown() {
 	[ -f "$marker" ]
 }
 
-@test "execute_ban: returns non-zero on command failure" {
+@test "execute_ban: command failure returns non-zero, logs, and skips recording" {
 	BAN_COMMAND_TEMPLATE="false"
 	run execute_ban "192.0.2.1" "sshd" "0"
 	[ "$status" -ne 0 ]
-}
-
-@test "execute_ban: logs ban command failure" {
-	BAN_COMMAND_TEMPLATE="false"
-	run execute_ban "192.0.2.1" "sshd" "0"
 	assert_output --partial "failed after"
-}
-
-@test "execute_ban: failed ban skips lifecycle recording" {
-	BAN_COMMAND_TEMPLATE="false"
-	run execute_ban "192.0.2.1" "sshd" "0"
-	[ "$status" -ne 0 ]
 
 	# bans.active and bans.history must remain empty
 	run cat "$INSTALL_PATH/tmp/bans.active"
@@ -82,9 +66,9 @@ teardown() {
 
 # --- ban retry logic ---
 
-@test "execute_ban: retries on failure with BAN_RETRY_COUNT" {
+@test "execute_ban: retry logic respects BAN_RETRY_COUNT" {
+	# scenario 1: BAN_RETRY_COUNT=2 retries up to 3 attempts
 	BAN_RETRY_COUNT="2"
-	# create a script that fails twice then succeeds
 	local counter="$TEST_TMPDIR/attempt_counter"
 	echo "0" > "$counter"
 	local cmd="$TEST_TMPDIR/retry_cmd.sh"
@@ -100,16 +84,14 @@ EOF
 	BAN_COMMAND_TEMPLATE="$cmd $counter"
 	run execute_ban "192.0.2.1" "sshd" "0"
 	assert_success
-	# verify it took 3 attempts
 	local attempts
 	attempts=$(cat "$counter")
 	[ "$attempts" -eq 3 ]
-}
 
-@test "execute_ban: no retries when BAN_RETRY_COUNT=0" {
+	# scenario 2: BAN_RETRY_COUNT=0 means exactly 1 attempt
 	BAN_RETRY_COUNT="0"
 	BAN_COMMAND_TEMPLATE="false"
-	run execute_ban "192.0.2.1" "sshd" "0"
+	run execute_ban "192.0.2.2" "sshd" "0"
 	[ "$status" -ne 0 ]
 	assert_output --partial "after 1 attempt"
 }
@@ -251,26 +233,34 @@ EOF
 
 # --- ban lifecycle flow ---
 
-@test "pipeline: ban → record → expire → unban flow" {
-	# simulate a ban
-	execute_ban "192.0.2.1" "sshd" "0" >/dev/null
-	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "192.0.2.1" "sshd" "22"
-	state_bans_history_append "$INSTALL_PATH" "1000" "1300" "192.0.2.1" "sshd" "ban"
+@test "pipeline: ban → record → expire → unban flow (IPv4 and IPv6)" {
+	local ip
+	for ip in "192.0.2.1" "2001:db8::1"; do
+		echo "# Testing IP family: $ip" >&3
+		# reset state between IP families
+		: > "$INSTALL_PATH/tmp/bans.active"
+		: > "$INSTALL_PATH/tmp/bans.history"
 
-	# verify active
-	run state_bans_active_check "$INSTALL_PATH" "192.0.2.1"
-	assert_success
+		# simulate a ban
+		execute_ban "$ip" "sshd" "0" >/dev/null
+		state_bans_active_append "$INSTALL_PATH" "1000" "1300" "$ip" "sshd" "22"
+		state_bans_history_append "$INSTALL_PATH" "1000" "1300" "$ip" "sshd" "ban"
 
-	# process unbans at time past expiry
-	process_unbans "$INSTALL_PATH" "1400" >/dev/null
+		# verify active
+		run state_bans_active_check "$INSTALL_PATH" "$ip"
+		assert_success
 
-	# verify removed from active
-	run state_bans_active_check "$INSTALL_PATH" "192.0.2.1"
-	assert_failure
+		# process unbans at time past expiry
+		process_unbans "$INSTALL_PATH" "1400" >/dev/null
 
-	# verify unban recorded in history
-	run cat "$INSTALL_PATH/tmp/bans.history"
-	assert_output --partial "unban"
+		# verify removed from active
+		run state_bans_active_check "$INSTALL_PATH" "$ip"
+		assert_failure
+
+		# verify unban recorded in history
+		run cat "$INSTALL_PATH/tmp/bans.history"
+		assert_output --partial "unban"
+	done
 }
 
 # --- manual_ban / manual_unban ---
@@ -309,21 +299,18 @@ EOF
 
 # --- PORTS enforcement ---
 
-@test "execute_ban: sets PORTS global" {
-	execute_ban "192.0.2.1" "sshd" "1" "22" >/dev/null
-	[ "$PORTS" = "22" ]
-}
-
-@test "execute_ban: PORTS available in template expansion" {
+@test "execute_ban: sets PORTS global and expands in template" {
+	# scenario 1: explicit PORTS set and available in template
 	local marker="$TEST_TMPDIR/ports_check"
 	BAN_COMMAND_TEMPLATE="echo \$PORTS > $marker"
 	execute_ban "192.0.2.1" "sshd" "0" "110,143,993,995" >/dev/null
+	[ "$PORTS" = "110,143,993,995" ]
 	run cat "$marker"
 	assert_output "110,143,993,995"
-}
 
-@test "execute_ban: defaults PORTS to all when not provided" {
-	execute_ban "192.0.2.1" "sshd" "1" >/dev/null
+	# scenario 2: no PORTS arg defaults to "all"
+	PORTS=""
+	execute_ban "192.0.2.2" "sshd" "1" >/dev/null
 	[ "$PORTS" = "all" ]
 }
 
@@ -332,13 +319,14 @@ EOF
 	[ "$MOD" = "dovecot" ]
 }
 
-@test "execute_unban: sets PORTS global" {
+@test "execute_unban: sets PORTS global or defaults to all" {
+	# scenario 1: explicit PORTS
 	execute_unban "192.0.2.1" "sshd" "22" >/dev/null
 	[ "$PORTS" = "22" ]
-}
 
-@test "execute_unban: defaults PORTS to all when not provided" {
-	execute_unban "192.0.2.1" "sshd" >/dev/null
+	# scenario 2: no PORTS defaults to "all"
+	PORTS=""
+	execute_unban "192.0.2.2" "sshd" >/dev/null
 	[ "$PORTS" = "all" ]
 }
 
@@ -364,50 +352,41 @@ EOF
 
 # --- IPv6 ban command selection ---
 
-@test "execute_ban: selects V6 command for IPv6 host" {
+@test "execute_ban: IPv6/IPv4 command selection and V6 fallback" {
+	# scenario 1: IPv6 host selects V6 command
 	local marker_v4="$TEST_TMPDIR/ban_v4"
 	local marker_v6="$TEST_TMPDIR/ban_v6"
 	BAN_COMMAND_TEMPLATE="touch $marker_v4"
 	BAN_COMMAND_V6_TEMPLATE="touch $marker_v6"
 	execute_ban "2001:db8::1" "sshd" "0" "22" >/dev/null
-	# V6 command should have run, not V4
 	[ -f "$marker_v6" ]
 	[ ! -f "$marker_v4" ]
-}
 
-@test "execute_ban: uses standard command for IPv4 even when V6 set" {
-	local marker_v4="$TEST_TMPDIR/ban_v4"
-	local marker_v6="$TEST_TMPDIR/ban_v6"
-	BAN_COMMAND_TEMPLATE="touch $marker_v4"
-	BAN_COMMAND_V6_TEMPLATE="touch $marker_v6"
+	# scenario 2: IPv4 host uses standard command even when V6 set
+	rm -f "$marker_v4" "$marker_v6"
 	execute_ban "192.0.2.1" "sshd" "0" "22" >/dev/null
-	# V4 command should have run, not V6
 	[ -f "$marker_v4" ]
 	[ ! -f "$marker_v6" ]
-}
 
-@test "execute_ban: falls back to standard for IPv6 when V6 empty" {
-	local marker="$TEST_TMPDIR/ban_fallback"
-	BAN_COMMAND_TEMPLATE="touch $marker"
+	# scenario 3: IPv6 host falls back to standard when V6 template empty
+	rm -f "$marker_v4"
 	BAN_COMMAND_V6_TEMPLATE=""
-	execute_ban "2001:db8::1" "sshd" "0" "22" >/dev/null
-	# standard command should have run
-	[ -f "$marker" ]
+	execute_ban "2001:db8::2" "sshd" "0" "22" >/dev/null
+	[ -f "$marker_v4" ]
 }
 
-@test "execute_unban: selects V6 command for IPv6 host" {
-	local marker_v6="$TEST_TMPDIR/unban_v6"
-	UNBAN_COMMAND_TEMPLATE="/bin/true"
-	UNBAN_COMMAND_V6_TEMPLATE="touch $marker_v6"
-	execute_unban "2001:db8::1" "sshd" "22" >/dev/null
-	[ -f "$marker_v6" ]
-}
-
-@test "execute_unban: uses standard for IPv4 when V6 set" {
+@test "execute_unban: IPv6/IPv4 command selection" {
+	# scenario 1: IPv6 host selects V6 command
 	local marker_v4="$TEST_TMPDIR/unban_v4"
 	local marker_v6="$TEST_TMPDIR/unban_v6"
 	UNBAN_COMMAND_TEMPLATE="touch $marker_v4"
 	UNBAN_COMMAND_V6_TEMPLATE="touch $marker_v6"
+	execute_unban "2001:db8::1" "sshd" "22" >/dev/null
+	[ -f "$marker_v6" ]
+	[ ! -f "$marker_v4" ]
+
+	# scenario 2: IPv4 host uses standard command when V6 set
+	rm -f "$marker_v4" "$marker_v6"
 	execute_unban "192.0.2.1" "sshd" "22" >/dev/null
 	[ -f "$marker_v4" ]
 	[ ! -f "$marker_v6" ]
@@ -467,15 +446,23 @@ _run_check_with_stats() {
 	check
 }
 
-@test "run stats: summary line appears after check()" {
+@test "run stats: empty rules dir shows summary with zeros and valid elapsed" {
 	local rules_dir="$TEST_TMPDIR/rules"
 	mkdir -p "$rules_dir"
 	run _run_check_with_stats "$rules_dir"
 	assert_success
+	# summary line structure
 	assert_output --partial "run complete:"
 	assert_output --partial "active rules"
 	assert_output --partial "events parsed"
 	assert_output --partial "bans executed"
+	# zero events
+	assert_output --partial "0 active rules, 0 with events, 0 events parsed, 0 bans executed"
+	# elapsed time is non-negative integer
+	local elapsed
+	elapsed=$(echo "$output" | grep -o '([0-9]*s)' | tr -dc '0-9')
+	[ -n "$elapsed" ]
+	[ "$elapsed" -ge 0 ]
 }
 
 @test "run stats: rules count matches valid rules" {
@@ -535,26 +522,6 @@ EOF
 	assert_output --partial "3 events parsed"
 }
 
-@test "run stats: zero events when no log activity" {
-	local rules_dir="$TEST_TMPDIR/rules"
-	mkdir -p "$rules_dir"
-	run _run_check_with_stats "$rules_dir"
-	assert_success
-	assert_output --partial "0 active rules, 0 with events, 0 events parsed, 0 bans executed"
-}
-
-@test "run stats: elapsed time is non-negative integer" {
-	local rules_dir="$TEST_TMPDIR/rules"
-	mkdir -p "$rules_dir"
-	run _run_check_with_stats "$rules_dir"
-	assert_success
-	# extract elapsed from "(...s)"
-	local elapsed
-	elapsed=$(echo "$output" | grep -o '([0-9]*s)' | tr -dc '0-9')
-	[ -n "$elapsed" ]
-	[ "$elapsed" -ge 0 ]
-}
-
 # --- IPv6 exact-match tests for ban state functions ---
 
 @test "state_bans_active: IPv6 does not false-match prefix" {
@@ -597,23 +564,6 @@ EOF
 	done
 	run check_recidivism "$INSTALL_PATH" "2001:db8::1" "500" "1000" "5"
 	assert_success
-}
-
-@test "pipeline: ban → record → expire → unban flow with IPv6" {
-	execute_ban "2001:db8::1" "sshd" "0" >/dev/null
-	state_bans_active_append "$INSTALL_PATH" "1000" "1300" "2001:db8::1" "sshd" "22"
-	state_bans_history_append "$INSTALL_PATH" "1000" "1300" "2001:db8::1" "sshd" "ban"
-	# verify active
-	run state_bans_active_check "$INSTALL_PATH" "2001:db8::1"
-	assert_success
-	# process unbans at time past expiry
-	process_unbans "$INSTALL_PATH" "1400" >/dev/null
-	# verify removed
-	run state_bans_active_check "$INSTALL_PATH" "2001:db8::1"
-	assert_failure
-	# verify unban recorded
-	run cat "$INSTALL_PATH/tmp/bans.history"
-	assert_output --partial "unban"
 }
 
 # --- IGNOREREGEX/PORTS reset tests (Phase 26) ---
@@ -821,7 +771,8 @@ EOF
 
 # --- record_ban ---
 
-@test "record_ban: normal ban with duration returns correct expiry" {
+@test "record_ban: normal and permanent ban expiry" {
+	# scenario 1: BAN_TTL=600 → expiry = 1000 + 600 = 1600
 	BAN_TTL="600"
 	BAN_DURATION="600"
 	BAN_ESCALATE_AFTER="0"
@@ -833,17 +784,14 @@ EOF
 	run record_ban "$INSTALL_PATH" "1000" "192.0.2.1" "sshd" "all" "ban"
 	assert_success
 	assert_output "1600|ban|0"
-}
 
-@test "record_ban: permanent ban (BAN_TTL=0) returns expiry=0" {
+	# reset state for scenario 2
+	: > "$INSTALL_PATH/tmp/bans.active"
+	: > "$INSTALL_PATH/tmp/bans.history"
+
+	# scenario 2: BAN_TTL=0 → permanent (expiry=0)
 	BAN_TTL="0"
 	BAN_DURATION="0"
-	BAN_ESCALATE_AFTER="0"
-	BAN_PERMANENT_AFTER="0"
-	BAN_ESCALATE_WINDOW="86400"
-	BAN_PERMANENT_WINDOW="86400"
-	BAN_ESCALATION="none"
-	BAN_ESCALATION_CAP="0"
 	run record_ban "$INSTALL_PATH" "1000" "192.0.2.2" "sshd" "all" "ban"
 	assert_success
 	assert_output "0|ban|0"
