@@ -1,4 +1,9 @@
 2.0.2:
+[Change] Merge event query functions (from bfd.lib.sh) and attack pool reporting
+      functions (from bfd) into new bfd_events.sh sub-library (~37 functions)
+[Change] Replace per-IP _apool_ban_status with batch pattern in _apool_report,
+      _apool_report_json, _apool_report_csv — eliminates ~50-75 AWK spawns per
+      invocation
 [Change] Move 6 detection pipeline functions (extract_hosts, filter_host,
       _build_ignore_cache, _rule_tlog, count_subnet_attackers, check_distributed)
       to new bfd_detect.sh sub-library
