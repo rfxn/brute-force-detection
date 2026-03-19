@@ -1,4 +1,8 @@
 2.0.2:
+[Change] Move 18 diagnostic functions (health_check, _hc_*, detect_run_mode,
+      show_status, show_service_status, show_config, list_rules, show_rule,
+      test_rule, test_pattern, test_alert, test_alert_email,
+      test_alert_messaging, format_duration) to new bfd_diag.sh sub-library
 [Change] Merge event query functions (from bfd.lib.sh) and attack pool reporting
       functions (from bfd) into new bfd_events.sh sub-library (~37 functions)
 [Change] Replace per-IP _apool_ban_status with batch pattern in _apool_report,
