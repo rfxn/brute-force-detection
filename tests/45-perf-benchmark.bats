@@ -523,19 +523,19 @@ _perf_generate_logs() {
 #  Documents where BFD's operating modes diverge in performance.
 # ============================================================
 
-@test "perf: deviation -- scan vs standard tlog path (sshd, 2K lines)" {
+@test "perf: deviation -- scan vs standard tlog path + TLOG_FLOCK overhead (sshd, 2K lines)" {
 	local _timeout=30
 	local _group_start
 	_group_start=$(date +%s)
 
-	# Generate 2K sshd log (100% match for consistent extraction)
+	# Generate 2K sshd log once (shared across all measurements)
 	local _log_file="$INSTALL_PATH/tmp/perf_dev_sshd.log"
 	generate_sshd_log 2000 200 100 > "$_log_file"
 	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
 
 	LOG_SOURCE="file"
 
-	# --- Scan mode: _rule_tlog → tlog_read_full ---
+	# --- Scan mode: _rule_tlog -> tlog_read_full ---
 	_SCAN_MODE=1
 	_TLOG_PASSTHROUGH=""
 	timer_start
@@ -549,7 +549,7 @@ _perf_generate_logs() {
 	kpi_report "deviation.scan.sshd" "$scan_count lines in ${ms_scan}ms" ""
 	perf_timeout_check "scan_path" "$_group_start" "$_timeout"
 
-	# --- Standard mode: _rule_tlog → tlog_read (TLOG_FIRST_RUN=full) ---
+	# --- Standard mode (no flock): _rule_tlog -> tlog_read (TLOG_FIRST_RUN=full) ---
 	_SCAN_MODE=""
 	TLOG_FIRST_RUN="full"
 	TLOG_FLOCK=0
@@ -565,47 +565,14 @@ _perf_generate_logs() {
 	kpi_report "deviation.standard.sshd" "$std_count lines in ${ms_std}ms" ""
 	perf_timeout_check "standard_path" "$_group_start" "$_timeout"
 
-	# --- Delta ---
+	# --- Scan vs Standard delta ---
 	local delta=0
 	if [ "$ms_scan" -gt 0 ]; then
 		delta=$(( (ms_std - ms_scan) * 100 / (ms_scan + 1) ))
 	fi
 	kpi_report "deviation.scan_vs_standard" "scan=${ms_scan}ms standard=${ms_std}ms" "(${delta}% overhead)"
 
-	# cleanup
-	TLOG_FIRST_RUN="skip"
-}
-
-@test "perf: deviation -- TLOG_FLOCK overhead (sshd, 2K lines)" {
-	local _timeout=30
-	local _group_start
-	_group_start=$(date +%s)
-
-	# Generate 2K sshd log
-	local _log_file="$INSTALL_PATH/tmp/perf_dev_flock.log"
-	generate_sshd_log 2000 200 100 > "$_log_file"
-	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
-
-	LOG_SOURCE="file"
-	_SCAN_MODE=""
-	_TLOG_PASSTHROUGH=""
-	TLOG_FIRST_RUN="full"
-
-	# --- Without flock ---
-	TLOG_FLOCK=0
-	command rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
-	timer_start
-	local noflock_out
-	noflock_out=$(_rule_tlog "$_log_file" "sshd" | extract_hosts \
-		"sshd.*Failed password for .* from <HOST>")
-	local ms_noflock
-	ms_noflock=$(timer_elapsed_ms)
-	local noflock_count
-	noflock_count=$(echo "$noflock_out" | grep -c . 2>/dev/null || echo 0)
-	kpi_report "deviation.flock_off.sshd" "$noflock_count lines in ${ms_noflock}ms" ""
-	perf_timeout_check "flock_off" "$_group_start" "$_timeout"
-
-	# --- With flock ---
+	# --- Standard mode with flock (TLOG_FLOCK=1) ---
 	TLOG_FLOCK=1
 	command rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
 	timer_start
@@ -619,12 +586,14 @@ _perf_generate_logs() {
 	kpi_report "deviation.flock_on.sshd" "$flock_count lines in ${ms_flock}ms" ""
 	perf_timeout_check "flock_on" "$_group_start" "$_timeout"
 
-	# --- Delta ---
-	local delta=0
-	if [ "$ms_noflock" -gt 0 ]; then
-		delta=$(( (ms_flock - ms_noflock) * 100 / (ms_noflock + 1) ))
+	# --- TLOG_FLOCK delta (no-flock from standard path above vs flock) ---
+	# ms_std is the no-flock baseline (TLOG_FLOCK=0 standard path)
+	kpi_report "deviation.flock_off.sshd" "$std_count lines in ${ms_std}ms" ""
+	delta=0
+	if [ "$ms_std" -gt 0 ]; then
+		delta=$(( (ms_flock - ms_std) * 100 / (ms_std + 1) ))
 	fi
-	kpi_report "deviation.tlog_flock" "off=${ms_noflock}ms on=${ms_flock}ms" "(${delta}% overhead)"
+	kpi_report "deviation.tlog_flock" "off=${ms_std}ms on=${ms_flock}ms" "(${delta}% overhead)"
 
 	# cleanup
 	TLOG_FIRST_RUN="skip"

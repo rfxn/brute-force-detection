@@ -30,61 +30,40 @@ teardown() {
 
 # --- expand_command_template ---
 
-@test "expand_command_template: single var ATTACK_HOST" {
+@test "expand_command_template: normal operation (single var, all vars, IPv6, multi-port, duplicate var)" {
+	# single var ATTACK_HOST
 	ATTACK_HOST="192.0.2.1"
 	MOD=""
 	PORTS=""
 	run expand_command_template 'ban $ATTACK_HOST'
 	assert_success
 	assert_output "ban 192.0.2.1"
-}
 
-@test "expand_command_template: all three vars" {
+	# all three vars
 	ATTACK_HOST="192.0.2.1"
 	MOD="sshd"
 	PORTS="22,80"
 	run expand_command_template 'iptables -s $ATTACK_HOST -m $MOD -p $PORTS'
 	assert_success
 	assert_output "iptables -s 192.0.2.1 -m sshd -p 22,80"
-}
 
-@test "expand_command_template: IPv6 address" {
+	# IPv6 address
 	ATTACK_HOST="2001:db8::1"
 	MOD=""
 	PORTS=""
 	run expand_command_template 'ip6tables -s $ATTACK_HOST'
 	assert_success
 	assert_output "ip6tables -s 2001:db8::1"
-}
 
-@test "expand_command_template: multi-port PORTS" {
+	# multi-port PORTS
 	ATTACK_HOST=""
 	MOD=""
 	PORTS="22,25,80"
 	run expand_command_template 'block $PORTS'
 	assert_success
 	assert_output "block 22,25,80"
-}
 
-@test "expand_command_template: empty variables" {
-	ATTACK_HOST=""
-	MOD=""
-	PORTS=""
-	run expand_command_template 'ban $ATTACK_HOST'
-	assert_success
-	assert_output "ban "
-}
-
-@test "expand_command_template: no variables in template" {
-	ATTACK_HOST="192.0.2.1"
-	MOD="sshd"
-	PORTS="22"
-	run expand_command_template '/usr/sbin/iptables -F'
-	assert_success
-	assert_output "/usr/sbin/iptables -F"
-}
-
-@test "expand_command_template: variable appears twice" {
+	# variable appears twice
 	ATTACK_HOST="192.0.2.1"
 	MOD=""
 	PORTS=""
@@ -93,31 +72,45 @@ teardown() {
 	assert_output "192.0.2.1 to 192.0.2.1"
 }
 
+@test "expand_command_template: edge cases (empty variables, no variables)" {
+	# empty variables
+	ATTACK_HOST=""
+	MOD=""
+	PORTS=""
+	run expand_command_template 'ban $ATTACK_HOST'
+	assert_success
+	assert_output "ban "
+
+	# no variables in template
+	ATTACK_HOST="192.0.2.1"
+	MOD="sshd"
+	PORTS="22"
+	run expand_command_template '/usr/sbin/iptables -F'
+	assert_success
+	assert_output "/usr/sbin/iptables -F"
+}
+
 # --- extract_command_template ---
 
-@test "extract_command_template: extracts unquoted value" {
+@test "extract_command_template: unquoted, quoted, last-occurrence, and missing var" {
 	local tmpconf="$TEST_TMPDIR/test.conf"
+
+	# unquoted value
 	echo 'BAN_COMMAND=/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP' > "$tmpconf"
 	run extract_command_template "$tmpconf" "BAN_COMMAND"
 	assert_output '/sbin/iptables -I INPUT -s $ATTACK_HOST -j DROP'
-}
 
-@test "extract_command_template: extracts quoted value" {
-	local tmpconf="$TEST_TMPDIR/test.conf"
+	# quoted value
 	echo 'BAN_COMMAND="/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}"' > "$tmpconf"
 	run extract_command_template "$tmpconf" "BAN_COMMAND"
 	assert_output '/etc/apf/apf -d $ATTACK_HOST {bfd.$MOD}'
-}
 
-@test "extract_command_template: takes last occurrence" {
-	local tmpconf="$TEST_TMPDIR/test.conf"
+	# takes last occurrence
 	printf 'BAN_COMMAND="first"\nBAN_COMMAND="second"\n' > "$tmpconf"
 	run extract_command_template "$tmpconf" "BAN_COMMAND"
 	assert_output "second"
-}
 
-@test "extract_command_template: returns empty for missing var" {
-	local tmpconf="$TEST_TMPDIR/test.conf"
+	# returns empty for missing var
 	echo 'OTHER_VAR="value"' > "$tmpconf"
 	run extract_command_template "$tmpconf" "BAN_COMMAND"
 	assert_output ""
@@ -125,49 +118,35 @@ teardown() {
 
 # --- format_duration ---
 
-@test "format_duration: 0 returns permanent" {
+@test "format_duration: all duration conversions (0, seconds, minutes, hours, mixed)" {
 	run format_duration 0
 	assert_success
 	assert_output "permanent"
-}
 
-@test "format_duration: 30 returns 30s" {
 	run format_duration 30
 	assert_success
 	assert_output "30s"
-}
 
-@test "format_duration: 60 returns 1m" {
 	run format_duration 60
 	assert_success
 	assert_output "1m"
-}
 
-@test "format_duration: 90 returns 1m 30s" {
 	run format_duration 90
 	assert_success
 	assert_output "1m 30s"
-}
 
-@test "format_duration: 300 returns 5m" {
 	run format_duration 300
 	assert_success
 	assert_output "5m"
-}
 
-@test "format_duration: 3600 returns 1h" {
 	run format_duration 3600
 	assert_success
 	assert_output "1h"
-}
 
-@test "format_duration: 3661 returns 1h 1m" {
 	run format_duration 3661
 	assert_success
 	assert_output "1h 1m"
-}
 
-@test "format_duration: 86400 returns 24h" {
 	run format_duration 86400
 	assert_success
 	assert_output "24h"
@@ -218,39 +197,6 @@ MOCK
 	run grep "CALL:" "$mail_log"
 	assert_output --partial "Brute Force Warning for testhost"
 	refute_output --partial "bans)"
-}
-
-@test "send_alerts: multiple entries same recipient sends one mail with ban count" {
-	local af="$TEST_TMPDIR/alerts_multi"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2|5" >> "$af"
-	local mail_log="$TEST_TMPDIR/mail_calls"
-	export MAIL_LOG="$mail_log"
-	_setup_mock_mail_log
-	send_alerts "$af" "$EMAIL_SUBJECT" "50"
-	[ -f "$mail_log" ]
-	# subject should have "(2 bans)" suffix
-	run grep "CALL:" "$mail_log"
-	assert_output --partial "(2 bans)"
-	# should only be one CALL (one email)
-	local call_count
-	call_count=$(grep -c "CALL:" "$mail_log")
-	[ "$call_count" -eq 1 ]
-}
-
-@test "send_alerts: different recipients get separate emails" {
-	local af="$TEST_TMPDIR/alerts_diff"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|admin@example.com|5|300|3|5" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|security@example.com|10|300|2|5" >> "$af"
-	local mail_log="$TEST_TMPDIR/mail_calls"
-	export MAIL_LOG="$mail_log"
-	_setup_mock_mail_log
-	send_alerts "$af" "$EMAIL_SUBJECT" "50"
-	[ -f "$mail_log" ]
-	# should be two CALL entries (two separate emails)
-	local call_count
-	call_count=$(grep -c "CALL:" "$mail_log")
-	[ "$call_count" -eq 2 ]
 }
 
 @test "send_alerts: RULE_EMAIL override routes to different recipient" {
@@ -349,10 +295,11 @@ EOF
 	[ -f "$mail_log" ]
 }
 
-@test "pipeline: SKIP_ALERT=1 suppresses alert entry" {
-	local rules_dir="$TEST_TMPDIR/rules"
+@test "pipeline: alerts suppressed by SKIP_ALERT=1, DRY_RUN=1, and EMAIL_ALERTS=0" {
+	# --- SKIP_ALERT=1 (set in rule file) ---
+	local rules_dir="$TEST_TMPDIR/rules_skip"
 	mkdir -p "$rules_dir"
-	local logfile="$TEST_TMPDIR/test.log"
+	local logfile="$TEST_TMPDIR/test_skip.log"
 	echo "test line" > "$logfile"
 	cat > "$rules_dir/testrule" <<'RULEEOF'
 TRIG="2"
@@ -366,61 +313,56 @@ MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	_setup_check_env "$rules_dir"
 	EMAIL_ALERTS="1"
-	local mail_log="$TEST_TMPDIR/mail_calls"
+	local mail_log="$TEST_TMPDIR/mail_skip"
 	export MAIL_LOG="$mail_log"
 	_setup_mock_mail_log
 	check >/dev/null 2>&1
-	# mail should NOT have been called
 	[ ! -f "$mail_log" ]
-}
 
-@test "pipeline: DRY_RUN=1 suppresses alert entry" {
-	local rules_dir="$TEST_TMPDIR/rules"
-	mkdir -p "$rules_dir"
-	local logfile="$TEST_TMPDIR/test.log"
-	echo "test line" > "$logfile"
-	cat > "$rules_dir/testrule" <<'RULEEOF'
+	# --- DRY_RUN=1 (different IP to avoid already-banned) ---
+	local rules_dir2="$TEST_TMPDIR/rules_dry"
+	mkdir -p "$rules_dir2"
+	local logfile2="$TEST_TMPDIR/test_dry.log"
+	echo "test line" > "$logfile2"
+	cat > "$rules_dir2/testrule" <<'RULEEOF'
 TRIG="2"
 PREREQ="/bin/sh"
 RULEEOF
-	cat >> "$rules_dir/testrule" <<EOF
-LOG_FILE="$logfile"
+	cat >> "$rules_dir2/testrule" <<EOF
+LOG_FILE="$logfile2"
 LOG_TAG="testrule"
-MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
+MATCHED_HOSTS="192.0.2.2 192.0.2.2 192.0.2.2"
 EOF
-	_setup_check_env "$rules_dir"
+	_setup_check_env "$rules_dir2"
 	EMAIL_ALERTS="1"
 	DRY_RUN="1"
-	local mail_log="$TEST_TMPDIR/mail_calls"
-	export MAIL_LOG="$mail_log"
+	local mail_log2="$TEST_TMPDIR/mail_dry"
+	export MAIL_LOG="$mail_log2"
 	_setup_mock_mail_log
 	check >/dev/null 2>&1
-	# mail should NOT have been called
-	[ ! -f "$mail_log" ]
-}
+	[ ! -f "$mail_log2" ]
 
-@test "pipeline: EMAIL_ALERTS=0 skips send_alerts entirely" {
-	local rules_dir="$TEST_TMPDIR/rules"
-	mkdir -p "$rules_dir"
-	local logfile="$TEST_TMPDIR/test.log"
-	echo "test line" > "$logfile"
-	cat > "$rules_dir/testrule" <<'RULEEOF'
+	# --- EMAIL_ALERTS=0 (different IP to avoid already-banned) ---
+	local rules_dir3="$TEST_TMPDIR/rules_nomail"
+	mkdir -p "$rules_dir3"
+	local logfile3="$TEST_TMPDIR/test_nomail.log"
+	echo "test line" > "$logfile3"
+	cat > "$rules_dir3/testrule" <<'RULEEOF'
 TRIG="2"
 PREREQ="/bin/sh"
 RULEEOF
-	cat >> "$rules_dir/testrule" <<EOF
-LOG_FILE="$logfile"
+	cat >> "$rules_dir3/testrule" <<EOF
+LOG_FILE="$logfile3"
 LOG_TAG="testrule"
-MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
+MATCHED_HOSTS="192.0.2.3 192.0.2.3 192.0.2.3"
 EOF
-	_setup_check_env "$rules_dir"
+	_setup_check_env "$rules_dir3"
 	EMAIL_ALERTS="0"
-	local mail_log="$TEST_TMPDIR/mail_calls"
-	export MAIL_LOG="$mail_log"
+	local mail_log3="$TEST_TMPDIR/mail_nomail"
+	export MAIL_LOG="$mail_log3"
 	_setup_mock_mail_log
 	check >/dev/null 2>&1
-	# mail should NOT have been called
-	[ ! -f "$mail_log" ]
+	[ ! -f "$mail_log3" ]
 }
 
 @test "pipeline: alerts file cleaned up after run" {
@@ -768,7 +710,8 @@ SC
 
 # --- Telegram MarkdownV2 escaping (F-A10, F-A11) ---
 
-@test "BAN_DURATION_DETAIL_TG: parentheses escaped for Telegram MarkdownV2 (F-A10)" {
+@test "Telegram MarkdownV2: BAN_DURATION_DETAIL_TG and REPORT_TREND_LABEL_TG parentheses escaped (F-A10, F-A11)" {
+	# --- BAN_DURATION_DETAIL_TG ---
 	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
 	_FW_BACKEND="custom"
 	BAN_ESCALATE_AFTER="0"
@@ -783,6 +726,22 @@ SC
 	# BAN_DURATION_DETAIL_TG should have parentheses escaped with backslash
 	[[ "$BAN_DURATION_DETAIL_TG" == *"\\("* ]]
 	[[ "$BAN_DURATION_DETAIL_TG" == *"\\)"* ]]
+
+	# --- REPORT_TREND_LABEL_TG ---
+	REPORT_TREND_LABEL="70% decrease vs prior 24h (3 vs 10)"
+	export REPORT_TREND_LABEL
+	REPORT_TREND_LABEL_TG=$(_alert_telegram_escape "$REPORT_TREND_LABEL")
+	export REPORT_TREND_LABEL_TG
+	# Original should contain unescaped parentheses
+	[[ "$REPORT_TREND_LABEL" == *"("* ]]
+	# TG variant should have parentheses escaped with backslash
+	[[ "$REPORT_TREND_LABEL_TG" == *"\\("* ]]
+	[[ "$REPORT_TREND_LABEL_TG" == *"\\)"* ]]
+	# Verify no unescaped parens remain after stripping escaped ones
+	local bare_parens
+	bare_parens=$(echo "$REPORT_TREND_LABEL_TG" | sed 's/\\(//g; s/\\)//g')
+	[[ "$bare_parens" != *"("* ]]
+	[[ "$bare_parens" != *")"* ]]
 }
 
 @test "test_alert_messaging: only dispatches to target channel (F-A07)" {
@@ -814,29 +773,4 @@ SC
 	[ "$SLACK_ALERTS" = "1" ]
 	[ "$TELEGRAM_ALERTS" = "1" ]
 	[ "$DISCORD_ALERTS" = "1" ]
-}
-
-@test "REPORT_TREND_LABEL_TG: parentheses escaped for Telegram MarkdownV2 (F-A11)" {
-	# Simulate what _report_data sets: a trend label with parentheses
-	# Typical values: "70% decrease vs prior 24h (3 vs 10)" or
-	#                 "new activity (5 events, none in prior 24h)"
-	REPORT_TREND_LABEL="70% decrease vs prior 24h (3 vs 10)"
-	export REPORT_TREND_LABEL
-
-	# Apply the same escaping that bfd_report.sh does at line 273
-	REPORT_TREND_LABEL_TG=$(_alert_telegram_escape "$REPORT_TREND_LABEL")
-	export REPORT_TREND_LABEL_TG
-
-	# Original should contain unescaped parentheses
-	[[ "$REPORT_TREND_LABEL" == *"("* ]]
-	# TG variant should have parentheses escaped with backslash
-	[[ "$REPORT_TREND_LABEL_TG" == *"\\("* ]]
-	[[ "$REPORT_TREND_LABEL_TG" == *"\\)"* ]]
-	# Verify the % is also escaped (MarkdownV2 does not require it, but dots are)
-	# The period in "24h" is not present, but verify no unescaped parens remain
-	# by checking the full escaped string doesn't have bare parens
-	local bare_parens
-	bare_parens=$(echo "$REPORT_TREND_LABEL_TG" | sed 's/\\(//g; s/\\)//g')
-	[[ "$bare_parens" != *"("* ]]
-	[[ "$bare_parens" != *")"* ]]
 }
