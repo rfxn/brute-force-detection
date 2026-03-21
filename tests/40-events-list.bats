@@ -440,3 +440,41 @@ RULE
 	assert_output --partial "showing 5"
 	assert_output --partial "--limit=0"
 }
+
+# --- rotated bans.history coverage (F-02) ---
+
+@test "_batch_ban_status_init: includes rotated bans.history archives" {
+	local now
+	now=$(date +"%s")
+	# Put ban in rotated archive, not current file
+	echo "$((now - 90000)) $((now - 89400)) 192.0.2.50 sshd ban" > "$INSTALL_PATH/tmp/bans.history.032026"
+	echo "$((now - 80000)) $((now - 79400)) 192.0.2.50 sshd ban" >> "$INSTALL_PATH/tmp/bans.history.032026"
+	# Current bans.history has a different IP
+	echo "$((now - 100)) $((now - 0)) 192.0.2.99 dovecot ban" > "$INSTALL_PATH/tmp/bans.history"
+
+	_batch_ban_status_init "$INSTALL_PATH"
+	# IP in rotated archive should show prev:2
+	run _batch_ban_status_lookup "192.0.2.50"
+	assert_output "prev:2"
+	# IP in current file should also work
+	run _batch_ban_status_lookup "192.0.2.99"
+	assert_output "prev:1"
+	_batch_ban_status_cleanup
+	rm -f "$INSTALL_PATH/tmp/bans.history.032026"
+}
+
+@test "_batch_ban_status_init: combines counts across current and rotated files" {
+	local now
+	now=$(date +"%s")
+	# 1 ban in rotated archive
+	echo "$((now - 90000)) $((now - 89400)) 192.0.2.60 sshd ban" > "$INSTALL_PATH/tmp/bans.history.031926"
+	# 2 bans in current file
+	echo "$((now - 500)) $((now - 0)) 192.0.2.60 sshd ban" > "$INSTALL_PATH/tmp/bans.history"
+	echo "$((now - 200)) $((now - 0)) 192.0.2.60 sshd escalate" >> "$INSTALL_PATH/tmp/bans.history"
+
+	_batch_ban_status_init "$INSTALL_PATH"
+	run _batch_ban_status_lookup "192.0.2.60"
+	assert_output "prev:3"
+	_batch_ban_status_cleanup
+	rm -f "$INSTALL_PATH/tmp/bans.history.031926"
+}

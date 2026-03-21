@@ -8,8 +8,9 @@ load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
-# Source _apool_ban_status from bfd (needed by search_ip)
+# Source functions needed by search_ip
 bfd_load_function _apool_ban_status
+bfd_load_function _search_ip_data
 
 setup() {
 	bfd_standard_setup
@@ -202,4 +203,29 @@ RULE
 	run _events_ip_awk "$events_file" "198.51.100.99" "$now" "300"
 	assert_success
 	assert_output ""
+}
+
+# --- rotated bans.history coverage (F-02) ---
+
+@test "_search_ip_data: includes ban history from rotated archives" {
+	local now
+	now=$(date +"%s")
+	# 2 bans in rotated archive
+	echo "$((now - 90000)) $((now - 89400)) 192.0.2.70 sshd ban" > "$INSTALL_PATH/tmp/bans.history.032026"
+	echo "$((now - 80000)) $((now - 79400)) 192.0.2.70 sshd ban" >> "$INSTALL_PATH/tmp/bans.history.032026"
+	# 1 ban in current file
+	echo "$((now - 500)) $((now - 0)) 192.0.2.70 sshd ban" > "$INSTALL_PATH/tmp/bans.history"
+	# Pool entry so IP is found
+	echo "$((now - 100)) 192.0.2.70 sshd 5 US ban 600 22 15000 service" > "$INSTALL_PATH/stats/attack.pool"
+
+	local output
+	output=$(_search_ip_data "$INSTALL_PATH" "192.0.2.70")
+	# D line format: D|ban_ts|ban_expiry|hist_24h|hist_total|...
+	local d_line
+	d_line=$(echo "$output" | grep '^D|')
+	# hist_total (field 5) should be 3 (2 rotated + 1 current)
+	local hist_total
+	hist_total=$(echo "$d_line" | awk -F'|' '{print $5}')
+	[ "$hist_total" = "3" ]
+	rm -f "$INSTALL_PATH/tmp/bans.history.032026"
 }
