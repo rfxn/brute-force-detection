@@ -394,6 +394,7 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 fi
 echo "$$" > "$LOCK_FILE.lk/pid"
 echo "$UTIME" > "$LOCK_FILE"
+chmod 640 "$LOCK_FILE" 2>/dev/null || true  # non-fatal: content is an epoch timestamp
 }
 
 check() {

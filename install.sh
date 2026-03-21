@@ -62,9 +62,10 @@ install_files(){
 		chmod 750 "$INSPATH/uninstall.sh"
 	fi
 
-	# CLI symlink
+	# CLI symlinks
 	mkdir -p "$(dirname "$BINPATH")"
 	pkg_symlink "$INSPATH/bfd" "$BINPATH"
+	pkg_symlink "$INSPATH/tlog" "$(dirname "$BINPATH")/tlog"
 
 	# Logrotate configuration
 	pkg_logrotate_install "logrotate.d.bfd" "bfd"

@@ -69,7 +69,9 @@ if [ -d "$INSPATH" ]; then
 
 	# Remove cron files, install directory, symlink, backups, default log
 	pkg_uninstall_cron /etc/cron.d/bfd /etc/cron.daily/bfd
-	pkg_uninstall_files "$INSPATH".bk.* "$INSPATH".[0-9]* "$INSPATH" "$BINPATH" /var/log/bfd_log
+	local _tlog_binpath
+	_tlog_binpath="$(dirname "$BINPATH")/tlog"
+	pkg_uninstall_files "$INSPATH".bk.* "$INSPATH".[0-9]* "$INSPATH" "$BINPATH" "$_tlog_binpath" /var/log/bfd_log
 
 	pkg_success "$APPN has been uninstalled."
 else
