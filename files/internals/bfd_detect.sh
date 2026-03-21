@@ -79,7 +79,7 @@ extract_hosts() {
 	# write tlog output to temp file once; sed reads from file per pattern
 	# instead of echo-piping multi-MB $tlog_input variable for each pattern
 	local _tlog_file
-	_tlog_file=$(mktemp "${TMPDIR:-/tmp}/.bfd_extract.XXXXXX")
+	_tlog_file=$(mktemp "$INSTALL_PATH/tmp/.bfd_extract.XXXXXX")
 	sed 's/::ffff://g' > "$_tlog_file"
 	if [ ! -s "$_tlog_file" ]; then
 		command rm -f "$_tlog_file"
@@ -96,7 +96,7 @@ extract_hosts() {
 			IGNOREREGEX=""
 		else
 			local _tlog_filtered
-			_tlog_filtered=$(mktemp "${TMPDIR:-/tmp}/.bfd_extract.XXXXXX")
+			_tlog_filtered=$(mktemp "$INSTALL_PATH/tmp/.bfd_extract.XXXXXX")
 			grep -Ev "$IGNOREREGEX" "$_tlog_file" > "$_tlog_filtered" || true  # exit 1 = all lines match (valid)
 			command mv -f "$_tlog_filtered" "$_tlog_file"
 			if [ ! -s "$_tlog_file" ]; then

@@ -586,7 +586,7 @@ _batch_ip_to_country() {
 
 	# Dual-stack: partition stdin, run each DB lookup, merge
 	local _tmpdir
-	_tmpdir=$(mktemp -d /tmp/bfd-batch.XXXXXX)
+	_tmpdir=$(mktemp -d "$INSTALL_PATH/tmp/bfd-batch.XXXXXX")
 	# shellcheck disable=SC2064
 	trap "command rm -rf '$_tmpdir'" RETURN
 	local _v4="$_tmpdir/v4" _v6="$_tmpdir/v6"

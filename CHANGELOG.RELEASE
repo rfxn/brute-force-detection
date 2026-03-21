@@ -24,6 +24,8 @@
 [Fix] Replace mawk-incompatible length(array) with portable flag in events
       AWK block
 [Fix] cron.daily version header updated to 2.0.2
+[Fix] Temp file creation in extract_hosts and _batch_ip_to_country uses
+      $INSTALL_PATH/tmp (root-owned 750) instead of /tmp fallback
 
 2.0.1:
 
