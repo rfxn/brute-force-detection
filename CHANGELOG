@@ -28,6 +28,16 @@
       $INSTALL_PATH/tmp (root-owned 750) instead of /tmp fallback
 [Fix] _check_file_safety permission parsing uses zero-padded stat output
       (%04a) to correctly handle setuid/setgid/sticky 4-digit permissions
+[Fix] IP report and list views now search rotated bans.history archives —
+      previously showed "Ban history: none" for IPs banned >1 day ago
+[Fix] show_status "Top services" trailing comma when fewer than 3 services
+[Fix] Lock contention message downgraded to log-file-only when holder is
+      alive — eliminates syslog noise from cron during watch mode
+[Fix] Stale IPv6 GeoIP build directories cleaned up at update-ipcountry.sh
+      startup (orphaned by prior interrupted builds)
+[New] audit.log added to logrotate configuration (was growing unbounded)
+[New] install.sh creates /usr/local/sbin/tlog symlink for PATH accessibility
+[Change] lock.utime created with mode 640 (was inheriting umask 644)
 
 2.0.1:
 
