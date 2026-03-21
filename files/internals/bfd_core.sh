@@ -383,7 +383,7 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 					exit "$EXIT_LOCK_ERROR"
 				}
 			else
-				eout "l" "locked subsystem, already running (pid=$_lock_pid, $DIFF seconds old), skipping."
+				eout "locked subsystem, already running (pid=$_lock_pid, $DIFF seconds old), skipping." "l"
 				exit "$EXIT_LOCK_ERROR"
 			fi
 		fi

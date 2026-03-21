@@ -1031,7 +1031,6 @@ search_ip_csv() {
 _apool_ban_status() {
 	local aip="$1"
 	local bans_active="$INSTALL_PATH/tmp/bans.active"
-	local bans_history="$INSTALL_PATH/tmp/bans.history"
 	if awk -v ip="$aip" '$3 == ip {found=1; exit} END {exit !found}' "$bans_active" 2>/dev/null; then
 		local ban_expiry
 		ban_expiry=$(awk -v ip="$aip" '$3 == ip {print $2; exit}' "$bans_active")
@@ -1046,12 +1045,19 @@ _apool_ban_status() {
 			fi
 			echo "BANNED(${remain}m)"
 		fi
-	elif [ -f "$bans_history" ]; then
-		local hist_count
-		hist_count=$(awk -v ip="$aip" '$3 == ip && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
-			"$bans_history")
-		if [ "$hist_count" -gt 0 ]; then
-			echo "prev:$hist_count"
+	else
+		local _hist_files=()
+		local _hf
+		for _hf in "$INSTALL_PATH/tmp"/bans.history*; do
+			[ -f "$_hf" ] && [ -s "$_hf" ] && _hist_files+=("$_hf")
+		done
+		if [ ${#_hist_files[@]} -gt 0 ]; then
+			local hist_count
+			hist_count=$(awk -v ip="$aip" '$3 == ip && ($5 == "ban" || $5 == "escalate") {c++} END {print c+0}' \
+				"${_hist_files[@]}")
+			if [ "$hist_count" -gt 0 ]; then
+				echo "prev:$hist_count"
+			fi
 		fi
 	fi
 }
