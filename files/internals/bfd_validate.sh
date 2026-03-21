@@ -197,9 +197,9 @@ sanitize_ports() {
 _check_file_safety() {
 	local file="$1"
 	_CSAF_UID=$(stat -L -c '%u' "$file")
-	_CSAF_PERMS=$(stat -L -c '%a' "$file")
-	local group_digit="${_CSAF_PERMS:1:1}"
-	local world_digit="${_CSAF_PERMS: -1}"
+	_CSAF_PERMS=$(stat -L -c '%04a' "$file")
+	local group_digit="${_CSAF_PERMS:2:1}"
+	local world_digit="${_CSAF_PERMS:3:1}"
 	if [ "$_CSAF_UID" != "0" ] || [ "$((group_digit & 2))" -ne 0 ] || [ "$((world_digit & 2))" -ne 0 ]; then
 		return 1
 	fi

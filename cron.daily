@@ -26,10 +26,10 @@ INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
 _int_conf="$INSTALL_PATH/internals/internals.conf"
 if [ -f "$_int_conf" ]; then
 	_int_owner=$(stat -L -c '%u' "$_int_conf" 2>/dev/null)
-	_int_perms=$(stat -L -c '%a' "$_int_conf" 2>/dev/null)
+	_int_perms=$(stat -L -c '%04a' "$_int_conf" 2>/dev/null)
 	if [ "${_int_owner:-}" = "0" ] && \
-	   [ "$(( ${_int_perms:1:1} & 2 ))" -eq 0 ] 2>/dev/null && \
-	   [ "$(( ${_int_perms: -1} & 2 ))" -eq 0 ] 2>/dev/null; then
+	   [ "$(( ${_int_perms:2:1} & 2 ))" -eq 0 ] 2>/dev/null && \
+	   [ "$(( ${_int_perms:3:1} & 2 ))" -eq 0 ] 2>/dev/null; then
 		# shellcheck disable=SC1090
 		. "$_int_conf"
 	fi

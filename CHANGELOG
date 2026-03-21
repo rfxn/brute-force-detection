@@ -26,6 +26,8 @@
 [Fix] cron.daily version header updated to 2.0.2
 [Fix] Temp file creation in extract_hosts and _batch_ip_to_country uses
       $INSTALL_PATH/tmp (root-owned 750) instead of /tmp fallback
+[Fix] _check_file_safety permission parsing uses zero-padded stat output
+      (%04a) to correctly handle setuid/setgid/sticky 4-digit permissions
 
 2.0.1:
 
