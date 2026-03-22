@@ -1,4 +1,6 @@
 2.0.2:
+[New] bfd -S shows CDN provider summary (count, treatments, update age)
+[New] bfd -a <IP> shows CDN provider annotation when IP matches a range
 [New] CDN batch lookup in check() with O(1) per-IP treatment dispatch
 [New] Three CDN treatment modes: ignore (skip), exclude (record, no ban),
       derate (reduced pressure weight)

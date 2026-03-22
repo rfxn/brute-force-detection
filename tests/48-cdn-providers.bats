@@ -657,3 +657,60 @@ EOF
 	assert_output --partial '"match"'
 	assert_output --partial '"cloudflare"'
 }
+
+# ============================================================
+# Status and event integration (Phase 5)
+# ============================================================
+
+@test "show_status includes CDN provider summary when CDN_ENABLE=1" {
+	bfd_require_bash42
+	CDN_ENABLE="1"
+	# Create cdn-providers.conf with 2 providers
+	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
+cloudflare  ignore   10  text  https://example.com/v4  -
+aws-cf      derate    5  text  https://example.com/v4  -
+EOF
+	# Create cdn.dat with ranges (recent mtime via touch)
+	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+16777216 16777471 cloudflare ignore 10
+167772160 167772415 aws-cf derate 5
+EOF
+	# show_status needs RULES_PATH and BFD_LOG_PATH
+	RULES_PATH="$INSTALL_PATH/rules"
+	mkdir -p "$RULES_PATH"
+	run show_status "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "CDN providers:"
+	assert_output --partial "2 active"
+	assert_output --partial "cloudflare"
+	assert_output --partial "aws-cf"
+}
+
+@test "show_status omits CDN line when CDN_ENABLE=0" {
+	bfd_require_bash42
+	CDN_ENABLE="0"
+	RULES_PATH="$INSTALL_PATH/rules"
+	mkdir -p "$RULES_PATH"
+	run show_status "$INSTALL_PATH"
+	assert_success
+	refute_output --partial "CDN providers:"
+}
+
+@test "search_ip shows CDN match annotation" {
+	bfd_require_bash42
+	CDN_ENABLE="1"
+	# Create cdn.dat with range covering 1.0.0.0/24 (16777216..16777471)
+	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+16777216 16777471 cloudflare ignore 10
+EOF
+	# Create pressure.dat and attack.pool with data for 1.0.0.50
+	local now
+	now=$(date +%s)
+	echo "$now 1.0.0.50 sshd 1" > "$INSTALL_PATH/tmp/pressure.dat"
+	echo "$now 1.0.0.50 sshd observed 1" > "$INSTALL_PATH/stats/attack.pool"
+	run search_ip "$INSTALL_PATH" "1.0.0.50"
+	assert_success
+	assert_output --partial "CDN provider:"
+	assert_output --partial "cloudflare"
+	assert_output --partial "ignore"
+}
