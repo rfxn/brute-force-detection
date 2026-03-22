@@ -555,3 +555,105 @@ EOF
 	# 192.168.1.50 should be in pool as ban (or ban-failed since DRY_RUN=0 with /bin/true)
 	grep -q "192.168.1.50" "$pool"
 }
+
+# ============================================================
+# CLI functions — cdn_list, cdn_detail, cdn_check_ip, cdn_update
+# ============================================================
+
+# Helper: set up CDN provider environment for CLI function tests
+_cdn_cli_setup() {
+	CDN_ENABLE="1"
+	mkdir -p "$INSTALL_PATH/internals"
+	# Create cdn-providers.conf with one provider
+	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
+cloudflare  ignore   10  text  https://example.com/v4  https://example.com/v6
+fastly      exclude  10  text  https://example.com/v4  -
+EOF
+	# Create cdn.dat with ranges for cloudflare and fastly
+	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+16777216 16777471 cloudflare ignore 10
+167772160 167772415 fastly exclude 10
+EOF
+	# Create cdn6.dat with a range for cloudflare
+	cat > "$INSTALL_PATH/cdn6.dat" <<'EOF'
+2400cb00000000000000000000000000 2400cb00ffffffffffffffffffffffff cloudflare ignore 10
+EOF
+}
+
+@test "cdn_list: shows active providers with status" {
+	_cdn_cli_setup
+	run cdn_list "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "cloudflare"
+	assert_output --partial "ignore"
+	assert_output --partial "fastly"
+	assert_output --partial "exclude"
+}
+
+@test "cdn_list: shows none when no providers configured" {
+	CDN_ENABLE="1"
+	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
+# all commented out
+EOF
+	run cdn_list "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "none configured"
+}
+
+@test "cdn_list: shows disabled when CDN_ENABLE=0" {
+	CDN_ENABLE="0"
+	run cdn_list "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "disabled"
+	assert_output --partial "CDN_ENABLE=0"
+}
+
+@test "cdn_list_json: outputs valid JSON array" {
+	_cdn_cli_setup
+	run cdn_list_json "$INSTALL_PATH"
+	assert_success
+	# Must be a JSON array
+	assert_line --index 0 "["
+	assert_output --partial '"name"'
+	assert_output --partial '"cloudflare"'
+	assert_output --partial '"treatment"'
+}
+
+@test "cdn_detail: shows CIDRs for known provider" {
+	_cdn_cli_setup
+	run cdn_detail "$INSTALL_PATH" "cloudflare"
+	assert_success
+	assert_output --partial "cloudflare"
+	# Should show IPv4 ranges
+	assert_output --partial "IPv4"
+}
+
+@test "cdn_detail: error for unknown provider" {
+	_cdn_cli_setup
+	run cdn_detail "$INSTALL_PATH" "nonexistent"
+	assert_failure
+	assert_output --partial "not found"
+}
+
+@test "cdn_check_ip: returns match for IP in CDN range" {
+	_cdn_cli_setup
+	run cdn_check_ip "$INSTALL_PATH" "1.0.0.50"
+	assert_success
+	assert_output --partial "cloudflare"
+	assert_output --partial "match"
+}
+
+@test "cdn_check_ip: returns no-match for IP not in CDN range" {
+	_cdn_cli_setup
+	run cdn_check_ip "$INSTALL_PATH" "8.8.8.8"
+	assert_success
+	assert_output --partial "no match"
+}
+
+@test "cdn_check_ip_json: returns JSON match result" {
+	_cdn_cli_setup
+	run cdn_check_ip_json "$INSTALL_PATH" "1.0.0.50"
+	assert_success
+	assert_output --partial '"match"'
+	assert_output --partial '"cloudflare"'
+}

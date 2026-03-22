@@ -637,3 +637,417 @@ _batch_cdn_lookup() {
 	# trap RETURN handles cleanup; explicit rm as belt-and-suspenders
 	command rm -rf "$_tmpdir"
 }
+
+# ---------------------------------------------------------------------------
+# CLI functions — cdn_list, cdn_list_json, cdn_detail, cdn_detail_json,
+#                 cdn_check_ip, cdn_check_ip_json, cdn_update
+# ---------------------------------------------------------------------------
+
+# _cdn_fmt_ago epoch — format seconds-ago as human-readable "Xh ago" / "Xd ago"
+# Args: epoch — file mtime as epoch seconds
+# Prints: short human string
+_cdn_fmt_ago() {
+	local epoch="$1"
+	local now
+	now=$(date +%s)
+	local diff=$(( now - epoch ))
+	if [ "$diff" -lt 60 ]; then
+		echo "${diff}s ago"
+	elif [ "$diff" -lt 3600 ]; then
+		echo "$(( diff / 60 ))m ago"
+	elif [ "$diff" -lt 86400 ]; then
+		echo "$(( diff / 3600 ))h ago"
+	else
+		echo "$(( diff / 86400 ))d ago"
+	fi
+}
+
+# cdn_list install_path — list all CDN providers with status table.
+# Reads cdn-providers.conf, cdn.dat, cdn6.dat. Outputs formatted table.
+# Args: install_path — BFD install directory
+cdn_list() {
+	local install_path="$1"
+
+	if [ "${CDN_ENABLE:-0}" = "0" ]; then
+		echo "CDN providers: disabled (CDN_ENABLE=0)"
+		return 0
+	fi
+
+	local conf_file="$install_path/cdn-providers.conf"
+	if [ ! -f "$conf_file" ]; then
+		echo "CDN providers: none configured (edit cdn-providers.conf to add providers)"
+		return 0
+	fi
+
+	if ! _cdn_load_providers "$conf_file"; then
+		echo "CDN providers: none configured (edit cdn-providers.conf to add providers)"
+		return 0
+	fi
+
+	if [ "$_CDN_COUNT" -eq 0 ]; then
+		echo "CDN providers: none configured (edit cdn-providers.conf to add providers)"
+		return 0
+	fi
+
+	local db_v4="$install_path/cdn.dat"
+	local db_v6="$install_path/cdn6.dat"
+
+	# Count active providers
+	local active_count="$_CDN_COUNT"
+	echo "CDN Providers ($active_count active)"
+	echo ""
+
+	# Table header
+	local header
+	header="NAME|TREATMENT|MULT|IPv4|IPv6|UPDATED|STATUS"
+	{
+		echo "$header"
+		local i _name _treatment _mult _v4_count _v6_count _updated _status
+		for (( i=0; i<_CDN_COUNT; i++ )); do
+			_name="${_CDN_NAMES[$i]}"
+			_treatment="${_CDN_TREATMENTS[$i]}"
+			_mult="${_CDN_MULTS[$i]}"
+
+			# Count ranges in databases for this provider
+			_v4_count=0
+			_v6_count=0
+			if [ -f "$db_v4" ] && [ -s "$db_v4" ]; then
+				_v4_count=$(grep -c " ${_name} " "$db_v4" 2>/dev/null || true)  # grep -c exits 1 on 0
+			fi
+			if [ -f "$db_v6" ] && [ -s "$db_v6" ]; then
+				_v6_count=$(grep -c " ${_name} " "$db_v6" 2>/dev/null || true)  # grep -c exits 1 on 0
+			fi
+
+			# Determine update time and status from db file mtime
+			_updated="--"
+			_status="no data"
+			if [ -f "$db_v4" ] && [ -s "$db_v4" ]; then
+				local _mtime
+				_mtime=$(stat -c '%Y' "$db_v4" 2>/dev/null)  # file existence already checked
+				if [ -n "$_mtime" ]; then
+					_updated=$(_cdn_fmt_ago "$_mtime")
+					_status="current"
+				fi
+			fi
+
+			# Format multiplier as divisor display (10 -> 1.0x, 5 -> 0.5x, etc.)
+			local _mult_display
+			if [ "$_mult" -eq 10 ]; then
+				_mult_display="1.0x"
+			else
+				# integer division: _mult / 10 with one decimal
+				local _whole=$(( _mult / 10 ))
+				local _frac=$(( _mult % 10 ))
+				_mult_display="${_whole}.${_frac}x"
+			fi
+
+			echo "${_name}|${_treatment}|${_mult_display}|${_v4_count}|${_v6_count}|${_updated}|${_status}"
+		done
+	} | format_table
+}
+
+# cdn_list_json install_path — JSON array of provider objects.
+# Args: install_path — BFD install directory
+cdn_list_json() {
+	local install_path="$1"
+
+	if [ "${CDN_ENABLE:-0}" = "0" ]; then
+		echo "[]"
+		return 0
+	fi
+
+	local conf_file="$install_path/cdn-providers.conf"
+	if [ ! -f "$conf_file" ] || ! _cdn_load_providers "$conf_file" || [ "$_CDN_COUNT" -eq 0 ]; then
+		echo "[]"
+		return 0
+	fi
+
+	local db_v4="$install_path/cdn.dat"
+	local db_v6="$install_path/cdn6.dat"
+
+	echo "["
+	local i _name _treatment _mult _v4_count _v6_count _updated_iso _first=1
+	for (( i=0; i<_CDN_COUNT; i++ )); do
+		_name="${_CDN_NAMES[$i]}"
+		_treatment="${_CDN_TREATMENTS[$i]}"
+		_mult="${_CDN_MULTS[$i]}"
+
+		_v4_count=0
+		_v6_count=0
+		if [ -f "$db_v4" ] && [ -s "$db_v4" ]; then
+			_v4_count=$(grep -c " ${_name} " "$db_v4" 2>/dev/null || true)  # grep -c exits 1 on 0
+		fi
+		if [ -f "$db_v6" ] && [ -s "$db_v6" ]; then
+			_v6_count=$(grep -c " ${_name} " "$db_v6" 2>/dev/null || true)  # grep -c exits 1 on 0
+		fi
+
+		_updated_iso=""
+		if [ -f "$db_v4" ]; then
+			local _mtime
+			_mtime=$(stat -c '%Y' "$db_v4" 2>/dev/null)  # file existence already checked
+			if [ -n "$_mtime" ]; then
+				_updated_iso=$(_fmt_ts_iso "$_mtime")
+			fi
+		fi
+
+		if [ "$_first" -eq 1 ]; then
+			_first=0
+		else
+			echo ","
+		fi
+		echo "  {"
+		echo "    \"name\": \"$(_json_escape "$_name")\","
+		echo "    \"treatment\": \"$(_json_escape "$_treatment")\","
+		echo "    \"multiplier\": $_mult,"
+		echo "    \"ipv4_ranges\": $_v4_count,"
+		echo "    \"ipv6_ranges\": $_v6_count,"
+		echo "    \"updated\": \"$(_json_escape "$_updated_iso")\""
+		echo "  }"
+	done
+	echo "]"
+}
+
+# cdn_detail install_path provider — show all CIDRs for a specific provider.
+# Args: install_path — BFD install directory
+#       provider — provider name
+cdn_detail() {
+	local install_path="$1" provider="$2"
+
+	local db_v4="$install_path/cdn.dat"
+	local db_v6="$install_path/cdn6.dat"
+
+	# Verify provider exists in config
+	local conf_file="$install_path/cdn-providers.conf"
+	local _found=0
+	if [ -f "$conf_file" ]; then
+		_cdn_load_providers "$conf_file"
+		local i
+		for (( i=0; i<_CDN_COUNT; i++ )); do
+			if [ "${_CDN_NAMES[$i]}" = "$provider" ]; then
+				_found=1
+				break
+			fi
+		done
+	fi
+
+	if [ "$_found" -eq 0 ]; then
+		echo "error: CDN provider '$provider' not found in cdn-providers.conf." >&2
+		return 1
+	fi
+
+	echo "CDN Provider: $provider"
+	echo "  Treatment: ${_CDN_TREATMENTS[$i]}"
+	echo "  Multiplier: ${_CDN_MULTS[$i]}"
+	echo ""
+
+	# Show IPv4 ranges
+	local _v4_count=0
+	if [ -f "$db_v4" ] && [ -s "$db_v4" ]; then
+		echo "IPv4 ranges:"
+		while IFS= read -r _line; do
+			local _start _end _prov _treat _m
+			read -r _start _end _prov _treat _m <<< "$_line"
+			if [ "$_prov" = "$provider" ]; then
+				echo "  $_start - $_end"
+				_v4_count=$((_v4_count + 1))
+			fi
+		done < "$db_v4"
+		if [ "$_v4_count" -eq 0 ]; then
+			echo "  (none)"
+		fi
+	else
+		echo "IPv4 ranges: (no database)"
+	fi
+
+	# Show IPv6 ranges
+	local _v6_count=0
+	if [ -f "$db_v6" ] && [ -s "$db_v6" ]; then
+		echo "IPv6 ranges:"
+		while IFS= read -r _line; do
+			local _start _end _prov _treat _m
+			read -r _start _end _prov _treat _m <<< "$_line"
+			if [ "$_prov" = "$provider" ]; then
+				echo "  $_start - $_end"
+				_v6_count=$((_v6_count + 1))
+			fi
+		done < "$db_v6"
+		if [ "$_v6_count" -eq 0 ]; then
+			echo "  (none)"
+		fi
+	else
+		echo "IPv6 ranges: (no database)"
+	fi
+
+	echo ""
+	echo "Total: $_v4_count IPv4, $_v6_count IPv6 ranges"
+}
+
+# cdn_detail_json install_path provider — JSON CIDR list for a provider.
+# Args: install_path — BFD install directory
+#       provider — provider name
+cdn_detail_json() {
+	local install_path="$1" provider="$2"
+
+	local db_v4="$install_path/cdn.dat"
+	local db_v6="$install_path/cdn6.dat"
+
+	# Verify provider exists
+	local conf_file="$install_path/cdn-providers.conf"
+	local _found=0 _treatment="" _mult=""
+	if [ -f "$conf_file" ]; then
+		_cdn_load_providers "$conf_file"
+		local i
+		for (( i=0; i<_CDN_COUNT; i++ )); do
+			if [ "${_CDN_NAMES[$i]}" = "$provider" ]; then
+				_found=1
+				_treatment="${_CDN_TREATMENTS[$i]}"
+				_mult="${_CDN_MULTS[$i]}"
+				break
+			fi
+		done
+	fi
+
+	if [ "$_found" -eq 0 ]; then
+		echo "error: CDN provider '$provider' not found in cdn-providers.conf." >&2
+		return 1
+	fi
+
+	echo "{"
+	echo "  \"provider\": \"$(_json_escape "$provider")\","
+	echo "  \"treatment\": \"$(_json_escape "$_treatment")\","
+	echo "  \"multiplier\": $_mult,"
+
+	# IPv4 ranges
+	echo "  \"ipv4_ranges\": ["
+	local _first=1
+	if [ -f "$db_v4" ] && [ -s "$db_v4" ]; then
+		while IFS= read -r _line; do
+			local _start _end _prov _treat _m
+			read -r _start _end _prov _treat _m <<< "$_line"
+			if [ "$_prov" = "$provider" ]; then
+				if [ "$_first" -eq 1 ]; then
+					_first=0
+				else
+					echo ","
+				fi
+				printf '    {"start": %s, "end": %s}' "$_start" "$_end"
+			fi
+		done < "$db_v4"
+	fi
+	echo ""
+	echo "  ],"
+
+	# IPv6 ranges
+	echo "  \"ipv6_ranges\": ["
+	_first=1
+	if [ -f "$db_v6" ] && [ -s "$db_v6" ]; then
+		while IFS= read -r _line; do
+			local _start _end _prov _treat _m
+			read -r _start _end _prov _treat _m <<< "$_line"
+			if [ "$_prov" = "$provider" ]; then
+				if [ "$_first" -eq 1 ]; then
+					_first=0
+				else
+					echo ","
+				fi
+				printf '    {"start": "%s", "end": "%s"}' "$_start" "$_end"
+			fi
+		done < "$db_v6"
+	fi
+	echo ""
+	echo "  ]"
+	echo "}"
+}
+
+# cdn_check_ip install_path ip — single IP lookup via _cdn_lookup.
+# Display match or no-match result.
+# Args: install_path — BFD install directory
+#       ip — IPv4 or IPv6 address to check
+cdn_check_ip() {
+	local install_path="$1" ip="$2"
+
+	local db_file
+	if [[ "$ip" == *:* ]]; then
+		db_file="$install_path/cdn6.dat"
+	else
+		db_file="$install_path/cdn.dat"
+	fi
+
+	local result
+	if result=$(_cdn_lookup "$ip" "$db_file"); then
+		local _prov _treat _mult
+		read -r _prov _treat _mult <<< "$result"
+		echo "CDN match: $ip -> provider=$_prov treatment=$_treat multiplier=$_mult"
+	else
+		echo "CDN no match: $ip does not match any CDN provider range"
+	fi
+}
+
+# cdn_check_ip_json install_path ip — JSON result for single IP lookup.
+# Args: install_path — BFD install directory
+#       ip — IPv4 or IPv6 address to check
+cdn_check_ip_json() {
+	local install_path="$1" ip="$2"
+
+	local db_file
+	if [[ "$ip" == *:* ]]; then
+		db_file="$install_path/cdn6.dat"
+	else
+		db_file="$install_path/cdn.dat"
+	fi
+
+	local result
+	if result=$(_cdn_lookup "$ip" "$db_file"); then
+		local _prov _treat _mult
+		read -r _prov _treat _mult <<< "$result"
+		echo "{"
+		echo "  \"ip\": \"$(_json_escape "$ip")\","
+		echo "  \"match\": true,"
+		echo "  \"provider\": \"$(_json_escape "$_prov")\","
+		echo "  \"treatment\": \"$(_json_escape "$_treat")\","
+		echo "  \"multiplier\": $_mult"
+		echo "}"
+	else
+		echo "{"
+		echo "  \"ip\": \"$(_json_escape "$ip")\","
+		echo "  \"match\": false"
+		echo "}"
+	fi
+}
+
+# cdn_update install_path — fetch and compile all provider ranges.
+# Checks curl/wget availability first. Reports results.
+# Args: install_path — BFD install directory
+cdn_update() {
+	local install_path="$1"
+
+	# Check for HTTP client
+	if [ -z "$CDN_CURL_BIN" ] && [ -z "$CDN_WGET_BIN" ]; then
+		echo "error: cdn update requires curl or wget (neither found)." >&2
+		return 1
+	fi
+
+	local conf_file="$install_path/cdn-providers.conf"
+	if [ ! -f "$conf_file" ]; then
+		echo "error: cdn-providers.conf not found at $conf_file" >&2
+		return 1
+	fi
+
+	echo "CDN database update"
+	echo "  config: $conf_file"
+	echo ""
+
+	_cdn_compile_db "$conf_file" "$install_path/cdn.dat" "$install_path/cdn6.dat"
+	local rc=$?
+
+	echo ""
+	if [ "$rc" -eq 0 ]; then
+		echo "Update complete: $_CDN_BUILD_COUNT providers, $_CDN_BUILD_RANGES ranges"
+		if [ "$_CDN_BUILD_FAIL" -gt 0 ]; then
+			echo "  warnings: $_CDN_BUILD_FAIL provider(s) failed to fetch"
+		fi
+	else
+		echo "Update failed." >&2
+		return 1
+	fi
+}
