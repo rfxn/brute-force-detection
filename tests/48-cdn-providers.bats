@@ -319,3 +319,53 @@ EOF
 	[ -f "$TEST_TMPDIR/cdn.dat" ]
 	[ ! -s "$TEST_TMPDIR/cdn.dat" ]
 }
+
+# ============================================================
+# pressure-country.conf format migration
+# ============================================================
+
+@test "country_weight reads whitespace-delimited format" {
+	cat > "$TEST_TMPDIR/pcountry.conf" <<'EOF'
+CN 20
+RU 15
+EOF
+	run country_weight "CN" "$TEST_TMPDIR/pcountry.conf"
+	assert_success
+	assert_output "20"
+}
+
+@test "country_weight reads old CC=MULT format (backward compat)" {
+	cat > "$TEST_TMPDIR/pcountry.conf" <<'EOF'
+CN=20
+RU=15
+EOF
+	run country_weight "CN" "$TEST_TMPDIR/pcountry.conf"
+	assert_success
+	assert_output "20"
+}
+
+@test "pressure-country.conf whitespace format loads into _cw_map" {
+	bfd_require_bash42
+	cat > "$INSTALL_PATH/pressure-country.conf" <<'EOF'
+CN 20
+RU 15
+EOF
+	# Load _cw_map using the same pattern as check() in bfd_core.sh
+	declare -A _cw_map
+	local _cw_file="$INSTALL_PATH/pressure-country.conf"
+	local _cw_cc _cw_val
+	while read -r _cw_cc _cw_val; do
+		[[ "$_cw_cc" == \#* ]] && continue
+		[ -z "$_cw_cc" ] && continue
+		# dual-format: handle both CC=MULT (old) and CC MULT (new)
+		if [[ "$_cw_cc" == *=* ]]; then
+			_cw_val="${_cw_cc#*=}"
+			_cw_cc="${_cw_cc%%=*}"
+		fi
+		[ -z "$_cw_val" ] && continue
+		_cw_map[$_cw_cc]="$_cw_val"
+	done < "$_cw_file"
+
+	[ "${_cw_map[CN]}" = "20" ]
+	[ "${_cw_map[RU]}" = "15" ]
+}

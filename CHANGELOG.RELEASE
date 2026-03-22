@@ -4,6 +4,10 @@
       lookup (IPv4 integer + IPv6 hex), curl/wget fetch with JSON/text extraction
 [New] cdn-providers.conf — whitespace-delimited provider config with 5
       commented defaults (Cloudflare, AWS CloudFront, Fastly, Google Cloud, Akamai)
+[Change] pressure-country.conf migrated from CC=MULT to CC MULT (fstab-style)
+[Change] country_weight() and _cw_map loader use dual-format awk (handles both
+      old CC=MULT and new CC MULT formats for backward compatibility)
+[Change] importconf auto-detects old CC=MULT format and converts on upgrade
 [New] update-cdn-providers.sh — standalone fetch/compile script for CDN IP
       databases (mirrors update-ipcountry.sh pattern)
 [Change] Decompose bfd.lib.sh (~4,900 lines) into 8 functionally-organized

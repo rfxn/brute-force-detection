@@ -416,9 +416,15 @@ check() {
 	local _cw_file="$INSTALL_PATH/pressure-country.conf"
 	if [ -f "$_cw_file" ]; then
 		local _cw_cc _cw_val
-		while IFS='=' read -r _cw_cc _cw_val; do
+		while read -r _cw_cc _cw_val; do
 			[[ "$_cw_cc" == \#* ]] && continue
 			[ -z "$_cw_cc" ] && continue
+			# dual-format: handle both CC=MULT (old) and CC MULT (new)
+			if [[ "$_cw_cc" == *=* ]]; then
+				_cw_val="${_cw_cc#*=}"
+				_cw_cc="${_cw_cc%%=*}"
+			fi
+			[ -z "$_cw_val" ] && continue
 			_cw_map[$_cw_cc]="$_cw_val"
 		done < "$_cw_file"
 	fi

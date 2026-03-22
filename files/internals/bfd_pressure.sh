@@ -501,9 +501,9 @@ country_weight() {
 		echo "10"
 		return 0
 	fi
-	awk -F= -v cc="$cc" '
-	/^#/ { next }
-	/^$/ { next }
+	awk -v cc="$cc" '
+	/^#/ || /^$/ { next }
+	index($0,"=") { split($0,a,"="); if (a[1]==cc) { print a[2]; found=1; exit }; next }
 	$1 == cc { print $2; found=1; exit }
 	END { if (!found) print 10 }' "$weights_file"
 }
