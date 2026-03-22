@@ -1,4 +1,5 @@
 2.0.2:
+[Change] Update man page and README for new pressure.conf whitespace format
 [Change] Ship pressure.conf default in new whitespace-delimited format (weight=N trip=N)
 [Change] importconf detects old colon-format pressure.conf and converts via awk on upgrade
 [Change] Pre-thresholds rule migration path emits new whitespace format

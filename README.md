@@ -211,7 +211,7 @@ When upgrading from a previous BFD installation (including v1.5-2), `install.sh`
 |----------|---------|
 | User configuration | `conf.bfd` values merged onto new template |
 | Legacy variable names | `TRIG` → `PRESSURE_TRIP`, `TRIG_WINDOW` → `PRESSURE_HALF_LIFE`, `TRIG_GLOBAL` → `PRESSURE_TRIP_GLOBAL`, `BAN_DURATION` → `BAN_TTL`, `BAN_PERMANENT_*` → `BAN_ESCALATE_*` |
-| Per-rule overrides | `pressure.conf` preserved from previous install |
+| Per-rule overrides | `pressure.conf` preserved from previous install; old colon format auto-converted to whitespace format |
 | Firewall backend | Set to `"custom"` if pre-2.0.1 `BAN_COMMAND` detected |
 | Ban state | `bans.active`, `bans.history`, `pressure.dat` |
 | Log tracking state | tlog byte-offsets, journal cursors |
@@ -262,6 +262,13 @@ pressure = SUM { weight * 2^(-(now - event_time) / half_life) }
 | `PRESSURE_TRIP` | `20` | Accumulated pressure needed to trigger a ban; per-rule overrides in rule files or `pressure.conf` |
 | `PRESSURE_HALF_LIFE` | `300` | Half-life in seconds (how fast pressure decays); shorter = more forgiving |
 Per-rule weights are configured in `pressure.conf` (centralized) or in individual rule files via `PRESSURE_WEIGHT`. Higher weight = faster pressure accumulation. Default tiers: 5 (control panels), 3 (SSH/VPN/database/critical), 2 (mail/FTP/web), 1 (noisy/generic).
+
+`pressure.conf` uses whitespace-delimited `key=value` format:
+
+```
+sshd       weight=3  trip=20
+postfix    weight=2  trip=20  skip_alert=1
+```
 
 ### 3.2 Email Alerts
 
@@ -854,7 +861,7 @@ PRESSURE_WEIGHT="3"
 PRESSURE_TRIP="15"
 ```
 
-Centralized per-rule overrides (without editing rule files) go in `/usr/local/bfd/pressure.conf`.
+Centralized per-rule overrides (without editing rule files) go in `/usr/local/bfd/pressure.conf` (whitespace-delimited `key=value` format; see [Pressure Model](#31-pressure-model-detection) for syntax).
 
 ---
 
