@@ -1,4 +1,5 @@
 2.0.2:
+[Change] Dual-format parser for pressure.conf — new whitespace format with old colon format backward compat
 [Change] Remove thresholds.conf dead code — functions, variables, migration path, tests (~480 lines)
 [Change] install.sh deploys update-cdn-providers.sh as executable with path
       replacement for custom install locations

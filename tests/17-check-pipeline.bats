@@ -883,9 +883,9 @@ MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/testrule"
 	chown root "$rules_dir/testrule"
-	# set up pressure.conf with PRESSURE_TRIP=2 for testrule
+	# set up pressure.conf with trip=2 for testrule
 	local press_conf="$TEST_TMPDIR/pressure.conf"
-	echo "testrule:PRESSURE_TRIP=2" > "$press_conf"
+	echo "testrule  trip=2" > "$press_conf"
 	chown root "$press_conf"
 	chmod 640 "$press_conf"
 	# load pressure config
@@ -939,9 +939,9 @@ MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/testrule"
 	chown root "$rules_dir/testrule"
-	# pressure.conf says PRESSURE_TRIP=1 (low), but rule file should override
+	# pressure.conf says trip=1 (low), but rule file should override
 	local press_conf="$TEST_TMPDIR/pressure.conf"
-	echo "testrule:PRESSURE_TRIP=1" > "$press_conf"
+	echo "testrule  trip=1" > "$press_conf"
 	chown root "$press_conf"
 	chmod 640 "$press_conf"
 	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
@@ -1094,7 +1094,7 @@ EOF
 	chown root "$rules_dir/testrule_weight"
 	# pressure.conf sets weight=5 for this rule
 	local press_conf="$TEST_TMPDIR/pressure.conf"
-	echo "testrule_weight:PRESSURE_WEIGHT=5" > "$press_conf"
+	echo "testrule_weight  weight=5" > "$press_conf"
 	chown root "$press_conf"
 	chmod 640 "$press_conf"
 	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
