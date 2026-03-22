@@ -1,4 +1,9 @@
 2.0.2:
+[Change] install.sh deploys update-cdn-providers.sh as executable with path
+      replacement for custom install locations
+[New] cron.daily CDN database staleness check (mirrors ipcountry.dat pattern)
+[Change] ci.yml adds bfd_cdn.sh and update-cdn-providers.sh to lint targets
+[Change] Test helpers updated for bfd_cdn.sh (_start_watch, bfd_load_function)
 [New] bfd -S shows CDN provider summary (count, treatments, update age)
 [New] bfd -a <IP> shows CDN provider annotation when IP matches a range
 [New] CDN batch lookup in check() with O(1) per-IP treatment dispatch
