@@ -211,7 +211,7 @@ When upgrading from a previous BFD installation (including v1.5-2), `install.sh`
 |----------|---------|
 | User configuration | `conf.bfd` values merged onto new template |
 | Legacy variable names | `TRIG` → `PRESSURE_TRIP`, `TRIG_WINDOW` → `PRESSURE_HALF_LIFE`, `TRIG_GLOBAL` → `PRESSURE_TRIP_GLOBAL`, `BAN_DURATION` → `BAN_TTL`, `BAN_PERMANENT_*` → `BAN_ESCALATE_*` |
-| Per-rule overrides | `thresholds.conf` → `pressure.conf` conversion |
+| Per-rule overrides | `pressure.conf` preserved from previous install |
 | Firewall backend | Set to `"custom"` if pre-2.0.1 `BAN_COMMAND` detected |
 | Ban state | `bans.active`, `bans.history`, `pressure.dat` |
 | Log tracking state | tlog byte-offsets, journal cursors |

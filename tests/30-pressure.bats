@@ -280,6 +280,46 @@ teardown() {
 	[ "${_PRESS_TRIP[sshd]}" = "200" ]
 }
 
+@test "_load_pressure_conf: ignores unknown keys" {
+	local conf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_TRIP=5:BADKEY=nope:SKIP_ALERT=1" > "$conf"
+	chown root "$conf"
+	chmod 640 "$conf"
+	_load_pressure_conf "$conf"
+	[ "${_PRESS_TRIP[sshd]}" = "5" ]
+	[ "${_PRESS_SKIP_ALERT[sshd]}" = "1" ]
+	[ -z "${_PRESS_TRIP[BADKEY]:-}" ]
+}
+
+@test "_load_pressure_conf: missing file returns 0 with empty arrays" {
+	run _load_pressure_conf "/nonexistent/pressure.conf"
+	assert_success
+	[ "${#_PRESS_TRIP[@]}" -eq 0 ]
+}
+
+@test "_load_pressure_conf: empty argument returns 0" {
+	run _load_pressure_conf ""
+	assert_success
+}
+
+@test "_load_pressure_conf: non-root-owned file is skipped" {
+	local conf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_TRIP=5" > "$conf"
+	chown 65534 "$conf"
+	chmod 640 "$conf"
+	_load_pressure_conf "$conf"
+	[ "${#_PRESS_TRIP[@]}" -eq 0 ]
+}
+
+@test "_load_pressure_conf: world-writable file is skipped" {
+	local conf="$TEST_TMPDIR/pressure.conf"
+	echo "sshd:PRESSURE_TRIP=5" > "$conf"
+	chown root "$conf"
+	chmod 646 "$conf"
+	_load_pressure_conf "$conf"
+	[ "${#_PRESS_TRIP[@]}" -eq 0 ]
+}
+
 # ============================================================
 # _apply_pressure()
 # ============================================================
@@ -375,6 +415,32 @@ teardown() {
 	RULE_EMAIL=""
 	_apply_pressure "sshd"
 	[ "$RULE_EMAIL" = "ops@test.com" ]
+}
+
+@test "_apply_pressure: does not overwrite non-empty SKIP_ALERT" {
+	_PRESS_SKIP_ALERT=([sshd]="1")
+	SKIP_ALERT="0"
+	PRESSURE_WEIGHT=""
+	PRESSURE_TRIP=""
+	_apply_pressure "sshd"
+	[ "$SKIP_ALERT" = "0" ]
+}
+
+@test "precedence: pressure.conf fills PRESSURE_TRIP, then GLOB_PRESSURE_TRIP fallback" {
+	GLOB_PRESSURE_TRIP="15"
+	# rule left PRESSURE_TRIP empty, pressure.conf has value
+	_PRESS_TRIP=([sshd]="8")
+	_clear_rule_vars
+	_apply_pressure "sshd"
+	[ "$PRESSURE_TRIP" = "8" ]
+
+	# rule left PRESSURE_TRIP empty, pressure.conf has no entry -> still empty
+	_clear_rule_vars
+	_apply_pressure "unlisted_rule"
+	[ -z "$PRESSURE_TRIP" ]
+	# caller would then do: PRESSURE_TRIP="${PRESSURE_TRIP:-$GLOB_PRESSURE_TRIP}"
+	PRESSURE_TRIP="${PRESSURE_TRIP:-$GLOB_PRESSURE_TRIP}"
+	[ "$PRESSURE_TRIP" = "15" ]
 }
 
 # ============================================================

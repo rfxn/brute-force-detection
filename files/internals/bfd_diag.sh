@@ -174,7 +174,6 @@ _hc_rules() {
 			if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
 				_compat_rule_vars
 				_apply_pressure "$rule_name"
-				_apply_thresholds "$rule_name"
 				if _rule_is_active; then
 					local rule_weight="${PRESSURE_WEIGHT:-1}"
 					local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
@@ -720,7 +719,6 @@ show_service_status() {
 	safe_source "$rule_file" "rule:$service" 2>/dev/null
 	_compat_rule_vars
 	_apply_pressure "$service"
-	_apply_thresholds "$service"
 
 	local rule_weight="${PRESSURE_WEIGHT:-1}"
 	local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
@@ -900,7 +898,6 @@ list_rules() {
 		if safe_source "$rule_file" "rule:$rule_name" 2>/dev/null; then
 			_compat_rule_vars
 			_apply_pressure "$rule_name"
-			_apply_thresholds "$rule_name"
 			local rule_weight="${PRESSURE_WEIGHT:-1}"
 			local rule_trip="${PRESSURE_TRIP:-${TRIG:-${GLOB_PRESSURE_TRIP:-${GLOB_TRIG:-20}}}}"
 			local rule_ports="${PORTS:-all}"
@@ -958,7 +955,6 @@ show_rule() {
 	fi
 	_compat_rule_vars
 	_apply_pressure "$rule_name"
-	_apply_thresholds "$rule_name"
 
 	if _rule_is_active; then
 		echo "  Status:     active"
@@ -1036,7 +1032,6 @@ test_rule() {
 	fi
 	_compat_rule_vars
 	_apply_pressure "$rule_name"
-	_apply_thresholds "$rule_name"
 
 	# report
 	echo "Rule:         $rule_name"

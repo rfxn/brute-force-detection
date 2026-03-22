@@ -410,9 +410,9 @@ NEWEOF
 	assert_output "1700000000 192.0.2.4 sshd 3"
 }
 
-# --- pressure.conf / thresholds.conf migration ---
+# --- pressure.conf migration ---
 
-@test "importconf: pre-thresholds upgrade migrates old rule TRIG to pressure.conf" {
+@test "importconf: pre-pressure.conf upgrade migrates old rule TRIG to pressure.conf" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/tmp" "$inst/stats"
 	_importconf_prep_inst "$inst"
@@ -429,7 +429,7 @@ PRESSURE_TRIP="15"
 INSTALL_PATH="/usr/local/bfd"
 NEWEOF
 
-	# old rules with uncommented TRIG (pre-thresholds format)
+	# old rules with uncommented TRIG (pre-pressure.conf format)
 	cat > "$inst.bk.last/rules/sshd" <<'EOF'
 TRIG="3"
 REQ="/usr/sbin/sshd"
@@ -451,7 +451,7 @@ EOF
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
-	assert_output --partial "Migrated 2 per-rule thresholds"
+	assert_output --partial "Migrated 2 per-rule overrides"
 
 	# verify pressure.conf was updated with old TRIG values as PRESSURE_TRIP
 	run grep '^sshd:' "$inst/pressure.conf"
@@ -502,51 +502,6 @@ EOF
 	assert_output "sshd:PRESSURE_TRIP=3"
 	run grep '^dovecot:' "$inst/pressure.conf"
 	assert_output "dovecot:PRESSURE_TRIP=25:SKIP_ALERT=1"
-}
-
-@test "importconf: thresholds.conf migrated to pressure.conf on upgrade" {
-	local inst="$TEST_TMPDIR/bfd"
-	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
-	_importconf_prep_inst "$inst"
-
-	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
-# Brute Force Detection 2.0.1 <bfd@rfxn.com>
-TRIG="15"
-INSTALL_PATH="/usr/local/bfd"
-OLDEOF
-
-	cat > "$inst/conf.bfd" <<'NEWEOF'
-# Brute Force Detection 2.0.1 <bfd@rfxn.com>
-PRESSURE_TRIP="15"
-INSTALL_PATH="/usr/local/bfd"
-NEWEOF
-
-	# old install had thresholds.conf (no pressure.conf)
-	cat > "$inst.bk.last/thresholds.conf" <<'EOF'
-sshd:TRIG=3
-dovecot:TRIG=25:SKIP_ALERT=1
-EOF
-
-	# new pressure.conf with defaults
-	cat > "$inst/pressure.conf" <<'EOF'
-sshd:PRESSURE_TRIP=5
-dovecot:PRESSURE_TRIP=10
-EOF
-
-	local script
-	script=$(mktemp "$TEST_TMPDIR/importconf.XXXXXX")
-	sed 's|INSTALL_PATH=.*|INSTALL_PATH="'"$inst"'"|' "$IMPORTCONF" > "$script"
-	chmod +x "$script"
-	run bash "$script"
-	assert_success
-	assert_output --partial "Migrated 2 per-rule thresholds from thresholds.conf to pressure.conf"
-
-	# verify thresholds.conf TRIG values were translated to PRESSURE_TRIP in pressure.conf
-	run grep '^sshd:' "$inst/pressure.conf"
-	assert_output --partial "PRESSURE_TRIP=3"
-	run grep '^dovecot:' "$inst/pressure.conf"
-	assert_output --partial "PRESSURE_TRIP=25"
-	assert_output --partial "SKIP_ALERT=1"
 }
 
 @test "importconf: TRIG migrated to PRESSURE_TRIP in conf.bfd" {

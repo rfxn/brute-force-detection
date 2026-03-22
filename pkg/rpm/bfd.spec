@@ -53,7 +53,6 @@ sed -i \
     -e 's|\$INSTALL_PATH/exclude\.files|/etc/bfd/exclude.files|' \
     -e 's|\$INSTALL_PATH/lock\.utime|/var/lib/bfd/lock.utime|' \
     -e 's|\$INSTALL_PATH/pressure\.conf|/etc/bfd/pressure.conf|' \
-    -e 's|\$INSTALL_PATH/thresholds\.conf|/etc/bfd/thresholds.conf|' \
     files/internals.conf.pkg
 
 cp files/exclude.files files/exclude.files.pkg

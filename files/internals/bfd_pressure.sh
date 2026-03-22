@@ -71,83 +71,10 @@ _compat_rule_vars() {
 
 # --- Pressure config loading ---
 
-# DEPRECATED: use _load_pressure_conf() — retained for pre-2.0 upgrade compatibility. Remove in v3.0.
-# _load_thresholds conf_file — parse thresholds.conf into associative arrays
-# Populates _THRESH_TRIG[], _THRESH_SKIP_ALERT[], _THRESH_RULE_EMAIL[].
-# Skips comments, blank lines, and unknown keys. Validates file safety.
-# Returns 0 even if file is missing (graceful degradation).
-_load_thresholds() {
-	local conf_file="${1:-}"
-	# clear arrays (caller must have declared them)
-	_THRESH_TRIG=()
-	_THRESH_SKIP_ALERT=()
-	_THRESH_RULE_EMAIL=()
-
-	[ -z "$conf_file" ] && return 0
-	[ ! -f "$conf_file" ] && return 0
-
-	# validate ownership and permissions
-	if ! _check_file_safety "$conf_file"; then
-		elog warn "thresholds.conf has unsafe ownership (uid=$_CSAF_UID) or permissions ($_CSAF_PERMS), skipping"
-		return 0
-	fi
-
-	local line rule_name fields key val pair
-	while IFS= read -r line; do
-		# skip comments and blank lines
-		case "$line" in
-			''|\#*) continue ;;
-		esac
-		# extract rule name (before first colon)
-		rule_name="${line%%:*}"
-		[ -z "$rule_name" ] && continue
-		# extract fields (after first colon)
-		fields="${line#*:}"
-		[ -z "$fields" ] && continue
-		# parse colon-delimited KEY=value pairs
-		while [ -n "$fields" ]; do
-			# extract next field
-			case "$fields" in
-				*:*) pair="${fields%%:*}"; fields="${fields#*:}" ;;
-				*)   pair="$fields"; fields="" ;;
-			esac
-			key="${pair%%=*}"
-			val="${pair#*=}"
-			case "$key" in
-				TRIG)       _THRESH_TRIG["$rule_name"]="$val" ;;
-				SKIP_ALERT) _THRESH_SKIP_ALERT["$rule_name"]="$val" ;;
-				RULE_EMAIL)
-					if validate_email "$val"; then
-						_THRESH_RULE_EMAIL["$rule_name"]="$val"
-					else
-						elog warn "thresholds.conf: $rule_name RULE_EMAIL='$val' invalid, skipping"
-					fi
-					;;
-			esac
-		done
-	done < "$conf_file"
-}
-
-# DEPRECATED: use _apply_pressure() — retained for pre-2.0 upgrade compatibility. Remove in v3.0.
-# _apply_thresholds rule_name — fill empty threshold vars from _THRESH arrays
-# Called after safe_source of a rule file. Only sets variables the rule left
-# empty, preserving rule-file precedence (rule > thresholds.conf > conf.bfd).
-_apply_thresholds() {
-	local rule_name="$1"
-	if [ -z "$TRIG" ] && [ "${_THRESH_TRIG[$rule_name]+x}" = "x" ]; then
-		TRIG="${_THRESH_TRIG[$rule_name]}"
-	fi
-	if [ -z "$SKIP_ALERT" ] && [ "${_THRESH_SKIP_ALERT[$rule_name]+x}" = "x" ]; then
-		SKIP_ALERT="${_THRESH_SKIP_ALERT[$rule_name]}"
-	fi
-	if [ -z "$RULE_EMAIL" ] && [ "${_THRESH_RULE_EMAIL[$rule_name]+x}" = "x" ]; then
-		RULE_EMAIL="${_THRESH_RULE_EMAIL[$rule_name]}"
-	fi
-}
-
 # _load_pressure_conf conf_file — parse pressure.conf into associative arrays
 # Populates _PRESS_WEIGHT[], _PRESS_TRIP[], _PRESS_SKIP_ALERT[], _PRESS_RULE_EMAIL[].
-# Recognizes both new keys (PRESSURE_WEIGHT, PRESSURE_TRIP) and legacy TRIG key.
+# Dual-format: per-line detection of old colon format and new whitespace format.
+# Also recognizes legacy TRIG key as PRESSURE_TRIP alias.
 # Skips comments, blank lines, and unknown keys. Validates file safety.
 # Returns 0 even if file is missing (graceful degradation).
 _load_pressure_conf() {

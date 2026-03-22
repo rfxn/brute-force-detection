@@ -148,7 +148,7 @@ config_init() {
 		# internals.conf variables
 		unset RULES_PATH TLOG_PATH TLOG_BASERUN
 		unset ALERT_TEMPLATE_DIR ALERT_SPOOL_FILE IGNORE_HOST_FILES LOCK_FILE
-		unset PRESSURE_CONF THRESHOLDS_CONF TIME_ZONE
+		unset PRESSURE_CONF TIME_ZONE
 		unset LOCK_FILE_TIMEOUT OUTPUT_SYSLOG_FILE BAN_RETRY_COUNT LOG_SOURCE
 	fi
 
@@ -247,13 +247,7 @@ config_init() {
 	_PRESS_RULE_EMAIL=()
 	if [ -f "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}" ]; then
 		_load_pressure_conf "${PRESSURE_CONF:-$INSTALL_PATH/pressure.conf}"
-	elif [ -f "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}" ]; then
-		_load_pressure_conf "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
 	fi
-	_THRESH_TRIG=()
-	_THRESH_SKIP_ALERT=()
-	_THRESH_RULE_EMAIL=()
-	_load_thresholds "${THRESHOLDS_CONF:-$INSTALL_PATH/thresholds.conf}"
 
 	# BAN_COMMAND templates — consumed by bfd_fw.sh and bfd_state.sh
 	# shellcheck disable=SC2034 # BAN_COMMAND_TEMPLATE used by bfd_fw.sh
@@ -466,7 +460,6 @@ check() {
 		safe_source "$RULES_PATH/$str" "rule:$str" || continue
 		_compat_rule_vars
 		_apply_pressure "$str"
-		_apply_thresholds "$str"
 		# resolve effective weight and trip for this rule
 		local eff_weight="${PRESSURE_WEIGHT:-1}"
 		local eff_trip="${PRESSURE_TRIP:-$GLOB_PRESSURE_TRIP}"

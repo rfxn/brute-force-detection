@@ -61,7 +61,6 @@ ELOG_STDOUT_PREFIX="full"
 # Associative arrays — must be at global scope (declare -A inside functions
 # creates locals in bash 4.1, breaking the pressure model)
 declare -A _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
-declare -A _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
 
 trap cleanup EXIT INT TERM
 

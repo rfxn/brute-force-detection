@@ -863,7 +863,7 @@ EOF
 	! echo "$check_src" | grep -q 'LAST="'
 }
 
-# --- pressure.conf / thresholds.conf precedence integration ---
+# --- pressure.conf precedence integration ---
 
 @test "check: pressure.conf PRESSURE_TRIP used when rule TRIG commented out" {
 	bfd_require_bash42
@@ -891,9 +891,6 @@ EOF
 	# load pressure config
 	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
 	_load_pressure_conf "$press_conf"
-	# also load thresholds for backward compat path
-	declare -gA _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
-	_load_thresholds "$press_conf"
 	# GLOB_PRESSURE_TRIP is high so it would NOT trigger ban
 	GLOB_PRESSURE_TRIP="999"
 	GLOB_TRIG="999"
@@ -949,8 +946,6 @@ EOF
 	chmod 640 "$press_conf"
 	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
 	_load_pressure_conf "$press_conf"
-	declare -gA _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
-	_load_thresholds "$press_conf"
 	GLOB_PRESSURE_TRIP="999"
 	GLOB_TRIG="999"
 	RULES_PATH="$rules_dir"
@@ -1104,8 +1099,6 @@ EOF
 	chmod 640 "$press_conf"
 	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
 	_load_pressure_conf "$press_conf"
-	declare -gA _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
-	_load_thresholds "$press_conf"
 	RULES_PATH="$rules_dir"
 	GLOB_PRESSURE_TRIP="999"
 	GLOB_TRIG="999"
