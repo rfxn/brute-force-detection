@@ -863,7 +863,7 @@ EOF
 	! echo "$check_src" | grep -q 'LAST="'
 }
 
-# --- pressure.conf / thresholds.conf precedence integration ---
+# --- pressure.conf precedence integration ---
 
 @test "check: pressure.conf PRESSURE_TRIP used when rule TRIG commented out" {
 	bfd_require_bash42
@@ -883,17 +883,14 @@ MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/testrule"
 	chown root "$rules_dir/testrule"
-	# set up pressure.conf with PRESSURE_TRIP=2 for testrule
+	# set up pressure.conf with trip=2 for testrule
 	local press_conf="$TEST_TMPDIR/pressure.conf"
-	echo "testrule:PRESSURE_TRIP=2" > "$press_conf"
+	echo "testrule  trip=2" > "$press_conf"
 	chown root "$press_conf"
 	chmod 640 "$press_conf"
 	# load pressure config
 	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
 	_load_pressure_conf "$press_conf"
-	# also load thresholds for backward compat path
-	declare -gA _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
-	_load_thresholds "$press_conf"
 	# GLOB_PRESSURE_TRIP is high so it would NOT trigger ban
 	GLOB_PRESSURE_TRIP="999"
 	GLOB_TRIG="999"
@@ -942,15 +939,13 @@ MATCHED_HOSTS="192.0.2.1 192.0.2.1 192.0.2.1"
 EOF
 	chmod 644 "$rules_dir/testrule"
 	chown root "$rules_dir/testrule"
-	# pressure.conf says PRESSURE_TRIP=1 (low), but rule file should override
+	# pressure.conf says trip=1 (low), but rule file should override
 	local press_conf="$TEST_TMPDIR/pressure.conf"
-	echo "testrule:PRESSURE_TRIP=1" > "$press_conf"
+	echo "testrule  trip=1" > "$press_conf"
 	chown root "$press_conf"
 	chmod 640 "$press_conf"
 	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
 	_load_pressure_conf "$press_conf"
-	declare -gA _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
-	_load_thresholds "$press_conf"
 	GLOB_PRESSURE_TRIP="999"
 	GLOB_TRIG="999"
 	RULES_PATH="$rules_dir"
@@ -1099,13 +1094,11 @@ EOF
 	chown root "$rules_dir/testrule_weight"
 	# pressure.conf sets weight=5 for this rule
 	local press_conf="$TEST_TMPDIR/pressure.conf"
-	echo "testrule_weight:PRESSURE_WEIGHT=5" > "$press_conf"
+	echo "testrule_weight  weight=5" > "$press_conf"
 	chown root "$press_conf"
 	chmod 640 "$press_conf"
 	declare -gA _PRESS_WEIGHT _PRESS_TRIP _PRESS_SKIP_ALERT _PRESS_RULE_EMAIL
 	_load_pressure_conf "$press_conf"
-	declare -gA _THRESH_TRIG _THRESH_SKIP_ALERT _THRESH_RULE_EMAIL
-	_load_thresholds "$press_conf"
 	RULES_PATH="$rules_dir"
 	GLOB_PRESSURE_TRIP="999"
 	GLOB_TRIG="999"

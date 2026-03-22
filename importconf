@@ -167,63 +167,42 @@ fi
 # migrate per-rule overrides to pressure.conf
 new_press="$INSTALL_PATH/pressure.conf"
 if [ -f "$BK_LAST/pressure.conf" ]; then
-	# already has pressure.conf — preserve it
-	command cp -f "$BK_LAST/pressure.conf" "$new_press"
-	# rename rule entries for rules that changed names (modsec -> mod_sec)
-	if grep -q '^modsec:' "$new_press" 2>/dev/null; then
-		sed -i 's/^modsec:/mod_sec:/' "$new_press"
+	# detect old colon-delimited format and convert
+	if grep -qE '^[a-z_-]+:PRESSURE_' "$BK_LAST/pressure.conf" 2>/dev/null; then  # 2>/dev/null: grep may fail on unreadable file
+		awk '/^#/ || /^$/ { print; next }
+		{
+			n = index($0, ":")
+			if (n > 0) {
+				rule = substr($0, 1, n-1)
+				rest = substr($0, n+1)
+			} else { print; next }
+			if (rule == "") { print; next }
+			out = rule
+			np = split(rest, pairs, ":")
+			for (i = 1; i <= np; i++) {
+				eq = index(pairs[i], "=")
+				if (eq > 0) {
+					k = substr(pairs[i], 1, eq-1)
+					v = substr(pairs[i], eq+1)
+					if (k == "PRESSURE_WEIGHT") out = out "  weight=" v
+					else if (k == "PRESSURE_TRIP" || k == "TRIG") out = out "  trip=" v
+					else if (k == "SKIP_ALERT") out = out "  skip_alert=" v
+					else if (k == "RULE_EMAIL") out = out "  rule_email=" v
+				}
+			}
+			print out
+		}' "$BK_LAST/pressure.conf" > "$new_press"
+		echo "  Migrated pressure.conf from colon to whitespace format."
+	else
+		command cp -f "$BK_LAST/pressure.conf" "$new_press"
+		echo "  Preserved pressure.conf from previous install."
 	fi
-	echo "  Preserved pressure.conf from previous install."
-elif [ -f "$BK_LAST/thresholds.conf" ]; then
-	# translate thresholds.conf TRIG entries → pressure.conf PRESSURE_TRIP entries
-	_migrated=0
-	while IFS=: read -r _rule_name _rest; do
-		[ -z "$_rule_name" ] && continue
-		# skip comments
-		case "$_rule_name" in \#*) continue ;; esac
-		# extract TRIG value
-		_old_trig=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^TRIG=/){sub(/^TRIG=/,"",$i); print $i; exit}}}')
-		[[ "$_old_trig" =~ ^[0-9]+$ ]] || _old_trig=""
-		if [ -n "$_old_trig" ] && [ "$_old_trig" -gt 200 ]; then
-			_old_trig=200
-		fi
-		if [ -n "$_old_trig" ] && [ -f "$new_press" ]; then
-			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
-				# update existing entry — replace or add PRESSURE_TRIP
-				if grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then
-					sed -i "s|^\(${_rule_name}:.*PRESSURE_TRIP=\)[^:]*|\1${_old_trig}|" "$new_press"
-				else
-					sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:PRESSURE_TRIP=${_old_trig}|" "$new_press"
-				fi
-			else
-				echo "${_rule_name}:PRESSURE_TRIP=${_old_trig}" >> "$new_press"
-			fi
-			_migrated=$((_migrated + 1))
-		fi
-		# extract SKIP_ALERT value
-		_skip=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^SKIP_ALERT=/){sub(/^SKIP_ALERT=/,"",$i); print $i; exit}}}')
-		[[ "$_skip" =~ ^[01]$ ]] || _skip=""
-		if [ -n "$_skip" ] && [ -f "$new_press" ]; then
-			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null && \
-			   ! grep -q "^${_rule_name}:.*SKIP_ALERT=" "$new_press" 2>/dev/null; then
-				sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:SKIP_ALERT=${_skip}|" "$new_press"
-			fi
-		fi
-		# extract RULE_EMAIL value
-		_email=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^RULE_EMAIL=/){sub(/^RULE_EMAIL=/,"",$i); print $i; exit}}}')
-		[[ "$_email" =~ ^[a-zA-Z0-9@._+,-]+$ ]] || _email=""
-		if [ -n "$_email" ] && [ -f "$new_press" ]; then
-			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null && \
-			   ! grep -q "^${_rule_name}:.*RULE_EMAIL=" "$new_press" 2>/dev/null; then
-				sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:RULE_EMAIL=${_email}|" "$new_press"
-			fi
-		fi
-	done < "$BK_LAST/thresholds.conf"
-	if [ "$_migrated" -gt 0 ]; then
-		echo "  Migrated $_migrated per-rule thresholds from thresholds.conf to pressure.conf."
+	# rename rule entries for rules that changed names (modsec -> mod_sec)
+	if grep -qE '^modsec[[:space:]:]' "$new_press" 2>/dev/null; then  # 2>/dev/null: grep may fail on unreadable file
+		sed -i 's/^modsec\([[:space:]:]\)/mod_sec\1/' "$new_press"
 	fi
 elif [ -f "$new_press" ] && [ -d "$BK_LAST/rules" ]; then
-	# pre-thresholds upgrade: extract uncommented TRIG/PRESSURE values from old rules
+	# pre-pressure.conf upgrade: extract uncommented TRIG/PRESSURE values from old rules
 	_migrated=0
 	for _rule_file in "$BK_LAST/rules"/*; do
 		[ ! -f "$_rule_file" ] && continue
@@ -236,21 +215,21 @@ elif [ -f "$new_press" ] && [ -d "$BK_LAST/rules" ]; then
 			if [ "$_old_trig" -gt 200 ]; then
 				_old_trig=200
 			fi
-			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
-				# replace or add PRESSURE_TRIP from old rule TRIG
-				if grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then
-					sed -i "s|^\(${_rule_name}:.*PRESSURE_TRIP=\)[^:]*|\1${_old_trig}|" "$new_press"
+			if grep -qE "^${_rule_name}[[:space:]]" "$new_press" 2>/dev/null; then
+				# replace or add trip= from old rule TRIG
+				if grep -qE "^${_rule_name}[[:space:]].*trip=" "$new_press" 2>/dev/null; then
+					sed -i "s|^\(${_rule_name}.*trip=\)[^[:space:]]*|\1${_old_trig}|" "$new_press"
 				else
-					sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:PRESSURE_TRIP=${_old_trig}|" "$new_press"
+					sed -i "s|^\(${_rule_name}[[:space:]].*\)|\1  trip=${_old_trig}|" "$new_press"
 				fi
 			else
-				echo "${_rule_name}:PRESSURE_TRIP=${_old_trig}" >> "$new_press"
+				echo "${_rule_name}  trip=${_old_trig}" >> "$new_press"
 			fi
 			_migrated=$((_migrated + 1))
 		fi
 	done
 	if [ "$_migrated" -gt 0 ]; then
-		echo "  Migrated $_migrated per-rule thresholds to pressure.conf."
+		echo "  Migrated $_migrated per-rule overrides to pressure.conf."
 	fi
 fi
 

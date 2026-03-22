@@ -71,88 +71,15 @@ _compat_rule_vars() {
 
 # --- Pressure config loading ---
 
-# DEPRECATED: use _load_pressure_conf() — retained for pre-2.0 upgrade compatibility. Remove in v3.0.
-# _load_thresholds conf_file — parse thresholds.conf into associative arrays
-# Populates _THRESH_TRIG[], _THRESH_SKIP_ALERT[], _THRESH_RULE_EMAIL[].
-# Skips comments, blank lines, and unknown keys. Validates file safety.
-# Returns 0 even if file is missing (graceful degradation).
-_load_thresholds() {
-	local conf_file="${1:-}"
-	# clear arrays (caller must have declared them)
-	_THRESH_TRIG=()
-	_THRESH_SKIP_ALERT=()
-	_THRESH_RULE_EMAIL=()
-
-	[ -z "$conf_file" ] && return 0
-	[ ! -f "$conf_file" ] && return 0
-
-	# validate ownership and permissions
-	if ! _check_file_safety "$conf_file"; then
-		elog warn "thresholds.conf has unsafe ownership (uid=$_CSAF_UID) or permissions ($_CSAF_PERMS), skipping"
-		return 0
-	fi
-
-	local line rule_name fields key val pair
-	while IFS= read -r line; do
-		# skip comments and blank lines
-		case "$line" in
-			''|\#*) continue ;;
-		esac
-		# extract rule name (before first colon)
-		rule_name="${line%%:*}"
-		[ -z "$rule_name" ] && continue
-		# extract fields (after first colon)
-		fields="${line#*:}"
-		[ -z "$fields" ] && continue
-		# parse colon-delimited KEY=value pairs
-		while [ -n "$fields" ]; do
-			# extract next field
-			case "$fields" in
-				*:*) pair="${fields%%:*}"; fields="${fields#*:}" ;;
-				*)   pair="$fields"; fields="" ;;
-			esac
-			key="${pair%%=*}"
-			val="${pair#*=}"
-			case "$key" in
-				TRIG)       _THRESH_TRIG["$rule_name"]="$val" ;;
-				SKIP_ALERT) _THRESH_SKIP_ALERT["$rule_name"]="$val" ;;
-				RULE_EMAIL)
-					if validate_email "$val"; then
-						_THRESH_RULE_EMAIL["$rule_name"]="$val"
-					else
-						elog warn "thresholds.conf: $rule_name RULE_EMAIL='$val' invalid, skipping"
-					fi
-					;;
-			esac
-		done
-	done < "$conf_file"
-}
-
-# DEPRECATED: use _apply_pressure() — retained for pre-2.0 upgrade compatibility. Remove in v3.0.
-# _apply_thresholds rule_name — fill empty threshold vars from _THRESH arrays
-# Called after safe_source of a rule file. Only sets variables the rule left
-# empty, preserving rule-file precedence (rule > thresholds.conf > conf.bfd).
-_apply_thresholds() {
-	local rule_name="$1"
-	if [ -z "$TRIG" ] && [ "${_THRESH_TRIG[$rule_name]+x}" = "x" ]; then
-		TRIG="${_THRESH_TRIG[$rule_name]}"
-	fi
-	if [ -z "$SKIP_ALERT" ] && [ "${_THRESH_SKIP_ALERT[$rule_name]+x}" = "x" ]; then
-		SKIP_ALERT="${_THRESH_SKIP_ALERT[$rule_name]}"
-	fi
-	if [ -z "$RULE_EMAIL" ] && [ "${_THRESH_RULE_EMAIL[$rule_name]+x}" = "x" ]; then
-		RULE_EMAIL="${_THRESH_RULE_EMAIL[$rule_name]}"
-	fi
-}
-
 # _load_pressure_conf conf_file — parse pressure.conf into associative arrays
 # Populates _PRESS_WEIGHT[], _PRESS_TRIP[], _PRESS_SKIP_ALERT[], _PRESS_RULE_EMAIL[].
-# Recognizes both new keys (PRESSURE_WEIGHT, PRESSURE_TRIP) and legacy TRIG key.
+# Dual-format: per-line detection of old colon format and new whitespace format.
+# Old format: rule:PRESSURE_WEIGHT=N:PRESSURE_TRIP=N[:SKIP_ALERT=N][:RULE_EMAIL=addr]
+# New format: rule  weight=N  trip=N  [skip_alert=N]  [rule_email=addr]
 # Skips comments, blank lines, and unknown keys. Validates file safety.
 # Returns 0 even if file is missing (graceful degradation).
 _load_pressure_conf() {
 	local conf_file="${1:-}"
-	# clear arrays (caller must have declared them)
 	_PRESS_WEIGHT=()
 	_PRESS_TRIP=()
 	_PRESS_SKIP_ALERT=()
@@ -161,62 +88,102 @@ _load_pressure_conf() {
 	[ -z "$conf_file" ] && return 0
 	[ ! -f "$conf_file" ] && return 0
 
-	# validate ownership and permissions
 	if ! _check_file_safety "$conf_file"; then
 		elog warn "pressure.conf has unsafe ownership (uid=$_CSAF_UID) or permissions ($_CSAF_PERMS), skipping"
 		return 0
 	fi
 
-	local line rule_name fields key val pair
+	local line rule_name _first fields pair key val _fields _pair _key _val
 	while IFS= read -r line; do
-		# skip comments and blank lines
 		case "$line" in
 			''|\#*) continue ;;
 		esac
-		# extract rule name (before first colon)
-		rule_name="${line%%:*}"
-		[ -z "$rule_name" ] && continue
-		# extract fields (after first colon)
-		fields="${line#*:}"
-		[ -z "$fields" ] && continue
-		# parse colon-delimited KEY=value pairs
-		while [ -n "$fields" ]; do
-			# extract next field
-			case "$fields" in
-				*:*) pair="${fields%%:*}"; fields="${fields#*:}" ;;
-				*)   pair="$fields"; fields="" ;;
-			esac
-			key="${pair%%=*}"
-			val="${pair#*=}"
-			case "$key" in
-				PRESSURE_WEIGHT)
-					if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 0 ]; then
-						_PRESS_WEIGHT["$rule_name"]="$val"
-					else
-						elog warn "pressure.conf: $rule_name PRESSURE_WEIGHT='$val' invalid (must be positive integer), skipping"
-					fi
-					;;
-				PRESSURE_TRIP|TRIG)
-					if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 0 ]; then
-						if [ "$val" -gt 200 ]; then
-							elog warn "pressure.conf: $rule_name PRESSURE_TRIP=$val exceeds maximum (200), clamping"
-							val=200
-						fi
-						_PRESS_TRIP["$rule_name"]="$val"
-					else
-						elog warn "pressure.conf: $rule_name PRESSURE_TRIP='$val' invalid (must be positive integer), skipping"
-					fi
-					;;
-				SKIP_ALERT)       _PRESS_SKIP_ALERT["$rule_name"]="$val" ;;
-				RULE_EMAIL)
-					if validate_email "$val"; then
-						_PRESS_RULE_EMAIL["$rule_name"]="$val"
-					else
-						elog warn "pressure.conf: $rule_name RULE_EMAIL='$val' invalid, skipping"
-					fi
-					;;
-			esac
-		done
+		_first="${line%%[[:space:]]*}"
+		case "$_first" in
+			*:*)
+				# OLD FORMAT: colon-delimited rule:KEY=VAL:KEY=VAL
+				rule_name="${line%%:*}"
+				[ -z "$rule_name" ] && continue
+				fields="${line#*:}"
+				[ -z "$fields" ] && continue
+				while [ -n "$fields" ]; do
+					case "$fields" in
+						*:*) pair="${fields%%:*}"; fields="${fields#*:}" ;;
+						*)   pair="$fields"; fields="" ;;
+					esac
+					key="${pair%%=*}"
+					val="${pair#*=}"
+					case "$key" in
+						PRESSURE_WEIGHT)
+							if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 0 ]; then
+								_PRESS_WEIGHT["$rule_name"]="$val"
+							else
+								elog warn "pressure.conf: $rule_name PRESSURE_WEIGHT='$val' invalid (must be positive integer), skipping"
+							fi
+							;;
+						PRESSURE_TRIP)
+							if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 0 ]; then
+								if [ "$val" -gt 200 ]; then
+									elog warn "pressure.conf: $rule_name PRESSURE_TRIP=$val exceeds maximum (200), clamping"
+									val=200
+								fi
+								_PRESS_TRIP["$rule_name"]="$val"
+							else
+								elog warn "pressure.conf: $rule_name PRESSURE_TRIP='$val' invalid (must be positive integer), skipping"
+							fi
+							;;
+						SKIP_ALERT)       _PRESS_SKIP_ALERT["$rule_name"]="$val" ;;
+						RULE_EMAIL)
+							if validate_email "$val"; then
+								_PRESS_RULE_EMAIL["$rule_name"]="$val"
+							else
+								elog warn "pressure.conf: $rule_name RULE_EMAIL='$val' invalid, skipping"
+							fi
+							;;
+					esac
+				done
+				;;
+			*)
+				# NEW FORMAT: whitespace-delimited rule key=val [key=val ...]
+				# shellcheck disable=SC2162
+				read rule_name _fields <<< "$line"
+				[ -z "$rule_name" ] && continue
+				# shellcheck disable=SC2086  # intentional word splitting
+				for _pair in $_fields; do
+					_key="${_pair%%=*}"
+					_val="${_pair#*=}"
+					[ "$_key" = "$_pair" ] && continue  # no = sign, skip
+					case "$_key" in
+						weight)
+							if [[ "$_val" =~ ^[0-9]+$ ]] && [ "$_val" -gt 0 ]; then
+								_PRESS_WEIGHT["$rule_name"]="$_val"
+							else
+								elog warn "pressure.conf: $rule_name weight='$_val' invalid (must be positive integer), skipping"
+							fi
+							;;
+						trip)
+							if [[ "$_val" =~ ^[0-9]+$ ]] && [ "$_val" -gt 0 ]; then
+								if [ "$_val" -gt 200 ]; then
+									elog warn "pressure.conf: $rule_name trip=$_val exceeds maximum (200), clamping"
+									_val=200
+								fi
+								_PRESS_TRIP["$rule_name"]="$_val"
+							else
+								elog warn "pressure.conf: $rule_name trip='$_val' invalid (must be positive integer), skipping"
+							fi
+							;;
+						skip_alert)       _PRESS_SKIP_ALERT["$rule_name"]="$_val" ;;
+						rule_email)
+							if validate_email "$_val"; then
+								_PRESS_RULE_EMAIL["$rule_name"]="$_val"
+							else
+								elog warn "pressure.conf: $rule_name rule_email='$_val' invalid, skipping"
+							fi
+							;;
+					esac
+				done
+				;;
+		esac
 	done < "$conf_file"
 }
 

@@ -410,9 +410,9 @@ NEWEOF
 	assert_output "1700000000 192.0.2.4 sshd 3"
 }
 
-# --- pressure.conf / thresholds.conf migration ---
+# --- pressure.conf migration ---
 
-@test "importconf: pre-thresholds upgrade migrates old rule TRIG to pressure.conf" {
+@test "importconf: pre-pressure.conf upgrade migrates old rule TRIG to pressure.conf" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last/rules" "$inst/tmp" "$inst/stats"
 	_importconf_prep_inst "$inst"
@@ -429,7 +429,7 @@ PRESSURE_TRIP="15"
 INSTALL_PATH="/usr/local/bfd"
 NEWEOF
 
-	# old rules with uncommented TRIG (pre-thresholds format)
+	# old rules with uncommented TRIG (pre-pressure.conf format)
 	cat > "$inst.bk.last/rules/sshd" <<'EOF'
 TRIG="3"
 REQ="/usr/sbin/sshd"
@@ -439,10 +439,10 @@ TRIG="20"
 REQ="/usr/sbin/dovecot"
 EOF
 
-	# new pressure.conf with defaults
+	# new pressure.conf with defaults (new whitespace format)
 	cat > "$inst/pressure.conf" <<'EOF'
-sshd:PRESSURE_TRIP=5
-dovecot:PRESSURE_TRIP=10
+sshd  weight=3  trip=5
+dovecot  weight=2  trip=10
 EOF
 
 	local script
@@ -451,42 +451,42 @@ EOF
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
-	assert_output --partial "Migrated 2 per-rule thresholds"
+	assert_output --partial "Migrated 2 per-rule overrides"
 
-	# verify pressure.conf was updated with old TRIG values as PRESSURE_TRIP
-	run grep '^sshd:' "$inst/pressure.conf"
-	assert_output --partial "PRESSURE_TRIP=3"
-	run grep '^dovecot:' "$inst/pressure.conf"
-	assert_output --partial "PRESSURE_TRIP=20"
+	# verify pressure.conf was updated with old TRIG values (new format)
+	run grep '^sshd' "$inst/pressure.conf"
+	assert_output --partial "trip=3"
+	run grep '^dovecot' "$inst/pressure.conf"
+	assert_output --partial "trip=20"
 }
 
-@test "importconf: post-pressure upgrade preserves existing pressure.conf" {
+@test "importconf: post-pressure upgrade preserves existing pressure.conf (new format)" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
 	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
-# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+# Brute Force Detection 2.0.2 <bfd@rfxn.com>
 PRESSURE_TRIP="15"
 INSTALL_PATH="/usr/local/bfd"
 OLDEOF
 
 	cat > "$inst/conf.bfd" <<'NEWEOF'
-# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+# Brute Force Detection 2.0.2 <bfd@rfxn.com>
 PRESSURE_TRIP="15"
 INSTALL_PATH="/usr/local/bfd"
 NEWEOF
 
-	# old install had pressure.conf with user customizations
+	# old install already had new-format pressure.conf with user customizations
 	cat > "$inst.bk.last/pressure.conf" <<'EOF'
-sshd:PRESSURE_TRIP=3
-dovecot:PRESSURE_TRIP=25:SKIP_ALERT=1
+sshd  weight=3  trip=3
+dovecot  weight=2  trip=25  skip_alert=1
 EOF
 
 	# new pressure.conf with defaults
 	cat > "$inst/pressure.conf" <<'EOF'
-sshd:PRESSURE_TRIP=5
-dovecot:PRESSURE_TRIP=10
+sshd  weight=3  trip=15
+dovecot  weight=2  trip=20
 EOF
 
 	local script
@@ -497,40 +497,42 @@ EOF
 	assert_success
 	assert_output --partial "Preserved pressure.conf"
 
-	# verify old pressure.conf was copied over new one
-	run grep '^sshd:' "$inst/pressure.conf"
-	assert_output "sshd:PRESSURE_TRIP=3"
-	run grep '^dovecot:' "$inst/pressure.conf"
-	assert_output "dovecot:PRESSURE_TRIP=25:SKIP_ALERT=1"
+	# verify old pressure.conf was copied over new one (new format preserved)
+	run grep '^sshd' "$inst/pressure.conf"
+	assert_output --partial "weight=3"
+	assert_output --partial "trip=3"
+	run grep '^dovecot' "$inst/pressure.conf"
+	assert_output --partial "weight=2"
+	assert_output --partial "trip=25"
+	assert_output --partial "skip_alert=1"
 }
 
-@test "importconf: thresholds.conf migrated to pressure.conf on upgrade" {
+@test "importconf: old-format pressure.conf converted to new format" {
 	local inst="$TEST_TMPDIR/bfd"
 	mkdir -p "$inst" "$inst.bk.last" "$inst/tmp" "$inst/stats"
 	_importconf_prep_inst "$inst"
 
 	cat > "$inst.bk.last/conf.bfd" <<'OLDEOF'
-# Brute Force Detection 2.0.1 <bfd@rfxn.com>
-TRIG="15"
+# Brute Force Detection 2.0.2 <bfd@rfxn.com>
+PRESSURE_TRIP="15"
 INSTALL_PATH="/usr/local/bfd"
 OLDEOF
 
 	cat > "$inst/conf.bfd" <<'NEWEOF'
-# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+# Brute Force Detection 2.0.2 <bfd@rfxn.com>
 PRESSURE_TRIP="15"
 INSTALL_PATH="/usr/local/bfd"
 NEWEOF
 
-	# old install had thresholds.conf (no pressure.conf)
-	cat > "$inst.bk.last/thresholds.conf" <<'EOF'
-sshd:TRIG=3
-dovecot:TRIG=25:SKIP_ALERT=1
+	# old install had colon-format pressure.conf
+	cat > "$inst.bk.last/pressure.conf" <<'EOF'
+# user customizations
+sshd:PRESSURE_WEIGHT=3:PRESSURE_TRIP=10
+dovecot:PRESSURE_WEIGHT=2:PRESSURE_TRIP=25:SKIP_ALERT=1
 EOF
 
-	# new pressure.conf with defaults
 	cat > "$inst/pressure.conf" <<'EOF'
-sshd:PRESSURE_TRIP=5
-dovecot:PRESSURE_TRIP=10
+sshd  weight=3  trip=15
 EOF
 
 	local script
@@ -539,14 +541,19 @@ EOF
 	chmod +x "$script"
 	run bash "$script"
 	assert_success
-	assert_output --partial "Migrated 2 per-rule thresholds from thresholds.conf to pressure.conf"
+	assert_output --partial "Migrated pressure.conf from colon to whitespace format"
 
-	# verify thresholds.conf TRIG values were translated to PRESSURE_TRIP in pressure.conf
-	run grep '^sshd:' "$inst/pressure.conf"
-	assert_output --partial "PRESSURE_TRIP=3"
-	run grep '^dovecot:' "$inst/pressure.conf"
-	assert_output --partial "PRESSURE_TRIP=25"
-	assert_output --partial "SKIP_ALERT=1"
+	# verify conversion
+	run grep '^sshd' "$inst/pressure.conf"
+	assert_output --partial "weight=3"
+	assert_output --partial "trip=10"
+	run grep '^dovecot' "$inst/pressure.conf"
+	assert_output --partial "weight=2"
+	assert_output --partial "trip=25"
+	assert_output --partial "skip_alert=1"
+	# comments preserved
+	run grep '^# user' "$inst/pressure.conf"
+	assert_success
 }
 
 @test "importconf: TRIG migrated to PRESSURE_TRIP in conf.bfd" {
@@ -1092,7 +1099,7 @@ OLDEOF
 INSTALL_PATH="/usr/local/bfd"
 NEWEOF
 
-	# old pressure.conf with modsec entries
+	# old pressure.conf with modsec entries (old colon format triggers conversion)
 	cat > "$inst.bk.last/pressure.conf" <<'EOF'
 sshd:PRESSURE_WEIGHT=3:PRESSURE_TRIP=10
 modsec:PRESSURE_WEIGHT=3:PRESSURE_TRIP=5
@@ -1101,8 +1108,8 @@ EOF
 
 	# new pressure.conf with defaults
 	cat > "$inst/pressure.conf" <<'EOF'
-sshd:PRESSURE_TRIP=5
-mod_sec:PRESSURE_TRIP=10
+sshd  weight=3  trip=15
+mod_sec  weight=2  trip=20
 EOF
 
 	local script
@@ -1112,11 +1119,13 @@ EOF
 	run bash "$script"
 	assert_success
 
-	# modsec should be renamed to mod_sec in preserved pressure.conf
-	run grep '^mod_sec:' "$inst/pressure.conf"
-	assert_output "mod_sec:PRESSURE_WEIGHT=3:PRESSURE_TRIP=5"
-	# old modsec: prefix should not remain
-	run grep '^modsec:' "$inst/pressure.conf"
+	# modsec should be converted and renamed to mod_sec
+	run grep '^mod_sec' "$inst/pressure.conf"
+	assert_output --partial "mod_sec"
+	assert_output --partial "weight=3"
+	assert_output --partial "trip=5"
+	# old modsec prefix should not remain
+	run grep '^modsec' "$inst/pressure.conf"
 	assert_failure
 }
 

@@ -1,59 +1,32 @@
 2.0.2:
-[Change] install.sh deploys update-cdn-providers.sh as executable with path
-      replacement for custom install locations
-[New] cron.daily CDN database staleness check (mirrors ipcountry.dat pattern)
-[Change] ci.yml adds bfd_cdn.sh and update-cdn-providers.sh to lint targets
-[Change] Test helpers updated for bfd_cdn.sh (_start_watch, bfd_load_function)
-[New] bfd -S shows CDN provider summary (count, treatments, update age)
-[New] bfd -a <IP> shows CDN provider annotation when IP matches a range
-[New] CDN batch lookup in check() with O(1) per-IP treatment dispatch
-[New] Three CDN treatment modes: ignore (skip), exclude (record, no ban),
-      derate (reduced pressure weight)
-[New] CDN_ENABLE and CDN_UPDATE_DAYS config variables with validation
-[New] cdn-exclude attack.pool ACTION value for excluded CDN IPs
-[New] bfd --cdn CLI subcommands: list providers, show provider detail,
-      check IP against ranges, force update — all support --json modifier
-[New] bfd_cdn.sh sourced in bfd.lib.sh between bfd_detect.sh and bfd_events.sh
-[New] bfd_cdn.sh — CDN/trusted proxy subsystem: provider config parser,
-      CIDR-to-integer-range conversion, database compilation, binary-search
-      lookup (IPv4 integer + IPv6 hex), curl/wget fetch with JSON/text extraction
-[New] cdn-providers.conf — whitespace-delimited provider config with 5
-      commented defaults (Cloudflare, AWS CloudFront, Fastly, Google Cloud, Akamai)
-[Change] pressure-country.conf migrated from CC=MULT to CC MULT (fstab-style)
-[Change] country_weight() and _cw_map loader use dual-format awk (handles both
-      old CC=MULT and new CC MULT formats for backward compatibility)
-[Change] importconf auto-detects old CC=MULT format and converts on upgrade
-[New] update-cdn-providers.sh — standalone fetch/compile script for CDN IP
-      databases (mirrors update-ipcountry.sh pattern)
-[Change] Decompose bfd.lib.sh (~4,900 lines) into 8 functionally-organized
-      sub-libraries (bfd_validate.sh, bfd_fw.sh, bfd_state.sh, bfd_pressure.sh,
-      bfd_detect.sh, bfd_events.sh, bfd_diag.sh, bfd_core.sh); bfd slimmed to
-      ~440-line CLI wrapper; send_alerts() moved to bfd_alert.sh
-[Change] Replace per-IP ban status lookup with batch pattern in attack pool
-      reporting — eliminates ~50-75 AWK spawns per invocation
-[Change] Remove dead code: 6 unused functions, dead variables, stale rule
-      path fallbacks, and 22 associated tests
-[New] Add REPORT_ENABLED and REPORT_TOP_N validation in validate_config()
-      to reject non-boolean and non-integer values at config load time
-[Fix] Per-channel alert dispatch prevents Slack JSON and Telegram MarkdownV2
-      from cross-contaminating when both channels are enabled
-[Fix] ALERT_COUNT in messaging alerts reflects actual ban count instead of
-      always "0"
+[New] CDN/trusted proxy subsystem: per-provider IP range databases with
+      binary-search lookup (IPv4/IPv6), three treatment modes (ignore/exclude/
+      derate), detection pipeline integration, and cron.daily database refresh
+[New] bfd --cdn CLI: list providers, show detail, check IP against ranges,
+      force update; CDN summary in bfd -S and per-IP annotation in bfd -a;
+      --json modifier support
+[New] cdn-providers.conf with 5 default providers (Cloudflare, AWS CloudFront,
+      Fastly, Google Cloud, Akamai); CDN_ENABLE and CDN_UPDATE_DAYS config vars
+[New] REPORT_ENABLED and REPORT_TOP_N config validation rejects invalid values
+      at load time
+[New] audit.log added to logrotate configuration (was growing unbounded)
+[New] install.sh creates /usr/local/sbin/tlog symlink for PATH accessibility
+[Change] pressure.conf migrated from colon-delimited (RULE:KEY=VAL) to
+      whitespace format (rule key=val); dual-format parser for backward compat;
+      importconf auto-converts on upgrade; thresholds.conf dead code removed
+[Change] pressure-country.conf migrated from CC=MULT to CC MULT format;
+      dual-format parser and importconf auto-conversion for backward compat
+[Change] lock.utime created with mode 640 (was inheriting umask 644)
+[Fix] Multi-channel alert rendering: per-channel dispatch prevents Slack/Telegram
+      cross-contamination, ALERT_COUNT reflects actual ban count, Telegram
+      MarkdownV2 escaping for special characters
 [Fix] CIDR sidecar enrichment data preserved across all rendering passes
-      (text, HTML, messaging) instead of falling through to static fallback
+      instead of falling through to static fallback
 [Fix] Report text table top-IPs rows emit all 7 columns; Slack/Discord
       templates use JSON-escaped brief vars to prevent broken JSON
-[Fix] Escape BAN_DURATION_DETAIL and REPORT_TREND_LABEL for Telegram
-      MarkdownV2 — parentheses caused malformed messages
-[Fix] Add 8 missing config vars (REPORT_*, LOG_IDLE_SUPPRESS,
-      SUBNET_ALERT_TOP_N) to SIGHUP reload unset block for clean re-read
-[Fix] Replace mawk-incompatible length(array) with portable flag in events
-      AWK block
-[Fix] cron.daily version header updated to 2.0.2
-[Fix] Temp file creation in extract_hosts and _batch_ip_to_country uses
-      $INSTALL_PATH/tmp (root-owned 750) instead of /tmp fallback
-[Fix] _check_file_safety permission parsing uses zero-padded stat output
-      (%04a) to correctly handle setuid/setgid/sticky 4-digit permissions
+[Fix] Add 8 missing config vars to SIGHUP reload unset block for clean re-read
+[Fix] Temp file hardening: extract_hosts and _batch_ip_to_country use
+      $INSTALL_PATH/tmp; _check_file_safety handles 4-digit setuid/setgid perms
 [Fix] IP report and list views now search rotated bans.history archives —
       previously showed "Ban history: none" for IPs banned >1 day ago
 [Fix] show_status "Top services" trailing comma when fewer than 3 services
@@ -61,9 +34,6 @@
       alive — eliminates syslog noise from cron during watch mode
 [Fix] Stale IPv6 GeoIP build directories cleaned up at update-ipcountry.sh
       startup (orphaned by prior interrupted builds)
-[New] audit.log added to logrotate configuration (was growing unbounded)
-[New] install.sh creates /usr/local/sbin/tlog symlink for PATH accessibility
-[Change] lock.utime created with mode 640 (was inheriting umask 644)
 
 2.0.1:
 

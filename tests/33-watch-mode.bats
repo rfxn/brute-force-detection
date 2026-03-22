@@ -171,7 +171,7 @@ teardown() {
 @test "reload_watch: clears pressure arrays when pressure.conf deleted (F-063)" {
 	# create pressure.conf with an entry
 	local pconf="$INSTALL_PATH/pressure.conf"
-	echo "sshd:PRESSURE_WEIGHT=5" > "$pconf"
+	echo "sshd  weight=5" > "$pconf"
 	chown root "$pconf"
 	chmod 640 "$pconf"
 
