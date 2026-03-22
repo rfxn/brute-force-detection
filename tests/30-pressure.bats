@@ -274,6 +274,7 @@ teardown() {
 }
 
 @test "_load_pressure_conf: ignores unknown keys" {
+	bfd_require_bash42
 	local conf="$TEST_TMPDIR/pressure.conf"
 	echo "sshd:PRESSURE_TRIP=5:BADKEY=nope:SKIP_ALERT=1" > "$conf"
 	chown root "$conf"
@@ -462,6 +463,7 @@ teardown() {
 }
 
 @test "precedence: pressure.conf fills PRESSURE_TRIP, then GLOB_PRESSURE_TRIP fallback" {
+	bfd_require_bash42
 	GLOB_PRESSURE_TRIP="15"
 	# rule left PRESSURE_TRIP empty, pressure.conf has value
 	_PRESS_TRIP=([sshd]="8")
