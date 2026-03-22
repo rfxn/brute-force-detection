@@ -1,4 +1,10 @@
 2.0.2:
+[New] CDN batch lookup in check() with O(1) per-IP treatment dispatch
+[New] Three CDN treatment modes: ignore (skip), exclude (record, no ban),
+      derate (reduced pressure weight)
+[New] CDN_ENABLE and CDN_UPDATE_DAYS config variables with validation
+[New] cdn-exclude attack.pool ACTION value for excluded CDN IPs
+[New] bfd_cdn.sh sourced in bfd.lib.sh between bfd_detect.sh and bfd_events.sh
 [New] bfd_cdn.sh — CDN/trusted proxy subsystem: provider config parser,
       CIDR-to-integer-range conversion, database compilation, binary-search
       lookup (IPv4 integer + IPv6 hex), curl/wget fetch with JSON/text extraction

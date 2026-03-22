@@ -140,6 +140,7 @@ config_init() {
 		unset REPORT_EMAIL_ADDRESS REPORT_EMAIL_SUBJECT REPORT_TOP_N
 		# log + internal overrides
 		unset LOG_IDLE_SUPPRESS SUBNET_ALERT_TOP_N
+		unset CDN_ENABLE CDN_UPDATE_DAYS
 		# alert_lib mapped env vars (set by _bfd_alert_init)
 		unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
 		unset ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
@@ -533,6 +534,15 @@ check() {
 			[ -n "$_cc_ip" ] && _cc_map[$_cc_ip]="$_cc_val"
 		done < <(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_unique_file")
 
+		# batch CDN lookup: single awk pass over cdn.dat for all unique IPs
+		declare -A _cdn_map  # IP -> "PROVIDER TREATMENT MULT"
+		if [ "${CDN_ENABLE:-0}" = "1" ] && [ -f "$INSTALL_PATH/cdn.dat" ]; then
+			local _cdn_ip _cdn_provider _cdn_treatment _cdn_mult
+			while read -r _cdn_ip _cdn_provider _cdn_treatment _cdn_mult; do
+				[ -n "$_cdn_ip" ] && _cdn_map[$_cdn_ip]="$_cdn_provider $_cdn_treatment $_cdn_mult"
+			done < <(_batch_cdn_lookup "$INSTALL_PATH/cdn.dat" < "$_unique_file")
+		fi
+
 		# batch pressure: single awk pass over pressure.dat for this MOD
 		# Note: pressure values are pre-computed from events recorded BEFORE this
 		# rule iteration. IP Y does not see IP X's events from the same rule in
@@ -556,12 +566,28 @@ check() {
 				vout "  $ATTACK_HOST filtered (ignored)"
 				continue
 			fi
+			# CDN treatment: ignore/exclude/derate
+			local _cdn_exclude=0 _cdn_prov="" _cdn_treat="" _cdn_mult_val=""
+			if [ -n "${_cdn_map[$ATTACK_HOST]:-}" ]; then
+				read -r _cdn_prov _cdn_treat _cdn_mult_val <<< "${_cdn_map[$ATTACK_HOST]}"
+				if [ "$_cdn_treat" = "ignore" ]; then
+					vout "  $ATTACK_HOST filtered (cdn: $_cdn_prov, ignore)"
+					continue
+				elif [ "$_cdn_treat" = "exclude" ]; then
+					_cdn_exclude=1
+				fi
+			fi
 			# O(1) country + weight lookup
 			local _cc="${_cc_map[$ATTACK_HOST]:-}"
 			[ "$_cc" = "-" ] && _cc=""
 			local scoring_weight="$eff_weight"
 			if [ -n "$_cc" ] && [ -n "${_cw_map[$_cc]+_}" ]; then
 				scoring_weight=$(( (eff_weight * ${_cw_map[$_cc]} + 5) / 10 ))
+				[ "$scoring_weight" -lt 1 ] && scoring_weight=1
+			fi
+			# CDN derate: further reduce scoring weight
+			if [ "$_cdn_treat" = "derate" ] && [ "${_cdn_mult_val:-10}" != "10" ]; then
+				scoring_weight=$(( (scoring_weight * ${_cdn_mult_val:-10} + 5) / 10 ))
 				[ "$scoring_weight" -lt 1 ] && scoring_weight=1
 			fi
 			# O(1) pressure: pre-computed base + new events at decay=1.0
@@ -592,6 +618,17 @@ check() {
 						vout "  $ATTACK_HOST: global pressure=${_gp_fmt}/${PRESSURE_TRIP_GLOBAL} -> ban"
 					fi
 				fi
+			fi
+			# CDN exclude: record observation but skip ban
+			if [ "$_cdn_exclude" -eq 1 ] && [ "$should_ban" -eq 1 ]; then
+				printf '%s\n' "$UTIME $ATTACK_HOST $MOD $_host_count ${_cc:---} cdn-exclude 0 ${PORTS:-all} $pressure_scaled -" >> "$_pool_tmp"
+				vout "  $ATTACK_HOST: cdn-exclude ($_cdn_prov), skipping ban"
+				# still accumulate pressure events for visibility
+				local _pi
+				for ((_pi = 0; _pi < _host_count; _pi++)); do
+					printf '%s\n' "$UTIME $ATTACK_HOST $MOD $scoring_weight"
+				done >> "$_pressure_tmp"
+				continue
 			fi
 			if [ "$should_ban" -eq 1 ]; then
 				# O(1) active ban check
@@ -656,7 +693,7 @@ check() {
 
 		# per-rule cleanup
 		command rm -f "$_unique_file" "$_pressure_tmp" "$_pool_tmp" "$_counted_file"
-		unset _filter_map _cc_map _pre_mod_p _pre_global_p
+		unset _filter_map _cc_map _pre_mod_p _pre_global_p _cdn_map
 	done
 
 	# distributed attack detection

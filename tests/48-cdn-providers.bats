@@ -369,3 +369,189 @@ EOF
 	[ "${_cw_map[CN]}" = "20" ]
 	[ "${_cw_map[RU]}" = "15" ]
 }
+
+# ============================================================
+# Detection pipeline CDN integration (Phase 3)
+# ============================================================
+
+# Helper: set up minimal check() environment for CDN integration tests
+_cdn_setup_check_env() {
+	local rules_dir="$1"
+	RULES_PATH="$rules_dir"
+	GLOB_PRESSURE_TRIP="5"
+	GLOB_TRIG="5"
+	PRESSURE_HALF_LIFE="300"
+	TRIG_WINDOW="300"
+	PRESSURE_TRIP_GLOBAL="0"
+	TRIG_GLOBAL="0"
+	UTIME="1000"
+	IGNORE_HOST_FILES="$TEST_TMPDIR/exclude.files"
+	LO_HOSTS="$TEST_TMPDIR/lo_hosts"
+	touch "$IGNORE_HOST_FILES" "$LO_HOSTS"
+	BAN_COMMAND_TEMPLATE="/bin/true"
+	BAN_COMMAND_V6_TEMPLATE=""
+	DRY_RUN="0"
+	BAN_TTL="0"
+	BAN_DURATION="0"
+	BAN_ESCALATE_AFTER="0"
+	BAN_PERMANENT_AFTER="0"
+	BAN_ESCALATE_WINDOW="86400"
+	BAN_PERMANENT_WINDOW="86400"
+	SKIP_ALERT=""
+	EMAIL_ALERTS="0"
+	SUBNET_TRIG="0"
+}
+
+# Helper: create a rule file with given MATCHED_HOSTS
+_cdn_create_rule() {
+	local rules_dir="$1" name="$2" hosts="$3" trip="${4:-2}"
+	local logfile="$TEST_TMPDIR/test.log"
+	echo "test line" > "$logfile"
+	cat > "$rules_dir/$name" <<RULEEOF
+TRIG="$trip"
+PREREQ="/bin/sh"
+LOG_FILE="$logfile"
+LOG_TAG="$name"
+MATCHED_HOSTS="$hosts"
+RULEEOF
+	chmod 644 "$rules_dir/$name"
+	chown root "$rules_dir/$name"
+}
+
+@test "CDN_ENABLE=0 skips all CDN processing" {
+	bfd_require_bash42
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	# IP in CDN range, 3 events at trip=2 -> should ban normally
+	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50"
+	# Create cdn.dat with range covering 1.0.0.0/24 = 16777216..16777471
+	# treatment=ignore should block the IP, but CDN_ENABLE=0 means it is skipped
+	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+16777216 16777471 cloudflare ignore 10
+EOF
+	CDN_ENABLE="0"
+	_cdn_setup_check_env "$rules_dir"
+	run check
+	assert_success
+	# IP should be banned because CDN is disabled
+	assert_output --partial "1 bans executed"
+}
+
+@test "missing cdn.dat is no-op when CDN_ENABLE=1" {
+	bfd_require_bash42
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50"
+	# No cdn.dat file
+	CDN_ENABLE="1"
+	_cdn_setup_check_env "$rules_dir"
+	run check
+	assert_success
+	# IP should be banned normally — missing cdn.dat is no-op
+	assert_output --partial "1 bans executed"
+}
+
+@test "cdn ignore treatment skips IP in detection loop" {
+	bfd_require_bash42
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	# IP 1.0.0.50 -> int ~16777266, inside 1.0.0.0/24 range (16777216..16777471)
+	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50"
+	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+16777216 16777471 cloudflare ignore 10
+EOF
+	CDN_ENABLE="1"
+	_cdn_setup_check_env "$rules_dir"
+	run check
+	assert_success
+	# IP should NOT be banned — cdn ignore skips entirely
+	assert_output --partial "0 bans executed"
+	# attack.pool should not contain this IP (skipped before pool write)
+	run grep "1.0.0.50" "$INSTALL_PATH/stats/attack.pool"
+	[ "$status" -ne 0 ]
+}
+
+@test "cdn exclude treatment records event but skips ban" {
+	bfd_require_bash42
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50"
+	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+16777216 16777471 cloudflare exclude 10
+EOF
+	CDN_ENABLE="1"
+	_cdn_setup_check_env "$rules_dir"
+	run check
+	assert_success
+	# IP should NOT be banned — cdn exclude skips ban
+	assert_output --partial "0 bans executed"
+	# attack.pool should contain the IP with ACTION=cdn-exclude
+	grep -q "cdn-exclude" "$INSTALL_PATH/stats/attack.pool"
+	grep -q "1.0.0.50" "$INSTALL_PATH/stats/attack.pool"
+}
+
+@test "cdn derate treatment reduces pressure multiplier" {
+	bfd_require_bash42
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	# 4 events at trip=5, weight=1 -> pressure=4.0 < 5 -> no ban normally
+	# With derate mult=3 (0.3x), weight goes from 1 -> (1*3+5)/10 = 0 -> clamp to 1
+	# So derate with mult=3 still has weight=1 (min clamp)
+	# Instead: use trip=3, events=4 -> pressure=4.0 >= 3 -> ban
+	# With derate mult=5 (0.5x), weight=1 -> (1*5+5)/10 = 1 -> still 1 (min clamp)
+	# Need higher initial weight. Use PRESSURE_WEIGHT in rule.
+	# Alternatively: 10 events at trip=5 -> pressure=10 >= 5 -> ban normally
+	# With derate mult=3 -> scoring_weight = (1*3+5)/10 = 0 -> clamp to 1 -> still bans
+	# The derate only changes scoring_weight. To test it meaningfully:
+	# Set eff_weight=10, trip=5, 1 event -> pressure=10 >= 5 -> ban
+	# With derate mult=3 -> scoring_weight = (10*3+5)/10 = 3 -> pressure=3 < 5 -> no ban
+	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50" "5"
+	cat >> "$rules_dir/testrule" <<'EOF'
+PRESSURE_WEIGHT="10"
+EOF
+	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+16777216 16777471 cloudflare derate 3
+EOF
+	CDN_ENABLE="1"
+	_cdn_setup_check_env "$rules_dir"
+	run check
+	assert_success
+	# Without derate: weight=10, 1 event -> pressure=10 >= trip=5 -> ban
+	# With derate mult=3: weight=10*(3/10)=3, 1 event -> pressure=3 < 5 -> no ban
+	assert_output --partial "0 bans executed"
+	# Pool should have an observed entry (sub-trip)
+	grep -q "1.0.0.50" "$INSTALL_PATH/stats/attack.pool"
+	grep -q "observed" "$INSTALL_PATH/stats/attack.pool"
+}
+
+@test "cdn treatment is per-provider independent" {
+	bfd_require_bash42
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	# Two IPs from different CDN ranges, different treatments
+	# 1.0.0.50 (16777266) -> cloudflare ignore
+	# 10.0.0.50 (167772210) -> fastly exclude
+	# 192.168.1.50 (3232235826) -> no CDN match, should ban normally
+	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50 10.0.0.50 10.0.0.50 10.0.0.50 192.168.1.50 192.168.1.50 192.168.1.50"
+	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+16777216 16777471 cloudflare ignore 10
+167772160 167772415 fastly exclude 10
+EOF
+	CDN_ENABLE="1"
+	_cdn_setup_check_env "$rules_dir"
+	run check
+	assert_success
+	# 1.0.0.50: cdn ignore -> skipped entirely (no ban, no pool)
+	# 10.0.0.50: cdn exclude -> recorded as cdn-exclude, no ban
+	# 192.168.1.50: normal -> should be banned
+	assert_output --partial "1 bans executed"
+	# Verify pool contents
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	# 1.0.0.50 should NOT be in pool (ignore skips it)
+	run grep "1.0.0.50" "$pool"
+	[ "$status" -ne 0 ]
+	# 10.0.0.50 should be in pool as cdn-exclude
+	grep -q "10.0.0.50.*cdn-exclude" "$pool"
+	# 192.168.1.50 should be in pool as ban (or ban-failed since DRY_RUN=0 with /bin/true)
+	grep -q "192.168.1.50" "$pool"
+}
