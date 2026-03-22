@@ -1,4 +1,30 @@
 2.0.2:
+[Change] install.sh deploys update-cdn-providers.sh as executable with path
+      replacement for custom install locations
+[New] cron.daily CDN database staleness check (mirrors ipcountry.dat pattern)
+[Change] ci.yml adds bfd_cdn.sh and update-cdn-providers.sh to lint targets
+[Change] Test helpers updated for bfd_cdn.sh (_start_watch, bfd_load_function)
+[New] bfd -S shows CDN provider summary (count, treatments, update age)
+[New] bfd -a <IP> shows CDN provider annotation when IP matches a range
+[New] CDN batch lookup in check() with O(1) per-IP treatment dispatch
+[New] Three CDN treatment modes: ignore (skip), exclude (record, no ban),
+      derate (reduced pressure weight)
+[New] CDN_ENABLE and CDN_UPDATE_DAYS config variables with validation
+[New] cdn-exclude attack.pool ACTION value for excluded CDN IPs
+[New] bfd --cdn CLI subcommands: list providers, show provider detail,
+      check IP against ranges, force update — all support --json modifier
+[New] bfd_cdn.sh sourced in bfd.lib.sh between bfd_detect.sh and bfd_events.sh
+[New] bfd_cdn.sh — CDN/trusted proxy subsystem: provider config parser,
+      CIDR-to-integer-range conversion, database compilation, binary-search
+      lookup (IPv4 integer + IPv6 hex), curl/wget fetch with JSON/text extraction
+[New] cdn-providers.conf — whitespace-delimited provider config with 5
+      commented defaults (Cloudflare, AWS CloudFront, Fastly, Google Cloud, Akamai)
+[Change] pressure-country.conf migrated from CC=MULT to CC MULT (fstab-style)
+[Change] country_weight() and _cw_map loader use dual-format awk (handles both
+      old CC=MULT and new CC MULT formats for backward compatibility)
+[Change] importconf auto-detects old CC=MULT format and converts on upgrade
+[New] update-cdn-providers.sh — standalone fetch/compile script for CDN IP
+      databases (mirrors update-ipcountry.sh pattern)
 [Change] Decompose bfd.lib.sh (~4,900 lines) into 8 functionally-organized
       sub-libraries (bfd_validate.sh, bfd_fw.sh, bfd_state.sh, bfd_pressure.sh,
       bfd_detect.sh, bfd_events.sh, bfd_diag.sh, bfd_core.sh); bfd slimmed to

@@ -363,7 +363,7 @@ Country weighting is active automatically when `pressure-country.conf` contains 
 
 The country database maps IP addresses to 2-letter country codes. IPv4 ranges are stored in `ipcountry.dat` (integer-range format) and IPv6 ranges in `ipcountry6.dat` (hex-range format). Both are downloaded automatically at install time (background) and refreshed via `cron.daily` when data is older than 30 days. Manual updates can be run with `update-ipcountry.sh`, which downloads per-country CIDR zones from ipverse.net (ipdeny.com fallback) and converts them to BFD's lookup format. Both IPv4 and IPv6 addresses are resolved to country codes.
 
-The multiplier file (`pressure-country.conf`) uses `CC=N` format where N is weight×10 (e.g., `CN=20` means 2.0× weight, `US=10` means 1.0× = no change). Unlisted countries default to 1.0×.
+The multiplier file (`pressure-country.conf`) uses whitespace-delimited `CC N` format where N is weight×10 (e.g., `CN 20` means 2.0× weight, `US 10` means 1.0× = no change). Unlisted countries default to 1.0×. The legacy `CC=N` format is also accepted for backward compatibility.
 
 ### 3.9 SMTP Relay
 
@@ -866,6 +866,70 @@ BFD provides two mechanisms for excluding addresses from bans:
 - **`/usr/local/bfd/exclude.files`** — additional files containing IPs to ignore. One file path per line; each referenced file contains IPs to exclude.
 
 BFD automatically detects local IPv4 and IPv6 addresses (including `::1`) and excludes them from bans. No manual configuration is needed for local address exclusion.
+
+---
+
+## 7b. CDN / Trusted Proxy
+
+When BFD monitors services behind a CDN or reverse proxy (e.g., Cloudflare, AWS CloudFront), the log may contain the proxy's IP instead of the real client. Without awareness of CDN IP ranges, BFD bans CDN infrastructure — blocking all proxied traffic.
+
+The CDN subsystem fetches provider IP ranges automatically and applies per-provider treatment during detection.
+
+### Configuration
+
+Enable in `conf.bfd`:
+```bash
+CDN_ENABLE="1"           # enable CDN IP awareness
+CDN_UPDATE_DAYS="7"      # refresh interval (days); 0 = manual only
+```
+
+### Provider Configuration
+
+Edit `cdn-providers.conf` to enable providers. Whitespace-delimited format:
+
+```
+# NAME          TREATMENT  MULT  FORMAT  URL_V4                                                    URL_V6
+cloudflare      ignore     10    text    https://www.cloudflare.com/ips-v4/                        https://www.cloudflare.com/ips-v6/
+aws-cloudfront  derate      3    json    https://d7uri8nf7uskq.cloudfront.net/tools/list-cloudfront-ips  -
+fastly          exclude    10    json    https://api.fastly.com/public-ip-list                     -
+```
+
+Fields:
+- **NAME**: Provider identifier (alphanumeric + hyphens)
+- **TREATMENT**: `ignore` (fully invisible), `exclude` (visible but never banned), `derate` (reduced pressure)
+- **MULT**: Pressure multiplier (10=1.0x, 5=0.5x, 3=0.3x) — only applies to `derate`
+- **FORMAT**: `text` (one CIDR per line) or `json` (CIDRs extracted automatically)
+- **URL_V4/URL_V6**: Provider IP range URLs (`-` for none)
+
+### Treatment Modes
+
+| Mode | Detection | Events | Pressure | Ban |
+|------|-----------|--------|----------|-----|
+| `ignore` | Skipped | None | None | No |
+| `exclude` | Processed | Recorded (`cdn-exclude`) | Accumulated | No |
+| `derate` | Processed | Recorded | Reduced by MULT | Yes (if threshold met) |
+
+### CLI Commands
+
+```bash
+bfd --cdn                    # list all providers with status
+bfd --cdn cloudflare         # show CIDRs for a provider
+bfd --cdn update             # force refresh all provider ranges
+bfd --cdn check 172.70.34.1  # check if an IP matches a CDN range
+bfd --cdn --json             # JSON output
+```
+
+### Automatic Updates
+
+`cron.daily` checks the CDN database age against `CDN_UPDATE_DAYS` and refreshes when stale. Manual refresh: `bfd --cdn update` or run `update-cdn-providers.sh` directly.
+
+### Adding Custom Providers
+
+Add a line to `cdn-providers.conf` with any provider that publishes IP ranges as plain-text CIDRs or JSON:
+
+```
+my-proxy  derate  5  text  https://example.com/ip-ranges.txt  -
+```
 
 ---
 

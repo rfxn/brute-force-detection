@@ -228,6 +228,19 @@ search_ip() {
 		[ "$_ptype" != "P" ] && continue
 		echo "                  ${_psvc}: ${_pfmt}/${_ptrip}"
 	done <<< "$data"
+
+	# CDN provider annotation (only when CDN_ENABLE=1 and cdn.dat exists)
+	if [ "${CDN_ENABLE:-0}" = "1" ]; then
+		local _cdn_db="$install_path/cdn.dat"
+		if [ -f "$_cdn_db" ] && [ -s "$_cdn_db" ]; then
+			local _cdn_result
+			if _cdn_result=$(_cdn_lookup "$ip" "$_cdn_db"); then
+				local _cdn_prov _cdn_treat _cdn_mult
+				read -r _cdn_prov _cdn_treat _cdn_mult <<< "$_cdn_result"
+				echo "  CDN provider:   $_cdn_prov (treatment: $_cdn_treat)"
+			fi
+		fi
+	fi
 }
 
 # _resolve_log_source_label log_source has_journalctl

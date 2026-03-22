@@ -333,6 +333,8 @@ _start_watch() {
 	chmod 640 "$inst/internals/bfd_report.sh"
 	cp "$PROJECT_ROOT/files/internals/bfd_core.sh" "$inst/internals/bfd_core.sh"
 	chmod 640 "$inst/internals/bfd_core.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_cdn.sh" "$inst/internals/bfd_cdn.sh"
+	chmod 640 "$inst/internals/bfd_cdn.sh"
 	cp "$PROJECT_ROOT/files/internals/pkg_lib.sh" "$inst/internals/pkg_lib.sh"
 	chmod 640 "$inst/internals/pkg_lib.sh"
 	touch "$inst/exclude.files"

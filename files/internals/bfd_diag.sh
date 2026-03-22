@@ -653,6 +653,32 @@ show_status() {
 		fi
 	fi
 
+	# CDN providers summary (only when CDN_ENABLE=1)
+	if [ "${CDN_ENABLE:-0}" = "1" ]; then
+		local _cdn_conf="$install_path/cdn-providers.conf"
+		local _cdn_dat="$install_path/cdn.dat"
+		if [ -f "$_cdn_conf" ] && _cdn_load_providers "$_cdn_conf" 2>/dev/null && [ "$_CDN_COUNT" -gt 0 ]; then
+			# Build treatment summary: "cloudflare: ignore, aws-cf: derate"
+			local _cdn_summary="" _ci
+			for (( _ci=0; _ci<_CDN_COUNT; _ci++ )); do
+				if [ -n "$_cdn_summary" ]; then
+					_cdn_summary="$_cdn_summary, "
+				fi
+				_cdn_summary="${_cdn_summary}${_CDN_NAMES[$_ci]}: ${_CDN_TREATMENTS[$_ci]}"
+			done
+			# Database age
+			local _cdn_age_str="not fetched"
+			if [ -f "$_cdn_dat" ]; then
+				local _cdn_mtime
+				_cdn_mtime=$(stat -c %Y "$_cdn_dat" 2>/dev/null)
+				if [ -n "$_cdn_mtime" ]; then
+					_cdn_age_str=$(_cdn_fmt_ago "$_cdn_mtime")
+				fi
+			fi
+			echo "  CDN providers:  $_CDN_COUNT active ($_cdn_summary) — updated $_cdn_age_str"
+		fi
+	fi
+
 	# Top-5 IPs by current pressure
 	local half_life="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"
 	if [ -f "$events_file" ] && [ -s "$events_file" ]; then

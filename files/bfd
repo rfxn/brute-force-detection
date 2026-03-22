@@ -99,7 +99,7 @@ usage_short() {
 	echo "       [-l|--list] [-a|--activity [IP|STR]] [-e|--events [IP|CIDR] [N]]"
 	echo "       [-S|--status] [-C|--config] [-R|--rules [--active]] [-c|--check]"
 	echo "       [-T|--test RULE] [--test-pattern PAT] [--test-alert TYPE]"
-	echo "       [--scan [RULE]] [--report [INTERVAL]]"
+	echo "       [--scan [RULE]] [--report [INTERVAL]] [--cdn [PROVIDER|update|check IP]]"
 	echo "       [--json] [--csv] [--limit=N] [-V|--verbose] [-v|--version] [-h|--help]"
 	echo ""
 	echo "Run modes:"
@@ -125,6 +125,12 @@ usage_short() {
 	echo "  bfd -C [VAR]        show active configuration"
 	echo "  bfd -R [RULE]       list rules or show rule detail (--active filter)"
 	echo "  bfd -c              health check diagnostics"
+	echo ""
+	echo "CDN / Trusted Proxy:"
+	echo "  bfd --cdn           list CDN providers and status"
+	echo "  bfd --cdn PROVIDER  show CIDRs for a provider"
+	echo "  bfd --cdn update    fetch and compile all provider ranges"
+	echo "  bfd --cdn check IP  check if IP matches a CDN range"
 	echo ""
 	echo "Testing:"
 	echo "  bfd -T RULE [FILE]  test rule against log or stdin"
@@ -177,6 +183,12 @@ usage() {
 	echo ""
 	echo "Reports:"
 	echo "  --report [daily|weekly|monthly]  generate and deliver periodic threat report"
+	echo ""
+	echo "CDN / Trusted Proxy:"
+	echo "  --cdn                       list CDN providers and status"
+	echo "  --cdn <PROVIDER>            show CIDRs for a provider"
+	echo "  --cdn update                fetch and compile all provider ranges"
+	echo "  --cdn check <IP>            check if IP matches a CDN range"
 	echo ""
 	echo "Output Modifiers:"
 	echo "  --json                      JSON output (with -l, -e, -a)"
@@ -430,6 +442,34 @@ case "${1:-}" in
 --report)
 	vhead; pre
 	report "${2:-daily}" || exit "$?"
+	;;
+--cdn)
+	pre
+	case "${2:-}" in
+		update) cdn_update "$INSTALL_PATH" ;;
+		check)
+			if [ -z "${3:-}" ]; then
+				echo "error: --cdn check requires an IP address." >&2
+				echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
+			fi
+			case "$OUTPUT_FORMAT" in
+				json) cdn_check_ip_json "$INSTALL_PATH" "$3" ;;
+				*)    cdn_check_ip "$INSTALL_PATH" "$3" ;;
+			esac
+			;;
+		"")
+			case "$OUTPUT_FORMAT" in
+				json) cdn_list_json "$INSTALL_PATH" ;;
+				*)    [ "$OUTPUT_FORMAT" = "table" ] && vhead; cdn_list "$INSTALL_PATH" ;;
+			esac
+			;;
+		*)
+			case "$OUTPUT_FORMAT" in
+				json) cdn_detail_json "$INSTALL_PATH" "$2" ;;
+				*)    [ "$OUTPUT_FORMAT" = "table" ] && vhead; cdn_detail "$INSTALL_PATH" "$2" ;;
+			esac
+			;;
+	esac
 	;;
 --flush-temp)   vhead; pre; flush_bans "$INSTALL_PATH" "temp" "$UTIME" || exit "$?" ;;
 --flush-all)    vhead; pre; flush_bans "$INSTALL_PATH" "all" "$UTIME" || exit "$?" ;;

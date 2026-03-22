@@ -50,7 +50,7 @@ install_files(){
 
 	# Set permissions: 750 dirs, 640 files, then executable overrides
 	pkg_set_perms "$INSPATH" "750" "640" \
-		"bfd" "tlog" "update-ipcountry.sh"
+		"bfd" "tlog" "update-ipcountry.sh" "update-cdn-providers.sh"
 
 	# Custom template override directory (preserved across upgrades via importconf)
 	[ -d "$INSPATH/alert/custom.d" ] || mkdir -p "$INSPATH/alert/custom.d"
@@ -135,7 +135,8 @@ install_files(){
 			"$INSPATH/bfd" "$INSPATH/internals/bfd.lib.sh" \
 			"$INSPATH/internals/internals.conf" \
 			"$INSPATH/exclude.files" \
-			"$INSPATH/update-ipcountry.sh" /etc/cron.daily/bfd
+			"$INSPATH/update-ipcountry.sh" \
+			"$INSPATH/update-cdn-providers.sh" /etc/cron.daily/bfd
 	fi
 	if [ "$BINPATH" != "/usr/local/sbin/bfd" ]; then
 		pkg_sed_replace "/usr/local/sbin/bfd" "$BINPATH" /etc/cron.d/bfd

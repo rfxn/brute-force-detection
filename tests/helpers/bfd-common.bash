@@ -114,10 +114,14 @@ bfd_load_function() {
 	local func="$1" src="${2:-$PROJECT_ROOT/files/bfd}"
 	local extracted
 	extracted="$(awk "/^${func}\\(\\)/ { p=1 } p { print; if (/^\\}\$/) exit }" "$src")"
-	# fallback: if not found in default source, try bfd_core.sh
+	# fallback: if not found in default source, try sub-libraries
 	if [ -z "$extracted" ] && [ "$src" = "$PROJECT_ROOT/files/bfd" ]; then
-		extracted="$(awk "/^${func}\\(\\)/ { p=1 } p { print; if (/^\\}\$/) exit }" \
-			"$PROJECT_ROOT/files/internals/bfd_core.sh")"
+		local _fallback
+		for _fallback in bfd_core.sh bfd_cdn.sh; do
+			extracted="$(awk "/^${func}\\(\\)/ { p=1 } p { print; if (/^\\}\$/) exit }" \
+				"$PROJECT_ROOT/files/internals/$_fallback")"
+			[ -n "$extracted" ] && break
+		done
 	fi
 	eval "$extracted"
 }

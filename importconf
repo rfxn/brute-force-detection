@@ -256,8 +256,15 @@ fi
 
 # preserve user's country pressure multiplier customizations
 if [ -f "$BK_LAST/pressure-country.conf" ]; then
-	command cp -f "$BK_LAST/pressure-country.conf" "$INSTALL_PATH/pressure-country.conf"
-	echo "  Preserved pressure-country.conf from previous install."
+	# detect old CC=MULT format and convert to whitespace-delimited CC MULT
+	if grep -qE '^[A-Z]{2}=' "$BK_LAST/pressure-country.conf" 2>/dev/null; then  # 2>/dev/null: grep may fail on unreadable file
+		awk -F= '/^#/||/^$/{print;next}{print $1, $2}' \
+			"$BK_LAST/pressure-country.conf" > "$INSTALL_PATH/pressure-country.conf"
+		echo "  Migrated pressure-country.conf from CC=MULT to CC MULT format."
+	else
+		command cp -f "$BK_LAST/pressure-country.conf" "$INSTALL_PATH/pressure-country.conf"
+		echo "  Preserved pressure-country.conf from previous install."
+	fi
 fi
 
 # preserve user's ignore lists

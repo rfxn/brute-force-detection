@@ -92,6 +92,12 @@ if [ -f "$_internals_dir/bfd_detect.sh" ]; then
 	. "$_internals_dir/bfd_detect.sh"
 fi
 
+# Source BFD CDN/trusted proxy subsystem
+if [ -f "$_internals_dir/bfd_cdn.sh" ]; then
+	# shellcheck disable=SC1091
+	. "$_internals_dir/bfd_cdn.sh"
+fi
+
 # Source BFD event queries and attack pool
 if [ -f "$_internals_dir/bfd_events.sh" ]; then
 	# shellcheck disable=SC1091

@@ -294,6 +294,18 @@ LOG_LEVEL="1"
 #BAN_RETRY_COUNT="2"
 
 # =============================================
+# CDN / Trusted Proxy
+# =============================================
+
+# enable CDN/trusted proxy IP awareness [0 = off, 1 = on]
+# when enabled, BFD loads cdn-providers.conf and applies per-provider
+# treatment (ignore, exclude, or derate) to matching IPs
+CDN_ENABLE="0"
+
+# how often to refresh provider IP ranges (days); 0 = never auto-refresh
+CDN_UPDATE_DAYS="7"
+
+# =============================================
 # Attack Pool (Long-term History)
 # =============================================
 

@@ -501,6 +501,18 @@ validate_config() {
 		echo "error: REPORT_TOP_N must be a positive integer (got '${REPORT_TOP_N}')." >&2
 		return "$EXIT_CONFIG_ERROR"
 	fi
+	# CDN config
+	case "${CDN_ENABLE:-0}" in
+		0|1) ;;
+		*) echo "error: CDN_ENABLE must be 0 or 1 (got '${CDN_ENABLE}')." >&2
+		   return "$EXIT_CONFIG_ERROR" ;;
+	esac
+	if [ -n "${CDN_UPDATE_DAYS:-}" ]; then
+		if ! [[ "${CDN_UPDATE_DAYS}" =~ $int_pattern ]]; then
+			echo "error: CDN_UPDATE_DAYS must be a non-negative integer (got '${CDN_UPDATE_DAYS}')." >&2
+			return "$EXIT_CONFIG_ERROR"
+		fi
+	fi
 }
 
 # detect_log_paths requires: AUTH_LOG_PATH, KERNEL_LOG_PATH, MAIL_LOG_PATH,
