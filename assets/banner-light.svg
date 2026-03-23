@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 830 160" width="830" height="160">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="spike-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#16a34a" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#16a34a" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+  <rect width="830" height="160" fill="url(#bg)" rx="8"/>
+
+  <!-- Top bar: shield + tagline + blocked IPs -->
+  <g transform="translate(40, 18)">
+    <!-- Shield icon -->
+    <path d="M16 0 L32 7 L32 20 C32 35 16 45 16 45 C16 45 0 35 0 20 L0 7 Z"
+          fill="none" stroke="#16a34a" stroke-width="1.5" opacity="0.7"/>
+    <polyline points="9,22 14,28 24,16" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+
+    <!-- Tagline -->
+    <text x="44" y="28" fill="#64748b" font-family="ui-monospace,'Cascadia Code','Source Code Pro',Consolas,monospace" font-size="13">Smart bots out &#x2022; honest humans in</text>
+  </g>
+
+  <!-- Blocked IP tickers (top right) -->
+  <g font-family="ui-monospace,monospace" font-size="9" opacity="0.25">
+    <text x="618" y="26" fill="#dc2626">&#x2717; 203.0.113.42</text>
+    <text x="648" y="40" fill="#dc2626">&#x2717; 198.51.100.7</text>
+    <text x="678" y="54" fill="#dc2626">&#x2717; 192.0.2.19</text>
+  </g>
+
+  <!-- Divider -->
+  <line x1="40" y1="58" x2="790" y2="58" stroke="#94a3b8" stroke-width="0.5" opacity="0.15"/>
+
+  <!-- Pressure chart (bottom region: y=68 to y=150) -->
+  <g transform="translate(40, 148)" filter="url(#glow)">
+    <!-- Baseline -->
+    <line x1="0" y1="0" x2="750" y2="0" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="3,3" opacity="0.3"/>
+
+    <!-- Filled area -->
+    <polygon points="0,0 25,-3 55,-6 85,-3 115,-9 145,-5 175,-12 205,-7 235,-18 260,-12 285,-24 305,-20 330,-32 350,-42 365,-54 380,-72 395,-58 410,-42 430,-50 450,-40 470,-30 500,-20 530,-14 560,-9 600,-6 650,-3 710,-2 750,0"
+             fill="url(#spike-fill)"/>
+
+    <!-- Pressure spikes line -->
+    <polyline points="0,0 25,-3 55,-6 85,-3 115,-9 145,-5 175,-12 205,-7 235,-18 260,-12 285,-24 305,-20 330,-32 350,-42 365,-54 380,-72 395,-58 410,-42 430,-50 450,-40 470,-30 500,-20 530,-14 560,-9 600,-6 650,-3 710,-2 750,0"
+              fill="none" stroke="#16a34a" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+
+    <!-- Trip threshold line -->
+    <line x1="0" y1="-60" x2="750" y2="-60" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="6,4" opacity="0.6"/>
+    <text x="756" y="-56" fill="#dc2626" font-family="ui-monospace,monospace" font-size="9" font-weight="600" opacity="0.7">TRIP</text>
+
+    <!-- Breach marker at peak -->
+    <circle cx="380" cy="-72" r="3" fill="#dc2626" opacity="0.9"/>
+    <circle cx="380" cy="-72" r="6.5" fill="none" stroke="#dc2626" stroke-width="0.8" opacity="0.4"/>
+  </g>
+</svg>

@@ -1,4 +1,10 @@
 2.0.2:
+[New] README restructured to rfxn documentation convention (level-2)
+[New] SVG banners (dark/light) with pressure threshold glyph
+[New] SECURITY.md and CONTRIBUTING.md from RDF templates
+[New] What's New, Integration, and Exit Codes sections in README
+[Change] Section renumbering: Usage to §4, Firewall to §5, CDN promoted to §8
+[Change] Badge row updated to flat-square style
 [New] Structured audit events for ban escalation, manual ban/unban/flush,
       alert delivery success/failure, detection triggers (pressure trip,
       distributed attack, CDN exclude), and scan cycle bookends
