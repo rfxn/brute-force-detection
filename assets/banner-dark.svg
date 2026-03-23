@@ -4,30 +4,61 @@
       <stop offset="0%" stop-color="#0d1117"/>
       <stop offset="100%" stop-color="#07080a"/>
     </linearGradient>
+    <linearGradient id="spike-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4ade80" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#4ade80" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
     <filter id="shadow">
       <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.3"/>
     </filter>
   </defs>
   <rect width="830" height="160" fill="url(#bg)" rx="8"/>
 
-  <!-- Threshold line glyph -->
-  <g transform="translate(50, 80)" filter="url(#shadow)">
-    <!-- Baseline -->
-    <line x1="0" y1="0" x2="120" y2="0" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="4,3"/>
-    <!-- Pressure spikes -->
-    <polyline points="0,0 15,-8 25,-5 35,-22 42,-12 50,-35 58,-18 65,-42 72,-55 80,-38 88,-15 100,-8 115,-3 120,0"
-              fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-    <!-- Trip point line -->
-    <line x1="0" y1="-45" x2="120" y2="-45" stroke="#f85149" stroke-width="1.5" stroke-dasharray="6,4"/>
-    <text x="125" y="-41" fill="#f85149" font-family="ui-monospace,monospace" font-size="9" font-weight="600">TRIP</text>
+  <!-- Shield icon -->
+  <g transform="translate(50, 32)" filter="url(#shadow)">
+    <path d="M24 0 L48 10 L48 30 C48 52 24 68 24 68 C24 68 0 52 0 30 L0 10 Z"
+          fill="none" stroke="#4ade80" stroke-width="2" opacity="0.8"/>
+    <path d="M24 16 L16 32 L24 28 L32 32 Z" fill="#f85149" opacity="0.9"/>
+    <line x1="24" y1="28" x2="24" y2="48" stroke="#f85149" stroke-width="2" opacity="0.7"/>
   </g>
 
-  <!-- Project name -->
-  <text x="220" y="68" fill="#ffffff" font-family="ui-monospace,'Cascadia Code','Source Code Pro',Consolas,monospace" font-size="32" font-weight="700" letter-spacing="-0.5">Brute Force Detection</text>
+  <!-- Wide pressure-spike chart -->
+  <g transform="translate(130, 110)" filter="url(#glow)">
+    <!-- Baseline -->
+    <line x1="0" y1="0" x2="580" y2="0" stroke="#8b949e" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>
 
-  <!-- Abbreviation -->
-  <text x="220" y="100" fill="#4ade80" font-family="ui-monospace,'Cascadia Code','Source Code Pro',Consolas,monospace" font-size="22" font-weight="600">(BFD)</text>
+    <!-- Filled area under spikes -->
+    <polygon points="0,0 20,-6 50,-10 80,-5 110,-18 135,-10 160,-30 185,-15 210,-38 230,-25 250,-50 265,-60 280,-72 295,-55 310,-40 330,-58 345,-45 360,-32 385,-20 410,-12 440,-8 470,-5 510,-3 550,-2 580,0"
+             fill="url(#spike-fill)"/>
+
+    <!-- Pressure spikes line -->
+    <polyline points="0,0 20,-6 50,-10 80,-5 110,-18 135,-10 160,-30 185,-15 210,-38 230,-25 250,-50 265,-60 280,-72 295,-55 310,-40 330,-58 345,-45 360,-32 385,-20 410,-12 440,-8 470,-5 510,-3 550,-2 580,0"
+              fill="none" stroke="#4ade80" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+
+    <!-- Trip threshold line -->
+    <line x1="0" y1="-62" x2="580" y2="-62" stroke="#f85149" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="588" y="-58" fill="#f85149" font-family="ui-monospace,monospace" font-size="10" font-weight="600">TRIP</text>
+
+    <!-- Peak breach markers -->
+    <circle cx="280" cy="-72" r="3.5" fill="#f85149" opacity="0.9"/>
+    <circle cx="280" cy="-72" r="7" fill="none" stroke="#f85149" stroke-width="1" opacity="0.4"/>
+  </g>
 
   <!-- Tagline -->
-  <text x="220" y="128" fill="#8b949e" font-family="ui-monospace,'Cascadia Code','Source Code Pro',Consolas,monospace" font-size="13">Pressure-based intrusion detection for Linux</text>
+  <text x="130" y="40" fill="#8b949e" font-family="ui-monospace,'Cascadia Code','Source Code Pro',Consolas,monospace" font-size="13">Pressure-based intrusion detection for Linux</text>
+
+  <!-- Decorative IP addresses (blocked) -->
+  <g font-family="ui-monospace,monospace" font-size="9" fill="#8b949e" opacity="0.3">
+    <text x="660" y="30">192.168.1.x</text>
+    <text x="680" y="48">10.0.0.x</text>
+    <text x="650" y="66">172.16.x.x</text>
+  </g>
+  <g transform="translate(750, 25)" opacity="0.35">
+    <line x1="0" y1="0" x2="16" y2="16" stroke="#f85149" stroke-width="2"/>
+    <line x1="16" y1="0" x2="0" y2="16" stroke="#f85149" stroke-width="2"/>
+  </g>
 </svg>
