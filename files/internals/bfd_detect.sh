@@ -342,6 +342,8 @@ check_distributed() {
 			continue
 		fi
 		elog warn "{$mod} distributed attack detected: $unique_count unique IPs from $subnet."
+		elog_event "threat_detected" "warn" "{$mod} distributed attack from $subnet" \
+			"subnet=$subnet" "mod=$mod" "unique_ips=$unique_count" "trip_type=subnet"
 		if execute_ban "$subnet" "$mod" "$DRY_RUN" "all"; then
 			ban_count=$((ban_count + 1))
 			local ban_result

@@ -395,6 +395,7 @@ chmod 640 "$LOCK_FILE" 2>/dev/null || true  # non-fatal: content is an epoch tim
 check() {
 	local run_start active_count=0 rules_count=0 events_count=0 bans_count=0
 	run_start=$(date +"%s")
+	elog_event "scan_started" "info" "detection cycle started"
 
 	# create alerts temp file for batched email delivery
 	local alerts_file
@@ -616,6 +617,8 @@ check() {
 			if [ "$_cdn_exclude" -eq 1 ] && [ "$should_ban" -eq 1 ]; then
 				printf '%s\n' "$UTIME $ATTACK_HOST $MOD $_host_count ${_cc:---} cdn-exclude 0 ${PORTS:-all} $pressure_scaled -" >> "$_pool_tmp"
 				vout "  $ATTACK_HOST: cdn-exclude ($_cdn_prov), skipping ban"
+				elog_event "threat_detected" "info" "{$MOD} CDN exclude for $ATTACK_HOST" \
+					"ip=$ATTACK_HOST" "mod=$MOD" "cdn_provider=$_cdn_prov" "cdn_treatment=exclude" "pressure=$pressure_scaled"
 				# still accumulate pressure events for visibility
 				local _pi
 				for ((_pi = 0; _pi < _host_count; _pi++)); do
@@ -636,6 +639,8 @@ check() {
 					local _pool_action="ban-failed" _pool_duration="-1"
 					if execute_ban "$ATTACK_HOST" "$MOD" "$DRY_RUN" "${PORTS:-all}"; then
 						vout "  ban: $ATTACK_HOST via ${_FW_BACKEND} ($MOD, port ${PORTS:-all})"
+						elog_event "threat_detected" "warn" "{$MOD} pressure trip for $ATTACK_HOST" \
+							"ip=$ATTACK_HOST" "mod=$MOD" "pressure=$pressure_scaled" "trip=$trip_scaled" "trip_type=$_trip_type"
 						bans_count=$((bans_count + 1))
 						local ban_result
 						ban_result=$(record_ban "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD" "${PORTS:-all}" "ban")
@@ -718,6 +723,8 @@ check() {
 	local run_end run_elapsed
 	run_end=$(date +"%s")
 	run_elapsed=$((run_end - run_start))
+	elog_event "scan_completed" "info" "detection cycle completed" \
+		"active_rules=$active_count" "events=$events_count" "bans=$bans_count" "elapsed=$run_elapsed"
 	local _run_label="run"
 	[ "${_SCAN_MODE:-}" = "1" ] && _run_label="scan"
 	local _log_flag="le"
