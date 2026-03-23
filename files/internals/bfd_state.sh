@@ -325,6 +325,8 @@ record_ban() {
 		ban_expiry=0
 		ban_action="escalate"
 		elog warn "{$mod} $host escalated to permanent ban (repeat offender)."
+		elog_event "block_escalated" "warn" "{$mod} $host escalated to permanent ban" \
+			"ip=$host" "mod=$mod" "recent_bans=$recent_bans"
 	else
 		local computed_duration
 		computed_duration=$(compute_ban_duration "$ban_ttl" "$recent_bans" \
@@ -475,6 +477,8 @@ manual_unban() {
 	ban_mod=$(awk -v ip="$ip" '$3 == ip {print $4; exit}' "$install_path/tmp/bans.active")
 	ban_ports=$(awk -v ip="$ip" '$3 == ip {print $5; exit}' "$install_path/tmp/bans.active")
 	execute_unban "$ip" "${ban_mod:-unknown}" "${ban_ports:-all}"
+	elog_event "block_removed" "info" "{${ban_mod:-unknown}} manual unban $ip via CLI" \
+		"ip=$ip" "mod=${ban_mod:-unknown}" "source=cli"
 	state_bans_active_remove "$install_path" "$ip"
 	state_bans_history_append "$install_path" "$utime" "0" "$ip" "${ban_mod:-unknown}" "unban"
 	echo "$ip unbanned successfully."
@@ -493,6 +497,8 @@ manual_ban() {
 		return 1
 	fi
 	execute_ban "$ip" "$mod" "0" "$ports"
+	elog_event "block_added" "warn" "{$mod} manual ban $ip via CLI" \
+		"ip=$ip" "mod=$mod" "source=cli" "ports=$ports"
 	state_bans_active_append "$install_path" "$utime" "0" "$ip" "$mod" "$ports"
 	state_bans_history_append "$install_path" "$utime" "0" "$ip" "$mod" "ban"
 	echo "$ip banned permanently."
@@ -525,5 +531,9 @@ flush_bans() {
 		fi
 	done <<< "$entries"
 
+	if [ "$count" -gt 0 ]; then
+		elog_event "block_removed" "warn" "flush: $count bans removed (mode=$mode)" \
+			"count=$count" "mode=$mode" "source=cli"
+	fi
 	echo "$count bans removed."
 }
