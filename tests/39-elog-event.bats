@@ -252,3 +252,22 @@ teardown() {
 	grep -q '"type":"scan_completed"' "$ELOG_AUDIT_FILE"
 	grep -q '"bans":"3"' "$ELOG_AUDIT_FILE"
 }
+
+@test "elog_event: alert_sent for digest flush with mode=digest" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "alert_sent" "info" "digest flush completed" \
+		"channel=email" "count=5" "mode=digest"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"type":"alert_sent"' "$ELOG_AUDIT_FILE"
+	grep -q '"mode":"digest"' "$ELOG_AUDIT_FILE"
+	grep -q '"count":"5"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: alert_failed for messaging channel (telegram)" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "alert_failed" "error" "messaging alert delivery failed" \
+		"channel=telegram" "count=2"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"channel":"telegram"' "$ELOG_AUDIT_FILE"
+	grep -q '"type":"alert_failed"' "$ELOG_AUDIT_FILE"
+}
