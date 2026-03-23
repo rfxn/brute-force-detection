@@ -1,4 +1,7 @@
 2.0.2:
+[New] Structured audit events for ban escalation, manual ban/unban/flush,
+      alert delivery success/failure, detection triggers (pressure trip,
+      distributed attack, CDN exclude), and scan cycle bookends
 [New] CDN/trusted proxy subsystem: per-provider IP range databases with
       binary-search lookup (IPv4/IPv6), three treatment modes (ignore/exclude/
       derate), detection pipeline integration, and cron.daily database refresh

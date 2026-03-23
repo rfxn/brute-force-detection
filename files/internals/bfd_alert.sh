@@ -903,17 +903,44 @@ _bfd_dispatch_messaging() {
 	if alert_channel_enabled "slack"; then
 		export ENTRY_BLOCKS="$slack_blocks"
 		export ENTRY_FIELDS=""
-		alert_dispatch "$tpl_dir" "$subject" "slack" || rc=$?
+		local _drc=0
+		alert_dispatch "$tpl_dir" "$subject" "slack" || _drc=$?
+		if [ "$_drc" -eq 0 ]; then
+			elog_event "alert_sent" "info" "messaging alert delivered" \
+				"channel=slack" "count=$entry_total"
+		else
+			rc=$_drc
+			elog_event "alert_failed" "error" "messaging alert delivery failed" \
+				"channel=slack" "count=$entry_total"
+		fi
 	fi
 	if alert_channel_enabled "telegram"; then
 		export ENTRY_BLOCKS="$telegram_blocks"
 		export ENTRY_FIELDS=""
-		alert_dispatch "$tpl_dir" "$subject" "telegram" || rc=$?
+		local _drc=0
+		alert_dispatch "$tpl_dir" "$subject" "telegram" || _drc=$?
+		if [ "$_drc" -eq 0 ]; then
+			elog_event "alert_sent" "info" "messaging alert delivered" \
+				"channel=telegram" "count=$entry_total"
+		else
+			rc=$_drc
+			elog_event "alert_failed" "error" "messaging alert delivery failed" \
+				"channel=telegram" "count=$entry_total"
+		fi
 	fi
 	if alert_channel_enabled "discord"; then
 		export ENTRY_BLOCKS=""
 		export ENTRY_FIELDS="$discord_fields"
-		alert_dispatch "$tpl_dir" "$subject" "discord" || rc=$?
+		local _drc=0
+		alert_dispatch "$tpl_dir" "$subject" "discord" || _drc=$?
+		if [ "$_drc" -eq 0 ]; then
+			elog_event "alert_sent" "info" "messaging alert delivered" \
+				"channel=discord" "count=$entry_total"
+		else
+			rc=$_drc
+			elog_event "alert_failed" "error" "messaging alert delivery failed" \
+				"channel=discord" "count=$entry_total"
+		fi
 	fi
 
 	# Clean up exported entry variables
@@ -980,6 +1007,8 @@ _bfd_digest_flush_callback() {
 	flush_count=$(wc -l < "$flush_file")
 	eout "digest flush: sending $flush_count accumulated alert(s)." le
 	send_alerts "$flush_file" "${EMAIL_SUBJECT:-BFD Alert}" "${EMAIL_LOGLINES:-5}"
+	elog_event "alert_sent" "info" "digest flush completed" \
+		"channel=email" "count=$flush_count" "mode=digest"
 }
 
 # send_alerts alerts_file subject loglines — orchestrate batched alert emails
@@ -1061,8 +1090,12 @@ send_alerts() {
 
 		if _alert_deliver_email "$recip" "$mail_subject" "$text_file" "$html_file" "$format"; then
 			elog info "alert email sent to $recip ($alert_count ban(s), format=$format)."
+			elog_event "alert_sent" "info" "email alert delivered" \
+				"channel=email" "recipient=$recip" "count=$alert_count" "format=$format"
 		else
 			elog error "alert email to $recip failed."
+			elog_event "alert_failed" "error" "email alert delivery failed" \
+				"channel=email" "recipient=$recip" "count=$alert_count" "format=$format"
 		fi
 
 		# set backward-compat globals for single-ban case
