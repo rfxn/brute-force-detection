@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 830 160" width="830" height="160">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#07080a"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <rect width="830" height="160" fill="url(#bg)" rx="8"/>
+
+  <!-- Threshold line glyph -->
+  <g transform="translate(50, 80)" filter="url(#shadow)">
+    <!-- Baseline -->
+    <line x1="0" y1="0" x2="120" y2="0" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <!-- Pressure spikes -->
+    <polyline points="0,0 15,-8 25,-5 35,-22 42,-12 50,-35 58,-18 65,-42 72,-55 80,-38 88,-15 100,-8 115,-3 120,0"
+              fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- Trip point line -->
+    <line x1="0" y1="-45" x2="120" y2="-45" stroke="#f85149" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="125" y="-41" fill="#f85149" font-family="ui-monospace,monospace" font-size="9" font-weight="600">TRIP</text>
+  </g>
+
+  <!-- Project name -->
+  <text x="220" y="68" fill="#ffffff" font-family="ui-monospace,'Cascadia Code','Source Code Pro',Consolas,monospace" font-size="32" font-weight="700" letter-spacing="-0.5">Brute Force Detection</text>
+
+  <!-- Abbreviation -->
+  <text x="220" y="100" fill="#4ade80" font-family="ui-monospace,'Cascadia Code','Source Code Pro',Consolas,monospace" font-size="22" font-weight="600">(BFD)</text>
+
+  <!-- Tagline -->
+  <text x="220" y="128" fill="#8b949e" font-family="ui-monospace,'Cascadia Code','Source Code Pro',Consolas,monospace" font-size="13">Pressure-based intrusion detection for Linux</text>
+</svg>

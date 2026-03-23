@@ -1,10 +1,20 @@
 # Brute Force Detection (BFD)
 
-[![CI](https://github.com/rfxn/brute-force-detection/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/rfxn/brute-force-detection/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-2.0.2-blue.svg)](CHANGELOG)
-[![License: GPL v2](https://img.shields.io/badge/license-GPL_v2-green.svg)](COPYING.GPL)
-[![Shell](https://img.shields.io/badge/language-bash-89e051.svg)](https://www.gnu.org/software/bash/)
-[![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)](README.md#11-supported-systems)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/banner-light.svg">
+    <img alt="Brute Force Detection (BFD)" src="assets/banner-dark.svg" width="830">
+  </picture>
+</p>
+
+<p align="center">
+  <a href="https://github.com/rfxn/brute-force-detection/actions/workflows/ci.yml"><img src="https://github.com/rfxn/brute-force-detection/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
+  <a href="CHANGELOG"><img src="https://img.shields.io/badge/version-2.0.2-blue.svg?style=flat-square" alt="Version"></a>
+  <a href="COPYING.GPL"><img src="https://img.shields.io/badge/license-GPL_v2-green.svg?style=flat-square" alt="License: GPL v2"></a>
+  <a href="https://www.gnu.org/software/bash/"><img src="https://img.shields.io/badge/language-bash-89e051.svg?style=flat-square" alt="Shell"></a>
+  <a href="#11-supported-systems"><img src="https://img.shields.io/badge/platform-linux-lightgrey.svg?style=flat-square" alt="Platform"></a>
+</p>
 
 Log-based brute force detection and automatic IP banning for Linux servers.
 Pressure-based scoring lets humans make mistakes while stopping bots cold —
@@ -14,6 +24,14 @@ multi-channel alerting, and continuous watch mode with ~10s detection latency.
 *Copyright (C) 1999-2026 [R-fx Networks](https://www.rfxn.com) · Ryan MacDonald · [GPL v2](COPYING.GPL)*
 
 ---
+
+## What's New in 2.0.2
+
+- **CDN/trusted proxy subsystem** — per-provider IP range databases with ignore/exclude/derate treatment modes, `bfd --cdn` CLI, automatic cron.daily refresh
+- **Structured audit events** — 12 new audit event types for ban escalation, alert delivery, detection triggers, and scan lifecycle
+- **Periodic threat reports** — scheduled daily/weekly/monthly reports via all alert channels with trend comparison
+- **Pressure config migration** — `pressure.conf` and `pressure-country.conf` migrated to whitespace format with backward-compatible dual-format parsing
+- **Multi-channel alert fixes** — per-channel dispatch prevents cross-contamination between Slack/Telegram/Discord
 
 ## Contents
 
@@ -36,26 +54,35 @@ multi-channel alerting, and continuous watch mode with ~10s detection latency.
   - [3.11 Slack Alerts](#311-slack-alerts)
   - [3.12 Telegram Alerts](#312-telegram-alerts)
   - [3.13 Discord Alerts](#313-discord-alerts)
-- [4. Firewall Integration](#4-firewall-integration)
-- [5. General Usage](#5-general-usage)
-  - [5.1 Dry Run](#51-dry-run)
-  - [5.2 Health Check](#52-health-check)
-  - [5.3 Threat Activity](#53-threat-activity)
-  - [5.4 Watch Mode](#54-watch-mode)
-  - [5.5 Flush Bans](#55-flush-bans)
-  - [5.6 Structured Output](#56-structured-output)
-  - [5.7 Scan Mode](#57-scan-mode)
-  - [5.8 Events and Investigation](#58-events-and-investigation)
+- [4. Usage](#4-usage)
+  - [4.1 Dry Run](#41-dry-run)
+  - [4.2 Health Check](#42-health-check)
+  - [4.3 Threat Activity](#43-threat-activity)
+  - [4.4 Watch Mode](#44-watch-mode)
+  - [4.5 Flush Bans](#45-flush-bans)
+  - [4.6 Structured Output](#46-structured-output)
+  - [4.7 Scan Mode](#47-scan-mode)
+  - [4.8 Events and Investigation](#48-events-and-investigation)
+  - [4.9 Exit Codes](#49-exit-codes)
+- [5. Firewall](#5-firewall)
 - [6. Rule Engine](#6-rule-engine)
   - [6.1 Rule Catalog](#61-rule-catalog)
   - [6.2 Rule Customization](#62-rule-customization)
 - [7. Ignore Lists](#7-ignore-lists)
-- [8. Periodic Reports](#8-periodic-reports)
-- [9. Ban Management](#9-ban-management)
-- [10. IPv6 Support](#10-ipv6-support)
-- [11. Troubleshooting](#11-troubleshooting)
-- [12. License](#12-license)
-- [13. Support](#13-support)
+- [8. CDN / Trusted Proxy](#8-cdn--trusted-proxy)
+  - [8.1 Configuration](#81-configuration)
+  - [8.2 Provider Configuration](#82-provider-configuration)
+  - [8.3 Treatment Modes](#83-treatment-modes)
+  - [8.4 CLI Commands](#84-cli-commands)
+  - [8.5 Automatic Updates](#85-automatic-updates)
+  - [8.6 Adding Custom Providers](#86-adding-custom-providers)
+- [9. Periodic Reports](#9-periodic-reports)
+- [10. Ban Management](#10-ban-management)
+- [11. IPv6](#11-ipv6)
+- [Integration](#integration)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+- [Support](#support)
 
 ---
 
@@ -295,9 +322,9 @@ Email templates are customizable — see [section 3.10](#310-email-templates). I
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `FIREWALL` | `auto` | Firewall backend; see [section 4](#4-firewall-integration) |
+| `FIREWALL` | `auto` | Firewall backend; see [section 5](#5-firewall) |
 | `BAN_TTL` | `600` | Ban duration in seconds (0 = permanent). Temporary bans auto-expire |
-| `BAN_COMMAND` | APF deny | Command when `FIREWALL="custom"`. See [section 4](#4-firewall-integration) |
+| `BAN_COMMAND` | APF deny | Command when `FIREWALL="custom"`. See [section 5](#5-firewall) |
 | `UNBAN_COMMAND` | APF unban | Reverse command. Required for temporary ban auto-expiry |
 
 The variables `$ATTACK_HOST`, `$MOD` (service name), and `$PORTS` (from rule file) are available in ban/unban commands.
@@ -325,7 +352,7 @@ These four settings form a pipeline: `BAN_ESCALATION` controls how ban duration 
 | `BAN_COMMAND_V6` | *(empty)* | IPv6-specific ban command. When empty, `BAN_COMMAND` is used for both address families |
 | `UNBAN_COMMAND_V6` | *(empty)* | IPv6-specific unban command. When empty, `UNBAN_COMMAND` is used for both |
 
-Leave empty when using tools that handle both protocols natively (nft with `inet` family, APF, ip route). Set explicitly for tools that require separate IPv4/IPv6 commands (iptables/ip6tables). See [section 10](#10-ipv6-support).
+Leave empty when using tools that handle both protocols natively (nft with `inet` family, APF, ip route). Set explicitly for tools that require separate IPv4/IPv6 commands (iptables/ip6tables). See [IPv6](#11-ipv6).
 
 ### 3.6 Log Paths
 
@@ -452,7 +479,7 @@ Messaging channels (Slack, Telegram, Discord) have their own template partials:
 | `discord.message.tpl` | Discord embed JSON wrapper |
 | `discord.entry.tpl` | Discord per-ban embed field |
 
-Periodic reports (see [section 8](#8-periodic-reports)) use their own template partials:
+Periodic reports (see [section 9](#9-periodic-reports)) use their own template partials:
 
 | File | Description |
 |------|-------------|
@@ -509,7 +536,254 @@ Requires `curl` in PATH. Test with `bfd --test-alert discord`.
 
 ---
 
-## 4. Firewall Integration
+## 4. Usage
+
+The `/usr/local/sbin/bfd` command provides the following options:
+
+```
+usage: bfd [OPTION]
+
+Run Modes:
+  -s, --standard              run detection cycle with output
+  -q, --quiet                 run detection cycle silently
+  -d, --dryrun                run detection without banning
+  -w, --watch                 run continuous watch mode (foreground)
+
+Ban Management:
+  -b, --ban IP [SERVICE]      manually ban an IP (permanent)
+  -u, --unban IP              unban an IP address
+  --flush-temp                remove all temporary bans
+  --flush-all                 remove all bans
+
+Reporting:                                      Supports: --json --csv
+  -l, --list                  list active bans
+  -a, --activity [IP|STR]     threat activity and IP investigation
+  -e, --events [IP|CIDR] [N]  event history, IP or subnet detail (N=log lines)
+
+System:
+  -S, --status [SERVICE]      operational status overview
+  -C, --config [VAR]          show active configuration
+  -R, --rules [RULE]          list rules or show rule detail (--active)
+  -c, --check                 health check diagnostics
+
+Testing:
+  -T, --test RULE [FILE|-]    test rule patterns against log or stdin
+  --test-pattern PAT [FILE|-] test raw <HOST> pattern against log or stdin
+  --test-alert TYPE           send test alert (email,slack,telegram,discord)
+
+Scan Mode:
+  --scan [RULE] [-d]          full-log scan (all rules or specific rule)
+  --max-lines=N               max lines per log during scan (default 50000)
+  --scan-timeout=N            journal timeout per rule during scan (default 120)
+
+Output Modifiers:
+  --json                      JSON output (with -l, -e, -a)
+  --csv                       CSV output (with -l, -e, -a)
+  --sort=MODE                 sort events: count (default), time, ip
+  --limit=N                   max IPs to display (default 100, 0=all)
+  --24h                       events from last 24 hours (default)
+  --7d                        events from last 7 days
+  --30d                       events from last 30 days
+  --active                    show only active rules (with -R)
+  -V, --verbose               detailed output (with -s, -d, -c, -S, --scan)
+
+General:
+  -v, --version               display version
+  -h, --help                  display this help (see bfd.1 for full docs)
+```
+
+The **`-s|--standard`** and **`-q|--quiet`** options run the full detection and banning cycle. Standard mode prints output; quiet mode suppresses it (used by cron). Both parse logs, compute pressure against trip points, and execute bans.
+
+### 4.1 Dry Run
+
+The **`-d|--dryrun`** option runs full detection but logs "would ban" instead of executing the ban command. Use this to test rules safely, validate your configuration, and see what BFD would do without affecting production.
+
+```bash
+bfd -d
+```
+
+### 4.2 Health Check
+
+The **`-c|--check`** option performs a non-destructive diagnostic check of your entire BFD installation:
+
+- Validates configuration (required variables, sane values)
+- Checks log file paths exist and are readable
+- Verifies ban command binary exists and is executable
+- Warns if `UNBAN_COMMAND` is empty when `BAN_TTL > 0`
+- Checks `BAN_COMMAND_V6` binary if configured
+- Scans all rules: reports active vs inactive, pressure weight/trip, ports, log paths
+- Displays pressure model summary (half-life, trip, global trip)
+- Verifies tlog (log tracking script) is executable
+- Checks state directories exist with correct permissions
+- Reports lock file status
+- Counts active bans
+
+```bash
+bfd -c
+```
+
+Output uses `[PASS]`, `[WARN]`, `[FAIL]`, and `[SKIP]` (inactive rules) indicators with a final summary.
+
+### 4.3 Threat Activity
+
+The **`-a|--activity`** option displays a threat activity report with aggregate summary, top threat IPs, and per-service breakdown:
+
+```bash
+bfd -a           # show threat activity report
+bfd --activity   # same as above
+bfd -a 192.0.2   # search for a specific string
+```
+
+The report includes:
+- **Threat Activity Summary** — unique IPs and total count for 24h and 7d windows, plus active bans
+- **Top 25 threat IPs (24h)** — event count, IP, pressure, country, first/last seen, services, ban status (active bans show `BANNED(perm)` or `BANNED(Xm)`, previous bans show `prev:N`)
+- **Top 25 threat IPs (7d)** — same format, 7-day window
+- **Per-service threat breakdown (24h / 7d)** — dual-interval count, unique IPs, and top country per service
+
+> **`-a` vs `-e`:** Both commands read from the same attack pool data store. `-a` provides a summary-oriented threat activity overview with dual-interval (24h/7d) views and per-service breakdown. `-e` provides event-level detail with configurable time windows (`--24h`, `--7d`, `--30d`) and sort modes (`--sort=count|time|ip`). Use `-a` to review aggregate threat patterns and `-e` to drill into specific IPs or subnets.
+
+### 4.4 Watch Mode
+
+The **`-w|--watch`** option runs BFD as a continuous daemon, polling for new log data every `WATCH_INTERVAL` seconds (default 10). This is the **recommended operating mode** — detection latency is ~10 seconds, comparable to fail2ban and other daemon-based tools.
+
+```bash
+bfd --watch
+```
+
+Watch mode holds a lock for its entire lifetime, so cron-based runs (`bfd -q`) will silently skip when watch mode is active. If the watch daemon exits unexpectedly (OOM, crash), cron automatically detects the dead PID and resumes detection within one cycle (~2 minutes). No cron modification is needed.
+
+**Signal handling:**
+
+| Signal | Action |
+|--------|--------|
+| `SIGTERM` / `SIGINT` | Clean shutdown (removes lock file) |
+| `SIGHUP` | Reload `conf.bfd`, `internals.conf`, and `pressure.conf` without restart (allows changing `WATCH_INTERVAL`, `PRESSURE_TRIP`, ban commands, etc.) |
+
+**Service management:**
+
+```bash
+# systemd (Rocky 8+, Debian 12, Ubuntu 20+)
+systemctl enable --now bfd-watch.service
+systemctl reload bfd-watch     # send SIGHUP
+systemctl status bfd-watch
+```
+
+This conflicts with `bfd.timer` — systemd prevents enabling both simultaneously.
+
+```bash
+# SysVinit (CentOS 6/7, Ubuntu 14.04)
+service bfd-watch start
+service bfd-watch reload        # send SIGHUP
+service bfd-watch status
+chkconfig bfd-watch on          # enable at boot (RHEL)
+```
+
+**Configuration:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WATCH_INTERVAL` | `10` | Polling interval in seconds for watch mode |
+
+### 4.5 Flush Bans
+
+Remove multiple bans at once:
+
+```bash
+bfd --flush-temp    # remove all temporary bans (keep permanent)
+bfd --flush-all     # remove all bans (temporary + permanent)
+```
+
+Flushed bans are recorded in the ban history.
+
+### 4.6 Structured Output
+
+Use `--json` or `--csv` with `-l`, `-e`, or `-a` for machine-readable output:
+
+```bash
+bfd -l --json          # active bans as JSON
+bfd -l --csv           # active bans as CSV
+bfd -e --json          # active events as JSON
+bfd -e 192.0.2.1 --csv # per-IP events as CSV
+bfd -a --json          # threat activity as JSON
+bfd -a 192.0.2.1 --csv # IP report as CSV
+```
+
+**JSON** outputs arrays of objects (or nested objects for IP detail and CIDR):
+```json
+[{"ip": "...", "pressure": 18.4, "pressure_trip": 20, "events": 5, "services": ["sshd"], ...}]
+```
+
+**CSV** outputs with a header row:
+```
+ip,pressure,pressure_trip,events,services,first_seen,last_seen,status
+```
+
+Timestamps in structured output use ISO 8601 format (`YYYY-MM-DDTHH:MM:SS`).
+Pressure values are unquoted numbers in JSON.
+
+### 4.7 Scan Mode
+
+Scan mode processes the **full current log file** through the detection pipeline, bypassing the incremental tlog reader. This is useful for:
+
+- **First install:** Catch existing attackers immediately instead of waiting for new log events.
+- **Rule changes:** Retroactively apply new rules to existing log data.
+- **Recovery:** Process missed events after a detection gap (daemon down, cron disabled).
+- **Forensic review:** Combine with `-d` (dry-run) to see what would be detected without banning.
+
+```bash
+bfd --scan              # scan all active rules against full logs
+bfd --scan sshd         # scan a specific rule only
+bfd --scan -d           # dry-run: detect without banning or advancing cursors
+bfd --scan --max-lines=100000   # override line limit
+bfd --scan --scan-timeout=60    # override journal timeout
+```
+
+After a non-dry-run scan, tlog cursors are advanced to the current log position so the next normal run starts fresh. In dry-run mode, cursors are not modified.
+
+**Safety limits:** `SCAN_MAX_LINES` (default 50000) bounds the number of lines processed per log file. `SCAN_TIMEOUT` (default 120s) limits journal reads. Set `--max-lines=0` for unlimited (use with caution on large logs). Both can be configured in `conf.bfd` or overridden on the command line.
+
+**Lock behavior:** Scan acquires the same global lock as normal runs. If watch mode is running, stop it first (`systemctl stop bfd-watch`), run the scan, then restart.
+
+### 4.8 Events and Investigation
+
+The `--events` command provides event history and IP investigation, reading from the attack pool which records all detected auth failures (both ban-triggering and sub-trip observations) with configurable retention (default: 365 days):
+
+```bash
+bfd --events                  # event list — top 100 IPs, last 24h
+bfd --events --7d --sort=time # last 7 days, newest first
+bfd --events --limit=0 --30d  # all IPs from last 30 days
+bfd --events 192.0.2.1        # IP investigation — history + pressure + logs
+bfd --events 192.0.2.0/24     # CIDR report — subnet-scoped view
+```
+
+**Event list** (no argument) shows IPs with failure counts, services, country, first/last seen, and ban status. Default: top 100 IPs sorted by count descending, 24-hour window. Use `--limit=N` to change the output cap (`0` for unlimited), `--sort=time` or `--sort=ip` to change ordering, and `--7d` or `--30d` to expand the time window.
+
+**IP investigation** shows a comprehensive report: historical failure counts from the attack pool (total and per-service breakdown), live pressure detail if the IP has active pressure, and a log sample from the triggering service.
+
+**CIDR mode** filters to a subnet (IPv4, mask 8-32) and includes a summary line with match count, total events, and banned count.
+
+All three modes support `--json` and `--csv`:
+
+```bash
+bfd --events --json           # event list as JSON array
+bfd --events 192.0.2.1 --json # IP detail as single JSON object
+bfd --events 10.0.0.0/8 --csv # CIDR as CSV
+```
+
+### 4.9 Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Configuration error (invalid config, unknown option) |
+| 2 | Lock error (another instance running) |
+| 3 | Prerequisite error (missing tlog, rules directory) |
+
+*See `man bfd`(1) §EXIT CODES for the authoritative reference.*
+
+---
+
+## 5. Firewall
 
 BFD supports automatic firewall detection via `FIREWALL="auto"` (default). When set to auto, BFD probes for installed firewalls in priority order: APF > CSF > firewalld > UFW > nftables > iptables > ip route.
 
@@ -569,242 +843,6 @@ UNBAN_COMMAND="/sbin/iptables -D INPUT -s $ATTACK_HOST -p tcp -m multiport --dpo
 ```bash
 BAN_COMMAND_V6="/sbin/ip6tables -I INPUT -s $ATTACK_HOST -j DROP"
 UNBAN_COMMAND_V6="/sbin/ip6tables -D INPUT -s $ATTACK_HOST -j DROP"
-```
-
----
-
-## 5. General Usage
-
-The `/usr/local/sbin/bfd` command provides the following options:
-
-```
-usage: bfd [OPTION]
-
-Run Modes:
-  -s, --standard              run detection cycle with output
-  -q, --quiet                 run detection cycle silently
-  -d, --dryrun                run detection without banning
-  -w, --watch                 run continuous watch mode (foreground)
-
-Ban Management:
-  -b, --ban IP [SERVICE]      manually ban an IP (permanent)
-  -u, --unban IP              unban an IP address
-  --flush-temp                remove all temporary bans
-  --flush-all                 remove all bans
-
-Reporting:                                      Supports: --json --csv
-  -l, --list                  list active bans
-  -a, --activity [IP|STR]     threat activity and IP investigation
-  -e, --events [IP|CIDR] [N]  event history, IP or subnet detail (N=log lines)
-
-System:
-  -S, --status [SERVICE]      operational status overview
-  -C, --config [VAR]          show active configuration
-  -R, --rules [RULE]          list rules or show rule detail (--active)
-  -c, --check                 health check diagnostics
-
-Testing:
-  -T, --test RULE [FILE|-]    test rule patterns against log or stdin
-  --test-pattern PAT [FILE|-] test raw <HOST> pattern against log or stdin
-  --test-alert TYPE           send test alert (email,slack,telegram,discord)
-
-Scan Mode:
-  --scan [RULE] [-d]          full-log scan (all rules or specific rule)
-  --max-lines=N               max lines per log during scan (default 50000)
-  --scan-timeout=N            journal timeout per rule during scan (default 120)
-
-Output Modifiers:
-  --json                      JSON output (with -l, -e, -a)
-  --csv                       CSV output (with -l, -e, -a)
-  --sort=MODE                 sort events: count (default), time, ip
-  --limit=N                   max IPs to display (default 100, 0=all)
-  --24h                       events from last 24 hours (default)
-  --7d                        events from last 7 days
-  --30d                       events from last 30 days
-  --active                    show only active rules (with -R)
-  -V, --verbose               detailed output (with -s, -d, -c, -S, --scan)
-
-General:
-  -v, --version               display version
-  -h, --help                  display this help (see bfd.1 for full docs)
-```
-
-The **`-s|--standard`** and **`-q|--quiet`** options run the full detection and banning cycle. Standard mode prints output; quiet mode suppresses it (used by cron). Both parse logs, compute pressure against trip points, and execute bans.
-
-### 5.1 Dry Run
-
-The **`-d|--dryrun`** option runs full detection but logs "would ban" instead of executing the ban command. Use this to test rules safely, validate your configuration, and see what BFD would do without affecting production.
-
-```bash
-bfd -d
-```
-
-### 5.2 Health Check
-
-The **`-c|--check`** option performs a non-destructive diagnostic check of your entire BFD installation:
-
-- Validates configuration (required variables, sane values)
-- Checks log file paths exist and are readable
-- Verifies ban command binary exists and is executable
-- Warns if `UNBAN_COMMAND` is empty when `BAN_TTL > 0`
-- Checks `BAN_COMMAND_V6` binary if configured
-- Scans all rules: reports active vs inactive, pressure weight/trip, ports, log paths
-- Displays pressure model summary (half-life, trip, global trip)
-- Verifies tlog (log tracking script) is executable
-- Checks state directories exist with correct permissions
-- Reports lock file status
-- Counts active bans
-
-```bash
-bfd -c
-```
-
-Output uses `[PASS]`, `[WARN]`, `[FAIL]`, and `[SKIP]` (inactive rules) indicators with a final summary.
-
-### 5.3 Threat Activity
-
-The **`-a|--activity`** option displays a threat activity report with aggregate summary, top threat IPs, and per-service breakdown:
-
-```bash
-bfd -a           # show threat activity report
-bfd --activity   # same as above
-bfd -a 192.0.2   # search for a specific string
-```
-
-The report includes:
-- **Threat Activity Summary** — unique IPs and total count for 24h and 7d windows, plus active bans
-- **Top 25 threat IPs (24h)** — event count, IP, pressure, country, first/last seen, services, ban status (active bans show `BANNED(perm)` or `BANNED(Xm)`, previous bans show `prev:N`)
-- **Top 25 threat IPs (7d)** — same format, 7-day window
-- **Per-service threat breakdown (24h / 7d)** — dual-interval count, unique IPs, and top country per service
-
-> **`-a` vs `-e`:** Both commands read from the same attack pool data store. `-a` provides a summary-oriented threat activity overview with dual-interval (24h/7d) views and per-service breakdown. `-e` provides event-level detail with configurable time windows (`--24h`, `--7d`, `--30d`) and sort modes (`--sort=count|time|ip`). Use `-a` to review aggregate threat patterns and `-e` to drill into specific IPs or subnets.
-
-### 5.4 Watch Mode
-
-The **`-w|--watch`** option runs BFD as a continuous daemon, polling for new log data every `WATCH_INTERVAL` seconds (default 10). This is the **recommended operating mode** — detection latency is ~10 seconds, comparable to fail2ban and other daemon-based tools.
-
-```bash
-bfd --watch
-```
-
-Watch mode holds a lock for its entire lifetime, so cron-based runs (`bfd -q`) will silently skip when watch mode is active. If the watch daemon exits unexpectedly (OOM, crash), cron automatically detects the dead PID and resumes detection within one cycle (~2 minutes). No cron modification is needed.
-
-**Signal handling:**
-
-| Signal | Action |
-|--------|--------|
-| `SIGTERM` / `SIGINT` | Clean shutdown (removes lock file) |
-| `SIGHUP` | Reload `conf.bfd`, `internals.conf`, and `pressure.conf` without restart (allows changing `WATCH_INTERVAL`, `PRESSURE_TRIP`, ban commands, etc.) |
-
-**Service management:**
-
-```bash
-# systemd (Rocky 8+, Debian 12, Ubuntu 20+)
-systemctl enable --now bfd-watch.service
-systemctl reload bfd-watch     # send SIGHUP
-systemctl status bfd-watch
-```
-
-This conflicts with `bfd.timer` — systemd prevents enabling both simultaneously.
-
-```bash
-# SysVinit (CentOS 6/7, Ubuntu 14.04)
-service bfd-watch start
-service bfd-watch reload        # send SIGHUP
-service bfd-watch status
-chkconfig bfd-watch on          # enable at boot (RHEL)
-```
-
-**Configuration:**
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WATCH_INTERVAL` | `10` | Polling interval in seconds for watch mode |
-
-### 5.5 Flush Bans
-
-Remove multiple bans at once:
-
-```bash
-bfd --flush-temp    # remove all temporary bans (keep permanent)
-bfd --flush-all     # remove all bans (temporary + permanent)
-```
-
-Flushed bans are recorded in the ban history.
-
-### 5.6 Structured Output
-
-Use `--json` or `--csv` with `-l`, `-e`, or `-a` for machine-readable output:
-
-```bash
-bfd -l --json          # active bans as JSON
-bfd -l --csv           # active bans as CSV
-bfd -e --json          # active events as JSON
-bfd -e 192.0.2.1 --csv # per-IP events as CSV
-bfd -a --json          # threat activity as JSON
-bfd -a 192.0.2.1 --csv # IP report as CSV
-```
-
-**JSON** outputs arrays of objects (or nested objects for IP detail and CIDR):
-```json
-[{"ip": "...", "pressure": 18.4, "pressure_trip": 20, "events": 5, "services": ["sshd"], ...}]
-```
-
-**CSV** outputs with a header row:
-```
-ip,pressure,pressure_trip,events,services,first_seen,last_seen,status
-```
-
-Timestamps in structured output use ISO 8601 format (`YYYY-MM-DDTHH:MM:SS`).
-Pressure values are unquoted numbers in JSON.
-
-### 5.7 Scan Mode
-
-Scan mode processes the **full current log file** through the detection pipeline, bypassing the incremental tlog reader. This is useful for:
-
-- **First install:** Catch existing attackers immediately instead of waiting for new log events.
-- **Rule changes:** Retroactively apply new rules to existing log data.
-- **Recovery:** Process missed events after a detection gap (daemon down, cron disabled).
-- **Forensic review:** Combine with `-d` (dry-run) to see what would be detected without banning.
-
-```bash
-bfd --scan              # scan all active rules against full logs
-bfd --scan sshd         # scan a specific rule only
-bfd --scan -d           # dry-run: detect without banning or advancing cursors
-bfd --scan --max-lines=100000   # override line limit
-bfd --scan --scan-timeout=60    # override journal timeout
-```
-
-After a non-dry-run scan, tlog cursors are advanced to the current log position so the next normal run starts fresh. In dry-run mode, cursors are not modified.
-
-**Safety limits:** `SCAN_MAX_LINES` (default 50000) bounds the number of lines processed per log file. `SCAN_TIMEOUT` (default 120s) limits journal reads. Set `--max-lines=0` for unlimited (use with caution on large logs). Both can be configured in `conf.bfd` or overridden on the command line.
-
-**Lock behavior:** Scan acquires the same global lock as normal runs. If watch mode is running, stop it first (`systemctl stop bfd-watch`), run the scan, then restart.
-
-### 5.8 Events and Investigation
-
-The `--events` command provides event history and IP investigation, reading from the attack pool which records all detected auth failures (both ban-triggering and sub-trip observations) with configurable retention (default: 365 days):
-
-```bash
-bfd --events                  # event list — top 100 IPs, last 24h
-bfd --events --7d --sort=time # last 7 days, newest first
-bfd --events --limit=0 --30d  # all IPs from last 30 days
-bfd --events 192.0.2.1        # IP investigation — history + pressure + logs
-bfd --events 192.0.2.0/24     # CIDR report — subnet-scoped view
-```
-
-**Event list** (no argument) shows IPs with failure counts, services, country, first/last seen, and ban status. Default: top 100 IPs sorted by count descending, 24-hour window. Use `--limit=N` to change the output cap (`0` for unlimited), `--sort=time` or `--sort=ip` to change ordering, and `--7d` or `--30d` to expand the time window.
-
-**IP investigation** shows a comprehensive report: historical failure counts from the attack pool (total and per-service breakdown), live pressure detail if the IP has active pressure, and a log sample from the triggering service.
-
-**CIDR mode** filters to a subnet (IPv4, mask 8-32) and includes a summary line with match count, total events, and banned count.
-
-All three modes support `--json` and `--csv`:
-
-```bash
-bfd --events --json           # event list as JSON array
-bfd --events 192.0.2.1 --json # IP detail as single JSON object
-bfd --events 10.0.0.0/8 --csv # CIDR as CSV
 ```
 
 ---
@@ -876,13 +914,13 @@ BFD automatically detects local IPv4 and IPv6 addresses (including `::1`) and ex
 
 ---
 
-## 7b. CDN / Trusted Proxy
+## 8. CDN / Trusted Proxy
 
 When BFD monitors services behind a CDN or reverse proxy (e.g., Cloudflare, AWS CloudFront), the log may contain the proxy's IP instead of the real client. Without awareness of CDN IP ranges, BFD bans CDN infrastructure — blocking all proxied traffic.
 
 The CDN subsystem fetches provider IP ranges automatically and applies per-provider treatment during detection.
 
-### Configuration
+### 8.1 Configuration
 
 Enable in `conf.bfd`:
 ```bash
@@ -890,7 +928,7 @@ CDN_ENABLE="1"           # enable CDN IP awareness
 CDN_UPDATE_DAYS="7"      # refresh interval (days); 0 = manual only
 ```
 
-### Provider Configuration
+### 8.2 Provider Configuration
 
 Edit `cdn-providers.conf` to enable providers. Whitespace-delimited format:
 
@@ -908,7 +946,7 @@ Fields:
 - **FORMAT**: `text` (one CIDR per line) or `json` (CIDRs extracted automatically)
 - **URL_V4/URL_V6**: Provider IP range URLs (`-` for none)
 
-### Treatment Modes
+### 8.3 Treatment Modes
 
 | Mode | Detection | Events | Pressure | Ban |
 |------|-----------|--------|----------|-----|
@@ -916,7 +954,7 @@ Fields:
 | `exclude` | Processed | Recorded (`cdn-exclude`) | Accumulated | No |
 | `derate` | Processed | Recorded | Reduced by MULT | Yes (if threshold met) |
 
-### CLI Commands
+### 8.4 CLI Commands
 
 ```bash
 bfd --cdn                    # list all providers with status
@@ -926,11 +964,11 @@ bfd --cdn check 172.70.34.1  # check if an IP matches a CDN range
 bfd --cdn --json             # JSON output
 ```
 
-### Automatic Updates
+### 8.5 Automatic Updates
 
 `cron.daily` checks the CDN database age against `CDN_UPDATE_DAYS` and refreshes when stale. Manual refresh: `bfd --cdn update` or run `update-cdn-providers.sh` directly.
 
-### Adding Custom Providers
+### 8.6 Adding Custom Providers
 
 Add a line to `cdn-providers.conf` with any provider that publishes IP ranges as plain-text CIDRs or JSON:
 
@@ -940,7 +978,7 @@ my-proxy  derate  5  text  https://example.com/ip-ranges.txt  -
 
 ---
 
-## 8. Periodic Reports
+## 9. Periodic Reports
 
 BFD can generate scheduled threat reports delivered via all configured alerting channels (email, Slack, Telegram, Discord):
 
@@ -971,7 +1009,7 @@ When `REPORT_ENABLED=1`, `cron.daily` triggers daily reports every day, weekly r
 
 ---
 
-## 9. Ban Management
+## 10. Ban Management
 
 Bans can be temporary (auto-expire after `BAN_TTL` seconds) or permanent (`BAN_TTL=0`). Temporary bans require `UNBAN_COMMAND` to be set for the firewall rule to be removed automatically on expiry.
 
@@ -1003,7 +1041,7 @@ Both `bfd -a` (threat activity) and `bfd -e` (events) read from the attack pool.
 
 ---
 
-## 10. IPv6 Support
+## 11. IPv6
 
 BFD detects and bans both IPv4 and IPv6 addresses automatically. Rules do not need modification — the extraction engine handles both address families. IPv6 addresses are normalized before counting and comparison.
 
@@ -1020,7 +1058,25 @@ Local IPv6 addresses (including `::1` and all link-local addresses) are auto-det
 
 ---
 
-## 11. Troubleshooting
+## Integration
+
+BFD integrates with existing infrastructure through standard interfaces.
+
+**Firewall backends** — auto-detected or user-selected from 8 backends (APF, CSF, firewalld, UFW, nftables, iptables, route, custom). See [Firewall](#5-firewall).
+
+**Log systems** — reads from syslog files or systemd journal via tlog. Rotation-aware: detects logrotate and grabs tails from both current and rotated files.
+
+**Alert channels** — email (local MTA or SMTP relay), Slack (webhook or Bot API), Telegram (Bot API), Discord (webhooks). All channels support batched digest delivery and customizable templates.
+
+**Structured output** — `--json` and `--csv` modifiers on `-l`, `-e`, and `-a` for SIEM, log aggregator, or automation pipeline consumption.
+
+**CDN awareness** — per-provider IP range databases with configurable treatment (ignore, exclude, derate) prevent banning CDN infrastructure. See [CDN / Trusted Proxy](#8-cdn--trusted-proxy).
+
+**Scheduling** — watch mode (systemd/SysVinit daemon, ~10s latency) or cron (2-minute fallback). Both coexist safely via lock coordination.
+
+---
+
+## Troubleshooting
 
 Run `bfd -c` first — it validates config, log paths, firewall binaries, rule status, state directories, and active bans in a single non-destructive check.
 
@@ -1035,7 +1091,7 @@ Run `bfd -c` first — it validates config, log paths, firewall binaries, rule s
 
 ---
 
-## 12. License
+## License
 
 BFD is developed and supported on a volunteer basis by Ryan MacDonald [ryan@rfxn.com].
 
@@ -1043,7 +1099,7 @@ BFD (Brute Force Detection) is distributed under the GNU General Public License 
 
 ---
 
-## 13. Support
+## Support
 
 The BFD source repository is at: https://github.com/rfxn/brute-force-detection
 
