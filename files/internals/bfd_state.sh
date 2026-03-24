@@ -40,23 +40,23 @@ state_init() {
 	local install_path="$1"
 	if [ ! -d "$install_path/tmp" ]; then
 		# shellcheck disable=SC2174  # parent always exists; -m applies to leaf
-		mkdir -m 750 -p "$install_path/tmp"
+		command mkdir -m 750 -p "$install_path/tmp"
 	fi
 	if [ ! -d "$install_path/stats" ]; then
 		# shellcheck disable=SC2174  # parent always exists; -m applies to leaf
-		mkdir -m 750 -p "$install_path/stats"
+		command mkdir -m 750 -p "$install_path/stats"
 	fi
 	local f
 	for f in "$install_path/tmp/pressure.dat" "$install_path/tmp/bans.active" \
 		 "$install_path/tmp/bans.history"; do
 		if [ ! -f "$f" ]; then
-			touch "$f"
-			chmod 600 "$f"
+			command touch "$f"
+			command chmod 600 "$f"
 		fi
 	done
 	if [ ! -f "$install_path/stats/attack.pool" ]; then
-		touch "$install_path/stats/attack.pool"
-		chmod 600 "$install_path/stats/attack.pool"
+		command touch "$install_path/stats/attack.pool"
+		command chmod 600 "$install_path/stats/attack.pool"
 	fi
 }
 
@@ -104,7 +104,7 @@ state_bans_active_remove() {
 		flock -x 200
 		awk -v ip="$host" '$3 != ip' "$bans_file" > "$bans_file.new" || true  # empty result is valid (last entry removed)
 		command mv "$bans_file.new" "$bans_file"
-		chmod 600 "$bans_file"
+		command chmod 600 "$bans_file"
 	) 200>>"$bans_file"
 }
 
@@ -189,7 +189,7 @@ state_pressure_prune() {
 		awk -v cutoff="$cutoff" '$1+0 >= cutoff' "$events_file" \
 			| tail -n "$max_lines" > "$events_file.new"
 		command mv "$events_file.new" "$events_file"
-		chmod 600 "$events_file"
+		command chmod 600 "$events_file"
 	) 200>>"$events_file"
 }
 
@@ -212,7 +212,7 @@ state_pool_prune() {
 		else
 			tail -n "$max_lines" "$pool_file" > "$pool_file.new"
 		fi
-		cat "$pool_file.new" > "$pool_file"   # preserves inode for flock
+		command cat "$pool_file.new" > "$pool_file"   # preserves inode for flock
 		command rm -f "$pool_file.new"
 	) 200>>"$pool_file"
 }

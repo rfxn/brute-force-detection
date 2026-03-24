@@ -188,7 +188,11 @@ _hc_rules() {
 					fi
 				else
 					rules_inactive=$((rules_inactive + 1))
-					echo "  [SKIP] $rule_name: inactive (PREREQ ${PREREQ:-unset} not found)"
+					if [ -z "${PREREQ:-}" ]; then
+						echo "  [SKIP] $rule_name: inactive (no service detected)"
+					else
+						echo "  [SKIP] $rule_name: inactive (PREREQ $PREREQ not found)"
+					fi
 				fi
 			else
 				rules_inactive=$((rules_inactive + 1))
@@ -709,7 +713,7 @@ show_service_status() {
 	# Find rule file
 	local rule_file="${RULES_PATH:-$install_path/rules}/$service"
 	if [ ! -f "$rule_file" ]; then
-		echo "  error: no rule found for '$service'"
+		echo "  error: no rule found for '$service'" >&2
 		return 1
 	fi
 
@@ -959,7 +963,11 @@ show_rule() {
 	if _rule_is_active; then
 		echo "  Status:     active"
 	else
-		echo "  Status:     inactive (${PREREQ:-unset} not found)"
+		if [ -z "${PREREQ:-}" ]; then
+			echo "  Status:     inactive (no service detected)"
+		else
+			echo "  Status:     inactive (PREREQ $PREREQ not found)"
+		fi
 	fi
 
 	local rule_weight="${PRESSURE_WEIGHT:-1}"
@@ -1007,7 +1015,7 @@ test_rule() {
 	local stdin_file=""
 	if [ "$log_file" = "-" ]; then
 		stdin_file=$(mktemp "$install_path/tmp/.test_stdin.XXXXXX")
-		cat > "$stdin_file"
+		command cat > "$stdin_file"
 		_TLOG_PASSTHROUGH="$stdin_file"
 	elif [ -n "$log_file" ]; then
 		[ ! -f "$log_file" ] && { echo "error: file '$log_file' not found" >&2; return 1; }

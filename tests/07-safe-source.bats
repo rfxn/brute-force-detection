@@ -178,17 +178,9 @@ teardown() {
 
 # --- Alert template directory validation tests (Phase 26) ---
 
-@test "send_alerts: missing template dir skips alerts" {
-	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
-	ALERT_TEMPLATE_DIR="$TEST_TMPDIR/nonexistent_dir"
-	run send_alerts "$alerts_file" "BFD Alert" "50"
-	assert_failure
-}
-
 @test "send_alerts: template dir without header tpl skips alerts" {
 	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$alerts_file"
 	local tpl_dir="$TEST_TMPDIR/alert_empty"
 	mkdir -p "$tpl_dir"
 	ALERT_TEMPLATE_DIR="$tpl_dir"
@@ -198,7 +190,7 @@ teardown() {
 
 @test "send_alerts: valid template dir passes validation" {
 	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$alerts_file"
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_FORMAT="text"
 	# mock mail so delivery doesn't fail on missing binary

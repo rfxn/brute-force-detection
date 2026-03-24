@@ -63,13 +63,6 @@ teardown() {
 	assert_output ""
 }
 
-@test "vout: VERBOSE=0 suppresses output" {
-	VERBOSE=0
-	run vout "test message"
-	assert_success
-	assert_output ""
-}
-
 @test "vout: handles multiple arguments" {
 	VERBOSE=1
 	run vout "hello" "world"

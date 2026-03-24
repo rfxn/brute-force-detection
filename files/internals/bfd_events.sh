@@ -899,7 +899,7 @@ events_list_cidr_json() {
 	fi
 	printf '{"cidr": "%s", "summary": {"match_count": %d, "total_count": %d, "banned_count": %d, "truncated": %s}, "ips": [\n' \
 		"$(_json_escape "$cidr")" "$match_count" "$total_events" "$banned_count" "$_truncated"
-	cat "$_cidr_ips" 2>/dev/null
+	command cat "$_cidr_ips" 2>/dev/null
 	echo ""
 	echo "]}"
 	command rm -f "$_cidr_summary" "$_cidr_ips"
@@ -1364,7 +1364,7 @@ _apool_awk() {
 		if [ -n "$search" ]; then
 			grep -F "$search" "$source_file"
 		else
-			cat "$source_file"
+			command cat "$source_file"
 		fi | awk -v cutoff="$cutoff" -v cidr_mode="$cidr_mode" \
 			-v taddr="$cidr_addr" -v tmask="$cidr_mask" '
 		function pow2(n,    r, i) {

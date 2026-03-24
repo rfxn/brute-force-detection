@@ -41,9 +41,9 @@ _rule_tlog() {
 	if [ -n "${_TLOG_PASSTHROUGH:-}" ]; then
 		# test mode: output entire file (or specific file)
 		if [ "$_TLOG_PASSTHROUGH" = "1" ]; then
-			cat "$lp"
+			command cat "$lp"
 		else
-			cat "$_TLOG_PASSTHROUGH"
+			command cat "$_TLOG_PASSTHROUGH"
 		fi
 		return 0
 	fi

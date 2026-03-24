@@ -440,7 +440,16 @@ case "${1:-}" in
 	;;
 --report)
 	vhead; pre
-	report "${2:-daily}" || exit "$?"
+	# Map events window modifier to report interval when no positional arg given
+	_rpt_interval="${2:-}"
+	if [ -z "$_rpt_interval" ]; then
+		case "$_EVENTS_WINDOW" in
+			7d)  _rpt_interval="weekly" ;;
+			30d) _rpt_interval="monthly" ;;
+			*)   _rpt_interval="daily" ;;
+		esac
+	fi
+	report "$_rpt_interval" || exit "$?"
 	;;
 --cdn)
 	pre

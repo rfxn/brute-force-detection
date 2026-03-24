@@ -85,7 +85,7 @@ if find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' -type f \
 		find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' \
 			-type f -delete
 		sort -n "$pool_file" > "$pool_file.new"
-		cat "$pool_file.new" > "$pool_file"
+		command cat "$pool_file.new" > "$pool_file"
 		command rm -f "$pool_file.new"
 	) 201>>"$pool_file"
 fi
@@ -106,7 +106,7 @@ if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
 		else
 			command cp "$pool_file" "$pool_file.new"
 		fi
-		cat "$pool_file.new" > "$pool_file"
+		command cat "$pool_file.new" > "$pool_file"
 		command rm -f "$pool_file.new"
 	) 201>>"$pool_file"
 fi

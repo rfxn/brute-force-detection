@@ -62,6 +62,11 @@ bfd \- brute force detection and IP banning
 .RB [ \-V | \-\-verbose ]
 .br
 .B bfd
+.B \-\-cdn
+.RI [ PROVIDER | update | check
+.IR IP ]
+.br
+.B bfd
 .RB [ \-v ]
 .RB [ \-h ]
 .SH DESCRIPTION
@@ -385,6 +390,25 @@ ban execution details, per-unban information, detection method in
 status, and binary paths in health check.
 Silenced by
 .BR \-q .
+.SS CDN / Trusted Proxy
+.TP
+.B \-\-cdn
+List all configured CDN providers with active/inactive status and CIDR counts.
+.TP
+.BI \-\-cdn " PROVIDER"
+Show the compiled CIDR ranges for a specific provider.
+.TP
+.B \-\-cdn update
+Fetch and compile IP ranges for all enabled CDN providers.
+Ranges are downloaded from the URLs configured in
+.BR cdn\-providers.conf .
+.TP
+.BI "\-\-cdn check " IP
+Check whether an IP address matches any CDN provider's compiled ranges.
+.PP
+Combine with
+.B \-\-json
+for structured output.
 .SS General
 .TP
 .BR \-v ", " \-\-version
@@ -398,7 +422,7 @@ is run with no arguments, a short summary of common commands is shown instead.
 .SH CONFIGURATION
 Configuration is in
 .BR conf.bfd ,
-organized into eleven sections.
+organized into fourteen sections.
 The file is sourced as bash; all values are shell variables.
 Additional tuning variables with sensible defaults
 .RB ( LOG_SOURCE ", " LOCK_FILE_TIMEOUT ", " BAN_RETRY_COUNT ", " OUTPUT_SYSLOG_FILE )
@@ -732,6 +756,61 @@ are expanded at send time.
 .TP
 .B REPORT_TOP_N
 Maximum IPs to include in report tables (default: 25).
+.SS "CDN / Trusted Proxy"
+When enabled, BFD loads
+.B cdn\-providers.conf
+and applies per-provider treatment (ignore, exclude, or derate) to matching
+source IPs before they enter the detection pipeline.
+.TP
+.B CDN_ENABLE
+Enable CDN/trusted proxy IP awareness: 0 or 1 (default: 0).
+.TP
+.B CDN_UPDATE_DAYS
+How often to refresh provider IP ranges in days; 0 = never auto-refresh
+(default: 7).
+.PP
+Provider configuration is in
+.BR cdn\-providers.conf .
+Each line defines a provider with fields:
+.BR NAME ", " TREATMENT ", " MULT ", " FORMAT ", " URL_V4 ", " URL_V6 .
+.PP
+Treatment modes:
+.B ignore
+(pre-filter, invisible to detection),
+.B exclude
+(visible in logs, never banned), or
+.B derate
+(reduced pressure via multiplier).
+Lines beginning with
+.B #
+are inactive; uncomment to enable a provider.
+Five providers are pre-configured: Cloudflare, AWS CloudFront, Fastly,
+Google Cloud, and Akamai.
+.SS "Country Weighting"
+Per-country pressure multipliers adjust detection sensitivity based on
+geographic origin.
+Activation is automatic when
+.B pressure\-country.conf
+contains uncommented entries.
+.PP
+.B pressure\-country.conf
+format: one entry per line,
+.IR "CC N" ,
+where
+.I CC
+is a two-letter ISO 3166-1 country code and
+.I N
+is the weight multiplied by 10 (e.g., 15 = 1.5\(mu).
+Legacy
+.I CC=N
+format is also accepted for backward compatibility.
+.PP
+Country lookup uses
+.B ipcountry.dat
+(IPv4 integer-range format) and
+.B ipcountry6.dat
+(IPv6 hex-range format), rebuilt by
+.BR update\-ipcountry.sh .
 .SH ALERT TEMPLATES
 Alert messages are rendered from customizable template partials in the
 .B alert/
@@ -958,8 +1037,51 @@ Periodic threat report functions \(em data collection, rendering, and delivery
 .I /usr/local/bfd/internals/internals.conf
 Internal/derived variables.
 .TP
+.I /usr/local/bfd/internals/bfd_core.sh
+Orchestration \(em bfd_run(), config_init(), main loop, watch mode core
+(sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_validate.sh
+Validation functions \(em IP, host, config, file safety checks
+(sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_fw.sh
+Firewall backend functions \(em iptables, nftables, APF, CSF, firewalld, UFW, route
+(sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_state.sh
+State I/O and ban execution functions (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_pressure.sh
+Pressure model and rule infrastructure functions (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_detect.sh
+Detection pipeline functions (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_events.sh
+Event and attack pool functions (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_diag.sh
+Diagnostic functions \(em format_duration, spec deviation, status
+(sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_cdn.sh
+CDN/trusted proxy functions \(em provider loading, IP matching, range compilation
+(sourced by bfd.lib.sh).
+.TP
 .I /usr/local/bfd/conf.bfd
 User configuration.
+.TP
+.I /usr/local/bfd/cdn\-providers.conf
+CDN/trusted proxy provider definitions (name, treatment, multiplier, URLs).
+Five providers pre-configured; uncomment to enable.
+.TP
+.I /usr/local/bfd/update\-cdn\-providers.sh
+Script to fetch and compile CDN provider IP ranges from configured URLs.
+Run automatically when
+.B CDN_UPDATE_DAYS
+interval elapses; also invoked via
+.BR "bfd \-\-cdn update" .
 .TP
 .I /usr/local/bfd/pressure.conf
 Per-rule pressure weight and trip overrides.

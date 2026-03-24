@@ -294,8 +294,8 @@ if [ ! -d "$RULES_PATH" ]; then
 	exit "$EXIT_PREREQ_ERROR"
 fi
 if [ ! -d "$TLOG_BASERUN" ]; then
-	mkdir -p "$TLOG_BASERUN"
-	chmod 750 "$TLOG_BASERUN"
+	command mkdir -p "$TLOG_BASERUN"
+	command chmod 750 "$TLOG_BASERUN"
 fi
 # one-time log path migration: /var/log/bfd_log → /var/log/bfd/bfd.log
 # v1.x used a flat file; v2.x consolidates into the elog log directory.
@@ -303,35 +303,35 @@ fi
 # external log parsers, logrotate entries, and muscle memory still work.
 _LEGACY_LOG="/var/log/bfd_log"
 if [ -f "$_LEGACY_LOG" ] && [ ! -L "$_LEGACY_LOG" ] && [ "$BFD_LOG_PATH" = "/var/log/bfd/bfd.log" ]; then
-	mkdir -p /var/log/bfd
-	chmod 750 /var/log/bfd
+	command mkdir -p /var/log/bfd
+	command chmod 750 /var/log/bfd
 	if [ -s "$BFD_LOG_PATH" ]; then
 		# both exist with content — prepend old (chronologically earlier) before new
-		cat "$_LEGACY_LOG" "$BFD_LOG_PATH" > "${BFD_LOG_PATH}.mig"
+		command cat "$_LEGACY_LOG" "$BFD_LOG_PATH" > "${BFD_LOG_PATH}.mig"
 		command mv -f "${BFD_LOG_PATH}.mig" "$BFD_LOG_PATH"
 	else
 		command mv -f "$_LEGACY_LOG" "$BFD_LOG_PATH"
 	fi
-	chmod 640 "$BFD_LOG_PATH"
-	ln -sf "$BFD_LOG_PATH" "$_LEGACY_LOG"
+	command chmod 640 "$BFD_LOG_PATH"
+	command ln -sf "$BFD_LOG_PATH" "$_LEGACY_LOG"
 fi
 
 if [ ! -f "$BFD_LOG_PATH" ]; then
-	touch "$BFD_LOG_PATH"
-	chmod 640 "$BFD_LOG_PATH"
+	command touch "$BFD_LOG_PATH"
+	command chmod 640 "$BFD_LOG_PATH"
 fi
 
 if [ ! -d "$INSTALL_PATH/stats" ]; then
-	mkdir -p "$INSTALL_PATH/stats"
-	chmod 750 "$INSTALL_PATH/stats"
+	command mkdir -p "$INSTALL_PATH/stats"
+	command chmod 750 "$INSTALL_PATH/stats"
 fi
 
 APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
 if [ -f "$APOOL_LIST" ]; then
-	chmod 600 "$APOOL_LIST"
+	command chmod 600 "$APOOL_LIST"
 else
-	touch "$APOOL_LIST"
-	chmod 600 "$APOOL_LIST"
+	command touch "$APOOL_LIST"
+	command chmod 600 "$APOOL_LIST"
 fi
 
 state_init "$INSTALL_PATH"
@@ -351,10 +351,11 @@ if [ -n "$IP_BIN" ]; then
 else
 	hostname -I | tr ' ' '\n' > "$LO_HOSTS"
 fi
+command chmod 640 "$LO_HOSTS"
 }
 
 get_state() {
-if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
+if ! command mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 	# lock dir exists — check staleness
 	if [ -f "$LOCK_FILE" ]; then
 		OVAL=$(cat "$LOCK_FILE")
@@ -362,7 +363,7 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 		if [ "$DIFF" -gt "$LOCK_FILE_TIMEOUT" ]; then
 			elog warn "cleared stale lock (${DIFF}s old, pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null || echo unknown))."
 			command rm -rf "$LOCK_FILE.lk"
-			mkdir "$LOCK_FILE.lk" 2>/dev/null || {
+			command mkdir "$LOCK_FILE.lk" 2>/dev/null || {
 				elog error "unable to acquire lock after stale cleanup, aborting."
 				exit "$EXIT_LOCK_ERROR"
 			}
@@ -373,7 +374,7 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 			if [ -n "$_lock_pid" ] && ! kill -0 "$_lock_pid" 2>/dev/null; then
 				elog warn "cleared dead lock (pid=$_lock_pid exited, lock ${DIFF}s old)."
 				command rm -rf "$LOCK_FILE.lk"
-				mkdir "$LOCK_FILE.lk" 2>/dev/null || {
+				command mkdir "$LOCK_FILE.lk" 2>/dev/null || {
 					elog error "unable to acquire lock after dead-pid cleanup, aborting."
 					exit "$EXIT_LOCK_ERROR"
 				}
@@ -389,7 +390,7 @@ if ! mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 fi
 echo "$$" > "$LOCK_FILE.lk/pid"
 echo "$UTIME" > "$LOCK_FILE"
-chmod 640 "$LOCK_FILE" 2>/dev/null || true  # non-fatal: content is an epoch timestamp
+command chmod 640 "$LOCK_FILE" 2>/dev/null || true  # non-fatal: content is an epoch timestamp
 }
 
 check() {
@@ -637,10 +638,10 @@ check() {
 					elog warn "{$MOD} $ATTACK_HOST is a local address, skipping ban."
 				else
 					local _pool_action="ban-failed" _pool_duration="-1"
+					elog_event "threat_detected" "warn" "{$MOD} pressure trip for $ATTACK_HOST" \
+						"ip=$ATTACK_HOST" "mod=$MOD" "pressure=$pressure_scaled" "trip=$trip_scaled" "trip_type=$_trip_type"
 					if execute_ban "$ATTACK_HOST" "$MOD" "$DRY_RUN" "${PORTS:-all}"; then
 						vout "  ban: $ATTACK_HOST via ${_FW_BACKEND} ($MOD, port ${PORTS:-all})"
-						elog_event "threat_detected" "warn" "{$MOD} pressure trip for $ATTACK_HOST" \
-							"ip=$ATTACK_HOST" "mod=$MOD" "pressure=$pressure_scaled" "trip=$trip_scaled" "trip_type=$_trip_type"
 						bans_count=$((bans_count + 1))
 						local ban_result
 						ban_result=$(record_ban "$INSTALL_PATH" "$UTIME" "$ATTACK_HOST" "$MOD" "${PORTS:-all}" "ban")
@@ -678,14 +679,14 @@ check() {
 			local _pdat="$INSTALL_PATH/tmp/pressure.dat"
 			(
 				flock -x 200
-				cat "$_pressure_tmp" >> "$_pdat"
+				command cat "$_pressure_tmp" >> "$_pdat"
 			) 200>>"$_pdat"
 		fi
 		if [ -s "$_pool_tmp" ]; then
 			local _pool_file="$INSTALL_PATH/stats/attack.pool"
 			(
 				flock -x 200
-				cat "$_pool_tmp" >> "$_pool_file"
+				command cat "$_pool_tmp" >> "$_pool_file"
 			) 200>>"$_pool_file"
 		fi
 

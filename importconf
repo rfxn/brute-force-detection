@@ -58,12 +58,12 @@ new_int="$INSTALL_PATH/internals/internals.conf"
 # internals.conf has the internal variables)
 old_combined=$(mktemp "$INSTALL_PATH/tmp/.importconf.XXXXXX")
 trap 'command rm -f "$old_combined" "$new_conf.tmp" "$new_int.tmp"' EXIT INT TERM  # cleanup temp files on exit
-cat "$old_conf" > "$old_combined"
+command cat "$old_conf" > "$old_combined"
 # support both new (internals/) and old (flat) backup layouts
 if [ -f "$BK_LAST/internals/internals.conf" ]; then
-	cat "$BK_LAST/internals/internals.conf" >> "$old_combined"
+	command cat "$BK_LAST/internals/internals.conf" >> "$old_combined"
 elif [ -f "$BK_LAST/internals.conf" ]; then
-	cat "$BK_LAST/internals.conf" >> "$old_combined"
+	command cat "$BK_LAST/internals.conf" >> "$old_combined"
 fi
 
 # merge conf.bfd — overlay old user values onto new config template
@@ -278,14 +278,14 @@ done
 
 # preserve custom.d/ template overrides from backup
 if [ -d "$BK_LAST/alert/custom.d" ] && [ -d "$INSTALL_PATH/alert" ]; then
-	mkdir -p "$INSTALL_PATH/alert/custom.d"
-	chmod 750 "$INSTALL_PATH/alert/custom.d"
+	command mkdir -p "$INSTALL_PATH/alert/custom.d"
+	command chmod 750 "$INSTALL_PATH/alert/custom.d"
 	_custom_tpl=0
 	for _old_custom in "$BK_LAST/alert/custom.d"/*.tpl; do
 		[ -f "$_old_custom" ] || continue
 		_tpl_name="${_old_custom##*/}"
 		command cp -f "$_old_custom" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
-		chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+		command chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
 		_custom_tpl=$((_custom_tpl + 1))
 	done
 	if [ "$_custom_tpl" -gt 0 ]; then
@@ -303,10 +303,10 @@ if [ -d "$BK_LAST/alert" ] && [ ! -d "$BK_LAST/alert/custom.d" ]; then
 		_new_tpl="$INSTALL_PATH/alert/$_tpl_name"
 		# only migrate if old template differs from new shipped version
 		if [ -f "$_new_tpl" ] && ! cmp -s "$_old_tpl" "$_new_tpl"; then
-			mkdir -p "$INSTALL_PATH/alert/custom.d"
-			chmod 750 "$INSTALL_PATH/alert/custom.d"
+			command mkdir -p "$INSTALL_PATH/alert/custom.d"
+			command chmod 750 "$INSTALL_PATH/alert/custom.d"
 			command cp -f "$_old_tpl" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
-			chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+			command chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
 			_migrated_tpl=$((_migrated_tpl + 1))
 		fi
 	done
@@ -336,7 +336,7 @@ if [ -d "$BK_LAST/rules" ]; then
 			*" $_rule_name "*) continue ;;
 		esac
 		command cp -f "$_old_rule" "$INSTALL_PATH/rules/$_rule_name"
-		chmod 640 "$INSTALL_PATH/rules/$_rule_name"
+		command chmod 640 "$INSTALL_PATH/rules/$_rule_name"
 		_custom_rules=$((_custom_rules + 1))
 	done
 	if [ "$_custom_rules" -gt 0 ]; then

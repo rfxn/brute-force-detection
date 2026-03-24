@@ -53,17 +53,17 @@ install_files(){
 		"bfd" "tlog" "update-ipcountry.sh" "update-cdn-providers.sh"
 
 	# Custom template override directory (preserved across upgrades via importconf)
-	[ -d "$INSPATH/alert/custom.d" ] || mkdir -p "$INSPATH/alert/custom.d"
-	chmod 750 "$INSPATH/alert/custom.d"
+	[ -d "$INSPATH/alert/custom.d" ] || command mkdir -p "$INSPATH/alert/custom.d"
+	command chmod 750 "$INSPATH/alert/custom.d"
 
 	# Install uninstall.sh into install path
 	if [ -f "uninstall.sh" ]; then
 		command cp uninstall.sh "$INSPATH/"
-		chmod 750 "$INSPATH/uninstall.sh"
+		command chmod 750 "$INSPATH/uninstall.sh"
 	fi
 
 	# CLI symlinks
-	mkdir -p "$(dirname "$BINPATH")"
+	command mkdir -p "$(dirname "$BINPATH")"
 	pkg_symlink "$INSPATH/bfd" "$BINPATH"
 	pkg_symlink "$INSPATH/tlog" "$(dirname "$BINPATH")/tlog"
 

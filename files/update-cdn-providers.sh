@@ -44,10 +44,10 @@ fi
 
 # Set secure permissions
 if [ -f "$OUTPUT_V4" ]; then
-	chmod 640 "$OUTPUT_V4"
+	command chmod 640 "$OUTPUT_V4"
 fi
 if [ -f "$OUTPUT_V6" ]; then
-	chmod 640 "$OUTPUT_V6"
+	command chmod 640 "$OUTPUT_V6"
 fi
 
 echo "Updated CDN databases ($_CDN_BUILD_COUNT providers, $_CDN_BUILD_RANGES ranges, $_CDN_BUILD_FAIL failed)."

@@ -565,7 +565,7 @@ _batch_cdn_lookup() {
 
 	if [ "$_have_v4" -eq 0 ] && [ "$_have_v6" -eq 0 ]; then
 		# No databases — consume stdin, output nothing
-		cat > /dev/null
+		command cat > /dev/null
 		return 0
 	fi
 

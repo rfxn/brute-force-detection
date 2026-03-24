@@ -51,7 +51,7 @@ if ! geoip_build_ipdb "$OUTPUT" 1000; then
 	echo "error: IPv4 database build failed. Aborting."
 	exit 1
 fi
-chmod 640 "$OUTPUT"
+command chmod 640 "$OUTPUT"
 echo "Updated $OUTPUT ($_GEOIP_BUILD_COUNT countries, $_GEOIP_BUILD_RANGES IPv4 ranges, $_GEOIP_BUILD_FAIL failed)."
 
 # ---------------------------------------------------------------------------
@@ -59,7 +59,7 @@ echo "Updated $OUTPUT ($_GEOIP_BUILD_COUNT countries, $_GEOIP_BUILD_RANGES IPv4 
 # ---------------------------------------------------------------------------
 echo "Building IPv6 country database..."
 if geoip_build_ip6db "$OUTPUT6" 500; then
-	chmod 640 "$OUTPUT6"
+	command chmod 640 "$OUTPUT6"
 	echo "Updated $OUTPUT6 ($_GEOIP_BUILD6_COUNT countries, $_GEOIP_BUILD6_RANGES IPv6 ranges, $_GEOIP_BUILD6_FAIL failed)."
 else
 	echo "warning: IPv6 database build failed (non-fatal)."

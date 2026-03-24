@@ -1,48 +1,38 @@
 2.0.2:
-[New] README restructured to rfxn documentation convention (level-2)
-[New] SVG banners (dark/light) with pressure threshold glyph
-[New] SECURITY.md and CONTRIBUTING.md from RDF templates
-[New] What's New, Integration, and Exit Codes sections in README
-[Change] Section renumbering: Usage to §4, Firewall to §5, CDN promoted to §8
-[Change] Badge row updated to flat-square style
+[New] CDN/trusted proxy subsystem: ignore/exclude/derate treatment modes,
+      binary-search IP range lookup (IPv4/IPv6), cdn-providers.conf with 5
+      default providers, bfd --cdn CLI, CDN_ENABLE and CDN_UPDATE_DAYS config;
+      cron.daily auto-refresh and --json output support
 [New] Structured audit events for ban escalation, manual ban/unban/flush,
-      alert delivery success/failure, detection triggers (pressure trip,
-      distributed attack, CDN exclude), and scan cycle bookends
-[New] CDN/trusted proxy subsystem: per-provider IP range databases with
-      binary-search lookup (IPv4/IPv6), three treatment modes (ignore/exclude/
-      derate), detection pipeline integration, and cron.daily database refresh
-[New] bfd --cdn CLI: list providers, show detail, check IP against ranges,
-      force update; CDN summary in bfd -S and per-IP annotation in bfd -a;
-      --json modifier support
-[New] cdn-providers.conf with 5 default providers (Cloudflare, AWS CloudFront,
-      Fastly, Google Cloud, Akamai); CDN_ENABLE and CDN_UPDATE_DAYS config vars
-[New] REPORT_ENABLED and REPORT_TOP_N config validation rejects invalid values
-      at load time
-[New] audit.log added to logrotate configuration (was growing unbounded)
+      alert delivery, detection triggers, and scan cycle bookends
+[New] REPORT_ENABLED and REPORT_TOP_N config validation at load time
+[New] audit.log added to logrotate configuration
 [New] install.sh creates /usr/local/sbin/tlog symlink for PATH accessibility
-[Change] pressure.conf migrated from colon-delimited (RULE:KEY=VAL) to
-      whitespace format (rule key=val); dual-format parser for backward compat;
-      importconf auto-converts on upgrade; thresholds.conf dead code removed
-[Change] pressure-country.conf migrated from CC=MULT to CC MULT format;
-      dual-format parser and importconf auto-conversion for backward compat
+[New] Man page: CDN/Trusted Proxy, Country Weighting config sections, --cdn
+      CLI options, all sub-library FILES entries
+[New] README redesign with SECURITY.md and CONTRIBUTING.md companion files
+[Change] pressure.conf and pressure-country.conf migrated to whitespace
+      format; dual-format parsers for backward compat; importconf auto-converts
+[Change] --check shows "no service detected" for rules with log-based PREREQ
 [Change] lock.utime created with mode 640 (was inheriting umask 644)
-[Fix] Multi-channel alert rendering: per-channel dispatch prevents Slack/Telegram
-      cross-contamination, ALERT_COUNT reflects actual ban count, Telegram
-      MarkdownV2 escaping for special characters
+[Fix] --report --7d/--30d now correctly maps to weekly/monthly report interval
+[Fix] ignore.hosts.local created with mode 640 for consistency with other config
+[Fix] --status error for unknown service directed to stderr
+[Fix] threat_detected audit event now fires on ban-failed path
+[Fix] Multi-channel alert rendering: per-channel dispatch prevents cross-channel
+      contamination, Telegram MarkdownV2 escaping for special characters
 [Fix] CIDR sidecar enrichment data preserved across all rendering passes
-      instead of falling through to static fallback
-[Fix] Report text table top-IPs rows emit all 7 columns; Slack/Discord
-      templates use JSON-escaped brief vars to prevent broken JSON
-[Fix] Add 8 missing config vars to SIGHUP reload unset block for clean re-read
-[Fix] Temp file hardening: extract_hosts and _batch_ip_to_country use
-      $INSTALL_PATH/tmp; _check_file_safety handles 4-digit setuid/setgid perms
-[Fix] IP report and list views now search rotated bans.history archives —
-      previously showed "Ban history: none" for IPs banned >1 day ago
+[Fix] Report text table top-IPs rows emit all 7 columns; messaging templates
+      use JSON-escaped vars to prevent broken payloads
+[Fix] 8 missing config vars added to SIGHUP reload unset block
+[Fix] Temp file hardening: extract_hosts uses $INSTALL_PATH/tmp;
+      _check_file_safety handles 4-digit setuid/setgid perms
+[Fix] Ban history search now includes rotated bans.history archives
 [Fix] show_status "Top services" trailing comma when fewer than 3 services
-[Fix] Lock contention message downgraded to log-file-only when holder is
-      alive — eliminates syslog noise from cron during watch mode
-[Fix] Stale IPv6 GeoIP build directories cleaned up at update-ipcountry.sh
-      startup (orphaned by prior interrupted builds)
+[Fix] Lock contention message log-file-only when holder is alive
+[Fix] Stale IPv6 GeoIP build dirs cleaned up at update-ipcountry.sh startup
+[Fix] Deep-legacy portability: all bare coreutils (chmod, mkdir, cat, touch,
+      ln, cp, mv, rm) use command prefix for CentOS 6 PATH compatibility
 
 2.0.1:
 
