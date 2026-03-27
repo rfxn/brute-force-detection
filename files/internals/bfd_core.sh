@@ -223,6 +223,11 @@ config_init() {
 	# safe: stdout module pre-registered at elog_lib load, stderr if already enabled
 	elog_output_enable "stdout" 2>/dev/null || true  # safe: no-op if already active
 
+	# Symlink farm self-healing — verify sbin symlinks on every startup (pkg_lib v1.0.6)
+	# Non-fatal: if BFD is already running, the invoking symlink works; log and continue
+	pkg_fhs_verify_farm "$INSTALL_PATH/internals/.symlink-manifest" \
+		|| elog warn "symlink farm verification failed; run install.sh to repair"
+
 	# Backward compat mapping (old v1.5 names -> new names)
 	PRESSURE_TRIP="${PRESSURE_TRIP:-${TRIG:-20}}"
 	PRESSURE_HALF_LIFE="${PRESSURE_HALF_LIFE:-${TRIG_WINDOW:-300}}"

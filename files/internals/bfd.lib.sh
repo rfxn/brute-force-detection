@@ -56,6 +56,12 @@ if [ -f "$_internals_dir/geoip_lib.sh" ]; then
 	. "$_internals_dir/geoip_lib.sh"
 fi
 
+# Source shared packaging library (symlink manifest verify, installer primitives)
+if [ -f "$_internals_dir/pkg_lib.sh" ]; then
+	# shellcheck disable=SC1091
+	. "$_internals_dir/pkg_lib.sh"
+fi
+
 # Source BFD report functions (periodic threat reports)
 if [ -f "$_internals_dir/bfd_report.sh" ]; then
 	# shellcheck disable=SC1091

@@ -1,4 +1,7 @@
 2.0.2:
+[Fix] RPM/DEB package manifests: add 9 sub-libraries + update-cdn-providers.sh
+[New] Symlink farm enforcement: sbin symlink manifest + runtime self-healing
+      (pkg_lib v1.0.6)
 [New] CDN/trusted proxy subsystem: ignore/exclude/derate treatment modes,
       binary-search IP range lookup (IPv4/IPv6), cdn-providers.conf with 5
       default providers, bfd --cdn CLI, CDN_ENABLE and CDN_UPDATE_DAYS config;

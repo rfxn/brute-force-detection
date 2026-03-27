@@ -88,12 +88,22 @@ install -D -m 644 files/internals/bfd_alert.sh %{buildroot}/usr/lib/bfd/internal
 install -D -m 644 files/internals/geoip_lib.sh %{buildroot}/usr/lib/bfd/internals/geoip_lib.sh
 install -D -m 644 files/internals/pkg_lib.sh %{buildroot}/usr/lib/bfd/internals/pkg_lib.sh
 install -D -m 644 files/internals/bfd_report.sh %{buildroot}/usr/lib/bfd/internals/bfd_report.sh
+install -D -m 644 files/internals/bfd_validate.sh %{buildroot}/usr/lib/bfd/internals/bfd_validate.sh
+install -D -m 644 files/internals/bfd_fw.sh %{buildroot}/usr/lib/bfd/internals/bfd_fw.sh
+install -D -m 644 files/internals/bfd_state.sh %{buildroot}/usr/lib/bfd/internals/bfd_state.sh
+install -D -m 644 files/internals/bfd_pressure.sh %{buildroot}/usr/lib/bfd/internals/bfd_pressure.sh
+install -D -m 644 files/internals/bfd_detect.sh %{buildroot}/usr/lib/bfd/internals/bfd_detect.sh
+install -D -m 644 files/internals/bfd_events.sh %{buildroot}/usr/lib/bfd/internals/bfd_events.sh
+install -D -m 644 files/internals/bfd_diag.sh %{buildroot}/usr/lib/bfd/internals/bfd_diag.sh
+install -D -m 644 files/internals/bfd_core.sh %{buildroot}/usr/lib/bfd/internals/bfd_core.sh
+install -D -m 644 files/internals/bfd_cdn.sh %{buildroot}/usr/lib/bfd/internals/bfd_cdn.sh
 install -d -m 755 %{buildroot}/usr/lib/bfd/alert
 for tpl in files/alert/*.tpl; do
     install -m 644 "$tpl" %{buildroot}/usr/lib/bfd/alert/
 done
 install -d -m 755 %{buildroot}/usr/lib/bfd/alert/custom.d
 install -D -m 755 files/update-ipcountry.sh %{buildroot}/usr/lib/bfd/update-ipcountry.sh
+install -D -m 755 files/update-cdn-providers.sh %{buildroot}/usr/lib/bfd/update-cdn-providers.sh
 install -D -m 755 importconf %{buildroot}/usr/lib/bfd/importconf
 
 # Config files (noreplace)
@@ -154,10 +164,20 @@ ln -s /usr/lib/bfd/internals/bfd_alert.sh %{buildroot}%{legacy_path}/internals/b
 ln -s /usr/lib/bfd/internals/geoip_lib.sh %{buildroot}%{legacy_path}/internals/geoip_lib.sh
 ln -s /usr/lib/bfd/internals/pkg_lib.sh %{buildroot}%{legacy_path}/internals/pkg_lib.sh
 ln -s /usr/lib/bfd/internals/bfd_report.sh %{buildroot}%{legacy_path}/internals/bfd_report.sh
+ln -s /usr/lib/bfd/internals/bfd_validate.sh %{buildroot}%{legacy_path}/internals/bfd_validate.sh
+ln -s /usr/lib/bfd/internals/bfd_fw.sh %{buildroot}%{legacy_path}/internals/bfd_fw.sh
+ln -s /usr/lib/bfd/internals/bfd_state.sh %{buildroot}%{legacy_path}/internals/bfd_state.sh
+ln -s /usr/lib/bfd/internals/bfd_pressure.sh %{buildroot}%{legacy_path}/internals/bfd_pressure.sh
+ln -s /usr/lib/bfd/internals/bfd_detect.sh %{buildroot}%{legacy_path}/internals/bfd_detect.sh
+ln -s /usr/lib/bfd/internals/bfd_events.sh %{buildroot}%{legacy_path}/internals/bfd_events.sh
+ln -s /usr/lib/bfd/internals/bfd_diag.sh %{buildroot}%{legacy_path}/internals/bfd_diag.sh
+ln -s /usr/lib/bfd/internals/bfd_core.sh %{buildroot}%{legacy_path}/internals/bfd_core.sh
+ln -s /usr/lib/bfd/internals/bfd_cdn.sh %{buildroot}%{legacy_path}/internals/bfd_cdn.sh
 ln -s /etc/bfd/internals.conf %{buildroot}%{legacy_path}/internals/internals.conf
 ln -s /usr/lib/bfd/tlog %{buildroot}%{legacy_path}/tlog
 ln -s /usr/lib/bfd/alert %{buildroot}%{legacy_path}/alert
 ln -s /usr/lib/bfd/update-ipcountry.sh %{buildroot}%{legacy_path}/update-ipcountry.sh
+ln -s /usr/lib/bfd/update-cdn-providers.sh %{buildroot}%{legacy_path}/update-cdn-providers.sh
 ln -s /usr/lib/bfd/importconf %{buildroot}%{legacy_path}/importconf
 ln -s /etc/bfd/conf.bfd %{buildroot}%{legacy_path}/conf.bfd
 ln -s /etc/bfd/pressure.conf %{buildroot}%{legacy_path}/pressure.conf
@@ -267,10 +287,20 @@ fi
 /usr/lib/bfd/internals/geoip_lib.sh
 /usr/lib/bfd/internals/pkg_lib.sh
 /usr/lib/bfd/internals/bfd_report.sh
+/usr/lib/bfd/internals/bfd_validate.sh
+/usr/lib/bfd/internals/bfd_fw.sh
+/usr/lib/bfd/internals/bfd_state.sh
+/usr/lib/bfd/internals/bfd_pressure.sh
+/usr/lib/bfd/internals/bfd_detect.sh
+/usr/lib/bfd/internals/bfd_events.sh
+/usr/lib/bfd/internals/bfd_diag.sh
+/usr/lib/bfd/internals/bfd_core.sh
+/usr/lib/bfd/internals/bfd_cdn.sh
 /usr/lib/bfd/tlog
 /usr/lib/bfd/alert/
 %dir %attr(755,root,root) /usr/lib/bfd/alert/custom.d
 /usr/lib/bfd/update-ipcountry.sh
+/usr/lib/bfd/update-cdn-providers.sh
 /usr/lib/bfd/importconf
 %config(noreplace) /etc/bfd/conf.bfd
 %config(noreplace) /etc/bfd/internals.conf
@@ -304,10 +334,20 @@ fi
 %{legacy_path}/internals/geoip_lib.sh
 %{legacy_path}/internals/pkg_lib.sh
 %{legacy_path}/internals/bfd_report.sh
+%{legacy_path}/internals/bfd_validate.sh
+%{legacy_path}/internals/bfd_fw.sh
+%{legacy_path}/internals/bfd_state.sh
+%{legacy_path}/internals/bfd_pressure.sh
+%{legacy_path}/internals/bfd_detect.sh
+%{legacy_path}/internals/bfd_events.sh
+%{legacy_path}/internals/bfd_diag.sh
+%{legacy_path}/internals/bfd_core.sh
+%{legacy_path}/internals/bfd_cdn.sh
 %{legacy_path}/internals/internals.conf
 %{legacy_path}/tlog
 %{legacy_path}/alert
 %{legacy_path}/update-ipcountry.sh
+%{legacy_path}/update-cdn-providers.sh
 %{legacy_path}/importconf
 %{legacy_path}/conf.bfd
 %{legacy_path}/pressure.conf

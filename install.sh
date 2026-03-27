@@ -67,6 +67,14 @@ install_files(){
 	pkg_symlink "$INSPATH/bfd" "$BINPATH"
 	pkg_symlink "$INSPATH/tlog" "$(dirname "$BINPATH")/tlog"
 
+	# Symlink manifest for runtime self-healing (pkg_lib v1.0.6)
+	{
+		command printf '# pkg_lib:symlink-manifest:1\n'
+		command printf '%s\t%s\n' "$BINPATH" "$INSPATH/bfd"
+		command printf '%s\t%s\n' "$(command dirname "$BINPATH")/tlog" "$INSPATH/tlog"
+	} > "$INSPATH/internals/.symlink-manifest"
+	command chmod 640 "$INSPATH/internals/.symlink-manifest"
+
 	# Logrotate configuration
 	pkg_logrotate_install "logrotate.d.bfd" "bfd"
 

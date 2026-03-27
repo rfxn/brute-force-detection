@@ -39,12 +39,22 @@ override_dh_auto_install:
 	install -D -m 644 files/internals/geoip_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/geoip_lib.sh
 	install -D -m 644 files/internals/pkg_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/pkg_lib.sh
 	install -D -m 644 files/internals/bfd_report.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_report.sh
+	install -D -m 644 files/internals/bfd_validate.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_validate.sh
+	install -D -m 644 files/internals/bfd_fw.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_fw.sh
+	install -D -m 644 files/internals/bfd_state.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_state.sh
+	install -D -m 644 files/internals/bfd_pressure.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_pressure.sh
+	install -D -m 644 files/internals/bfd_detect.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_detect.sh
+	install -D -m 644 files/internals/bfd_events.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_events.sh
+	install -D -m 644 files/internals/bfd_diag.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_diag.sh
+	install -D -m 644 files/internals/bfd_core.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_core.sh
+	install -D -m 644 files/internals/bfd_cdn.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_cdn.sh
 	install -d -m 755 $(CURDIR)/debian/bfd/usr/lib/bfd/alert
 	for tpl in files/alert/*.tpl; do \
 	    install -m 644 "$$tpl" $(CURDIR)/debian/bfd/usr/lib/bfd/alert/; \
 	done
 	install -d -m 755 $(CURDIR)/debian/bfd/usr/lib/bfd/alert/custom.d
 	install -D -m 755 files/update-ipcountry.sh $(CURDIR)/debian/bfd/usr/lib/bfd/update-ipcountry.sh
+	install -D -m 755 files/update-cdn-providers.sh $(CURDIR)/debian/bfd/usr/lib/bfd/update-cdn-providers.sh
 	install -D -m 755 importconf $(CURDIR)/debian/bfd/usr/lib/bfd/importconf
 	# Config files
 	install -D -m 640 files/conf.bfd $(CURDIR)/debian/bfd/etc/bfd/conf.bfd
