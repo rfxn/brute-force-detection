@@ -145,13 +145,6 @@ teardown() {
 
 # --- apool_list() orchestrator ---
 
-@test "apool_list: empty pool produces no crash" {
-	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
-	> "$APOOL_LIST"
-	run apool_list
-	assert_success
-}
-
 @test "apool_list: absent pool file prints no-data message" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool.nonexistent"
 	run apool_list

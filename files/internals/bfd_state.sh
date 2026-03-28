@@ -467,7 +467,7 @@ list_bans_csv() {
 # manual_unban install_path ip utime — manually unban an IP via firewall backend
 manual_unban() {
 	local install_path="$1" ip="$2" utime="$3"
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
+	ip=$(_require_valid_ip "$ip" "$2") || return 1
 	state_init "$install_path"
 	if ! state_bans_active_check "$install_path" "$ip"; then
 		echo "error: $ip is not in the active ban list." >&2
@@ -490,7 +490,7 @@ manual_ban() {
 	local install_path="$1" ip="$2" utime="$3"
 	local mod="${4:-manual}"
 	local ports="${5:-all}"
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
+	ip=$(_require_valid_ip "$ip" "$2") || return 1
 	mod=$(sanitize_mod "$mod") || { echo "error: invalid service name '$mod'." >&2; return 1; }
 	state_init "$install_path"
 	if state_bans_active_check "$install_path" "$ip"; then

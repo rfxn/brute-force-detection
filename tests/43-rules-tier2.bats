@@ -8,6 +8,24 @@ load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
+# create/remove mock PREREQ binaries at file level to avoid race with
+# BATS --jobs parallel test-gathering phase (per-test teardown rm races
+# with the next test's setup touch on shared /usr paths)
+setup_file() {
+	mkdir -p /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin /opt/jellyfin
+	touch /usr/sbin/sogod
+	touch /usr/bin/freeswitch
+	touch /usr/sbin/ejabberdctl
+	touch /usr/sbin/pdns_server
+	touch /usr/bin/jellyfin
+}
+
+teardown_file() {
+	rm -f /usr/sbin/sogod /usr/bin/freeswitch /usr/sbin/ejabberdctl \
+		/usr/sbin/pdns_server /usr/bin/jellyfin
+	rm -rf /var/log/jellyfin
+}
+
 setup() {
 	bfd_standard_setup
 	GLOB_PRESSURE_TRIP="15"
@@ -19,14 +37,6 @@ setup() {
 	# drupal rule uses KERNEL_LOG_PATH as PREREQ — set and create mock
 	KERNEL_LOG_PATH="$TEST_TMPDIR/syslog"
 	touch "$KERNEL_LOG_PATH"
-
-	# create mock PREREQ binaries so rule if-guards pass
-	mkdir -p /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin /opt/jellyfin
-	touch /usr/sbin/sogod
-	touch /usr/bin/freeswitch
-	touch /usr/sbin/ejabberdctl
-	touch /usr/sbin/pdns_server
-	touch /usr/bin/jellyfin
 
 	# copy rule files from project source
 	cp "$PROJECT_ROOT/files/rules/sogo" "$RULES_PATH/"
@@ -44,11 +54,6 @@ setup() {
 }
 
 teardown() {
-	# clean up mock PREREQ binaries
-	rm -f /usr/sbin/sogod /usr/bin/freeswitch /usr/sbin/ejabberdctl \
-		/usr/sbin/pdns_server /usr/bin/jellyfin
-	# clean up jellyfin log directory (created outside TEST_TMPDIR)
-	rm -rf /var/log/jellyfin
 	bfd_teardown
 }
 

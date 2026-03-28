@@ -7,27 +7,25 @@
       default providers, bfd --cdn CLI, CDN_ENABLE and CDN_UPDATE_DAYS config;
       cron.daily auto-refresh and --json output support
 [New] Structured audit events for ban escalation, manual ban/unban/flush,
-      alert delivery, detection triggers, and scan cycle bookends
-[New] REPORT_ENABLED and REPORT_TOP_N config validation at load time
-[New] audit.log added to logrotate configuration
+      alert delivery, detection triggers, and scan cycle bookends;
+      audit.log added to logrotate
+[New] Config validation: REPORT_ENABLED, REPORT_TOP_N checked at load time;
+      8 missing vars added to SIGHUP reload unset block
 [New] install.sh creates /usr/local/sbin/tlog symlink for PATH accessibility
-[New] Man page: CDN/Trusted Proxy, Country Weighting config sections, --cdn
-      CLI options, all sub-library FILES entries
-[New] README redesign with SECURITY.md and CONTRIBUTING.md companion files
+[New] Documentation: man page CDN/Trusted Proxy and Country Weighting sections,
+      --cdn CLI options, sub-library FILES entries; README redesign with
+      SECURITY.md and CONTRIBUTING.md
 [Change] pressure.conf and pressure-country.conf migrated to whitespace
       format; dual-format parsers for backward compat; importconf auto-converts
 [Change] --check shows "no service detected" for rules with log-based PREREQ
-[Change] lock.utime created with mode 640 (was inheriting umask 644)
-[Fix] --report --7d/--30d now correctly maps to weekly/monthly report interval
-[Fix] ignore.hosts.local created with mode 640 for consistency with other config
+[Fix] File permissions: lock.utime and ignore.hosts.local created with mode 640
+[Fix] Report: --7d/--30d correctly maps to weekly/monthly interval; top-IPs
+      table emits all 7 columns; messaging templates use JSON-escaped vars
 [Fix] --status error for unknown service directed to stderr
 [Fix] threat_detected audit event now fires on ban-failed path
 [Fix] Multi-channel alert rendering: per-channel dispatch prevents cross-channel
       contamination, Telegram MarkdownV2 escaping for special characters
 [Fix] CIDR sidecar enrichment data preserved across all rendering passes
-[Fix] Report text table top-IPs rows emit all 7 columns; messaging templates
-      use JSON-escaped vars to prevent broken payloads
-[Fix] 8 missing config vars added to SIGHUP reload unset block
 [Fix] Temp file hardening: extract_hosts uses $INSTALL_PATH/tmp;
       _check_file_safety handles 4-digit setuid/setgid perms
 [Fix] Ban history search now includes rotated bans.history archives

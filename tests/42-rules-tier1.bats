@@ -8,6 +8,21 @@ load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
+# create/remove mock PREREQ binaries at file level to avoid race with
+# BATS --jobs parallel test-gathering phase (per-test teardown rm races
+# with the next test's setup touch on shared /usr paths)
+setup_file() {
+	mkdir -p /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin
+	touch /usr/bin/vaultwarden
+	touch /usr/sbin/guacd
+	touch /usr/sbin/haproxy
+	touch /usr/sbin/squid
+}
+
+teardown_file() {
+	rm -f /usr/bin/vaultwarden /usr/sbin/guacd /usr/sbin/haproxy /usr/sbin/squid
+}
+
 setup() {
 	bfd_standard_setup
 	GLOB_PRESSURE_TRIP="15"
@@ -15,13 +30,6 @@ setup() {
 	RULES_PATH="$INSTALL_PATH/rules"
 	mkdir -p "$RULES_PATH"
 	LOG_SOURCE="file"
-
-	# create mock PREREQ binaries so rule if-guards pass
-	mkdir -p /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin
-	touch /usr/bin/vaultwarden
-	touch /usr/sbin/guacd
-	touch /usr/sbin/haproxy
-	touch /usr/sbin/squid
 
 	# copy rule files from project source
 	cp "$PROJECT_ROOT/files/rules/vaultwarden" "$RULES_PATH/"
@@ -35,8 +43,6 @@ setup() {
 }
 
 teardown() {
-	# clean up mock PREREQ binaries
-	rm -f /usr/bin/vaultwarden /usr/sbin/guacd /usr/sbin/haproxy /usr/sbin/squid
 	bfd_teardown
 }
 

@@ -106,6 +106,18 @@ validate_cidr() {
 	return 0
 }
 
+# _require_valid_ip ip raw_arg — validate IP or print error and return 1
+# Outputs cleaned IP on stdout. Usage: ip=$(_require_valid_ip "$ip" "$2") || return 1
+_require_valid_ip() {
+	validate_ip_any "$1" || { echo "error: invalid IP address '$2'." >&2; return 1; }
+}
+
+# _require_valid_cidr cidr raw_arg — validate CIDR or print error and return 1
+# Outputs cleaned CIDR on stdout. Usage: cidr=$(_require_valid_cidr "$cidr" "$2") || return 1
+_require_valid_cidr() {
+	validate_cidr "$1" || { echo "error: invalid CIDR notation '$2' (IPv4, mask 8-32)." >&2; return 1; }
+}
+
 # ip_to_subnet ip mask — compute the network address for an IP and prefix length
 # Library utility exercised by tests and available for external callers;
 # production subnet math is inline in count_subnet_attackers() for performance.

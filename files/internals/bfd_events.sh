@@ -42,7 +42,7 @@ _search_ip_data() {
 	local now
 	now=$(date +"%s")
 
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
+	ip=$(_require_valid_ip "$ip" "$2") || return 1
 
 	local half_life trip
 	half_life="${PRESSURE_HALF_LIFE:-300}"
@@ -429,7 +429,7 @@ events_list_ip() {
 	local pool_file="$install_path/stats/attack.pool"
 	local half_life="${PRESSURE_HALF_LIFE:-300}"
 
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
+	ip=$(_require_valid_ip "$ip" "$2") || return 1
 
 	# Pool data (durable history)
 	local pool_data=""
@@ -551,7 +551,7 @@ events_list_cidr() {
 	local pool_file="$install_path/stats/attack.pool"
 	local cutoff="${_EVENTS_CUTOFF:-0}"
 
-	cidr=$(validate_cidr "$cidr") || { echo "error: invalid CIDR notation '$2' (IPv4, mask 8-32)." >&2; return 1; }
+	cidr=$(_require_valid_cidr "$cidr" "$2") || return 1
 	local target_addr target_mask
 	target_addr="${cidr%/*}"
 	target_mask="${cidr#*/}"
@@ -683,7 +683,7 @@ events_list_ip_json() {
 	local half_life="${PRESSURE_HALF_LIFE:-300}"
 	local trip="${GLOB_PRESSURE_TRIP:-20}"
 
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
+	ip=$(_require_valid_ip "$ip" "$2") || return 1
 
 	# Pool data (durable history)
 	local pool_data=""
@@ -809,7 +809,7 @@ events_list_ip_csv() {
 	local install_path="$1" ip="$2"
 	local pool_file="$install_path/stats/attack.pool"
 
-	ip=$(validate_ip_any "$ip") || { echo "error: invalid IP address '$2'." >&2; return 1; }
+	ip=$(_require_valid_ip "$ip" "$2") || return 1
 
 	echo "ip,total_failures,ban_triggers,country,service,count,first_seen,last_seen,status"
 
@@ -847,7 +847,7 @@ events_list_cidr_json() {
 	local pool_file="$install_path/stats/attack.pool"
 	local cutoff="${_EVENTS_CUTOFF:-0}"
 
-	cidr=$(validate_cidr "$cidr") || { echo "error: invalid CIDR notation '$2' (IPv4, mask 8-32)." >&2; return 1; }
+	cidr=$(_require_valid_cidr "$cidr" "$2") || return 1
 	local target_addr target_mask
 	target_addr="${cidr%/*}"
 	target_mask="${cidr#*/}"
@@ -911,7 +911,7 @@ events_list_cidr_csv() {
 	local pool_file="$install_path/stats/attack.pool"
 	local cutoff="${_EVENTS_CUTOFF:-0}"
 
-	cidr=$(validate_cidr "$cidr") || { echo "error: invalid CIDR notation '$2' (IPv4, mask 8-32)." >&2; return 1; }
+	cidr=$(_require_valid_cidr "$cidr" "$2") || return 1
 	local target_addr target_mask
 	target_addr="${cidr%/*}"
 	target_mask="${cidr#*/}"

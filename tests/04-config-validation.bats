@@ -346,24 +346,12 @@ run_validate_output() {
 
 # --- BAN_ESCALATION ---
 
-@test "validate_config: BAN_ESCALATION=none passes" {
-	run run_validate 'BAN_ESCALATION="none"'
-	assert_success
-}
-
-@test "validate_config: BAN_ESCALATION=linear passes" {
-	run run_validate 'BAN_ESCALATION="linear"'
-	assert_success
-}
-
-@test "validate_config: BAN_ESCALATION=double passes" {
-	run run_validate 'BAN_ESCALATION="double"'
-	assert_success
-}
-
-@test "validate_config: BAN_ESCALATION=exponential accepted (backward compat)" {
-	run run_validate 'BAN_ESCALATION="exponential"'
-	assert_success
+@test "validate_config: BAN_ESCALATION accepts all valid values" {
+	local val
+	for val in none linear double exponential; do
+		run run_validate "BAN_ESCALATION=\"$val\""
+		assert_success
+	done
 }
 
 @test "validate_config: BAN_ESCALATION=bogus rejects" {
@@ -647,19 +635,12 @@ run_validate_output() {
 
 # --- EMAIL_FORMAT ---
 
-@test "validate_config: EMAIL_FORMAT=text passes" {
-	run run_validate 'EMAIL_FORMAT="text"'
-	assert_success
-}
-
-@test "validate_config: EMAIL_FORMAT=html passes" {
-	run run_validate 'EMAIL_FORMAT="html"'
-	assert_success
-}
-
-@test "validate_config: EMAIL_FORMAT=both passes" {
-	run run_validate 'EMAIL_FORMAT="both"'
-	assert_success
+@test "validate_config: EMAIL_FORMAT accepts all valid values" {
+	local val
+	for val in text html both; do
+		run run_validate "EMAIL_FORMAT=\"$val\""
+		assert_success
+	done
 }
 
 @test "validate_config: EMAIL_FORMAT=invalid rejects" {

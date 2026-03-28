@@ -364,6 +364,8 @@ if ! command mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 	# lock dir exists — check staleness
 	if [ -f "$LOCK_FILE" ]; then
 		OVAL=$(cat "$LOCK_FILE")
+		# guard: treat non-numeric content as epoch 0 (always exceeds LOCK_FILE_TIMEOUT → stale)
+		[[ "$OVAL" =~ ^[0-9]+$ ]] || OVAL=0
 		DIFF=$((UTIME - OVAL))
 		if [ "$DIFF" -gt "$LOCK_FILE_TIMEOUT" ]; then
 			elog warn "cleared stale lock (${DIFF}s old, pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null || echo unknown))."

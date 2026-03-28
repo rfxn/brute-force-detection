@@ -257,27 +257,19 @@ _fw_route_setup() {
 	fi
 }
 
-_fw_route_ban() {
-	local host="$1"
+_fw_route_op() {
+	local action="$1" host="$2"
 	if [[ "$host" == */* ]]; then
-		"$_FW_ROUTE_IP_BIN" route add blackhole "$host" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route "$action" blackhole "$host" 2>/dev/null
 	elif [[ "$host" == *:* ]]; then
-		"$_FW_ROUTE_IP_BIN" route add blackhole "$host/128" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route "$action" blackhole "$host/128" 2>/dev/null
 	else
-		"$_FW_ROUTE_IP_BIN" route add blackhole "$host/32" 2>/dev/null
+		"$_FW_ROUTE_IP_BIN" route "$action" blackhole "$host/32" 2>/dev/null
 	fi
 }
 
-_fw_route_unban() {
-	local host="$1"
-	if [[ "$host" == */* ]]; then
-		"$_FW_ROUTE_IP_BIN" route del blackhole "$host" 2>/dev/null
-	elif [[ "$host" == *:* ]]; then
-		"$_FW_ROUTE_IP_BIN" route del blackhole "$host/128" 2>/dev/null
-	else
-		"$_FW_ROUTE_IP_BIN" route del blackhole "$host/32" 2>/dev/null
-	fi
-}
+_fw_route_ban() { _fw_route_op add "$1"; }
+_fw_route_unban() { _fw_route_op del "$1"; }
 
 _fw_route_status() {
 	local count=0
@@ -288,20 +280,25 @@ _fw_route_status() {
 # --- custom backend (backward-compatible eval of BAN_COMMAND templates) ---
 _fw_custom_setup() { :; }
 
-_fw_custom_ban() {
-	local host="$1" mod="$2" ports="$3"
-	ports=$(sanitize_ports "$ports") || { elog error "invalid PORTS value '$3'" "le"; return 1; }
-	local cmd="$BAN_COMMAND_TEMPLATE"
-	if [ -n "${BAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]]; then
-		cmd="$BAN_COMMAND_V6_TEMPLATE"
+_fw_custom_exec() {
+	local action="$1" host="$2" mod="$3" raw_ports="$4"
+	local ports
+	ports=$(sanitize_ports "$raw_ports") || { elog error "invalid PORTS value '$raw_ports'" "le"; return 1; }
+	local cmd
+	if [ "$action" = "ban" ]; then
+		cmd="$BAN_COMMAND_TEMPLATE"
+		[ -n "${BAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]] && cmd="$BAN_COMMAND_V6_TEMPLATE"
+	else
+		cmd="$UNBAN_COMMAND_TEMPLATE"
+		[ -n "${UNBAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]] && cmd="$UNBAN_COMMAND_V6_TEMPLATE"
 	fi
-	# shellcheck disable=SC2034  # consumed by eval'd BAN_COMMAND_TEMPLATE and alert templates
+	# shellcheck disable=SC2034  # consumed by eval'd command template and alert templates
 	ATTACK_HOST="$host"
 	# shellcheck disable=SC2034
 	MOD="$mod"
 	# shellcheck disable=SC2034
 	PORTS="$ports"
-	# Security: $cmd is from BAN_COMMAND_TEMPLATE, extracted raw from conf.bfd
+	# Security: $cmd is from BAN/UNBAN_COMMAND_TEMPLATE, extracted raw from conf.bfd
 	# by extract_command_template(). $host is validated by validate_ip_any()
 	# (check() loop + CLI callers), $mod by sanitize_mod(), $ports by
 	# sanitize_ports(). conf.bfd is root-owned and verified by safe_source().
@@ -309,22 +306,8 @@ _fw_custom_ban() {
 	eval "$cmd" >/dev/null 2>&1
 }
 
-_fw_custom_unban() {
-	local host="$1" mod="$2" ports="$3"
-	ports=$(sanitize_ports "$ports") || { elog error "invalid PORTS value '$3'" "le"; return 1; }
-	local cmd="$UNBAN_COMMAND_TEMPLATE"
-	if [ -n "${UNBAN_COMMAND_V6_TEMPLATE:-}" ] && [[ "$host" == *:* ]]; then
-		cmd="$UNBAN_COMMAND_V6_TEMPLATE"
-	fi
-	# shellcheck disable=SC2034  # consumed by eval'd UNBAN_COMMAND_TEMPLATE and alert templates
-	ATTACK_HOST="$host"
-	# shellcheck disable=SC2034
-	MOD="$mod"
-	# shellcheck disable=SC2034
-	PORTS="$ports"
-	# Security: same mitigation chain as _fw_custom_ban() — see comment there.
-	eval "$cmd" >/dev/null 2>&1
-}
+_fw_custom_ban() { _fw_custom_exec ban "$1" "$2" "$3"; }
+_fw_custom_unban() { _fw_custom_exec unban "$1" "$2" "$3"; }
 
 _fw_custom_status() {
 	echo "custom (BAN_COMMAND template)"

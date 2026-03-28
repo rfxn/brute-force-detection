@@ -162,8 +162,8 @@ _perf_generate_logs() {
 	# create unique IP list (50 IPs)
 	local _ip_file="$INSTALL_PATH/tmp/perf_ips.txt"
 	awk -v n=50 'BEGIN {
-		for (i = 0; i < n; i++) {
-			o4 = i % 256; if (o4 == 0) o4 = 1
+		for (i = 1; i <= n; i++) {
+			o4 = i % 256
 			print "10.0.0." o4
 		}
 	}' /dev/null > "$_ip_file"
@@ -307,9 +307,9 @@ _perf_generate_logs() {
 	# create unique IP list (500 IPs)
 	local _ip_file="$INSTALL_PATH/tmp/perf_ips.txt"
 	awk -v n=500 'BEGIN {
-		for (i = 0; i < n; i++) {
+		for (i = 1; i <= n; i++) {
 			o3 = int(i / 256) % 256
-			o4 = i % 256; if (o4 == 0) o4 = 1
+			o4 = i % 256
 			print "10.0." o3 "." o4
 		}
 	}' /dev/null > "$_ip_file"
@@ -451,9 +451,9 @@ _perf_generate_logs() {
 	# create unique IP list (2K IPs)
 	local _ip_file="$INSTALL_PATH/tmp/perf_ips.txt"
 	awk -v n=2000 'BEGIN {
-		for (i = 0; i < n; i++) {
+		for (i = 1; i <= n; i++) {
 			o3 = int(i / 256) % 256
-			o4 = i % 256; if (o4 == 0) o4 = 1
+			o4 = i % 256
 			print "10.0." o3 "." o4
 		}
 	}' /dev/null > "$_ip_file"

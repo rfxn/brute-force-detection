@@ -170,6 +170,14 @@ teardown() {
 
 # --- apool_list_csv ---
 
+@test "apool_list_csv: empty pool returns empty output" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	> "$APOOL_LIST"
+	run apool_list_csv
+	assert_success
+	assert_output ""
+}
+
 @test "apool_list_csv: sections labeled with summary" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
 	local now

@@ -633,16 +633,13 @@ _setup_validate_config() {
 
 # --- show_config scan vars ---
 
-@test "show_config: SCAN_MAX_LINES is in whitelist" {
-	SCAN_MAX_LINES="50000"
-	run show_config "SCAN_MAX_LINES"
-	assert_success
-	assert_output "50000"
-}
-
-@test "show_config: SCAN_TIMEOUT is in whitelist" {
-	SCAN_TIMEOUT="120"
-	run show_config "SCAN_TIMEOUT"
-	assert_success
-	assert_output "120"
+@test "show_config: scan variables are in whitelist" {
+	local var val
+	for var in SCAN_MAX_LINES SCAN_TIMEOUT; do
+		eval "$var=12345"
+		run show_config "$var"
+		assert_success
+		assert_output "12345"
+		unset "$var"
+	done
 }

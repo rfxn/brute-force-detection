@@ -27,10 +27,11 @@ jobs:
 
   test:
     needs: lint
-    uses: rfxn/batsman/.github/workflows/test.yml@v1.0.3
+    uses: rfxn/batsman/.github/workflows/test.yml@v1.3.0
     with:
       project-name: bfd
       os-matrix: '["debian12","centos6","centos7","rocky8","rocky9","rocky10","ubuntu1204","ubuntu2004","ubuntu2404"]'
+      parallel-jobs: 4
 
   uat:
     needs: lint
