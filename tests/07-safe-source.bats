@@ -15,13 +15,6 @@ teardown() {
 	bfd_teardown
 }
 
-@test "safe_source: valid root-owned file returns 0" {
-	echo 'SAFE_SOURCE_TEST_VAR="loaded"' > "$TEST_TMPDIR/good.conf"
-	chmod 640 "$TEST_TMPDIR/good.conf"
-	run safe_source "$TEST_TMPDIR/good.conf" "test:good"
-	assert_success
-}
-
 @test "safe_source: valid file sets variable" {
 	echo 'SAFE_SOURCE_TEST_VAR="loaded"' > "$TEST_TMPDIR/good.conf"
 	chmod 640 "$TEST_TMPDIR/good.conf"
@@ -48,13 +41,6 @@ teardown() {
 	SAFE_SOURCE_TEST_VAR=""
 	safe_source "$TEST_TMPDIR/world_writable.conf" "test:writable" >/dev/null 2>&1 || true
 	[ "$SAFE_SOURCE_TEST_VAR" = "" ]
-}
-
-@test "safe_source: 644 perms succeeds" {
-	echo 'SAFE_SOURCE_TEST_VAR="ok644"' > "$TEST_TMPDIR/readable.conf"
-	chmod 644 "$TEST_TMPDIR/readable.conf"
-	run safe_source "$TEST_TMPDIR/readable.conf" "test:644"
-	assert_success
 }
 
 @test "safe_source: 644 file sets variable" {

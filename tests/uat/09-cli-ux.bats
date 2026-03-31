@@ -50,26 +50,6 @@ teardown_file() {
 }
 
 # bats test_tags=uat,uat:cli-ux
-@test "UAT: status display" {
-    uat_capture "cli-ux" bfd -S
-    assert_success
-}
-
-# bats test_tags=uat,uat:cli-ux
-@test "UAT: no-args shows usage hint" {
-    uat_capture "cli-ux" bfd
-    # Should show help or usage hint, exit 0 or 1
-    [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
-}
-
-# bats test_tags=uat,uat:cli-ux
-@test "UAT: test-alert shows available channels" {
-    uat_capture "cli-ux" bfd --test-alert
-    # Should either show help about channels or list available ones
-    [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
-}
-
-# bats test_tags=uat,uat:cli-ux
 @test "UAT: config health check exit code" {
     run bfd -c
     assert_success

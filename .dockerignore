@@ -1,6 +1,8 @@
 # Exclude dev-only artifacts from Docker build context
+# NOTE: tests/ is NOT excluded — the test Dockerfile needs it.
+# Packaging Dockerfiles (pkg/docker/) build from the tarball, so
+# tests/ in their context is harmless extra bytes.
 .git/
-tests/
 docs/
 audit-output/
 .rdf/

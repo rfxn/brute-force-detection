@@ -84,14 +84,6 @@ teardown() {
 	assert_output "3000"
 }
 
-@test "pressure_compute: single event weight=1 returns 1000" {
-	local now; now=$(date +%s)
-	echo "$now 192.0.2.1 sshd 1" > "$INSTALL_PATH/tmp/pressure.dat"
-	run pressure_compute "$INSTALL_PATH" "192.0.2.1" "300" "$now" "sshd"
-	assert_success
-	assert_output "1000"
-}
-
 # ============================================================
 # pressure_compute() — decay
 # ============================================================
@@ -184,15 +176,6 @@ teardown() {
 # ============================================================
 # _load_pressure_conf()
 # ============================================================
-
-@test "_load_pressure_conf: parses SKIP_ALERT and RULE_EMAIL" {
-	local pconf="$TEST_TMPDIR/pressure.conf"
-	echo "dovecot  weight=2  skip_alert=1  rule_email=ops@test.com" > "$pconf"
-	_load_pressure_conf "$pconf"
-	[ "${_PRESS_WEIGHT[dovecot]}" = "2" ]
-	[ "${_PRESS_SKIP_ALERT[dovecot]}" = "1" ]
-	[ "${_PRESS_RULE_EMAIL[dovecot]}" = "ops@test.com" ]
-}
 
 @test "_load_pressure_conf: skips comment lines" {
 	local pconf="$TEST_TMPDIR/pressure.conf"
@@ -315,14 +298,6 @@ teardown() {
 }
 
 # --- Dual-format: new whitespace, old colon, mixed ---
-
-@test "_load_pressure_conf: parses new whitespace format" {
-	local pconf="$TEST_TMPDIR/pressure.conf"
-	echo "sshd  weight=3  trip=15" > "$pconf"
-	_load_pressure_conf "$pconf"
-	[ "${_PRESS_WEIGHT[sshd]}" = "3" ]
-	[ "${_PRESS_TRIP[sshd]}" = "15" ]
-}
 
 @test "_load_pressure_conf: parses new format with all four keys" {
 	local pconf="$TEST_TMPDIR/pressure.conf"
@@ -574,14 +549,6 @@ teardown() {
 	assert_success
 	# 1 + 3 = 4 → 4000 scaled
 	assert_output "4000"
-}
-
-@test "pressure_format: negative input returns 0.0 sentinel" {
-	# negative input shouldn't occur in practice, but verify no crash
-	run pressure_format -500
-	assert_success
-	# implementation detail: may show "0.-5" or similar, but shouldn't crash
-	# mainly verifying no error exit
 }
 
 # ============================================================

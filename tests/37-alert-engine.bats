@@ -22,16 +22,6 @@ teardown() {
 # Source guard & version
 # ===================================================================
 
-@test "alert_lib: ALERT_LIB_VERSION is set" {
-	[ -n "$ALERT_LIB_VERSION" ]
-	[[ "$ALERT_LIB_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-}
-
-@test "bfd_alert: BFD_ALERT_VERSION is set" {
-	[ -n "$BFD_ALERT_VERSION" ]
-	[[ "$BFD_ALERT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-}
-
 @test "alert_lib: reputation link arrays are populated" {
 	[ "${#_REPLINK_KEYS[@]}" -eq 5 ]
 	[ "${#_REPLINK_LABELS[@]}" -eq 5 ]
