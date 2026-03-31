@@ -259,8 +259,8 @@ INTEOF
 
 @test "reload_watch: re-registers journal filters (F-057)" {
 	reload_watch
-	# _bfd_journal_register_all registers 23 mappings
-	[ "${#_TLOG_JOURNAL_NAMES[@]}" -ge 23 ]
+	# _bfd_journal_register_all registers 39+ mappings (lower-bound check)
+	[ "${#_TLOG_JOURNAL_NAMES[@]}" -ge 39 ]
 }
 
 @test "reload_watch: config_init 1 clears LOG_IDLE_SUPPRESS (F-A06)" {

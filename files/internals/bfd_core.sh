@@ -71,6 +71,10 @@ _bfd_journal_register_all() {
 	tlog_journal_register "pdns" "SYSLOG_IDENTIFIER=pdns_server"
 	tlog_journal_register "proxmox" "SYSLOG_IDENTIFIER=pvedaemon + SYSLOG_IDENTIFIER=pveproxy"
 	tlog_journal_register "phpmyadmin" "SYSLOG_IDENTIFIER=phpmyadmin"
+	# pam_generic: PAM logs under the calling service's SYSLOG_IDENTIFIER, not its
+	# own — no single identifier captures all PAM auth failures. Use authpriv
+	# facility (10) as the broadest correct filter; extract_hosts pattern is tight.
+	tlog_journal_register "pam" "SYSLOG_FACILITY=10"
 }
 
 _cleanup_common() {

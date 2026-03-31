@@ -26,6 +26,9 @@
 [Fix] Multi-channel alert rendering: per-channel dispatch prevents cross-channel
       contamination, Telegram MarkdownV2 escaping for special characters
 [Fix] CIDR sidecar enrichment data preserved across all rendering passes
+[Fix] pam_generic rule: PREREQ changed from AUTH_LOG_PATH to /etc/pam.d/other
+      so journal fallback works on rsyslog-less systems (RHEL 10+, Ubuntu minimal);
+      added SYSLOG_FACILITY=10 journal registration (39 of 57 rules now covered)
 [Fix] Temp file hardening: extract_hosts uses $INSTALL_PATH/tmp;
       _check_file_safety handles 4-digit setuid/setgid perms
 [Fix] Ban history search now includes rotated bans.history archives
@@ -92,7 +95,7 @@
       fail2ban-compatible <HOST> patterns, dual IPv4/IPv6 boundary-aware
       regex, per-rule IGNOREREGEX exclusion; sshd expanded from 3 to 12
       patterns, dovecot 2 to 6 with ManageSieve
-[New] Systemd journal reader: transparent fallback for 38 of 57 rules;
+[New] Systemd journal reader: transparent fallback for 39 of 57 rules;
       cursor-based tracking; LOG_SOURCE config (auto/file/journal); dynamic
       service-to-journalctl filter registry
 [New] Events CLI (-e/--events): active event dashboard with pressure scores,
