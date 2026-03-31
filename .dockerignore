@@ -1,0 +1,15 @@
+# Exclude dev-only artifacts from Docker build context
+.git/
+tests/
+docs/
+audit-output/
+.rdf/
+.claude/
+.github/
+pkg/build/
+CLAUDE.md
+PLAN*.md
+AUDIT.md
+MEMORY.md
+REGR.md
+PRESSURE.md
