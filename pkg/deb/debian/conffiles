@@ -4,3 +4,4 @@
 /etc/bfd/pressure-country.conf
 /etc/bfd/exclude.files
 /etc/bfd/ignore.hosts
+/etc/bfd/cdn-providers.conf

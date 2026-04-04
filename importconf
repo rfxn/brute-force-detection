@@ -246,6 +246,12 @@ if [ -f "$BK_LAST/pressure-country.conf" ]; then
 	fi
 fi
 
+# preserve user's CDN provider configuration
+if [ -f "$BK_LAST/cdn-providers.conf" ]; then
+	command cp -f "$BK_LAST/cdn-providers.conf" "$INSTALL_PATH/cdn-providers.conf"
+	echo "  Preserved cdn-providers.conf from previous install."
+fi
+
 # preserve user's ignore lists
 command cp -f "$BK_LAST/ignore.hosts" "$INSTALL_PATH" 2>/dev/null
 

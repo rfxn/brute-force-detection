@@ -20,7 +20,7 @@
 ###
 #
 set -eu
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 INSPATH="${INSTALL_PATH:-/usr/local/bfd}"
 BINPATH="${BIN_PATH:-/usr/local/sbin/bfd}"

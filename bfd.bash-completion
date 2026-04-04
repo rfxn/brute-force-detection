@@ -11,7 +11,7 @@ _bfd_completions() {
 
 	# Flag lists
 	local short_flags="-s -q -d -w -a -e -c -l -u -b -S -C -R -T -v -h -V"
-	local long_flags="--standard --quiet --dryrun --watch --activity --events --check --list --unban --ban --status --config --rules --test --test-pattern --test-alert --scan --report --max-lines= --scan-timeout= --limit= --flush-temp --flush-all --json --csv --sort= --24h --7d --30d --active --verbose --version --help"
+	local long_flags="--standard --quiet --dryrun --watch --activity --events --check --list --unban --ban --status --config --rules --test --test-pattern --test-alert --scan --report --cdn --max-lines= --scan-timeout= --limit= --flush-temp --flush-all --json --csv --sort= --24h --7d --30d --active --verbose --version --help"
 
 	# Context-sensitive completions
 	case "$prev" in
@@ -64,6 +64,17 @@ _bfd_completions() {
 			COMPREPLY=( $(compgen -W "daily weekly monthly" -- "$cur") )
 			return 0
 			;;
+		--cdn)
+			# subcommands + provider names from cdn-providers.conf
+			local cdn_subs="update check"
+			local cdn_conf="/usr/local/bfd/cdn-providers.conf"
+			local providers=""
+			if [ -f "$cdn_conf" ]; then
+				providers=$(awk '/^[^#]/ && NF {print $1}' "$cdn_conf" 2>/dev/null)
+			fi
+			COMPREPLY=( $(compgen -W "$cdn_subs $providers" -- "$cur") )
+			return 0
+			;;
 		--test-pattern)
 			# second arg: file
 			local nargs=0 i
@@ -99,7 +110,7 @@ _bfd_completions() {
 			;;
 		-C|--config)
 			# complete with config variable names
-			local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES EMAIL_FORMAT EMAIL_DIGEST EMAIL_DIGEST_INTERVAL EMAIL_REPUTATION_LINKS SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS SLACK_ALERTS SLACK_MODE SLACK_WEBHOOK_URL SLACK_TOKEN SLACK_CHANNEL TELEGRAM_ALERTS TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID DISCORD_ALERTS DISCORD_WEBHOOK_URL ALERT_TEMPLATE_DIR REPORT_ENABLED REPORT_INTERVALS REPORT_CHANNELS REPORT_EMAIL_ADDRESS REPORT_EMAIL_SUBJECT REPORT_TOP_N LOG_FORMAT LOG_LEVEL LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG LOG_IDLE_SUPPRESS OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT APOOL_RETENTION_DAYS APOOL_MAX_LINES PRESSURE_CONF"
+			local config_vars="FIREWALL PRESSURE_TRIP PRESSURE_HALF_LIFE PRESSURE_TRIP_GLOBAL SUBNET_TRIG SUBNET_MASK SUBNET_MASK_V6 BAN_COMMAND BAN_COMMAND_V6 UNBAN_COMMAND UNBAN_COMMAND_V6 BAN_TTL BAN_ESCALATE_AFTER BAN_ESCALATE_WINDOW BAN_RETRY_COUNT BAN_ESCALATION BAN_ESCALATION_CAP EMAIL_ALERTS EMAIL_ADDRESS EMAIL_SUBJECT EMAIL_LOGLINES EMAIL_FORMAT EMAIL_DIGEST EMAIL_DIGEST_INTERVAL EMAIL_REPUTATION_LINKS SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS SLACK_ALERTS SLACK_MODE SLACK_WEBHOOK_URL SLACK_TOKEN SLACK_CHANNEL TELEGRAM_ALERTS TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID DISCORD_ALERTS DISCORD_WEBHOOK_URL ALERT_TEMPLATE_DIR REPORT_ENABLED REPORT_INTERVALS REPORT_CHANNELS REPORT_EMAIL_ADDRESS REPORT_EMAIL_SUBJECT REPORT_TOP_N CDN_ENABLE CDN_UPDATE_DAYS LOG_FORMAT LOG_LEVEL LOG_SOURCE AUTH_LOG_PATH KERNEL_LOG_PATH MAIL_LOG_PATH BFD_LOG_PATH OUTPUT_SYSLOG LOG_IDLE_SUPPRESS OUTPUT_SYSLOG_FILE LOCK_FILE_TIMEOUT WATCH_INTERVAL SCAN_MAX_LINES SCAN_TIMEOUT APOOL_RETENTION_DAYS APOOL_MAX_LINES PRESSURE_CONF"
 			COMPREPLY=( $(compgen -W "$config_vars" -- "$cur") )
 			return 0
 			;;

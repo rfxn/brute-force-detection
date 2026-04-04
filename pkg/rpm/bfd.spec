@@ -113,6 +113,7 @@ install -D -m 640 files/pressure.conf %{buildroot}/etc/bfd/pressure.conf
 install -D -m 640 files/pressure-country.conf %{buildroot}/etc/bfd/pressure-country.conf
 install -D -m 640 files/exclude.files.pkg %{buildroot}/etc/bfd/exclude.files
 install -D -m 640 files/ignore.hosts %{buildroot}/etc/bfd/ignore.hosts
+install -D -m 640 files/cdn-providers.conf %{buildroot}/etc/bfd/cdn-providers.conf
 
 # Data files
 install -D -m 644 files/ipcountry.dat %{buildroot}/usr/share/bfd/ipcountry.dat
@@ -184,6 +185,7 @@ ln -s /etc/bfd/pressure.conf %{buildroot}%{legacy_path}/pressure.conf
 ln -s /etc/bfd/pressure-country.conf %{buildroot}%{legacy_path}/pressure-country.conf
 ln -s /etc/bfd/exclude.files %{buildroot}%{legacy_path}/exclude.files
 ln -s /etc/bfd/ignore.hosts %{buildroot}%{legacy_path}/ignore.hosts
+ln -s /etc/bfd/cdn-providers.conf %{buildroot}%{legacy_path}/cdn-providers.conf
 ln -s /usr/share/bfd/ipcountry.dat %{buildroot}%{legacy_path}/ipcountry.dat
 ln -s /usr/share/bfd/rules %{buildroot}%{legacy_path}/rules
 ln -s /var/lib/bfd/tmp %{buildroot}%{legacy_path}/tmp
@@ -308,6 +310,7 @@ fi
 %config(noreplace) /etc/bfd/pressure-country.conf
 %config(noreplace) /etc/bfd/exclude.files
 %config(noreplace) /etc/bfd/ignore.hosts
+%config(noreplace) /etc/bfd/cdn-providers.conf
 /usr/share/bfd/ipcountry.dat
 /usr/share/bfd/rules/
 /usr/share/man/man1/bfd.1*
@@ -354,6 +357,7 @@ fi
 %{legacy_path}/pressure-country.conf
 %{legacy_path}/exclude.files
 %{legacy_path}/ignore.hosts
+%{legacy_path}/cdn-providers.conf
 %{legacy_path}/ipcountry.dat
 %{legacy_path}/rules
 %{legacy_path}/tmp
