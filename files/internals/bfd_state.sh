@@ -520,7 +520,7 @@ flush_bans() {
 
 	# Read all entries first (avoid modifying file while reading)
 	local entries
-	entries=$(cat "$bans_file")
+	entries=$(command cat "$bans_file")
 
 	local ts expiry host mod ports
 	while IFS=' ' read -r ts expiry host mod ports; do

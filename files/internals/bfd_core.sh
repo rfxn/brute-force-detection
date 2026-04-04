@@ -367,12 +367,12 @@ get_state() {
 if ! command mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 	# lock dir exists — check staleness
 	if [ -f "$LOCK_FILE" ]; then
-		OVAL=$(cat "$LOCK_FILE")
+		OVAL=$(command cat "$LOCK_FILE")
 		# guard: treat non-numeric content as epoch 0 (always exceeds LOCK_FILE_TIMEOUT → stale)
 		[[ "$OVAL" =~ ^[0-9]+$ ]] || OVAL=0
 		DIFF=$((UTIME - OVAL))
 		if [ "$DIFF" -gt "$LOCK_FILE_TIMEOUT" ]; then
-			elog warn "cleared stale lock (${DIFF}s old, pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null || echo unknown))."
+			elog warn "cleared stale lock (${DIFF}s old, pid=$(command cat "$LOCK_FILE.lk/pid" 2>/dev/null || echo unknown))."
 			command rm -rf "$LOCK_FILE.lk"
 			command mkdir "$LOCK_FILE.lk" 2>/dev/null || {
 				elog error "unable to acquire lock after stale cleanup, aborting."
@@ -381,7 +381,7 @@ if ! command mkdir "$LOCK_FILE.lk" 2>/dev/null; then
 		else
 			# lock is fresh — verify the holder is still alive
 			local _lock_pid
-			_lock_pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null)
+			_lock_pid=$(command cat "$LOCK_FILE.lk/pid" 2>/dev/null)
 			if [ -n "$_lock_pid" ] && ! kill -0 "$_lock_pid" 2>/dev/null; then
 				elog warn "cleared dead lock (pid=$_lock_pid exited, lock ${DIFF}s old)."
 				command rm -rf "$LOCK_FILE.lk"
@@ -455,7 +455,7 @@ check() {
 	if [ "${_SCAN_MODE:-}" != "1" ]; then
 		local _pool_prune_marker="$INSTALL_PATH/tmp/.pool_prune_ts"
 		local _pool_last_prune=0
-		[ -f "$_pool_prune_marker" ] && _pool_last_prune=$(cat "$_pool_prune_marker" 2>/dev/null)
+		[ -f "$_pool_prune_marker" ] && _pool_last_prune=$(command cat "$_pool_prune_marker" 2>/dev/null)
 		if [ $(( UTIME - _pool_last_prune )) -gt 86400 ]; then
 			state_pool_prune "$INSTALL_PATH" "${APOOL_RETENTION_DAYS:-365}" "${APOOL_MAX_LINES:-500000}"
 			echo "$UTIME" > "$_pool_prune_marker"

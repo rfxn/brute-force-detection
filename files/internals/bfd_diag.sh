@@ -1074,10 +1074,10 @@ test_pattern() {
 	local pattern="$1" log_file="${2:-}"
 	local input
 	if [ -z "$log_file" ] || [ "$log_file" = "-" ]; then
-		input=$(cat)
+		input=$(command cat)
 	else
 		[ ! -f "$log_file" ] && { echo "error: file '$log_file' not found" >&2; return 1; }
-		input=$(cat "$log_file")
+		input=$(command cat "$log_file")
 	fi
 
 	local _sv_ign="${IGNOREREGEX:-}"

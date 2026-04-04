@@ -1,6 +1,13 @@
 bfd (2.0.2-1) unstable; urgency=medium
 
-  *
+  * CDN/trusted proxy subsystem with ignore/exclude/derate treatment modes
+  * Structured audit events (26 call sites) and audit.log logrotate
+  * Symlink farm enforcement with sbin symlink manifest
+  * Pressure config migrated to whitespace format with dual-format parsers
+  * Deep-legacy portability: all coreutils use command prefix (CentOS 6)
+  * Man page CDN, country weighting, and sub-library documentation
+  * Ban history search includes rotated archives
+  * pam_generic journal fallback for rsyslog-less systems
 
  -- R-fx Networks <proj@rfxn.com>  Wed, 18 Mar 2026 00:00:00 +0000
 

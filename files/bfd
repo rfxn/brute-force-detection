@@ -460,6 +460,10 @@ case "${1:-}" in
 				echo "error: --cdn check requires an IP address." >&2
 				echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
 			fi
+			if ! validate_ip_any "$3" >/dev/null 2>&1; then
+				echo "error: invalid IP address '${3}'." >&2
+				exit "$EXIT_CONFIG_ERROR"
+			fi
 			case "$OUTPUT_FORMAT" in
 				json) cdn_check_ip_json "$INSTALL_PATH" "$3" ;;
 				*)    cdn_check_ip "$INSTALL_PATH" "$3" ;;

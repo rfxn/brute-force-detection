@@ -47,6 +47,7 @@ $(BUILDDIR)/$(TARBALL):
 	        --exclude='AUDIT.md' --exclude='MEMORY.md' \
 	        --exclude='REGR.md' --exclude='PRESSURE.md' \
 	        --exclude='.dockerignore' --exclude='.gitattributes' \
+	        --exclude='.gitmodules' --exclude='.shellcheckrc' \
 	        . ; \
 	fi
 

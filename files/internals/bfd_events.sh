@@ -1419,7 +1419,7 @@ _apool_awk() {
 			ip)   sort -t'|' -k2 -V ;;
 			*)    sort -t'|' -k1 -nr ;;
 		esac
-	} | if [ "$limit" -gt 0 ] 2>/dev/null; then head -n "$limit"; else cat; fi  # suppress non-numeric $limit comparison error (defaults to unlimited)
+	} | if [ "$limit" -gt 0 ] 2>/dev/null; then head -n "$limit"; else command cat; fi  # suppress non-numeric $limit comparison error (defaults to unlimited)
 }
 
 _apool_report() {

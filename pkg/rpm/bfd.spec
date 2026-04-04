@@ -366,7 +366,14 @@ fi
 
 %changelog
 * Wed Mar 18 2026 R-fx Networks <proj@rfxn.com> - 2.0.2-1
--
+- CDN/trusted proxy subsystem with ignore/exclude/derate treatment modes
+- Structured audit events (26 call sites) and audit.log logrotate
+- Symlink farm enforcement with sbin symlink manifest
+- Pressure config migrated to whitespace format with dual-format parsers
+- Deep-legacy portability: all coreutils use command prefix (CentOS 6)
+- Man page CDN, country weighting, and sub-library documentation
+- Ban history search includes rotated archives
+- pam_generic journal fallback for rsyslog-less systems
 
 * Thu Feb 26 2026 R-fx Networks <proj@rfxn.com> - 2.0.1-1
 - Initial RPM package with FHS layout and symlink farm

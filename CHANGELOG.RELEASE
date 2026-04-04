@@ -37,6 +37,10 @@
 [Fix] Stale IPv6 GeoIP build dirs cleaned up at update-ipcountry.sh startup
 [Fix] Deep-legacy portability: all bare coreutils (chmod, mkdir, cat, touch,
       ln, cp, mv, rm) use command prefix for CentOS 6 PATH compatibility
+[Fix] --cdn check validates IP address before lookup (consistency with -b/-u/-e)
+[Fix] Bare cat instances in cron.daily and source files use command prefix
+[Fix] RPM/DEB changelog entries populated with 2.0.2 release notes
+[Fix] .shellcheckrc and .gitmodules excluded from release tarball
 
 2.0.1:
 

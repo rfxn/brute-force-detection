@@ -38,7 +38,7 @@ LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
 
 # check if bfd is actively running (mkdir-based lock used by bfd/watch)
 if [ -d "$LOCK_FILE.lk" ]; then
-	_lock_pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null)
+	_lock_pid=$(command cat "$LOCK_FILE.lk/pid" 2>/dev/null)
 	if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null; then
 		exit 0
 	fi
@@ -81,7 +81,7 @@ if find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' -type f \
 	(
 		flock -x 201
 		find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' \
-			-type f -exec cat {} + >> "$pool_file"
+			-type f -exec command cat {} + >> "$pool_file"
 		find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' \
 			-type f -delete
 		sort -n "$pool_file" > "$pool_file.new"
