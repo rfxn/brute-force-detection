@@ -81,7 +81,7 @@ if find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' -type f \
 	(
 		flock -x 201
 		find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' \
-			-type f -exec command cat {} + >> "$pool_file"
+			-type f -exec cat {} + >> "$pool_file"  # bare cat: find -exec uses execvp, not bash (command builtin unavailable)
 		find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' \
 			-type f -delete
 		sort -n "$pool_file" > "$pool_file.new"

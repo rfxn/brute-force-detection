@@ -193,7 +193,7 @@ _stop_services(){
 		if [ -n "$_initdir" ]; then
 			local _pid=""
 			if [ -f /var/run/bfd-watch.pid ]; then
-				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true  # pidfile may not exist or be empty
+				_pid=$(command cat /var/run/bfd-watch.pid 2>/dev/null) || true  # pidfile may not exist or be empty
 			fi
 			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
 				echo -n "Stopping bfd-watch... "
@@ -233,7 +233,7 @@ _enable_services(){
 		done
 		if [ -n "$_initdir" ]; then
 			if [ -f /var/run/bfd-watch.pid ]; then
-				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true  # pidfile may not exist or be empty
+				_pid=$(command cat /var/run/bfd-watch.pid 2>/dev/null) || true  # pidfile may not exist or be empty
 			fi
 			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
 				echo -n "Starting bfd-watch... "
