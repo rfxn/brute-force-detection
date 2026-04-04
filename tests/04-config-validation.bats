@@ -801,6 +801,55 @@ run_validate_output() {
 	assert_success
 }
 
+# --- CDN_ENABLE ---
+
+@test "validate_config: CDN_ENABLE=0 passes" {
+	run run_validate 'CDN_ENABLE="0"'
+	assert_success
+}
+
+@test "validate_config: CDN_ENABLE=1 passes" {
+	run run_validate 'CDN_ENABLE="1"'
+	assert_success
+}
+
+@test "validate_config: CDN_ENABLE=yes rejects" {
+	run run_validate 'CDN_ENABLE="yes"'
+	assert_failure
+}
+
+@test "validate_config: CDN_ENABLE unset uses default (passes)" {
+	run run_validate 'unset CDN_ENABLE'
+	assert_success
+}
+
+# --- CDN_UPDATE_DAYS ---
+
+@test "validate_config: CDN_UPDATE_DAYS=7 passes" {
+	run run_validate 'CDN_UPDATE_DAYS="7"'
+	assert_success
+}
+
+@test "validate_config: CDN_UPDATE_DAYS=0 passes" {
+	run run_validate 'CDN_UPDATE_DAYS="0"'
+	assert_success
+}
+
+@test "validate_config: CDN_UPDATE_DAYS=abc rejects" {
+	run run_validate 'CDN_UPDATE_DAYS="abc"'
+	assert_failure
+}
+
+@test "validate_config: CDN_UPDATE_DAYS unset passes (optional)" {
+	run run_validate 'unset CDN_UPDATE_DAYS'
+	assert_success
+}
+
+@test "validate_config: CDN_UPDATE_DAYS empty passes (optional)" {
+	run run_validate 'CDN_UPDATE_DAYS=""'
+	assert_success
+}
+
 @test "show_config: EMAIL_FORMAT returns value" {
 	EMAIL_FORMAT="both"
 	run show_config EMAIL_FORMAT
