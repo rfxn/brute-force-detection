@@ -9,8 +9,8 @@
 [New] Structured audit events for ban escalation, manual ban/unban/flush,
       alert delivery, detection triggers, and scan cycle bookends;
       audit.log added to logrotate
-[New] Config validation: REPORT_ENABLED, REPORT_TOP_N checked at load time;
-      8 missing vars added to SIGHUP reload unset block
+[New] Config validation: REPORT_ENABLED, REPORT_TOP_N, REPORT_CHANNELS checked
+      at load time; 8 missing vars added to SIGHUP reload unset block
 [New] install.sh creates /usr/local/sbin/tlog symlink for PATH accessibility
 [New] Documentation: man page CDN/Trusted Proxy and Country Weighting sections,
       --cdn CLI options, sub-library FILES entries; README redesign with
@@ -18,7 +18,8 @@
 [Change] pressure.conf and pressure-country.conf migrated to whitespace
       format; dual-format parsers for backward compat; importconf auto-converts
 [Change] --check shows "no service detected" for rules with log-based PREREQ
-[Fix] File permissions: lock.utime and ignore.hosts.local created with mode 640
+[Fix] File permissions: lock.utime (creation and heartbeat) and ignore.hosts.local
+      consistently set to mode 640
 [Fix] Report: --7d/--30d correctly maps to weekly/monthly interval; top-IPs
       table emits all 7 columns; messaging templates use JSON-escaped vars
 [Fix] --status error for unknown service directed to stderr
@@ -38,13 +39,8 @@
 [Fix] Deep-legacy portability: all bare coreutils (chmod, mkdir, cat, touch,
       ln, cp, mv, rm) use command prefix for CentOS 6 PATH compatibility
 [Fix] --cdn check validates IP address before lookup (consistency with -b/-u/-e)
-[Fix] Bare cat instances in cron.daily and source files use command prefix
-[Fix] RPM/DEB changelog entries populated with 2.0.2 release notes
 [Fix] .shellcheckrc and .gitmodules excluded from release tarball
-[Fix] Watch-mode heartbeat preserves lock.utime 640 permissions
-[Fix] REPORT_CHANNELS validated against known channel set at config load
 [Fix] Unban error message includes hint for firewall-only blocks
-[Fix] SIGHUP reload test timing tolerance increased (5s→8s)
 [Change] README: supported Ubuntu versions now reflect CI-tested targets
 
 2.0.1:
