@@ -520,6 +520,7 @@ validate_config() {
 		for _rc in $REPORT_CHANNELS; do
 			IFS="$_rc_ifs_save"
 			_rc="${_rc## }"; _rc="${_rc%% }"
+			[ -z "$_rc" ] && continue
 			case "$_rc" in
 				email|slack|telegram|discord) ;;
 				*) echo "error: REPORT_CHANNELS contains unknown channel '$_rc' (must be email, slack, telegram, or discord)." >&2
