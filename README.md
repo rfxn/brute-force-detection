@@ -161,7 +161,7 @@ BFD runs on any Linux distribution with bash 4.1+ and standard GNU utilities (gr
 - Rocky Linux 8, 9, 10
 
 **Debian-family:**
-- Ubuntu 14.04, 16.04, 18.04, 20.04, 22.04, 24.04
+- Ubuntu 20.04, 24.04 (CI-tested); 14.04 (deep-legacy CI via 12.04 target)
 - Debian 12
 
 Log paths are auto-detected at runtime:

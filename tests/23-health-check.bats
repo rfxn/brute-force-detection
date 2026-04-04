@@ -232,14 +232,14 @@ EOF
 	# create a restricted PATH without mail but with essential commands
 	local clean_dir
 	clean_dir=$(mktemp -d)
-	ln -s /bin/bash "$clean_dir/bash"
-	ln -s /usr/bin/stat "$clean_dir/stat"
-	ln -s /usr/bin/awk "$clean_dir/awk"
-	ln -s /usr/bin/wc "$clean_dir/wc"
-	ln -s /usr/bin/hostname "$clean_dir/hostname"
-	ln -s /usr/bin/date "$clean_dir/date"
-	ln -s /bin/cat "$clean_dir/cat"
-	ln -s /bin/grep "$clean_dir/grep"
+	ln -s "$(command -v bash)" "$clean_dir/bash"
+	ln -s "$(command -v stat)" "$clean_dir/stat"
+	ln -s "$(command -v awk)" "$clean_dir/awk"
+	ln -s "$(command -v wc)" "$clean_dir/wc"
+	ln -s "$(command -v hostname)" "$clean_dir/hostname"
+	ln -s "$(command -v date)" "$clean_dir/date"
+	ln -s "$(command -v cat)" "$clean_dir/cat"
+	ln -s "$(command -v grep)" "$clean_dir/grep"
 	# run health_check in subshell with restricted PATH
 	run bash -c "
 		source '${PROJECT_ROOT}/files/internals/bfd.lib.sh'

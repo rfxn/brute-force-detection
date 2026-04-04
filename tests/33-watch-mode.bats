@@ -465,9 +465,10 @@ INTEOF
 		_waited=$((_waited + 1))
 	done
 	kill -HUP "$_WATCH_PID"
-	# wait for reload complete message (up to 5s)
+	# wait for reload complete message (up to 8s — config reload includes
+	# validate_config() which can be slow under container I/O pressure)
 	_waited=0
-	while [ "$_waited" -lt 50 ] && ! grep -q "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log" 2>/dev/null; do
+	while [ "$_waited" -lt 80 ] && ! grep -q "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log" 2>/dev/null; do
 		sleep 0.1
 		_waited=$((_waited + 1))
 	done

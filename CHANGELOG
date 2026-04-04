@@ -41,6 +41,11 @@
 [Fix] Bare cat instances in cron.daily and source files use command prefix
 [Fix] RPM/DEB changelog entries populated with 2.0.2 release notes
 [Fix] .shellcheckrc and .gitmodules excluded from release tarball
+[Fix] Watch-mode heartbeat preserves lock.utime 640 permissions
+[Fix] REPORT_CHANNELS validated against known channel set at config load
+[Fix] Unban error message includes hint for firewall-only blocks
+[Fix] SIGHUP reload test timing tolerance increased (5s→8s)
+[Change] README: supported Ubuntu versions now reflect CI-tested targets
 
 2.0.1:
 

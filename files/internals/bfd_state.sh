@@ -471,6 +471,8 @@ manual_unban() {
 	state_init "$install_path"
 	if ! state_bans_active_check "$install_path" "$ip"; then
 		echo "error: $ip is not in the active ban list." >&2
+		echo "hint: if the IP is blocked in the firewall but not tracked by BFD," >&2
+		echo "      remove it directly with your firewall tool (iptables/nft/apf/csf)." >&2
 		return 1
 	fi
 	local ban_mod ban_ports

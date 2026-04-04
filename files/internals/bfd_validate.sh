@@ -513,6 +513,22 @@ validate_config() {
 		echo "error: REPORT_TOP_N must be a positive integer (got '${REPORT_TOP_N}')." >&2
 		return "$EXIT_CONFIG_ERROR"
 	fi
+	# REPORT_CHANNELS: comma-separated list from known set
+	if [ -n "${REPORT_CHANNELS:-}" ]; then
+		local _rc _rc_ifs_save="$IFS" _rc_valid=1
+		IFS=','
+		for _rc in $REPORT_CHANNELS; do
+			IFS="$_rc_ifs_save"
+			_rc="${_rc## }"; _rc="${_rc%% }"
+			case "$_rc" in
+				email|slack|telegram|discord) ;;
+				*) echo "error: REPORT_CHANNELS contains unknown channel '$_rc' (must be email, slack, telegram, or discord)." >&2
+				   _rc_valid=0 ;;
+			esac
+		done
+		IFS="$_rc_ifs_save"
+		[ "$_rc_valid" -eq 0 ] && return "$EXIT_CONFIG_ERROR"
+	fi
 	# CDN config
 	case "${CDN_ENABLE:-0}" in
 		0|1) ;;

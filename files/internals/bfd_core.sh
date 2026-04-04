@@ -804,6 +804,7 @@ watch() {
 	while true; do
 		UTIME=$(date +"%s")
 		echo "$UTIME" > "$LOCK_FILE"
+		command chmod 640 "$LOCK_FILE" 2>/dev/null || true  # match initial creation perms (non-fatal)
 		process_unbans "$INSTALL_PATH" "$UTIME"
 		check
 		sleep "$WATCH_INTERVAL" &
