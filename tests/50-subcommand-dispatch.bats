@@ -20,6 +20,9 @@ setup() {
 	bfd_load_function "_cdn_help" "$PROJECT_ROOT/files/bfd"
 	bfd_load_function "_report_help" "$PROJECT_ROOT/files/bfd"
 	bfd_load_function "_status_help" "$PROJECT_ROOT/files/bfd"
+	bfd_load_function "_cli_levenshtein" "$PROJECT_ROOT/files/bfd"
+	bfd_load_function "_cli_did_you_mean" "$PROJECT_ROOT/files/bfd"
+	bfd_load_function "_cli_unknown_verb" "$PROJECT_ROOT/files/bfd"
 	bfd_load_function "_dispatch_ban" "$PROJECT_ROOT/files/bfd"
 	bfd_load_function "_dispatch_ignore" "$PROJECT_ROOT/files/bfd"
 	bfd_load_function "_dispatch_test" "$PROJECT_ROOT/files/bfd"
@@ -186,7 +189,7 @@ teardown() {
 @test "dispatch ban: unknown verb shows error" {
 	run _dispatch_ban frobnicate
 	assert_failure
-	assert_output --partial "error: unknown ban command"
+	assert_output --partial "bfd ban: unknown verb"
 }
 
 @test "dispatch ignore: missing IP for add shows error" {
@@ -198,7 +201,7 @@ teardown() {
 @test "dispatch ignore: unknown verb shows error" {
 	run _dispatch_ignore frobnicate
 	assert_failure
-	assert_output --partial "error: unknown ignore command"
+	assert_output --partial "bfd ignore: unknown verb"
 }
 
 @test "dispatch test: empty shows help" {
@@ -210,7 +213,7 @@ teardown() {
 @test "dispatch test: unknown verb shows error" {
 	run _dispatch_test frobnicate
 	assert_failure
-	assert_output --partial "error: unknown test command"
+	assert_output --partial "bfd test: unknown verb"
 }
 
 @test "dispatch ban: add without IP shows error" {

@@ -72,6 +72,92 @@ vhead() {
 	echo ""
 }
 
+# --- CLI infrastructure: color, typo suggestion, error helpers ---
+
+_CLI_BOLD=""
+_CLI_DIM=""
+_CLI_RESET=""
+
+_cli_color_init() {
+	if [ -n "${NO_COLOR:-}" ]; then return 0; fi
+	if [ ! -t 1 ]; then return 0; fi
+	if [ "${TERM:-}" = "dumb" ]; then return 0; fi
+	_CLI_BOLD=$'\033[1m'
+	_CLI_DIM=$'\033[2m'
+	_CLI_RESET=$'\033[0m'
+}
+_cli_color_init
+
+# _cli_levenshtein s t — edit distance between two strings
+_cli_levenshtein() {
+	local s="$1" t="$2"
+	local s_len=${#s} t_len=${#t}
+	local i j cost
+	if [ "$s_len" -eq 0 ]; then echo "$t_len"; return; fi
+	if [ "$t_len" -eq 0 ]; then echo "$s_len"; return; fi
+	local prev_row=() curr_row=()
+	for (( j = 0; j <= t_len; j++ )); do
+		prev_row[$j]=$j
+	done
+	for (( i = 1; i <= s_len; i++ )); do
+		curr_row[0]=$i
+		for (( j = 1; j <= t_len; j++ )); do
+			if [ "${s:i-1:1}" = "${t:j-1:1}" ]; then cost=0; else cost=1; fi
+			local del=$(( prev_row[j] + 1 ))
+			local ins=$(( curr_row[j-1] + 1 ))
+			local sub=$(( prev_row[j-1] + cost ))
+			local min=$del
+			[ "$ins" -lt "$min" ] && min=$ins
+			[ "$sub" -lt "$min" ] && min=$sub
+			curr_row[$j]=$min
+		done
+		for (( j = 0; j <= t_len; j++ )); do
+			prev_row[$j]=${curr_row[$j]}
+		done
+	done
+	echo "${prev_row[$t_len]}"
+}
+
+# _cli_did_you_mean input "candidate1 candidate2 ..." [threshold]
+_cli_did_you_mean() {
+	local input="$1" candidates="$2" threshold="${3:-3}"
+	local best="" best_dist=999 dist candidate
+	for candidate in $candidates; do
+		dist=$(_cli_levenshtein "$input" "$candidate")
+		if [ "$dist" -lt "$best_dist" ]; then
+			best_dist=$dist
+			best="$candidate"
+		fi
+	done
+	if [ "$best_dist" -le "$threshold" ] && [ "$best_dist" -gt 0 ]; then
+		echo "$best"
+	fi
+}
+
+# _cli_unknown_verb "bfd ban" "badverb" "add remove list flush history"
+_cli_unknown_verb() {
+	local prefix="$1" input="$2" candidates="$3"
+	local suggestion
+	suggestion=$(_cli_did_you_mean "$input" "$candidates")
+	if [ -n "$suggestion" ]; then
+		echo "${prefix}: unknown verb '${input}'. Did you mean '${suggestion}'?" >&2
+	else
+		echo "${prefix}: unknown verb '${input}'. See '${prefix} --help'." >&2
+	fi
+}
+
+# _cli_unknown_command "bfd" "badcmd" "ban ignore test cdn report status ..."
+_cli_unknown_command() {
+	local prefix="$1" input="$2" candidates="$3"
+	local suggestion
+	suggestion=$(_cli_did_you_mean "$input" "$candidates")
+	if [ -n "$suggestion" ]; then
+		echo "${prefix}: unknown command '${input}'. Did you mean '${suggestion}'?" >&2
+	else
+		echo "${prefix}: unknown command '${input}'. See '${prefix} --help'." >&2
+	fi
+}
+
 if ! config_init; then
 	elog_event "config_error" "error" "configuration initialization failed"
 	vhead
@@ -93,148 +179,102 @@ if [ "$_FW_BACKEND" = "custom" ]; then
 fi
 
 usage_short() {
-	echo "usage: bfd [-s|--standard] [-q|--quiet] [-d|--dryrun] [-w|--watch]"
-	echo "       [-b|--ban IP] [-u|--unban IP] [--flush-temp] [--flush-all]"
-	echo "       [-l|--list] [-a|--activity [IP|STR]] [-e|--events [IP|CIDR] [N]]"
-	echo "       [-S|--status] [-C|--config] [-R|--rules [--active]] [-c|--check]"
-	echo "       [-T|--test RULE] [--test-pattern PAT] [--test-alert TYPE]"
-	echo "       [--scan [RULE]] [--report [INTERVAL]] [--cdn [PROVIDER|update|check IP]]"
-	echo "       [--json] [--csv] [--limit=N] [-V|--verbose] [-v|--version] [-h|--help]"
+	echo "usage: bfd [COMMAND] [OPTIONS]"
 	echo ""
-	echo "Run modes:"
-	echo "  bfd -s              run detection cycle with output"
-	echo "  bfd -q              run detection cycle (quiet, for cron)"
-	echo "  bfd -d              dry-run detection (no bans executed)"
-	echo "  bfd -w              continuous watch mode (foreground daemon)"
+	echo "${_CLI_BOLD}COMMANDS:${_CLI_RESET}"
+	echo "  -s, --standard       run detection cycle          -b IP [SVC]  ban an IP"
+	echo "  -q, --quiet          run quietly (cron)           -u IP        unban an IP"
+	echo "  -w, --watch          watch mode (daemon)          -l           list active bans"
+	echo "  -e [IP|CIDR] [N]    event history                -a [IP]      threat activity"
+	echo "  -S [SERVICE]        operational status           -c           health check"
 	echo ""
-	echo "Ban management:"
-	echo "  bfd -b IP [SVC]     manually ban an IP (permanent)"
-	echo "  bfd -u IP           unban an IP address"
-	echo "  bfd --flush-temp    remove all temporary bans"
-	echo "  bfd --flush-all     remove all bans (temp + permanent)"
+	echo "${_CLI_BOLD}SUBCOMMANDS:${_CLI_RESET}"
+	echo "  ban              ban management (add, remove, list, flush, history)"
+	echo "  ignore           ignore list management (add, remove, list, check)"
+	echo "  test             testing operations (rule, pattern, alert, scan)"
+	echo "  cdn              CDN/trusted proxy management"
+	echo "  report           periodic threat report (daily, weekly, monthly)"
+	echo "  status           status and diagnostics (lock, cursors, pool, pressure)"
 	echo ""
-	echo "Reporting:"
-	echo "  bfd -l              list active bans"
-	echo "  bfd -a [IP|STR]     threat activity / investigate IP"
-	echo "  bfd -e [IP|CIDR] [N]  event history / IP or subnet detail (N=log lines)"
-	echo "  bfd --report [INTERVAL] periodic threat report (daily|weekly|monthly)"
+	echo "${_CLI_BOLD}MODIFIERS:${_CLI_RESET}  --json  --csv  --sort=  --limit=  --24h  --7d  --30d  -V"
 	echo ""
-	echo "System:"
-	echo "  bfd -S [SERVICE]    operational status overview"
-	echo "  bfd -C [VAR]        show active configuration"
-	echo "  bfd -R [RULE]       list rules or show rule detail (--active filter)"
-	echo "  bfd -c              health check diagnostics"
-	echo ""
-	echo "CDN / Trusted Proxy:"
-	echo "  bfd --cdn           list CDN providers and status"
-	echo "  bfd --cdn PROVIDER  show CIDRs for a provider"
-	echo "  bfd --cdn update    fetch and compile all provider ranges"
-	echo "  bfd --cdn check IP  check if IP matches a CDN range"
-	echo ""
-	echo "Testing:"
-	echo "  bfd -T RULE [FILE]  test rule against log or stdin"
-	echo "  bfd --test-pattern PAT [FILE|-]  test raw <HOST> pattern against log"
-	echo "  bfd --test-alert TYPE   send test alert (email|slack|telegram|discord)"
-	echo "  bfd --scan [RULE]   full-log scan (all or specific rule)"
-	echo ""
-	echo "Subcommands:"
-	echo "  bfd ban <cmd>       ban management (add, remove, list, flush, history)"
-	echo "  bfd ignore <cmd>    ignore list management (add, remove, list, check)"
-	echo "  bfd test <cmd>      testing operations (rule, pattern, alert, scan)"
-	echo "  bfd cdn <cmd>       CDN/trusted proxy management"
-	echo "  bfd report [INT]    periodic threat report"
-	echo "  bfd status [VIEW]   status overview or sub-view (lock, cursors, pool, pressure)"
-	echo ""
-	echo "Output modifiers:    --json  --csv  --sort=  --limit=  --24h  --7d  --30d"
-	echo "                     --active  -V"
-	echo ""
-	echo "Run 'bfd -h' for full option list, or 'man bfd' for documentation."
+	echo "Run 'bfd <command> --help' for subcommand details."
+	echo "Run 'bfd -h' for all options, or 'man bfd' for full documentation."
 }
 
 usage() {
-	echo "usage: bfd [OPTION]"
+	echo "usage: bfd [COMMAND] [OPTIONS]"
 	echo ""
-	echo "Run Modes:"
+	echo "${_CLI_BOLD}Run Modes:${_CLI_RESET}"
 	echo "  -s, --standard              run detection cycle with output"
 	echo "  -q, --quiet                 run detection cycle silently"
 	echo "  -d, --dryrun                run detection without banning"
 	echo "  -w, --watch                 run continuous watch mode (foreground)"
 	echo "                              send SIGHUP to reload config without restart"
 	echo ""
-	echo "Ban Management:"
+	echo "${_CLI_BOLD}Subcommands:${_CLI_RESET}"
+	echo "  ban              ban management (add, remove, list, flush, history)"
+	echo "  ignore           ignore list management (add, remove, list, check)"
+	echo "  test             testing operations (rule, pattern, alert, scan)"
+	echo "  cdn              CDN/trusted proxy management"
+	echo "  report           periodic threat report (daily, weekly, monthly)"
+	echo "  status           status and diagnostics (lock, cursors, pool, pressure)"
+	echo ""
+	echo "${_CLI_BOLD}Ban Management:${_CLI_RESET}"
 	echo "  -b, --ban IP [SERVICE]      manually ban an IP (permanent)"
 	echo "  -u, --unban IP              unban an IP address"
 	echo "  --flush-temp                remove all temporary bans"
 	echo "  --flush-all                 remove all bans"
 	echo ""
-	echo "Reporting:                                      Supports: --json --csv"
+	echo "${_CLI_BOLD}Reporting:${_CLI_RESET}                                      Supports: --json --csv"
 	echo "  -l, --list                  list active bans"
 	echo "  -a, --activity [IP|STR]     threat activity and IP investigation"
 	echo "  -e, --events [IP|CIDR] [N]  event history, IP or subnet detail (N=log lines)"
+	echo "  --report [daily|weekly|monthly]  periodic threat report"
 	echo ""
-	echo "System:"
+	echo "${_CLI_BOLD}System:${_CLI_RESET}"
 	echo "  -S, --status [SERVICE]      operational status overview"
 	echo "  -C, --config [VAR]          show active configuration"
 	echo "  -R, --rules [RULE]          list rules or show rule detail (--active)"
 	echo "  -c, --check                 health check diagnostics"
 	echo ""
-	echo "Testing:"
+	echo "${_CLI_BOLD}Testing:${_CLI_RESET}"
 	echo "  -T, --test RULE [FILE|-]    test rule patterns against log or stdin"
 	echo "  --test-pattern PAT [FILE|-] test raw <HOST> pattern against log or stdin"
 	echo "  --test-alert TYPE           send test alert (email,slack,telegram,discord)"
-	echo ""
-	echo "Scan Mode:"
 	echo "  --scan [RULE] [-d]          full-log scan (all rules or specific rule)"
-	echo "  --max-lines=N               max lines per log during scan (default 50000)"
-	echo "  --scan-timeout=N            journal timeout per rule during scan (default 120)"
 	echo ""
-	echo "Subcommands:"
-	echo "  ban <cmd>                   ban management (see bfd ban --help)"
-	echo "  ignore <cmd>                ignore list management (see bfd ignore --help)"
-	echo "  test <cmd>                  testing operations (see bfd test --help)"
-	echo "  cdn <cmd>                   CDN management (see bfd cdn --help)"
-	echo "  report [INTERVAL]           periodic report (see bfd report --help)"
-	echo "  status [VIEW]               status sub-views (see bfd status --help)"
-	echo ""
-	echo "Reports:"
-	echo "  --report [daily|weekly|monthly]  generate and deliver periodic threat report"
-	echo ""
-	echo "CDN / Trusted Proxy:"
+	echo "${_CLI_BOLD}CDN / Trusted Proxy:${_CLI_RESET}"
 	echo "  --cdn                       list CDN providers and status"
 	echo "  --cdn <PROVIDER>            show CIDRs for a provider"
 	echo "  --cdn update                fetch and compile all provider ranges"
 	echo "  --cdn check <IP>            check if IP matches a CDN range"
 	echo ""
-	echo "Output Modifiers:"
+	echo "${_CLI_BOLD}Output Modifiers:${_CLI_RESET}"
 	echo "  --json                      JSON output (with -l, -e, -a)"
 	echo "  --csv                       CSV output (with -l, -e, -a)"
 	echo "  --sort=MODE                 sort events: count (default), time, ip"
 	echo "  --limit=N                   max IPs to display (default 100, 0=all)"
-	echo "  --24h                       events from last 24 hours (default)"
-	echo "  --7d                        events from last 7 days"
-	echo "  --30d                       events from last 30 days"
+	echo "  --24h / --7d / --30d        time window filter"
 	echo "  --active                    show only active rules (with -R)"
 	echo "  -V, --verbose               detailed output (with -s, -d, -c, -S, --scan)"
 	echo ""
-	echo "General:"
+	echo "${_CLI_BOLD}General:${_CLI_RESET}"
 	echo "  -v, --version               display version"
-	echo "  -h, --help                  display this help (see bfd.1 for full docs)"
+	echo "  -h                          show this help"
+	echo "  --help                      open full manual page"
 	echo ""
-	echo "Examples:"
+	echo "${_CLI_BOLD}Examples:${_CLI_RESET}"
 	echo "  bfd -s                      run detection and show results"
-	echo "  bfd -s -V                   verbose detection (show per-IP pressure)"
-	echo "  bfd -a 203.0.113.100        investigate an IP across all state"
-	echo "  bfd -e --json               event history in JSON (top 100)"
-	echo "  bfd -e --7d --sort=time     events from last 7 days, newest first"
-	echo "  bfd -e --limit=0 --30d      all events from last 30 days"
-	echo "  bfd --scan sshd -d          dry-run full-log scan for sshd only"
-	echo "  bfd -b 10.0.0.5 sshd        manually ban IP for sshd service"
-	echo "  bfd -T sshd /var/log/auth.log  test sshd rule against a log file"
-	echo "  bfd --report weekly             generate and deliver weekly report"
+	echo "  bfd ban add 10.0.0.5 sshd   ban IP for sshd service"
+	echo "  bfd ban history --7d        ban history for last 7 days"
 	echo "  bfd ignore add 10.0.0.0/8 \"internal\"  add CIDR to ignore list"
 	echo "  bfd ignore check 10.0.0.5   check if IP is in ignore list"
 	echo "  bfd status pressure 203.0.113.5  show pressure score for IP"
-	echo "  bfd ban history --7d         ban history for last 7 days"
+	echo "  bfd -e --json --7d          events from last 7 days as JSON"
+	echo "  bfd --scan sshd -d          dry-run full-log scan for sshd"
+	echo ""
+	echo "Run 'bfd <command> --help' for subcommand details."
 }
 
 # _run_scan [RULE] [-d] — extracted scan operation for --scan and test scan
@@ -426,7 +466,7 @@ _dispatch_ban() {
 				*)    ban_history "$INSTALL_PATH" "${2:-}" ;;
 			esac
 			;;
-		*)	echo "error: unknown ban command '${1}'." >&2; echo >&2; _ban_help >&2; exit "$EXIT_CONFIG_ERROR" ;;
+		*)	_cli_unknown_verb "bfd ban" "$1" "add remove list flush history"; exit "$EXIT_CONFIG_ERROR" ;;
 	esac
 }
 
@@ -452,7 +492,7 @@ _dispatch_ignore() {
 			fi
 			ignore_check "$INSTALL_PATH" "$2" || exit "$?"
 			;;
-		*)	echo "error: unknown ignore command '${1}'." >&2; echo >&2; _ignore_help >&2; exit "$EXIT_CONFIG_ERROR" ;;
+		*)	_cli_unknown_verb "bfd ignore" "$1" "add remove list check"; exit "$EXIT_CONFIG_ERROR" ;;
 	esac
 }
 
@@ -478,7 +518,7 @@ _dispatch_test() {
 			test_alert "$INSTALL_PATH" "${2:-}" || exit "$?"
 			;;
 		scan)	_run_scan "${@:2}" ;;
-		*)	echo "error: unknown test command '${1}'." >&2; echo >&2; _test_help >&2; exit "$EXIT_CONFIG_ERROR" ;;
+		*)	_cli_unknown_verb "bfd test" "$1" "rule pattern alert scan"; exit "$EXIT_CONFIG_ERROR" ;;
 	esac
 }
 
@@ -711,8 +751,33 @@ cdn)		_dispatch_cdn "${@:2}" ;;
 report)		_dispatch_report "${@:2}" ;;
 status)		_dispatch_status "${@:2}" ;;
 -v|--version)   vhead ;;
--h|--help)      vhead; usage ;;
+-h)		vhead; usage ;;
+--help)
+	# Progressive disclosure: --help opens man page, falls back to -h
+	if command -v man >/dev/null 2>&1 && \
+	   man -w bfd >/dev/null 2>&1 && \
+	   ! man bfd 2>&1 | command head -1 | command grep -q "minimized"; then  # safe: detect man stub on minimized Docker images
+		man bfd
+	else
+		vhead; usage
+	fi
+	;;
+help)
+	case "${2:-}" in
+		"")		vhead; usage_short ;;
+		ban)		_dispatch_ban --help ;;
+		ignore)		_dispatch_ignore --help ;;
+		test)		_dispatch_test --help ;;
+		cdn)		_dispatch_cdn --help ;;
+		report)		_dispatch_report --help ;;
+		status)		_dispatch_status --help ;;
+		*)		echo "bfd: unknown topic '${2}'. See 'bfd help'." >&2; exit "$EXIT_CONFIG_ERROR" ;;
+	esac
+	;;
 "")             vhead; usage_short ;;
-*)              vhead; echo "error: unknown option '$1'" >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR" ;;
+*)
+	_cli_unknown_command "bfd" "$1" "ban ignore test cdn report status help -s -q -d -w -a -e -c -l -u -b -S -C -R -T -v -h"
+	exit "$EXIT_CONFIG_ERROR"
+	;;
 esac
 exit "$EXIT_OK"

@@ -12,6 +12,49 @@ _bfd_completions() {
 	# Flag lists
 	local short_flags="-s -q -d -w -a -e -c -l -u -b -S -C -R -T -v -h -V"
 	local long_flags="--standard --quiet --dryrun --watch --activity --events --check --list --unban --ban --status --config --rules --test --test-pattern --test-alert --scan --report --cdn --max-lines= --scan-timeout= --limit= --flush-temp --flush-all --json --csv --sort= --24h --7d --30d --active --verbose --version --help"
+	local nouns="ban ignore test cdn report status help"
+
+	# Subcommand verb dispatch (position 2+)
+	case "$prev" in
+		ban)
+			COMPREPLY=( $(compgen -W "add remove list flush history --help" -- "$cur") )
+			return 0
+			;;
+		ignore)
+			COMPREPLY=( $(compgen -W "add remove list check --help" -- "$cur") )
+			return 0
+			;;
+		test)
+			COMPREPLY=( $(compgen -W "rule pattern alert scan --help" -- "$cur") )
+			return 0
+			;;
+		cdn)
+			local cdn_subs="update check --help"
+			local cdn_conf="/usr/local/bfd/cdn-providers.conf"
+			local providers=""
+			if [ -f "$cdn_conf" ]; then
+				providers=$(awk '/^[^#]/ && NF {print $1}' "$cdn_conf" 2>/dev/null)
+			fi
+			COMPREPLY=( $(compgen -W "$cdn_subs $providers" -- "$cur") )
+			return 0
+			;;
+		report)
+			COMPREPLY=( $(compgen -W "daily weekly monthly --help" -- "$cur") )
+			return 0
+			;;
+		status)
+			COMPREPLY=( $(compgen -W "lock cursors pool pressure --help" -- "$cur") )
+			return 0
+			;;
+		help)
+			COMPREPLY=( $(compgen -W "ban ignore test cdn report status" -- "$cur") )
+			return 0
+			;;
+		flush)
+			COMPREPLY=( $(compgen -W "temp all" -- "$cur") )
+			return 0
+			;;
+	esac
 
 	# Context-sensitive completions
 	case "$prev" in
@@ -116,11 +159,13 @@ _bfd_completions() {
 			;;
 	esac
 
-	# Default: complete flags
+	# Default: complete flags + subcommand nouns
 	if [[ "$cur" == --* ]]; then
 		COMPREPLY=( $(compgen -W "$long_flags" -- "$cur") )
 	elif [[ "$cur" == -* ]]; then
 		COMPREPLY=( $(compgen -W "$short_flags $long_flags" -- "$cur") )
+	else
+		COMPREPLY=( $(compgen -W "$nouns $short_flags" -- "$cur") )
 	fi
 }
 
