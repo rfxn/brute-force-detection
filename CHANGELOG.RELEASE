@@ -70,6 +70,7 @@
   -- Changes --
 
 [Change] Vendored lib sync: tlog_lib 2.0.5, alert_lib 1.0.6, elog_lib 1.0.5,
+[Fix] pkg_lib 1.0.7 → 1.0.8: POSIX herestring compat, ln -sfn symlink safety
         pkg_lib 1.0.8, geoip_lib 1.0.5
 [Change] pressure.conf and pressure-country.conf migrated to whitespace
       format; dual-format parsers for backward compat; importconf auto-converts

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# pkg_lib.sh — Shared Packaging & Installer Library 1.0.6
+# pkg_lib.sh — Shared Packaging & Installer Library 1.0.8
 ###
 # Copyright (C) 2002-2026 R-fx Networks <proj@rfxn.com>
 #                         Ryan MacDonald <ryan@rfxn.com>
@@ -706,7 +706,7 @@ pkg_backup_prune() {
 			command rm -rf "$entry_path"
 			pruned=$((pruned + 1))
 		fi
-	done < <(find "$parent_dir" -maxdepth 1 -mindepth 1 -printf '%f\n' 2>/dev/null)
+	done <<< "$(find "$parent_dir" -maxdepth 1 -mindepth 1 -printf '%f\n' 2>/dev/null)"
 
 	if [[ "$pruned" -gt 0 ]]; then
 		pkg_info "pruned ${pruned} old backup(s)"
@@ -773,7 +773,7 @@ pkg_restore_files() {
 			else
 				pkg_warn "pkg_restore_files: failed to restore ${relpath}"
 			fi
-		done < <(find "$backup_path" -name "$pattern" -not -type d 2>/dev/null)
+		done <<< "$(find "$backup_path" -name "$pattern" -not -type d 2>/dev/null)"
 	done
 
 	if [[ "$restored" -eq 0 ]]; then
