@@ -21,7 +21,7 @@
 _TLOG_LIB_LOADED=1
 
 # shellcheck disable=SC2034
-TLOG_LIB_VERSION="2.0.4"
+TLOG_LIB_VERSION="2.0.5"
 
 # Journal filter registry — consuming projects populate via tlog_journal_register()
 # Uses parallel indexed arrays instead of declare -A to avoid scope issues
@@ -83,6 +83,12 @@ _tlog_parse_cursor() {
 	# No cursor file → first run
 	if [[ ! -f "$cursor_file" ]]; then
 		return 0
+	fi
+
+	# Symlink guard — cursor files must be regular files, not symlinks
+	if [[ -L "$cursor_file" ]]; then
+		echo "tlog: symlink detected for cursor $cursor_file, resetting" >&2
+		return 2
 	fi
 
 	read -r raw_value < "$cursor_file" 2>/dev/null || true  # read exits 1 on EOF; not an error
@@ -457,8 +463,8 @@ tlog_read() {
 	fi
 	# No change (newsize == size): no output, no cursor write
 
-	# Stale protection — update cursor mtime on every call
-	touch "$baserun/$tlog_name"
+	# Stale protection — update cursor mtime on every call (skip symlinks)
+	[[ ! -L "$baserun/$tlog_name" ]] && touch "$baserun/$tlog_name"
 
 	# Release lock
 	if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
@@ -654,8 +660,10 @@ tlog_journal_read() {
 
 	# Read stored cursor
 	stored_cursor=""
-	if [[ -f "$cursor_file" ]]; then
+	if [[ -f "$cursor_file" ]] && [[ ! -L "$cursor_file" ]]; then
 		read -r stored_cursor < "$cursor_file" 2>/dev/null || true  # read exits 1 on EOF; not an error
+	elif [[ -L "$cursor_file" ]]; then
+		echo "tlog: symlink detected for journal cursor $cursor_file, resetting" >&2
 	fi
 
 	# Validate cursor format — allowlist covers real systemd cursor tokens
@@ -668,8 +676,10 @@ tlog_journal_read() {
 
 	# Read stored journal timestamp
 	stored_jts=""
-	if [[ -f "$jts_file" ]]; then
+	if [[ -f "$jts_file" ]] && [[ ! -L "$jts_file" ]]; then
 		read -r stored_jts < "$jts_file" 2>/dev/null || true  # read exits 1 on EOF; not an error
+	elif [[ -L "$jts_file" ]]; then
+		echo "tlog: symlink detected for journal timestamp $jts_file, resetting" >&2
 	fi
 
 	# Validate timestamp is numeric
@@ -688,7 +698,7 @@ tlog_journal_read() {
 		fi
 		_tlog_write_cursor "${tlog_name}.jts" "$baserun" "$new_jts" "raw"
 
-		touch "$baserun/$tlog_name"
+		[[ ! -L "$baserun/$tlog_name" ]] && touch "$baserun/$tlog_name"
 		# Release lock
 		if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then
 			exec {_tlog_fd}>&-
@@ -727,8 +737,8 @@ tlog_journal_read() {
 	fi
 	_tlog_write_cursor "${tlog_name}.jts" "$baserun" "$new_jts" "raw"
 
-	# Stale protection
-	touch "$baserun/$tlog_name"
+	# Stale protection (skip symlinks)
+	[[ ! -L "$baserun/$tlog_name" ]] && touch "$baserun/$tlog_name"
 
 	# Release lock
 	if [[ "${TLOG_FLOCK:-0}" == "1" ]]; then

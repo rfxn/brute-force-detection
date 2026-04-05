@@ -29,7 +29,7 @@
 [[ -n "${_PKG_LIB_LOADED:-}" ]] && return 0 2>/dev/null
 _PKG_LIB_LOADED=1
 # shellcheck disable=SC2034 # version checked by consumers
-PKG_LIB_VERSION="1.0.6"
+PKG_LIB_VERSION="1.0.7"
 
 # Configurable defaults — consuming projects override via environment
 PKG_NO_COLOR="${PKG_NO_COLOR:-0}"
@@ -960,10 +960,8 @@ pkg_symlink() {
 		return 1
 	fi
 
-	# Remove existing link or file at link_path
-	command rm -f "$link_path" 2>/dev/null  # safe: only removes file/symlink, not dir
-
-	ln -s "$target" "$link_path" || {
+	# Reduced TOCTOU: ln -sf replaces rm+ln with a single coreutils call
+	command ln -sf "$target" "$link_path" || {
 		pkg_error "pkg_symlink: failed to create symlink ${link_path} -> ${target}"
 		return 1
 	}
@@ -1016,10 +1014,11 @@ pkg_sed_replace() {
 		return 1
 	fi
 
-	# Escape both arguments for sed with | delimiter (handle &, |, /, \)
+	# Escape old_path for BRE search: .*[\^$&|/\ must be escaped
+	# Escape new_path for sed replacement: &|/\ only
 	local esc_old esc_new
-	esc_old=$(printf '%s' "$old_path" | sed 's/[&|/\]/\\&/g')
-	esc_new=$(printf '%s' "$new_path" | sed 's/[&|/\]/\\&/g')
+	esc_old=$(printf '%s' "$old_path" | sed 's/[.*[\^$&|/\\]/\\&/g')
+	esc_new=$(printf '%s' "$new_path" | sed 's/[&|/\\]/\\&/g')
 
 	local file
 	for file in "$@"; do
@@ -1858,10 +1857,16 @@ pkg_rclocal_remove() {
 			continue
 		fi
 
-		# Check if pattern exists before modifying
-		if ! grep -q "$pattern" "$path" 2>/dev/null; then
+		# Check if pattern exists before modifying (fixed-string match)
+		if ! grep -qF "$pattern" "$path" 2>/dev/null; then
 			continue
 		fi
+
+		# Preserve original permissions before atomic replace
+		local _orig_mode
+		_orig_mode=$(command stat -Lc '%a' "$path" 2>/dev/null) || \
+			_orig_mode=$(command stat -Lf '%OLp' "$path" 2>/dev/null) || \
+			_orig_mode="755"
 
 		# Atomic replace: grep -v to tmpfile, then mv
 		local tmpfile
@@ -1869,11 +1874,16 @@ pkg_rclocal_remove() {
 			pkg_warn "pkg_rclocal_remove: mktemp failed for ${path}"
 			continue
 		}
-		grep -v "$pattern" "$path" > "$tmpfile" 2>/dev/null || true  # safe: grep -v returns 1 when all lines match
+		grep -vF "$pattern" "$path" > "$tmpfile" 2>/dev/null || true  # safe: grep -v returns 1 when all lines match
 		command mv -f "$tmpfile" "$path" || {
 			pkg_warn "pkg_rclocal_remove: failed to update ${path}"
 			command rm -f "$tmpfile"
+			continue
 		}
+
+		# Restore original permissions (mktemp creates 0600; rc.local needs 755)
+		command chmod "$_orig_mode" "$path" || \
+			pkg_warn "pkg_rclocal_remove: failed to restore permissions on ${path}"
 	done
 
 	return 0
@@ -2083,9 +2093,10 @@ pkg_cron_restore_schedule() {
 		return 0
 	fi
 
-	# Escape * and / for sed (both old and new schedules)
+	# Escape current_schedule for BRE search: .*[\^$/\ must be escaped
+	# Escape old_schedule for sed replacement: &/\ only
 	local esc_current esc_old
-	esc_current=$(printf '%s' "$current_schedule" | sed 's/[*./\\]/\\&/g')
+	esc_current=$(printf '%s' "$current_schedule" | sed 's/[.*[\^$/\\]/\\&/g')
 	esc_old=$(printf '%s' "$old_schedule" | sed 's/[&/\\]/\\&/g')
 
 	# Replace first occurrence only (sed with address range)
@@ -2177,9 +2188,10 @@ pkg_man_install() {
 		old_str="${pair%%|*}"
 		new_str="${pair#*|}"
 		if [[ -n "$old_str" ]]; then
-			# Escape both strings for sed with | delimiter (handle &, |, /, \)
-			esc_old=$(printf '%s' "$old_str" | sed 's/[&|/\]/\\&/g')
-			esc_new=$(printf '%s' "$new_str" | sed 's/[&|/\]/\\&/g')
+			# Escape old_str for BRE search: .*[\^$&|/\ must be escaped
+			# Escape new_str for sed replacement: &|/\ only
+			esc_old=$(printf '%s' "$old_str" | sed 's/[.*[\^$&|/\\]/\\&/g')
+			esc_new=$(printf '%s' "$new_str" | sed 's/[&|/\\]/\\&/g')
 			sed -i "s|${esc_old}|${esc_new}|g" "$tmpfile" || {
 				pkg_warn "pkg_man_install: sed replacement failed for pair: ${pair}"
 			}
@@ -2316,7 +2328,9 @@ pkg_doc_install() {
 #   $1 — config file path
 #   $2 — variable name to read
 # Reads the first VAR=value or VAR="value" line matching var.
-# Strips surrounding quotes. Echoes value to stdout.
+# Strips surrounding quotes. Echoes raw file bytes to stdout (no shell
+# interpretation — escape sequences like \" and \$ are returned literally).
+# For the shell-interpreted value, source the file instead.
 # Returns 1 if file not found or variable not found.
 pkg_config_get() {
 	local conf_file="$1" var="$2"
@@ -2400,10 +2414,16 @@ pkg_config_set() {
 		return 1
 	fi
 
-	# Escape val for sed replacement (handle &, |, /, \)
+	# Shell-escape val for sourcing safety: \, ", $, ` must be escaped inside double quotes
+	local _shell_val="${val//\\/\\\\}"
+	_shell_val="${_shell_val//\"/\\\"}"
+	_shell_val="${_shell_val//\$/\\\$}"
+	_shell_val="${_shell_val//\`/\\\`}"
+
+	# Escape shell-safe val for sed replacement (handle &, |, /, \)
 	# Pipe must be escaped because the outer sed uses | as delimiter
 	local esc_val
-	esc_val=$(printf '%s' "$val" | sed 's/[&|/\]/\\&/g')
+	esc_val=$(printf '%s' "$_shell_val" | sed 's/[&|/\]/\\&/g')
 
 	# Check if variable already exists (uncommented)
 	if grep -q "^[[:space:]]*${var}=" "$conf_file"; then
@@ -2414,7 +2434,7 @@ pkg_config_set() {
 		}
 	else
 		# Append new variable
-		printf '%s="%s"\n' "$var" "$val" >> "$conf_file" || {
+		printf '%s="%s"\n' "$var" "$_shell_val" >> "$conf_file" || {
 			pkg_error "pkg_config_set: failed to append to ${conf_file}"
 			return 1
 		}
@@ -2601,9 +2621,18 @@ pkg_config_migrate_var() {
 			;;
 	esac
 
-	# Escape old_val for sed replacement (handle &, |, /, \)
+	# Shell-escape old_val for sourcing safety: the AWK raw reader returns literal
+	# file bytes between quotes — single-quoted originals lack escape sequences,
+	# so writing them inside double quotes without escaping creates injection vectors.
+	# Escape \, ", $, ` for double-quote context (backslash first to avoid double-escaping).
+	local _shell_val="${old_val//\\/\\\\}"
+	_shell_val="${_shell_val//\"/\\\"}"
+	_shell_val="${_shell_val//\$/\\\$}"
+	_shell_val="${_shell_val//\`/\\\`}"
+
+	# Escape shell-safe val for sed replacement (handle &, |, /, \)
 	local esc_val
-	esc_val=$(printf '%s' "$old_val" | sed 's/[&|/\]/\\&/g')
+	esc_val=$(printf '%s' "$_shell_val" | sed 's/[&|/\]/\\&/g')
 
 	# Replace old_var line with new_var and add migration comment
 	sed -i "s|^[[:space:]]*${old_var}=.*|# migrated: ${old_var} -> ${new_var}\n${new_var}=\"${esc_val}\"|" "$conf_file" || {
@@ -3322,6 +3351,12 @@ pkg_manifest_load() {
 
 	if [[ ! -f "$manifest_file" ]]; then
 		pkg_error "pkg_manifest_load: file not found: ${manifest_file}"
+		return 1
+	fi
+
+	# Defense-in-depth: reject manifest not owned by current user
+	if [[ ! -O "$manifest_file" ]]; then
+		pkg_error "pkg_manifest_load: ${manifest_file} not owned by current user"
 		return 1
 	fi
 

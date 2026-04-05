@@ -63,6 +63,8 @@
 
   -- Changes --
 
+[Change] Vendored lib sync: tlog_lib 2.0.5, alert_lib 1.0.6, elog_lib 1.0.5,
+        pkg_lib 1.0.7, geoip_lib 1.0.5
 [Change] pressure.conf and pressure-country.conf migrated to whitespace
       format; dual-format parsers for backward compat; importconf auto-converts
 [Change] --check shows "no service detected" for rules with log-based PREREQ
