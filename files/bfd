@@ -137,6 +137,14 @@ usage_short() {
 	echo "  bfd --test-alert TYPE   send test alert (email|slack|telegram|discord)"
 	echo "  bfd --scan [RULE]   full-log scan (all or specific rule)"
 	echo ""
+	echo "Subcommands:"
+	echo "  bfd ban <cmd>       ban management (add, remove, list, flush, history)"
+	echo "  bfd ignore <cmd>    ignore list management (add, remove, list, check)"
+	echo "  bfd test <cmd>      testing operations (rule, pattern, alert, scan)"
+	echo "  bfd cdn <cmd>       CDN/trusted proxy management"
+	echo "  bfd report [INT]    periodic threat report"
+	echo "  bfd status [VIEW]   status overview or sub-view (lock, cursors, pool, pressure)"
+	echo ""
 	echo "Output modifiers:    --json  --csv  --sort=  --limit=  --24h  --7d  --30d"
 	echo "                     --active  -V"
 	echo ""
@@ -180,6 +188,14 @@ usage() {
 	echo "  --max-lines=N               max lines per log during scan (default 50000)"
 	echo "  --scan-timeout=N            journal timeout per rule during scan (default 120)"
 	echo ""
+	echo "Subcommands:"
+	echo "  ban <cmd>                   ban management (see bfd ban --help)"
+	echo "  ignore <cmd>                ignore list management (see bfd ignore --help)"
+	echo "  test <cmd>                  testing operations (see bfd test --help)"
+	echo "  cdn <cmd>                   CDN management (see bfd cdn --help)"
+	echo "  report [INTERVAL]           periodic report (see bfd report --help)"
+	echo "  status [VIEW]               status sub-views (see bfd status --help)"
+	echo ""
 	echo "Reports:"
 	echo "  --report [daily|weekly|monthly]  generate and deliver periodic threat report"
 	echo ""
@@ -215,6 +231,319 @@ usage() {
 	echo "  bfd -b 10.0.0.5 sshd        manually ban IP for sshd service"
 	echo "  bfd -T sshd /var/log/auth.log  test sshd rule against a log file"
 	echo "  bfd --report weekly             generate and deliver weekly report"
+	echo "  bfd ignore add 10.0.0.0/8 \"internal\"  add CIDR to ignore list"
+	echo "  bfd ignore check 10.0.0.5   check if IP is in ignore list"
+	echo "  bfd status pressure 203.0.113.5  show pressure score for IP"
+	echo "  bfd ban history --7d         ban history for last 7 days"
+}
+
+# _run_scan [RULE] [-d] — extracted scan operation for --scan and test scan
+_run_scan() {
+	vhead; pre
+	# apply defaults: CLI --max-lines= / --scan-timeout= override config > hardcoded
+	if [ -n "$_CLI_SCAN_MAX_LINES" ]; then
+		SCAN_MAX_LINES="$_CLI_SCAN_MAX_LINES"
+	else
+		SCAN_MAX_LINES="${SCAN_MAX_LINES:-50000}"
+	fi
+	if [ -n "$_CLI_SCAN_TIMEOUT" ]; then
+		SCAN_TIMEOUT="$_CLI_SCAN_TIMEOUT"
+	else
+		SCAN_TIMEOUT="${SCAN_TIMEOUT:-120}"
+	fi
+	# validate limits
+	local _int_p='^[0-9]+$'
+	if ! [[ "$SCAN_MAX_LINES" =~ $_int_p ]]; then
+		echo "error: --max-lines must be a non-negative integer (got '$SCAN_MAX_LINES')." >&2
+		exit "$EXIT_CONFIG_ERROR"
+	fi
+	if ! [[ "$SCAN_TIMEOUT" =~ $_int_p ]] || [ "$SCAN_TIMEOUT" -eq 0 ]; then
+		echo "error: --scan-timeout must be a positive integer (got '$SCAN_TIMEOUT')." >&2
+		exit "$EXIT_CONFIG_ERROR"
+	fi
+	# parse sub-args: optional RULE and -d/--dryrun (order-independent)
+	_SCAN_RULE=""
+	local _s2="${1:-}" _s3="${2:-}"
+	case "$_s2" in
+		-d|--dryrun) DRY_RUN=1 ;;
+		"") ;;
+		-*) echo "error: unknown scan option '$_s2'" >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR" ;;
+		*)  _SCAN_RULE="$_s2" ;;
+	esac
+	case "$_s3" in
+		-d|--dryrun) DRY_RUN=1 ;;
+		"") ;;
+		-*) echo "error: unknown scan option '$_s3'" >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR" ;;
+		*)  [ -z "$_SCAN_RULE" ] && _SCAN_RULE="$_s3" ;;
+	esac
+	if [ -n "$_SCAN_RULE" ] && [ ! -f "$RULES_PATH/$_SCAN_RULE" ]; then
+		echo "error: rule '$_SCAN_RULE' not found." >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
+	fi
+	get_state
+	_SCAN_MODE=1
+	_SCAN_LOG_PAIRS=""
+	eout "scan: processing ${_SCAN_RULE:-all rules} (max_lines=$SCAN_MAX_LINES, timeout=${SCAN_TIMEOUT}s, dry_run=$DRY_RUN)" le
+	# watchdog: kill the entire process group if scan exceeds SCAN_TIMEOUT seconds.
+	# kill -TERM -- -$$ targets the process group, ensuring child processes inside
+	# $() command substitutions are terminated so the trap handler fires immediately.
+	( sleep "$SCAN_TIMEOUT"; kill -TERM -- -$$ ) >/dev/null 2>&1 &
+	_scan_watchdog_pid=$!
+	trap 'kill "$_scan_watchdog_pid" 2>/dev/null; wait 2>/dev/null; eout "scan: timed out after ${SCAN_TIMEOUT}s -- use --scan-timeout=N to extend" le; exit 1' TERM
+	process_unbans "$INSTALL_PATH" "$UTIME"
+	check
+	kill "$_scan_watchdog_pid" 2>/dev/null
+	trap cleanup TERM
+	# force-flush digest spool after scan (one-shot operation)
+	if [ "${EMAIL_ALERTS:-0}" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
+		_bfd_digest_flush
+	fi
+	_SCAN_MODE=""
+	if [ "$DRY_RUN" != "1" ] && [ -n "$_SCAN_LOG_PAIRS" ]; then
+		local _deduped_pairs
+		_deduped_pairs=$(printf '%s\n' "$_SCAN_LOG_PAIRS" | command sort -u)
+		tlog_advance_cursors "${TLOG_BASERUN:-$INSTALL_PATH/tmp}" "$_deduped_pairs"
+		eout "scan: cursors advanced to current position" le
+	elif [ "$DRY_RUN" = "1" ]; then
+		vout "scan: dry-run — cursors not advanced"
+	fi
+}
+
+# --- Subcommand help functions ---
+
+_ban_help() {
+	echo "usage: bfd ban <command> [args]"
+	echo ""
+	echo "Commands:"
+	echo "  add IP [SERVICE]    ban an IP (= bfd -b IP [SERVICE])"
+	echo "  remove IP           unban an IP (= bfd -u IP)"
+	echo "  list                list active bans (= bfd -l)"
+	echo "  flush temp|all      flush bans (= bfd --flush-temp / --flush-all)"
+	echo "  history [IP]        ban history across rotated archives"
+	echo ""
+	echo "Supports: --json --csv --24h --7d --30d --limit=N"
+}
+
+_ignore_help() {
+	echo "usage: bfd ignore <command> [args]"
+	echo ""
+	echo "Commands:"
+	echo "  add IP|CIDR [COMMENT]   add to ignore list"
+	echo "  remove IP|CIDR          remove from ignore list"
+	echo "  list                    show all ignore entries"
+	echo "  check IP                check if IP is ignored (exact or CIDR)"
+}
+
+_test_help() {
+	echo "usage: bfd test <command> [args]"
+	echo ""
+	echo "Commands:"
+	echo "  rule RULE [FILE|-]      test rule patterns (= bfd -T RULE [FILE])"
+	echo "  pattern PAT [FILE|-]    test raw <HOST> pattern (= bfd --test-pattern)"
+	echo "  alert TYPE              send test alert (= bfd --test-alert TYPE)"
+	echo "  scan [RULE] [-d]        full-log scan (= bfd --scan [RULE] [-d])"
+	echo ""
+	echo "Supports: --json --csv"
+}
+
+_cdn_help() {
+	echo "usage: bfd cdn [command] [args]"
+	echo ""
+	echo "Commands:"
+	echo "  (no command)            list CDN providers and status (= bfd --cdn)"
+	echo "  PROVIDER                show CIDRs for a provider (= bfd --cdn PROVIDER)"
+	echo "  update                  fetch and compile all provider ranges"
+	echo "  check IP                check if IP matches a CDN range"
+	echo ""
+	echo "Supports: --json"
+}
+
+_report_help() {
+	echo "usage: bfd report [INTERVAL]"
+	echo ""
+	echo "Commands:"
+	echo "  (no command)            generate report (= bfd --report)"
+	echo "  daily|weekly|monthly    generate specific interval report"
+	echo ""
+	echo "Supports: --7d --30d (sets default interval)"
+}
+
+_status_help() {
+	echo "usage: bfd status [command] [args]"
+	echo ""
+	echo "Commands:"
+	echo "  (no command)            operational status overview (= bfd -S)"
+	echo "  SERVICE                 service-specific status (= bfd -S SERVICE)"
+	echo "  lock                    lock state (PID, age, staleness)"
+	echo "  cursors                 tlog cursor positions and ages"
+	echo "  pool                    attack pool statistics"
+	echo "  pressure [IP]           current pressure scores"
+}
+
+# --- Subcommand dispatch functions ---
+
+_dispatch_ban() {
+	case "${1:-}" in
+		--help|-h|"")	_ban_help; return 0 ;;
+		add)
+			vhead; pre
+			if [ -z "${2:-}" ]; then
+				echo "error: ban add requires an IP address." >&2; echo >&2; _ban_help >&2; exit "$EXIT_CONFIG_ERROR"
+			fi
+			if [ -n "${3:-}" ] && [[ "${3}" == -* ]]; then
+				echo "error: service name cannot start with '-': '${3}'" >&2
+				echo >&2; _ban_help >&2; exit "$EXIT_CONFIG_ERROR"
+			fi
+			manual_ban "$INSTALL_PATH" "$2" "$UTIME" "${3:-manual}" "all" || exit "$?"
+			;;
+		remove)
+			vhead; pre
+			if [ -z "${2:-}" ]; then
+				echo "error: ban remove requires an IP address." >&2; echo >&2; _ban_help >&2; exit "$EXIT_CONFIG_ERROR"
+			fi
+			manual_unban "$INSTALL_PATH" "$2" "$UTIME" || exit "$?"
+			;;
+		list)
+			[ "$OUTPUT_FORMAT" = "table" ] && vhead; pre
+			case "$OUTPUT_FORMAT" in
+				json) list_bans_json "$INSTALL_PATH" ;;
+				csv)  list_bans_csv "$INSTALL_PATH" ;;
+				*)    list_bans "$INSTALL_PATH" ;;
+			esac
+			;;
+		flush)
+			vhead; pre
+			case "${2:-}" in
+				temp) flush_bans "$INSTALL_PATH" "temp" "$UTIME" || exit "$?" ;;
+				all)  flush_bans "$INSTALL_PATH" "all" "$UTIME" || exit "$?" ;;
+				*)    echo "error: flush requires 'temp' or 'all'." >&2; echo >&2; _ban_help >&2; exit "$EXIT_CONFIG_ERROR" ;;
+			esac
+			;;
+		history)
+			[ "$OUTPUT_FORMAT" = "table" ] && vhead; pre
+			case "$OUTPUT_FORMAT" in
+				json) ban_history_json "$INSTALL_PATH" "${2:-}" ;;
+				csv)  ban_history_csv "$INSTALL_PATH" "${2:-}" ;;
+				*)    ban_history "$INSTALL_PATH" "${2:-}" ;;
+			esac
+			;;
+		*)	echo "error: unknown ban command '${1}'." >&2; echo >&2; _ban_help >&2; exit "$EXIT_CONFIG_ERROR" ;;
+	esac
+}
+
+_dispatch_ignore() {
+	case "${1:-}" in
+		--help|-h|"")	_ignore_help; return 0 ;;
+		add)
+			if [ -z "${2:-}" ]; then
+				echo "error: ignore add requires an IP or CIDR." >&2; echo >&2; _ignore_help >&2; exit "$EXIT_CONFIG_ERROR"
+			fi
+			ignore_add "$INSTALL_PATH" "$2" "${3:-}" || exit "$?"
+			;;
+		remove)
+			if [ -z "${2:-}" ]; then
+				echo "error: ignore remove requires an IP or CIDR." >&2; echo >&2; _ignore_help >&2; exit "$EXIT_CONFIG_ERROR"
+			fi
+			ignore_remove "$INSTALL_PATH" "$2" || exit "$?"
+			;;
+		list)	ignore_list "$INSTALL_PATH" ;;
+		check)
+			if [ -z "${2:-}" ]; then
+				echo "error: ignore check requires an IP address." >&2; echo >&2; _ignore_help >&2; exit "$EXIT_CONFIG_ERROR"
+			fi
+			ignore_check "$INSTALL_PATH" "$2" || exit "$?"
+			;;
+		*)	echo "error: unknown ignore command '${1}'." >&2; echo >&2; _ignore_help >&2; exit "$EXIT_CONFIG_ERROR" ;;
+	esac
+}
+
+_dispatch_test() {
+	case "${1:-}" in
+		--help|-h|"")	_test_help; return 0 ;;
+		rule)
+			vhead; pre
+			if [ -z "${2:-}" ]; then
+				echo "error: test rule requires a rule name." >&2; echo >&2; _test_help >&2; exit "$EXIT_CONFIG_ERROR"
+			fi
+			test_rule "$INSTALL_PATH" "$2" "${3:-}" || exit "$?"
+			;;
+		pattern)
+			vhead
+			if [ -z "${2:-}" ]; then
+				echo "error: test pattern requires a pattern." >&2; echo >&2; _test_help >&2; exit "$EXIT_CONFIG_ERROR"
+			fi
+			test_pattern "$2" "${3:-}" || exit "$?"
+			;;
+		alert)
+			vhead; pre
+			test_alert "$INSTALL_PATH" "${2:-}" || exit "$?"
+			;;
+		scan)	_run_scan "${@:2}" ;;
+		*)	echo "error: unknown test command '${1}'." >&2; echo >&2; _test_help >&2; exit "$EXIT_CONFIG_ERROR" ;;
+	esac
+}
+
+_dispatch_cdn() {
+	case "${1:-}" in
+		--help|-h)	_cdn_help; return 0 ;;
+		update) pre; cdn_update "$INSTALL_PATH" ;;
+		check)
+			pre
+			if [ -z "${2:-}" ]; then
+				echo "error: cdn check requires an IP address." >&2; echo >&2; _cdn_help >&2; exit "$EXIT_CONFIG_ERROR"
+			fi
+			if ! validate_ip_any "$2" >/dev/null 2>&1; then
+				echo "error: invalid IP address '${2}'." >&2; exit "$EXIT_CONFIG_ERROR"
+			fi
+			case "$OUTPUT_FORMAT" in
+				json) cdn_check_ip_json "$INSTALL_PATH" "$2" ;;
+				*)    cdn_check_ip "$INSTALL_PATH" "$2" ;;
+			esac
+			;;
+		"")
+			pre
+			case "$OUTPUT_FORMAT" in
+				json) cdn_list_json "$INSTALL_PATH" ;;
+				*)    [ "$OUTPUT_FORMAT" = "table" ] && vhead; cdn_list "$INSTALL_PATH" ;;
+			esac
+			;;
+		*)
+			pre
+			case "$OUTPUT_FORMAT" in
+				json) cdn_detail_json "$INSTALL_PATH" "$1" ;;
+				*)    [ "$OUTPUT_FORMAT" = "table" ] && vhead; cdn_detail "$INSTALL_PATH" "$1" ;;
+			esac
+			;;
+	esac
+}
+
+_dispatch_report() {
+	case "${1:-}" in
+		--help|-h)	_report_help; return 0 ;;
+		*)
+			vhead; pre
+			local _rpt_interval="${1:-}"
+			if [ -z "$_rpt_interval" ]; then
+				case "$_EVENTS_WINDOW" in
+					7d)  _rpt_interval="weekly" ;;
+					30d) _rpt_interval="monthly" ;;
+					*)   _rpt_interval="daily" ;;
+				esac
+			fi
+			report "$_rpt_interval" || exit "$?"
+			;;
+	esac
+}
+
+_dispatch_status() {
+	case "${1:-}" in
+		--help|-h)	_status_help; return 0 ;;
+		"")		vhead; pre; show_status "$INSTALL_PATH" || exit "$?" ;;
+		lock)		status_lock "$INSTALL_PATH" ;;
+		cursors)	pre; status_cursors "$INSTALL_PATH" ;;
+		pool)		pre; status_pool "$INSTALL_PATH" ;;
+		pressure)	pre; status_pressure "$INSTALL_PATH" "${2:-}" ;;
+		*)		vhead; pre; show_service_status "$INSTALL_PATH" "$1" || exit "$?" ;;
+	esac
 }
 
 # Pre-process global modifier flags (--json, --csv, --verbose, --max-lines=, --scan-timeout=,
@@ -369,122 +698,18 @@ case "${1:-}" in
 	vhead; pre
 	test_alert "$INSTALL_PATH" "${2:-}" || exit "$?"
 	;;
---scan)
-	vhead; pre
-	# apply defaults: CLI --max-lines= / --scan-timeout= override config > hardcoded
-	if [ -n "$_CLI_SCAN_MAX_LINES" ]; then
-		SCAN_MAX_LINES="$_CLI_SCAN_MAX_LINES"
-	else
-		SCAN_MAX_LINES="${SCAN_MAX_LINES:-50000}"
-	fi
-	if [ -n "$_CLI_SCAN_TIMEOUT" ]; then
-		SCAN_TIMEOUT="$_CLI_SCAN_TIMEOUT"
-	else
-		SCAN_TIMEOUT="${SCAN_TIMEOUT:-120}"
-	fi
-	# validate limits
-	_int_p='^[0-9]+$'
-	if ! [[ "$SCAN_MAX_LINES" =~ $_int_p ]]; then
-		echo "error: --max-lines must be a non-negative integer (got '$SCAN_MAX_LINES')." >&2
-		exit "$EXIT_CONFIG_ERROR"
-	fi
-	if ! [[ "$SCAN_TIMEOUT" =~ $_int_p ]] || [ "$SCAN_TIMEOUT" -eq 0 ]; then
-		echo "error: --scan-timeout must be a positive integer (got '$SCAN_TIMEOUT')." >&2
-		exit "$EXIT_CONFIG_ERROR"
-	fi
-	# parse sub-args: optional RULE and -d/--dryrun (order-independent)
-	_SCAN_RULE=""
-	_s2="${2:-}"; _s3="${3:-}"
-	case "$_s2" in
-		-d|--dryrun) DRY_RUN=1 ;;
-		"") ;;
-		-*) echo "error: unknown scan option '$_s2'" >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR" ;;
-		*)  _SCAN_RULE="$_s2" ;;
-	esac
-	case "$_s3" in
-		-d|--dryrun) DRY_RUN=1 ;;
-		"") ;;
-		-*) echo "error: unknown scan option '$_s3'" >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR" ;;
-		*)  [ -z "$_SCAN_RULE" ] && _SCAN_RULE="$_s3" ;;
-	esac
-	if [ -n "$_SCAN_RULE" ] && [ ! -f "$RULES_PATH/$_SCAN_RULE" ]; then
-		echo "error: rule '$_SCAN_RULE' not found." >&2; echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
-	fi
-	get_state
-	_SCAN_MODE=1
-	_SCAN_LOG_PAIRS=""
-	eout "scan: processing ${_SCAN_RULE:-all rules} (max_lines=$SCAN_MAX_LINES, timeout=${SCAN_TIMEOUT}s, dry_run=$DRY_RUN)" le
-	# watchdog: kill the entire process group if scan exceeds SCAN_TIMEOUT seconds.
-	# kill -TERM -- -$$ targets the process group, ensuring child processes inside
-	# $() command substitutions are terminated so the trap handler fires immediately.
-	( sleep "$SCAN_TIMEOUT"; kill -TERM -- -$$ ) >/dev/null 2>&1 &
-	_scan_watchdog_pid=$!
-	trap 'kill "$_scan_watchdog_pid" 2>/dev/null; wait 2>/dev/null; eout "scan: timed out after ${SCAN_TIMEOUT}s -- use --scan-timeout=N to extend" le; exit 1' TERM
-	process_unbans "$INSTALL_PATH" "$UTIME"
-	check
-	kill "$_scan_watchdog_pid" 2>/dev/null
-	trap cleanup TERM
-	# force-flush digest spool after scan (one-shot operation)
-	if [ "${EMAIL_ALERTS:-0}" = "1" ] && [ "${EMAIL_DIGEST:-cycle}" = "timed" ]; then
-		_bfd_digest_flush
-	fi
-	_SCAN_MODE=""
-	if [ "$DRY_RUN" != "1" ] && [ -n "$_SCAN_LOG_PAIRS" ]; then
-		_deduped_pairs=$(printf '%s\n' "$_SCAN_LOG_PAIRS" | sort -u)
-		tlog_advance_cursors "${TLOG_BASERUN:-$INSTALL_PATH/tmp}" "$_deduped_pairs"
-		unset _deduped_pairs
-		eout "scan: cursors advanced to current position" le
-	elif [ "$DRY_RUN" = "1" ]; then
-		vout "scan: dry-run — cursors not advanced"
-	fi
-	;;
---report)
-	vhead; pre
-	# Map events window modifier to report interval when no positional arg given
-	_rpt_interval="${2:-}"
-	if [ -z "$_rpt_interval" ]; then
-		case "$_EVENTS_WINDOW" in
-			7d)  _rpt_interval="weekly" ;;
-			30d) _rpt_interval="monthly" ;;
-			*)   _rpt_interval="daily" ;;
-		esac
-	fi
-	report "$_rpt_interval" || exit "$?"
-	;;
---cdn)
-	pre
-	case "${2:-}" in
-		update) cdn_update "$INSTALL_PATH" ;;
-		check)
-			if [ -z "${3:-}" ]; then
-				echo "error: --cdn check requires an IP address." >&2
-				echo >&2; usage >&2; exit "$EXIT_CONFIG_ERROR"
-			fi
-			if ! validate_ip_any "$3" >/dev/null 2>&1; then
-				echo "error: invalid IP address '${3}'." >&2
-				exit "$EXIT_CONFIG_ERROR"
-			fi
-			case "$OUTPUT_FORMAT" in
-				json) cdn_check_ip_json "$INSTALL_PATH" "$3" ;;
-				*)    cdn_check_ip "$INSTALL_PATH" "$3" ;;
-			esac
-			;;
-		"")
-			case "$OUTPUT_FORMAT" in
-				json) cdn_list_json "$INSTALL_PATH" ;;
-				*)    [ "$OUTPUT_FORMAT" = "table" ] && vhead; cdn_list "$INSTALL_PATH" ;;
-			esac
-			;;
-		*)
-			case "$OUTPUT_FORMAT" in
-				json) cdn_detail_json "$INSTALL_PATH" "$2" ;;
-				*)    [ "$OUTPUT_FORMAT" = "table" ] && vhead; cdn_detail "$INSTALL_PATH" "$2" ;;
-			esac
-			;;
-	esac
-	;;
+--scan)		_run_scan "${@:2}" ;;
+--report)	_dispatch_report "${@:2}" ;;
+--cdn)		_dispatch_cdn "${@:2}" ;;
 --flush-temp)   vhead; pre; flush_bans "$INSTALL_PATH" "temp" "$UTIME" || exit "$?" ;;
 --flush-all)    vhead; pre; flush_bans "$INSTALL_PATH" "all" "$UTIME" || exit "$?" ;;
+# --- Tier 2: Subcommand dispatch ---
+ban)		_dispatch_ban "${@:2}" ;;
+ignore)		_dispatch_ignore "${@:2}" ;;
+test)		_dispatch_test "${@:2}" ;;
+cdn)		_dispatch_cdn "${@:2}" ;;
+report)		_dispatch_report "${@:2}" ;;
+status)		_dispatch_status "${@:2}" ;;
 -v|--version)   vhead ;;
 -h|--help)      vhead; usage ;;
 "")             vhead; usage_short ;;

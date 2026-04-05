@@ -541,3 +541,191 @@ flush_bans() {
 	fi
 	echo "$count bans removed."
 }
+
+# --- Ban history query functions ---
+# Query ban history across current and rotated bans.history archives.
+# Globals: _EVENTS_CUTOFF (epoch, 0=no cutoff), _EVENTS_LIMIT (int, 0=unlimited)
+
+# _ban_history_data install_path [ip] — gather, filter, sort history lines
+# Outputs pipe-delimited: ts|expiry|ip|service|action (sorted desc by timestamp)
+# Returns 1 if no matching events.
+_ban_history_data() {
+	local install_path="$1" filter_ip="${2:-}"
+	local cutoff="${_EVENTS_CUTOFF:-0}"
+	local limit="${_EVENTS_LIMIT:-0}"
+
+	# Collect history files (current + rotated)
+	local files=()
+	local hf="$install_path/tmp/bans.history"
+	if [ -f "$hf" ] && [ -s "$hf" ]; then
+		files+=("$hf")
+	fi
+	local rotated
+	for rotated in "$install_path/tmp/bans.history."*; do
+		[ -f "$rotated" ] && [ -s "$rotated" ] && files+=("$rotated")
+	done
+
+	if [ "${#files[@]}" -eq 0 ]; then
+		return 1
+	fi
+
+	# Filter and sort via awk + sort
+	local sorted
+	sorted=$(awk -v ip="$filter_ip" -v cutoff="$cutoff" '
+		{
+			if (NF < 5) next
+			if (ip != "" && $3 != ip) next
+			if (cutoff+0 > 0 && $1+0 < cutoff+0) next
+			print $1 "|" $2 "|" $3 "|" $4 "|" $5
+		}
+	' "${files[@]}" | command sort -t'|' -rnk1)
+
+	if [ -z "$sorted" ]; then
+		return 1
+	fi
+
+	local total
+	total=$(printf '%s\n' "$sorted" | command wc -l)
+
+	# Apply limit
+	local limited="$sorted"
+	if [ "$limit" -gt 0 ] 2>/dev/null && [ "$total" -gt "$limit" ]; then
+		limited=$(printf '%s\n' "$sorted" | command head -n "$limit")
+	fi
+
+	# Output: data lines followed by a metadata trailer
+	printf '%s\n' "$limited"
+	echo "META|$total|$limit"
+}
+
+# ban_history install_path [ip] — display formatted ban history table
+ban_history() {
+	local install_path="$1" filter_ip="${2:-}"
+	local raw
+	raw=$(_ban_history_data "$install_path" "$filter_ip") || {
+		echo "no ban history"
+		return 0
+	}
+
+	# Extract metadata trailer
+	local meta_line
+	meta_line=$(printf '%s\n' "$raw" | command tail -1)
+	local total showing
+	total=$(echo "$meta_line" | command cut -d'|' -f2)
+	local limit_val
+	limit_val=$(echo "$meta_line" | command cut -d'|' -f3)
+
+	# Remove metadata trailer for data processing
+	local data
+	data=$(printf '%s\n' "$raw" | command sed '$d')
+
+	echo "[+] Ban history" && echo
+
+	local atmp
+	atmp=$(mktemp "$install_path/tmp/.bhist.XXXXXX")
+	echo "TIME|IP|SERVICE|ACTION|DURATION" > "$atmp"
+
+	local now
+	now=$(date +%s)
+	local ts expiry ip service action
+	local _ts_numeric='^[0-9]+$'
+	local row_count=0
+	while IFS='|' read -r ts expiry ip service action; do
+		[[ "$ts" =~ $_ts_numeric ]] || continue
+		[ -n "$ip" ] || continue
+		local age_secs dur_str
+		age_secs=$((now - ts))
+		local age_str
+		age_str="$(format_duration "$age_secs") ago"
+		if [ "$expiry" = "0" ]; then
+			dur_str="permanent"
+		else
+			local dur_secs=$((expiry - ts))
+			dur_str=$(format_duration "$dur_secs")
+		fi
+		echo "$age_str|$ip|$service|$action|$dur_str"
+		row_count=$((row_count + 1))
+	done <<< "$data" >> "$atmp"
+
+	format_table < "$atmp"
+	command rm -f "$atmp"
+
+	# Footer: show truncation notice if limited
+	showing="$row_count"
+	if [ "$limit_val" -gt 0 ] 2>/dev/null && [ "$total" -gt "$limit_val" ]; then
+		echo "$total events ($showing showing)"
+	fi
+}
+
+# ban_history_json install_path [ip] — JSON formatted ban history
+ban_history_json() {
+	local install_path="$1" filter_ip="${2:-}"
+	local raw
+	raw=$(_ban_history_data "$install_path" "$filter_ip") || {
+		echo '{"events":[],"total":0}'
+		return 0
+	}
+
+	# Extract metadata trailer
+	local meta_line
+	meta_line=$(printf '%s\n' "$raw" | command tail -1)
+	local total
+	total=$(echo "$meta_line" | command cut -d'|' -f2)
+
+	# Remove metadata trailer for data processing
+	local data
+	data=$(printf '%s\n' "$raw" | command sed '$d')
+
+	printf '{"events":['
+	local first=1
+	local ts expiry ip service action
+	local _ts_numeric='^[0-9]+$'
+	while IFS='|' read -r ts expiry ip service action; do
+		[[ "$ts" =~ $_ts_numeric ]] || continue
+		[ -n "$ip" ] || continue
+		local ts_fmt expiry_fmt
+		ts_fmt=$(_fmt_ts_iso "$ts")
+		if [ "$expiry" = "0" ]; then
+			expiry_fmt="permanent"
+		else
+			expiry_fmt=$(_fmt_ts_iso "$expiry")
+		fi
+		if [ "$first" -eq 1 ]; then
+			first=0
+		else
+			printf ','
+		fi
+		printf '{"timestamp":"%s","expiry":"%s","ip":"%s","service":"%s","action":"%s"}' \
+			"$ts_fmt" "$expiry_fmt" \
+			"$(_json_escape "$ip")" "$(_json_escape "$service")" \
+			"$(_json_escape "$action")"
+	done <<< "$data"
+	printf '],"total":%s}\n' "$total"
+}
+
+# ban_history_csv install_path [ip] — CSV formatted ban history
+ban_history_csv() {
+	local install_path="$1" filter_ip="${2:-}"
+	echo "timestamp,expiry,ip,service,action"
+	local raw
+	raw=$(_ban_history_data "$install_path" "$filter_ip") || return 0
+
+	# Remove metadata trailer for data processing
+	local data
+	data=$(printf '%s\n' "$raw" | command sed '$d')
+
+	local ts expiry ip service action
+	local _ts_numeric='^[0-9]+$'
+	while IFS='|' read -r ts expiry ip service action; do
+		[[ "$ts" =~ $_ts_numeric ]] || continue
+		[ -n "$ip" ] || continue
+		local ts_fmt expiry_fmt
+		ts_fmt=$(_fmt_ts_iso "$ts")
+		if [ "$expiry" = "0" ]; then
+			expiry_fmt="permanent"
+		else
+			expiry_fmt=$(_fmt_ts_iso "$expiry")
+		fi
+		echo "$ts_fmt,$expiry_fmt,$ip,$service,$action"
+	done <<< "$data"
+}

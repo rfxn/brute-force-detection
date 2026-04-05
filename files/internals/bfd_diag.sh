@@ -1287,3 +1287,306 @@ test_alert_messaging() {
 		return 1
 	fi
 }
+
+# --- Status sub-view functions ---
+# Each function provides a focused operational diagnostic view.
+# Called by _dispatch_status() in the CLI subcommand layer.
+
+# status_lock install_path — display lock state and PID info
+status_lock() {
+	local install_path="$1"
+	local lock_file="${LOCK_FILE:-$install_path/lock.utime}"
+	local lock_dir="$lock_file.lk"
+	local pid_file="$lock_dir/pid"
+	local now
+	now=$(date +%s)
+
+	echo "Lock Status:"
+	echo "  Lock file: $lock_file"
+
+	if [ -d "$lock_dir" ]; then
+		local pid=""
+		[ -f "$pid_file" ] && pid=$(command cat "$pid_file" 2>/dev/null)  # pid file may be empty during race
+		if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then  # check if process alive
+			if [ -f "$lock_file" ]; then
+				local lock_ts
+				lock_ts=$(command cat "$lock_file" 2>/dev/null)  # timestamp file may be empty
+				if [ -n "$lock_ts" ]; then
+					local lock_age=$(( now - lock_ts ))
+					echo "  State:     held by PID $pid (age: $(format_duration "$lock_age"))"
+					echo "  Staleness: ${lock_age}s / ${LOCK_FILE_TIMEOUT:-300}s threshold"
+				else
+					echo "  State:     held by PID $pid"
+				fi
+			else
+				echo "  State:     held by PID $pid"
+			fi
+		else
+			echo "  State:     stale (PID ${pid:-unknown} not running)"
+			echo "  Action:    lock directory exists but holder is dead — will be cleaned on next run"
+		fi
+	elif [ -f "$lock_file" ]; then
+		local lock_ts
+		lock_ts=$(command cat "$lock_file" 2>/dev/null)  # timestamp file may be empty
+		if [ -n "$lock_ts" ]; then
+			local idle_age=$(( now - lock_ts ))
+			echo "  State:     idle (last completed: $(format_duration "$idle_age") ago)"
+		else
+			echo "  State:     idle (timestamp file empty)"
+		fi
+	else
+		echo "  State:     idle (no activity recorded)"
+	fi
+}
+
+# status_cursors install_path — display tlog cursor positions and ages
+status_cursors() {
+	local install_path="$1"
+	local cursor_dir="$install_path/tmp"
+	local now count=0
+	now=$(date +%s)
+
+	echo "Cursor Status:"
+
+	local files=()
+	local f
+	for f in "$cursor_dir"/*.cursor "$cursor_dir"/*.jts; do
+		[ -f "$f" ] && files+=("$f")
+	done
+
+	if [ ${#files[@]} -eq 0 ]; then
+		echo "  no cursors (first run pending)"
+		return 0
+	fi
+
+	printf "  %-40s  %12s  %s\n" "CURSOR FILE" "OFFSET" "LAST UPDATE"
+	printf "  %-40s  %12s  %s\n" \
+		"$(printf '%0.s-' {1..40})" "$(printf '%0.s-' {1..12})" "$(printf '%0.s-' {1..20})"
+
+	for f in "${files[@]}"; do
+		local offset mtime age basename_f
+		offset=$(command cat "$f" 2>/dev/null)  # cursor may be empty on first create
+		offset="${offset:-0}"
+		mtime=$(stat -c '%Y' "$f" 2>/dev/null)  # stat for mtime
+		basename_f="${f##*/}"
+		if [ -n "$mtime" ]; then
+			age=$(( now - mtime ))
+			printf "  %-40s  %12s  %s\n" "$basename_f" "$offset" "$(format_duration "$age") ago"
+		else
+			printf "  %-40s  %12s  %s\n" "$basename_f" "$offset" "unknown"
+		fi
+		count=$(( count + 1 ))
+	done
+
+	echo ""
+	echo "  $count cursor file(s)"
+}
+
+# status_pool install_path — attack pool statistics
+status_pool() {
+	local install_path="$1"
+	local pool_file="$install_path/stats/attack.pool"
+
+	echo "Attack Pool Status:"
+
+	if [ ! -f "$pool_file" ] || [ ! -s "$pool_file" ]; then
+		echo "  attack pool: empty"
+		return 0
+	fi
+
+	local awk_out
+	awk_out=$(awk '
+	BEGIN { oldest=9999999999; newest=0; total=0 }
+	/^[[:space:]]*$/ || /^#/ { next }
+	{
+		total++
+		ts = $1+0
+		if (ts < oldest) oldest = ts
+		if (ts > newest) newest = ts
+		ip = $2
+		ip_count[ip]++
+		unique[ip] = 1
+	}
+	END {
+		if (total == 0) { print "EMPTY"; exit }
+		ucount = 0
+		for (k in unique) ucount++
+		print "TOTAL:" total
+		print "UNIQUE:" ucount
+		print "OLDEST:" oldest
+		print "NEWEST:" newest
+		# Selection sort for top 5 (mawk-safe: no asort)
+		for (i = 1; i <= 5 && i <= ucount; i++) {
+			max_ip = ""; max_c = 0
+			for (k in ip_count) {
+				if (ip_count[k] > max_c) { max_c = ip_count[k]; max_ip = k }
+			}
+			if (max_ip != "") {
+				print "TOP:" max_ip ":" max_c
+				delete ip_count[max_ip]
+			}
+		}
+	}
+	' "$pool_file")
+
+	if [ "$awk_out" = "EMPTY" ]; then
+		echo "  attack pool: empty"
+		return 0
+	fi
+
+	local line
+	while IFS= read -r line; do
+		case "$line" in
+			TOTAL:*) echo "  Total events: ${line#TOTAL:}" ;;
+			UNIQUE:*) echo "  Unique IPs:   ${line#UNIQUE:}" ;;
+			OLDEST:*)
+				local ts="${line#OLDEST:}"
+				echo "  Oldest event: $(date -d "@$ts" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$ts")"  # date -d may fail on non-GNU
+				;;
+			NEWEST:*)
+				local ts="${line#NEWEST:}"
+				echo "  Newest event: $(date -d "@$ts" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$ts")"  # date -d may fail on non-GNU
+				;;
+			TOP:*)
+				local rest="${line#TOP:}"
+				local ip="${rest%:*}"
+				local cnt="${rest##*:}"
+				printf "    %-20s  %s events\n" "$ip" "$cnt"
+				;;
+		esac
+	done <<< "$awk_out"
+}
+
+# status_pressure install_path [ip] — current pressure scores
+status_pressure() {
+	local install_path="$1"
+	local query_ip="${2:-}"
+	local pressure_file="$install_path/tmp/pressure.dat"
+	local now
+	now=$(date +%s)
+
+	if [ -n "$query_ip" ]; then
+		# --- Single IP mode ---
+		echo "Pressure Status: $query_ip"
+
+		if [ ! -f "$pressure_file" ] || ! command grep -q "$query_ip" "$pressure_file" 2>/dev/null; then  # grep fails on missing file
+			echo "  Score:      0.0"
+			echo "  Status:     no pressure events recorded"
+			return 0
+		fi
+
+		# Compute global score
+		local half_life="${PRESSURE_HALF_LIFE:-300}"
+		local score
+		score=$(pressure_compute "$install_path" "$query_ip" "$half_life" "$now")
+		local formatted
+		formatted=$(pressure_format "$score")
+		local trip="${PRESSURE_TRIP:-20}"
+		local trip_scaled=$((trip * 1000))
+		echo "  Score:      $formatted"
+		if [ "$score" -ge "$trip_scaled" ]; then
+			echo "  Status:     ABOVE threshold ($trip)"
+		else
+			echo "  Status:     below threshold ($trip)"
+		fi
+
+		# Per-service breakdown
+		echo ""
+		echo "  Per-service breakdown:"
+		local services
+		services=$(awk -v ip="$query_ip" '$2 == ip { print $3 }' "$pressure_file" | command sort -u)
+		if [ -z "$services" ]; then
+			echo "    (no services)"
+		else
+			local svc
+			while IFS= read -r svc; do
+				[ -z "$svc" ] && continue
+				local svc_score
+				svc_score=$(pressure_compute "$install_path" "$query_ip" "$half_life" "$now" "$svc")
+				local svc_formatted
+				svc_formatted=$(pressure_format "$svc_score")
+				printf "    %-20s  %s\n" "$svc" "$svc_formatted"
+			done <<< "$services"
+		fi
+	else
+		# --- All IPs mode ---
+		echo "Active Pressure Scores:"
+
+		if [ ! -f "$pressure_file" ] || [ ! -s "$pressure_file" ]; then
+			echo "  no pressure data"
+			return 0
+		fi
+
+		# Single awk pass reimplementing decay: score = weight * exp(-0.693 * age / half_life)
+		local half_life="${PRESSURE_HALF_LIFE:-300}"
+		local trip="${PRESSURE_TRIP:-20}"
+
+		local awk_out
+		awk_out=$(awk -v now="$now" -v hl="$half_life" -v trip_val="$trip" '
+		/^[[:space:]]*$/ || /^#/ { next }
+		{
+			ts = $1+0; ip = $2; svc = $3; w = ($4+0 > 0) ? $4+0 : 1
+			age = now - ts
+			if (age < 0) age = 0
+			score = w * exp(-0.693 * age / hl)
+			ip_score[ip] += score
+			if (!(ip in ip_svc)) ip_svc[ip] = svc
+			else {
+				# Track unique services
+				if (index(ip_svc[ip], svc) == 0) ip_svc[ip] = ip_svc[ip] "," svc
+			}
+			if (ts > ip_last[ip]+0) ip_last[ip] = ts
+		}
+		END {
+			count = 0
+			for (k in ip_score) count++
+			if (count == 0) { print "EMPTY"; exit }
+			# Selection sort for top 10
+			for (i = 1; i <= 10 && i <= count; i++) {
+				max_ip = ""; max_s = 0
+				for (k in ip_score) {
+					if (ip_score[k] > max_s) { max_s = ip_score[k]; max_ip = k }
+				}
+				if (max_ip != "") {
+					above = (max_s >= trip_val) ? "ABOVE" : "below"
+					printf "ROW:%s:%.1f:%s:%s:%d\n", max_ip, max_s, above, ip_svc[max_ip], ip_last[max_ip]
+					delete ip_score[max_ip]
+				}
+			}
+			print "COUNT:" count
+		}
+		' "$pressure_file")
+
+		if [ "$awk_out" = "EMPTY" ]; then
+			echo "  no pressure data"
+			return 0
+		fi
+
+		printf "  %-20s  %8s  %6s  %-20s  %s\n" "IP" "SCORE" "TRIP" "SERVICES" "LAST EVENT"
+		printf "  %-20s  %8s  %6s  %-20s  %s\n" \
+			"$(printf '%0.s-' {1..20})" "$(printf '%0.s-' {1..8})" "$(printf '%0.s-' {1..6})" \
+			"$(printf '%0.s-' {1..20})" "$(printf '%0.s-' {1..15})"
+
+		local total_ips=0
+		while IFS= read -r line; do
+			case "$line" in
+				ROW:*)
+					local rest="${line#ROW:}"
+					local ip="${rest%%:*}"; rest="${rest#*:}"
+					local score="${rest%%:*}"; rest="${rest#*:}"
+					local above="${rest%%:*}"; rest="${rest#*:}"
+					local svcs="${rest%%:*}"; rest="${rest#*:}"
+					local last_ts="$rest"
+					local age=$(( now - last_ts ))
+					printf "  %-20s  %8s  %6s  %-20s  %s\n" "$ip" "$score" "$above" "$svcs" "$(format_duration "$age") ago"
+					;;
+				COUNT:*)
+					total_ips="${line#COUNT:}"
+					;;
+			esac
+		done <<< "$awk_out"
+
+		echo ""
+		echo "  $total_ips IP(s) with pressure events"
+	fi
+}

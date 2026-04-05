@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Brute Force Detection 2.0.2 - Input and Config Validation
+# Brute Force Detection 2.1.0 - Input and Config Validation
 ###
 # Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
@@ -566,4 +566,148 @@ detect_log_paths() {
 			MAIL_LOG_PATH="/var/log/mail.log"
 		fi
 	fi
+}
+
+# --- Ignore list management functions ---
+
+# ignore_add install_path entry [comment] — add IP/CIDR to ignore.hosts
+# Validates entry, normalizes CIDR to network address, checks duplicates, appends with flock.
+# Returns: 0=added, 1=invalid input, 2=duplicate
+ignore_add() {
+	local install_path="$1" entry="$2" comment="${3:-}"
+	local ignore_file="$install_path/ignore.hosts"
+
+	# Validate: try IP first, then CIDR
+	local validated
+	if validated=$(validate_ip_any "$entry" 2>/dev/null); then
+		entry="$validated"
+	elif validated=$(validate_cidr "$entry" 2>/dev/null); then
+		# Normalize CIDR to network address
+		local _addr="${validated%/*}" _mask="${validated#*/}"
+		entry=$(ip_to_subnet "$_addr" "$_mask")
+	else
+		echo "error: invalid IP or CIDR '$entry'." >&2
+		return 1
+	fi
+
+	# Ensure file exists
+	[ -f "$ignore_file" ] || command touch "$ignore_file"
+
+	(
+		flock -x 200
+		# Check for duplicate (strip inline comments for comparison)
+		if awk -v entry="$entry" '
+			{ line=$0; sub(/#.*/, "", line); gsub(/^[[:space:]]+|[[:space:]]+$/, "", line) }
+			line == entry { found=1; exit }
+			END { exit !found }
+		' "$ignore_file" 2>/dev/null; then
+			echo "$entry: already in ignore list" >&2
+			exit 2
+		fi
+		# Append
+		if [ -n "$comment" ]; then
+			printf '%s  # %s\n' "$entry" "$comment" >> "$ignore_file"
+		else
+			printf '%s\n' "$entry" >> "$ignore_file"
+		fi
+	) 200>>"$ignore_file"
+	local rc=$?
+	[ "$rc" -ne 0 ] && return "$rc"
+	echo "$entry: added to ignore list"
+	return 0
+}
+
+# ignore_remove install_path entry — remove IP/CIDR from ignore.hosts
+# Returns: 0=removed, 1=not found
+ignore_remove() {
+	local install_path="$1" entry="$2"
+	local ignore_file="$install_path/ignore.hosts"
+
+	if [ ! -f "$ignore_file" ]; then
+		echo "$entry: not in ignore list" >&2
+		return 1
+	fi
+
+	(
+		flock -x 200
+		# Check entry exists (strip inline comments for matching)
+		if ! awk -v entry="$entry" '
+			{ line=$0; sub(/#.*/, "", line); gsub(/^[[:space:]]+|[[:space:]]+$/, "", line) }
+			line == entry { found=1; exit }
+			END { exit !found }
+		' "$ignore_file" 2>/dev/null; then
+			echo "$entry: not in ignore list" >&2
+			exit 1
+		fi
+		# Remove: exclude lines where stripped entry matches
+		awk -v entry="$entry" '
+			{ line=$0; sub(/#.*/, "", line); gsub(/^[[:space:]]+|[[:space:]]+$/, "", line) }
+			line != entry
+		' "$ignore_file" > "$ignore_file.new"
+		command mv "$ignore_file.new" "$ignore_file"
+		command chmod 600 "$ignore_file"
+	) 200>>"$ignore_file"
+	local rc=$?
+	[ "$rc" -ne 0 ] && return "$rc"
+	echo "$entry: removed from ignore list"
+	return 0
+}
+
+# ignore_list install_path — display ignore.hosts entries (skip comments and blanks)
+ignore_list() {
+	local install_path="$1"
+	local ignore_file="$install_path/ignore.hosts"
+
+	if [ ! -f "$ignore_file" ] || [ ! -s "$ignore_file" ]; then
+		echo "no entries" >&2
+		return 0
+	fi
+
+	# Print non-blank, non-comment-only lines (preserves inline comments)
+	awk '!/^[[:space:]]*$/ && !/^[[:space:]]*#/' "$ignore_file"
+}
+
+# ignore_check install_path ip — check if IP is ignored (exact match + CIDR containment)
+# Returns: 0 + message if ignored, 1 (silent) if not ignored
+ignore_check() {
+	local install_path="$1" query_ip="$2"
+	local ignore_file="$install_path/ignore.hosts"
+
+	query_ip=$(validate_ip_any "$query_ip") || {
+		echo "error: invalid IP address '$2'." >&2
+		return 1
+	}
+
+	if [ ! -f "$ignore_file" ]; then
+		return 1
+	fi
+
+	local entry stripped
+	while IFS= read -r entry; do
+		# Skip comment-only lines
+		[[ "$entry" =~ ^[[:space:]]*# ]] && continue
+		# Strip inline comments and whitespace
+		stripped="${entry%%#*}"
+		stripped=$(printf '%s' "$stripped" | awk '{gsub(/^[[:space:]]+|[[:space:]]+$/, ""); print}')
+		[ -z "$stripped" ] && continue
+
+		if [[ "$stripped" == */* ]]; then
+			# CIDR entry — compute network address of query IP with this mask
+			local _mask="${stripped#*/}"
+			local computed
+			computed=$(ip_to_subnet "$query_ip" "$_mask" 2>/dev/null) || continue
+			if [ "$computed" = "$stripped" ]; then
+				echo "$query_ip: ignored (matched $stripped)"
+				return 0
+			fi
+		else
+			# Exact IP match
+			if [ "$stripped" = "$query_ip" ]; then
+				echo "$query_ip: ignored"
+				return 0
+			fi
+		fi
+	done < "$ignore_file"
+
+	return 1
 }

@@ -66,6 +66,22 @@ bfd \- brute force detection and IP banning
 .RI [ PROVIDER | update | check
 .IR IP ]
 .br
+.B bfd ban
+.RI [ add | remove | list | flush | history ]
+.RI [ args... ]
+.br
+.B bfd ignore
+.RI [ add | remove | list | check ]
+.RI [ args... ]
+.br
+.B bfd test
+.RI [ rule | pattern | alert | scan ]
+.RI [ args... ]
+.br
+.B bfd
+.RI { cdn | report | status }
+.RI [ args... ]
+.br
 .B bfd
 .RB [ \-v ]
 .RB [ \-h ]
@@ -139,6 +155,9 @@ Remove all temporary (non-permanent) bans.
 .TP
 .B \-\-flush\-all
 Remove all bans (temporary and permanent).
+.PP
+See also:
+.BR "bfd ban" .
 .SS Scan Mode
 .TP
 .BI \-\-scan " \fR[" RULE \fR] " \fR[" \-d \fR]
@@ -340,6 +359,9 @@ The subject line is prefixed with
 .B [TEST]
 to distinguish from real alerts.
 Bypasses digest mode to always send immediately.
+.PP
+See also:
+.BR "bfd test" .
 .SS Output Modifiers
 .TP
 .B \-\-json
@@ -409,6 +431,9 @@ Check whether an IP address matches any CDN provider's compiled ranges.
 Combine with
 .B \-\-json
 for structured output.
+.PP
+See also:
+.BR "bfd cdn" .
 .SS General
 .TP
 .BR \-v ", " \-\-version
@@ -419,6 +444,130 @@ Display full usage help with grouped options and examples.
 When
 .B bfd
 is run with no arguments, a short summary of common commands is shown instead.
+.SH SUBCOMMANDS
+BFD supports grouped subcommand syntax alongside traditional flag-based
+invocation.
+Each subcommand group accepts
+.B \-\-help
+or
+.B \-h
+to display its verb list.
+.SS "bfd ban"
+.TP
+.BI "bfd ban add " "IP \fR[" SERVICE \fR]
+Manually ban an IP address (permanent).
+Equivalent to
+.BR "bfd \-b" .
+.TP
+.BI "bfd ban remove " IP
+Remove a ban.
+Equivalent to
+.BR "bfd \-u" .
+.TP
+.B "bfd ban list"
+List active bans.
+Equivalent to
+.BR "bfd \-l" .
+.TP
+.BI "bfd ban flush " "temp\fR|\fPall"
+Flush temporary or all bans.
+Equivalent to
+.B \-\-flush\-temp
+/
+.BR \-\-flush\-all .
+.TP
+.BI "bfd ban history " \fR[ IP \fR]
+Query ban history across current and rotated
+.B bans.history
+archives.
+Supports
+.BR \-\-24h ", " \-\-7d ", " \-\-30d
+time windows,
+.BR \-\-limit= \fIN\fR,
+and
+.BR \-\-json " / " \-\-csv
+output.
+.SS "bfd ignore"
+.TP
+.BI "bfd ignore add " "IP\fR|\fPCIDR \fR[" COMMENT \fR]
+Add an IP address or CIDR to the ignore list.
+CIDR entries are normalized to the network address (e.g., 10.0.0.5/8
+becomes 10.0.0.0/8).
+Validates input and rejects duplicates.
+.TP
+.BI "bfd ignore remove " IP\fR|\fPCIDR
+Remove an entry from the ignore list.
+.TP
+.B "bfd ignore list"
+Display all ignore list entries (skips comments and blank lines).
+.TP
+.BI "bfd ignore check " IP
+Check whether an IP is ignored, by exact match or CIDR containment.
+Returns exit code 0 if ignored, 1 if not.
+.SS "bfd test"
+.TP
+.BI "bfd test rule " "RULE \fR[" FILE \fR| \fB\- \fR]
+Test a rule's patterns against its configured log file, a specific file, or stdin.
+Equivalent to
+.BR "bfd \-T" .
+.TP
+.BI "bfd test pattern " "PATTERN \fR[" FILE \fR| \fB\- \fR]
+Test a raw
+.I <HOST>
+pattern.
+Equivalent to
+.BR \-\-test\-pattern .
+.TP
+.BI "bfd test alert " TYPE
+Send a test alert.
+Equivalent to
+.BR \-\-test\-alert .
+.TP
+.BI "bfd test scan " "\fR[" RULE \fR] " \fR[" \-d \fR]
+Full-log scan.
+Equivalent to
+.BR \-\-scan .
+.SS "bfd cdn"
+CDN/trusted proxy management.
+Equivalent to the
+.B \-\-cdn
+flag variants; see
+.B CDN / Trusted Proxy
+in OPTIONS above.
+.SS "bfd report"
+.TP
+.BI "bfd report " "\fR[" daily \fR| weekly \fR| monthly \fR]
+Generate and deliver a periodic threat report.
+Equivalent to
+.BR \-\-report .
+.SS "bfd status"
+.TP
+.B "bfd status"
+Operational status overview.
+Equivalent to
+.BR "bfd \-S" .
+.TP
+.BI "bfd status " SERVICE
+Service-specific status.
+Equivalent to
+.BR "bfd \-S " \fISERVICE\fR .
+.TP
+.B "bfd status lock"
+Display lock state: holder PID, age, and staleness relative to
+.BR LOCK_FILE_TIMEOUT .
+.TP
+.B "bfd status cursors"
+Display tlog cursor file positions and ages.
+Shows byte offset and last update time for each cursor file.
+.TP
+.B "bfd status pool"
+Display attack pool statistics: total events, unique IPs, age range,
+and top 5 IPs by event count.
+.TP
+.BI "bfd status pressure " \fR[ IP \fR]
+Display current pressure scores with exponential decay.
+Without an IP argument, shows the top 10 IPs by score.
+With an IP argument, shows per-service breakdown and threshold status.
 .SH CONFIGURATION
 Configuration is in
 .BR conf.bfd ,

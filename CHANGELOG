@@ -1,11 +1,21 @@
 2.0.2:
-[Fix] RPM/DEB package manifests: add 9 sub-libraries + update-cdn-providers.sh
-[New] Symlink farm enforcement: sbin symlink manifest + runtime self-healing
-      (pkg_lib v1.0.6)
+
+  -- New Features --
+
+[New] CLI subcommand namespaces: bfd ban, bfd ignore, bfd test, bfd cdn,
+      bfd report, bfd status — grouped help and operational clarity
+[New] bfd ignore: add/remove/list/check for ignore.hosts management with
+      flock safety, CIDR normalization, and containment checking
+[New] bfd status sub-views: lock (PID/age/staleness), cursors (tlog positions),
+      pool (attack pool stats), pressure (decay-adjusted scores)
+[New] bfd ban history: query across rotated bans.history archives with
+      IP filter, time windows (--24h/--7d/--30d), and --json/--csv output
 [New] CDN/trusted proxy subsystem: ignore/exclude/derate treatment modes,
       binary-search IP range lookup (IPv4/IPv6), cdn-providers.conf with 5
       default providers, bfd --cdn CLI, CDN_ENABLE and CDN_UPDATE_DAYS config;
       cron.daily auto-refresh and --json output support
+[New] Symlink farm enforcement: sbin symlink manifest + runtime self-healing
+      (pkg_lib v1.0.6)
 [New] Structured audit events for ban escalation, manual ban/unban/flush,
       alert delivery, detection triggers, and scan cycle bookends;
       audit.log added to logrotate
@@ -15,9 +25,11 @@
 [New] Documentation: man page CDN/Trusted Proxy and Country Weighting sections,
       --cdn CLI options, sub-library FILES entries; README redesign with
       SECURITY.md and CONTRIBUTING.md
-[Change] pressure.conf and pressure-country.conf migrated to whitespace
-      format; dual-format parsers for backward compat; importconf auto-converts
-[Change] --check shows "no service detected" for rules with log-based PREREQ
+
+  -- Bug Fixes --
+
+[Fix] RPM/DEB package manifests: add 9 sub-libraries + update-cdn-providers.sh;
+      .shellcheckrc and .gitmodules excluded from release tarball
 [Fix] File permissions: lock.utime (creation and heartbeat) and ignore.hosts.local
       consistently set to mode 640
 [Fix] Report: --7d/--30d correctly maps to weekly/monthly interval; top-IPs
@@ -39,11 +51,16 @@
 [Fix] Deep-legacy portability: all bare coreutils (chmod, mkdir, cat, touch,
       ln, cp, mv, rm) use command prefix for CentOS 6 PATH compatibility
 [Fix] --cdn check validates IP address before lookup (consistency with -b/-u/-e)
-[Fix] .shellcheckrc and .gitmodules excluded from release tarball
 [Fix] Unban error message includes hint for firewall-only blocks
-[Change] README: supported Ubuntu versions now reflect CI-tested targets
-[Change] CI: batsman v1.3.0 → v1.4.0 with file-group splitting (3 groups × 9 OS),
-      per-test timeout (120s), and tighter job timeout (10min)
+
+  -- Changes --
+
+[Change] pressure.conf and pressure-country.conf migrated to whitespace
+      format; dual-format parsers for backward compat; importconf auto-converts
+[Change] --check shows "no service detected" for rules with log-based PREREQ
+[Change] --scan extracted to _run_scan() helper (shared by --scan and test scan)
+[Change] --cdn and --report refactored to call dispatch functions
+[New] Man page SUBCOMMANDS section with per-group verb documentation
 
 2.0.1:
 

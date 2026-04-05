@@ -1,11 +1,21 @@
 2.0.2:
-[Fix] RPM/DEB package manifests: add 9 sub-libraries + update-cdn-providers.sh
-[New] Symlink farm enforcement: sbin symlink manifest + runtime self-healing
-      (pkg_lib v1.0.6)
+
+  -- New Features --
+
+[New] CLI subcommand namespaces: bfd ban, bfd ignore, bfd test, bfd cdn,
+      bfd report, bfd status — grouped help and operational clarity
+[New] bfd ignore: add/remove/list/check for ignore.hosts management with
+      flock safety, CIDR normalization, and containment checking
+[New] bfd status sub-views: lock (PID/age/staleness), cursors (tlog positions),
+      pool (attack pool stats), pressure (decay-adjusted scores)
+[New] bfd ban history: query across rotated bans.history archives with
+      IP filter, time windows (--24h/--7d/--30d), and --json/--csv output
 [New] CDN/trusted proxy subsystem: ignore/exclude/derate treatment modes,
       binary-search IP range lookup (IPv4/IPv6), cdn-providers.conf with 5
       default providers, bfd --cdn CLI, CDN_ENABLE and CDN_UPDATE_DAYS config;
       cron.daily auto-refresh and --json output support
+[New] Symlink farm enforcement: sbin symlink manifest + runtime self-healing
+      (pkg_lib v1.0.6)
 [New] Structured audit events for ban escalation, manual ban/unban/flush,
       alert delivery, detection triggers, and scan cycle bookends;
       audit.log added to logrotate
@@ -15,9 +25,11 @@
 [New] Documentation: man page CDN/Trusted Proxy and Country Weighting sections,
       --cdn CLI options, sub-library FILES entries; README redesign with
       SECURITY.md and CONTRIBUTING.md
-[Change] pressure.conf and pressure-country.conf migrated to whitespace
-      format; dual-format parsers for backward compat; importconf auto-converts
-[Change] --check shows "no service detected" for rules with log-based PREREQ
+
+  -- Bug Fixes --
+
+[Fix] RPM/DEB package manifests: add 9 sub-libraries + update-cdn-providers.sh;
+      .shellcheckrc and .gitmodules excluded from release tarball
 [Fix] File permissions: lock.utime (creation and heartbeat) and ignore.hosts.local
       consistently set to mode 640
 [Fix] Report: --7d/--30d correctly maps to weekly/monthly interval; top-IPs
@@ -39,197 +51,13 @@
 [Fix] Deep-legacy portability: all bare coreutils (chmod, mkdir, cat, touch,
       ln, cp, mv, rm) use command prefix for CentOS 6 PATH compatibility
 [Fix] --cdn check validates IP address before lookup (consistency with -b/-u/-e)
-[Fix] .shellcheckrc and .gitmodules excluded from release tarball
 [Fix] Unban error message includes hint for firewall-only blocks
-[Change] README: supported Ubuntu versions now reflect CI-tested targets
-[Change] CI: batsman v1.3.0 → v1.4.0 with file-group splitting (3 groups × 9 OS),
-      per-test timeout (120s), and tighter job timeout (10min)
-
-2.0.1:
-
-  -- New Features --
-
-[New] CIDR subnet ban alerts enriched with aggregate pressure and failure stats
-[New] Contributing hosts breakdown in all alert channels (email, Slack, Telegram, Discord)
-[Fix] CIDR alert pipeline fields 4 and 13 now carry real aggregate values (was broken)
-[Fix] Packaging: cron.daily keeps /usr/local/bfd INSTALL_PATH in FHS packages
-      (symlink farm provides the indirection; /var/lib/bfd has no conf.bfd or bfd)
-[Fix] Packaging: alert template count assertion updated from 14 to 21
-[Fix] Packaging: DEB changelog rule count corrected from 42 to 57
-[Fix] CI: add bfd_report.sh to bash -n and shellcheck lint targets
-[Fix] Man page: add --ban, --unban, --events, --test long forms to OPTIONS;
-      fix template variable names (FAIL_COUNT_DISPLAY, BAN_DURATION_DETAIL,
-      COUNTRY_FLAG, SOURCE_LOGS_SECTION_TEXT, REPUTATION_SECTION_TEXT);
-      add --sort, --limit, --24h/--7d/--30d, --active to SYNOPSIS modifiers;
-      update .TH date to 2026-03-17
-[Fix] README: promote Periodic Reports to top-level section (§7.1→§8),
-      renumber sections 8-12→9-13, update TOC and cross-references;
-      fix template variable names in variable table
-[Fix] usage_short() output line split to fit 80 columns
-[Fix] conf.bfd EMAIL_LOGLINES comment: add "and event view"
-[Fix] cron.daily sources internals.conf for correct LOCK_FILE in FHS packages
-      (lock.utime is at /var/lib/bfd/ not /usr/local/bfd/ after pkg transform)
-[New] Pressure-to-response scoring model: exponential-decay replaces fixed
-      count thresholds; per-rule weights, trip points, and half-life via
-      pressure.conf; cross-service aggregate trip; old TRIG/TRIG_WINDOW
-      configs auto-migrate via importconf
-[New] GeoIP country integration: full country names in alerts ("China (CN)"),
-      country pressure multipliers, IPv4+IPv6 lookup via ipcountry.dat and
-      ipcountry6.dat, pre-filled database (238 countries), cron.daily
-      auto-refresh, background download at install
-[New] Firewall auto-detection: 8 backends (APF, CSF, firewalld, UFW,
-      nftables, iptables, route, custom); full IPv6 dual-stack detection
-      and banning with separate BAN_COMMAND_V6/UNBAN_COMMAND_V6
-[New] Ban lifecycle: temporary bans with BAN_TTL auto-expiry; recidivism
-      escalation (none/linear/double with configurable cap and retry
-      backoff); distributed attack subnet banning (SUBNET_TRIG)
-[New] Watch mode (-w/--watch): continuous daemon with configurable interval,
-      SIGHUP config reload, systemd unit and SysVinit init script, dead-PID
-      lock recovery; scan mode (--scan) for full-log processing with
-      --max-lines and --scan-timeout
-[New] Multi-channel alerting: email (text/HTML/multipart with SMTP relay),
-      Slack (webhook and Bot API), Telegram, Discord; customizable {{VAR}}
-      template partials (21 templates) with custom.d/ overrides preserved
-      across upgrades; digest mode with configurable interval; severity
-      colors, country flags, reputation links; --test-alert for all channels
-[New] Periodic threat reports (--report daily|weekly|monthly): multi-channel
-      delivery, ban breakdowns (temporary/escalated/permanent), top IPs with
-      country codes, per-service breakdown, trend comparison, styled HTML
-      tables, comma-formatted numbers; REPORT_ENABLED, REPORT_INTERVALS,
-      REPORT_CHANNELS, REPORT_EMAIL_ADDRESS, REPORT_EMAIL_SUBJECT,
-      REPORT_TOP_N config variables; cron-scheduled
-[New] 57 service detection rules (37 new + 20 existing with 10 expanded):
-      fail2ban-compatible <HOST> patterns, dual IPv4/IPv6 boundary-aware
-      regex, per-rule IGNOREREGEX exclusion; sshd expanded from 3 to 12
-      patterns, dovecot 2 to 6 with ManageSieve
-[New] Systemd journal reader: transparent fallback for 39 of 57 rules;
-      cursor-based tracking; LOG_SOURCE config (auto/file/journal); dynamic
-      service-to-journalctl filter registry
-[New] Events CLI (-e/--events): active event dashboard with pressure scores,
-      per-IP investigation with log sample, CIDR subnet reports;
-      --sort=count|time|ip, --24h/--7d/--30d, --limit=N, --json/--csv
-[New] Threat activity report (-a/--activity): aggregate summary with
-      dual-interval per-service breakdown, IP search; structured output
-      (--json/--csv) for bans, events, and activity
-[New] CLI expanded from 4 to 21+ flags: health check (-c), verbose (-V),
-      status (-S), config (-C), rules (-R with --active filter), test and
-      test-pattern and test-alert, ban management (-b/-u/--flush), output
-      modifiers (--json/--csv/--sort/--limit)
-[New] Shared libraries: tlog_lib v2.0.4 (incremental log reader),
-      elog_lib v1.0.4 (structured logging with JSON audit events),
-      alert_lib v1.0.5 (alert delivery and template engine),
-      pkg_lib v1.0.5 (packaging and config merge),
-      geoip_lib v1.0.4 (GeoIP metadata and CIDR download)
-[New] Infrastructure: bfd.1 man page, bfd.bash-completion, importconf
-      rewritten with awk-based config merge and TRIG migration,
-      install.sh/uninstall.sh modernized via pkg_lib with custom paths
-      and service lifecycle management
-[New] Security: safe_source() validates ownership and permissions before
-      sourcing; strict IP and email validation; rule name sanitization;
-      credential masking in show_config()
-[New] RPM (el7/el8/el9/el10) and DEB (Debian 12, Ubuntu 18-24) packaging
-      with FHS layout, symlink farm, and config protection
-[New] GitHub Actions CI (10-OS Docker matrix with lint) and tag-triggered
-      release workflow (RPM+DEB builds)
-[New] Test suite: 1578 unit/integration tests, 86 UAT scenarios, 14
-      performance benchmarks across 3 scaling tiers with KPI tracking
-[New] LOG_IDLE_SUPPRESS suppresses idle run-complete syslog messages;
-      FAIL_COUNT template variable shows actual failure count in alerts
-
-  -- Bug Fixes --
-
-[Fix] Report: repeat-offender percentage silently zero when unique IP count
-      exceeds 999 — integer comparison on comma-formatted string failed;
-      preserve raw integers for arithmetic, format only for display export
-[Fix] Security: eval injection replaced with safe template expansion;
-      show_config() whitelist; safe_source() on all sourced files; flock
-      on state file operations; mktemp replaces PID-based temp files;
-      credential sanitization in alert log excerpts; Slack token via
-      curl -K to prevent /proc/PID/cmdline exposure
-[Fix] Watch mode: SIGTERM/SIGINT properly exit daemon; config reload
-      unsets vars before re-sourcing and re-registers journal filters;
-      validation uses return instead of exit to prevent daemon crash;
-      mkdir-based lock replaces flock with PID liveness check
-[Fix] Scan mode: SCAN_TIMEOUT enforced for file-based rules; pressure
-      prune skipped in scan mode; timeout watchdog kills process group
-[Fix] Email: base64-encode HTML MIME part (RFC 5321 998-char line limit);
-      TLS conditional on URL scheme; credentials optional for auth-free
-      relays; curl stderr captured for error reporting
-[Fix] Upgrade path: importconf preserves pressure-country.conf, custom
-      rules, exclude.files, templates, tlog cursors, and cron schedule;
-      validates UNBAN_COMMAND; prevents stale modsec rule restoration;
-      merge_conf preserves file permissions
-[Fix] Packaging: all 8 internal libraries included in RPM/DEB with
-      symlink farm; logrotate path updated to /var/log/bfd/bfd.log;
-      DEB postrm purges /var/log/bfd/; uninstall.sh cleans empty log dir
-[Fix] Deep-legacy portability: all bare rm/cp/mv and hardcoded /usr/bin/*
-      paths converted to 'command' prefix for CentOS 6 / Ubuntu 12.04;
-      mawk /dev/stdin compatibility for _batch_ip_to_country
-[Fix] install.sh: stop watch mode before upgrade; systemd unit
-      auto-detection; pipe fd hang fix (exec >/dev/null 2>&1 in background
-      subshell); sourced library permissions set to 640
-[Fix] Report: template resolution (report-prefixed templates resolved
-      directly), trend computation, HTML entity escaping, temp file
-      cleanup via ALERT_TMPDIR, bash completion, show_config display
-[Fix] Documentation: README/man page synchronized for rule counts,
-      template descriptions (8->21), config variables, FILES section,
-      section count (ten->eleven), --attackpool→--activity rename
-[Fix] Documentation audit: README.md ToC section 5.8 label corrected
-      (Events and Pressure → Events and Investigation); broken cross-reference
-      in section 3.10 fixed (3.9→7.1 for Periodic Reports anchor); Periodic
-      Reports section added to README.md (§7.1) with CLI examples and config
-      variable table; plain README usage block updated to include --report
-      in Reports group; plain README rule catalog updated from 35→57 rules
-      (postscreen, sogo, drupal, gitea, nextcloud, vaultwarden, jellyfin,
-      cockpit, interworx, guacamole, haproxy, squid, ejabberd, freeswitch,
-      powerdns added with Proxy and Messaging categories); man page SYNOPSIS
-      updated to include --report line
-[Fix] CLI: exit codes propagate correctly; -b rejects service names
-      starting with '-'; -a prints empty-pool message; list_bans skips
-      corrupt lines; show_config() masks webhook/API/SMTP credentials;
-      config validation expanded (LOG_FORMAT, LOG_LEVEL, BFD_LOG_PATH,
-      SCAN_TIMEOUT, EMAIL_REPUTATION_LINKS)
-[Fix] Various: JSON escape per RFC 8259; extract_hosts multi-pattern
-      dedup; rule variable leakage (IGNOREREGEX/PORTS/SKIP_ALERT reset);
-      attack pool exact service matching; nftables element counting;
-      cron.daily lock contention; Telegram MarkdownV2 escaping; quiet
-      mode stderr; tlog rotation and journal filter fixes; state file
-      permissions; pressure display rounding; ignore file inline comments;
-      subnet mask guard; IPv6 exact matching; cleanup trap for temp files
 
   -- Changes --
 
-[Change] conf.bfd restructured into workflow-oriented sections (Pressure
-      Model, Email Alerts, Banning, Log Paths, Advanced, Periodic Reports)
-      with worked examples and commented entries for discoverability
-[Change] check() rewritten: pressure scoring with per-cycle caching;
-      extract_hosts combined-sed pipeline (~85x throughput); per-IP loop
-      batch pre-computation with O(1) lookups for filter, country, pressure,
-      and ban status; deferred bulk writes (flock calls ~500/rule to 2/rule)
-[Change] Alert subsystem: shared alert_lib replaces legacy templates;
-      BFD-specific rendering in bfd_alert.sh; ban alert pressure display
-      uses formula chain; email HTML rebranded to rfxn.com design system
-[Change] BFD_LOG_PATH consolidated from /var/log/bfd_log to
-      /var/log/bfd/bfd.log with symlink migration for external parsers
-[Change] Attack pool enriched to 10-field format with country, action,
-      duration, pressure; timestamp-based filtering with configurable
-      retention (APOOL_RETENTION_DAYS, APOOL_MAX_LINES); events column
-      renamed to failures across all output formats
-[Change] Rule variables renamed for clarity (REQ→PREREQ, LP→LOG_FILE,
-      TLOG_TF→LOG_TAG, ARG_VAL→MATCHED_HOSTS) with backward-compat shim;
-      rule validation rewritten; logging delegates to elog library with
-      explicit severity levels; errors and warnings to stderr
-[Change] Structured output refactor: shared data helpers for ban list,
-      activity, events; per-IP investigation appends recent log activity;
-      batch ban status pre-computation for events CLI
-[Change] Internal libraries moved to internals/ subdirectory;
-      install.sh/uninstall.sh refactored to use pkg_lib functions;
-      importconf rewritten with pkg_config_merge()
-[Change] Security hardening: cron.daily validates file ownership before
-      sourcing; database files mode 640; alert temp dir defaults to
-      $INSTALL_PATH/tmp
-[Change] Shell modernization: backticks to $(), egrep to grep -E, for-cat
-      to while-read, systematic variable quoting, hardcoded paths to
-      command -v discovery; default cron interval reduced from 3 to 2 min
-[Change] README wholesale rewrite; documentation updated for 57 rules,
-      21 alert templates, 11 config sections, and all new CLI features
+[Change] pressure.conf and pressure-country.conf migrated to whitespace
+      format; dual-format parsers for backward compat; importconf auto-converts
+[Change] --check shows "no service detected" for rules with log-based PREREQ
+[Change] --scan extracted to _run_scan() helper (shared by --scan and test scan)
+[Change] --cdn and --report refactored to call dispatch functions
+[New] Man page SUBCOMMANDS section with per-group verb documentation
