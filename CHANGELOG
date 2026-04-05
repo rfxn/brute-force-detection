@@ -25,6 +25,14 @@
 [New] Documentation: man page CDN/Trusted Proxy and Country Weighting sections,
       --cdn CLI options, sub-library FILES entries; README redesign with
       SECURITY.md and CONTRIBUTING.md
+[New] Man page SUBCOMMANDS section with per-group verb documentation
+[New] "Did you mean?" typo suggestions with Levenshtein distance for unknown
+      verbs and commands (threshold 3, matches APF convention)
+[New] Color-aware help output: bold section headers respecting NO_COLOR,
+      non-terminal, and TERM=dumb
+[New] Bash completion: subcommand nouns (ban, ignore, test, cdn, report,
+      status, help) with per-group verb completions
+[New] help subcommand: bfd help <topic> routes to per-group help
 
   -- Bug Fixes --
 
@@ -60,7 +68,9 @@
 [Change] --check shows "no service detected" for rules with log-based PREREQ
 [Change] --scan extracted to _run_scan() helper (shared by --scan and test scan)
 [Change] --cdn and --report refactored to call dispatch functions
-[New] Man page SUBCOMMANDS section with per-group verb documentation
+[Change] usage_short() rewritten: COMMANDS/SUBCOMMANDS/UTILITIES three-section
+      APF-style layout; legacy flags condensed; 58 lines reduced to 22
+[Change] -h shows full reference; --help opens man page (progressive disclosure)
 
 2.0.1:
 

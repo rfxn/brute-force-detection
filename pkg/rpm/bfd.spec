@@ -365,13 +365,17 @@ fi
 /usr/local/sbin/bfd
 
 %changelog
-* Wed Mar 18 2026 R-fx Networks <proj@rfxn.com> - 2.0.2-1
+* Sat Apr 05 2026 R-fx Networks <proj@rfxn.com> - 2.0.2-1
+- CLI subcommand namespaces: ban, ignore, test, cdn, report, status
+- Ignore list management: add/remove/list/check with flock and CIDR support
+- Status sub-views: lock, cursors, pool, pressure
+- Bash completion with per-group verb expansion and typo suggestions
 - CDN/trusted proxy subsystem with ignore/exclude/derate treatment modes
 - Structured audit events (26 call sites) and audit.log logrotate
 - Symlink farm enforcement with sbin symlink manifest
 - Pressure config migrated to whitespace format with dual-format parsers
 - Deep-legacy portability: all coreutils use command prefix (CentOS 6)
-- Man page CDN, country weighting, and sub-library documentation
+- Man page CDN, country weighting, SUBCOMMANDS, and sub-library documentation
 - Ban history search includes rotated archives
 - pam_generic journal fallback for rsyslog-less systems
 
