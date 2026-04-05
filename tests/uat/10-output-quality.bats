@@ -5,6 +5,7 @@
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load '../helpers/uat-bfd'
+load '../helpers/assert-bfd'
 load '../infra/lib/uat-helpers'
 
 setup_file() {
@@ -116,22 +117,25 @@ teardown_file() {
 
 # bats test_tags=uat,uat:output-quality
 @test "UAT: banned IPs in -l appear in -S" {
+    # Prerequisite: setup test populated bans — verify data exists first
+    assert_banned 192.0.2.70
     run bfd -l
-    local list_output="$output"
+    assert_success
+    assert_output --partial "192.0.2.70"
     run bfd -S
-    # If -l shows IPs, -S should show a non-zero ban count
-    if echo "$list_output" | grep -q "192.0.2"; then
-        assert_output --partial "192.0.2"
-    fi
+    assert_success
+    # Status must reflect that bans exist
+    assert_output --partial "192.0.2"
 }
 
 # bats test_tags=uat,uat:output-quality
 @test "UAT: detected IPs in -e appear in -a" {
+    # Prerequisite: verify event data exists before cross-checking
     run bfd -e
+    assert_success
+    assert_output --partial "192.0.2.70"
     local events_output="$output"
     run bfd -a
-    # IPs in events should also be in attack pool
-    if echo "$events_output" | grep -q "192.0.2.70"; then
-        assert_output --partial "192.0.2.70"
-    fi
+    assert_success
+    assert_output --partial "192.0.2.70"
 }

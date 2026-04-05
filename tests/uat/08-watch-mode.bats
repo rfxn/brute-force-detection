@@ -5,6 +5,7 @@
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load '../helpers/uat-bfd'
+load '../helpers/assert-bfd'
 load '../infra/lib/uat-helpers'
 
 # WATCH_PID_FILE — file-level variable to track watch background PID
@@ -64,8 +65,7 @@ teardown_file() {
     uat_bfd_inject_failures "192.0.2.60" 30
     # Poll for ban to appear in active bans (WATCH_INTERVAL=2s + processing)
     uat_wait_for_condition "grep -q 192.0.2.60 /usr/local/bfd/tmp/bans.active" 15
-    run grep 192.0.2.60 /usr/local/bfd/tmp/bans.active
-    assert_success
+    assert_banned 192.0.2.60
 }
 
 # bats test_tags=uat,uat:watch-mode

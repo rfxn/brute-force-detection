@@ -3,6 +3,9 @@
 # Provides install, reset, and log injection for UAT scenarios.
 # Load in UAT .bats files with: load '../helpers/uat-bfd'
 
+# Export INSTALL_PATH for assert-bfd.bash helpers (assert_banned, refute_banned, etc.)
+export INSTALL_PATH="/usr/local/bfd"
+
 # uat_bfd_install — Install BFD from /opt source and configure for Docker.
 # Idempotent — safe to call multiple times from setup_file().
 uat_bfd_install() {
