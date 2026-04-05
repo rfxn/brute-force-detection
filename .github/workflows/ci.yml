@@ -27,11 +27,13 @@ jobs:
 
   test:
     needs: lint
-    uses: rfxn/batsman/.github/workflows/test.yml@v1.3.0
+    uses: rfxn/batsman/.github/workflows/test.yml@v1.4.0
     with:
       project-name: bfd
       os-matrix: '["debian12","centos6","centos7","rocky8","rocky9","rocky10","ubuntu1204","ubuntu2004","ubuntu2404"]'
       parallel-jobs: 4
+      file-groups: 3
+      timeout: 10
 
   uat:
     needs: lint
@@ -58,7 +60,7 @@ jobs:
             -f tests/Dockerfile \
             -t bfd-test-debian12 .
       - name: Run UAT scenarios
-        run: make -C tests uat
+        run: BATSMAN_TEST_TIMEOUT=120 make -C tests uat
       - name: Upload UAT results
         if: always()
         uses: actions/upload-artifact@v4

@@ -42,6 +42,8 @@
 [Fix] .shellcheckrc and .gitmodules excluded from release tarball
 [Fix] Unban error message includes hint for firewall-only blocks
 [Change] README: supported Ubuntu versions now reflect CI-tested targets
+[Change] CI: batsman v1.3.0 → v1.4.0 with file-group splitting (3 groups × 9 OS),
+      per-test timeout (120s), and tighter job timeout (10min)
 
 2.0.1:
 
