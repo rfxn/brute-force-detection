@@ -96,6 +96,23 @@ teardown() {
 	grep -q "::1" "$INSTALL_PATH/ignore.hosts"
 }
 
+@test "ignore_remove: CIDR roundtrip with non-canonical input" {
+	ignore_add "$INSTALL_PATH" "10.0.0.5/24"
+	# Added as normalized 10.0.0.0/24
+	grep -q "10.0.0.0/24" "$INSTALL_PATH/ignore.hosts"
+	# Remove with same non-canonical input — must find normalized form
+	run ignore_remove "$INSTALL_PATH" "10.0.0.5/24"
+	assert_success
+	assert_output "10.0.0.0/24: removed from ignore list"
+	! grep -q "10.0.0.0/24" "$INSTALL_PATH/ignore.hosts"
+}
+
+@test "ignore_remove: rejects invalid input" {
+	run ignore_remove "$INSTALL_PATH" "not-an-ip"
+	assert_failure
+	assert_output --partial "invalid IP or CIDR"
+}
+
 # --- ignore_list tests ---
 
 @test "ignore_list: shows entries skipping comments" {

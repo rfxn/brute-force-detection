@@ -1166,7 +1166,7 @@ test_alert_email() {
 	echo "  Delivery:  $delivery"
 	echo ""
 
-	# build synthetic alert entry (12 pipe-delimited fields matching check() format)
+	# build synthetic alert entry (13 pipe-delimited fields matching check() format)
 	local test_ip="192.0.2.1"
 	local test_service="sshd"
 	local test_ports="22"
@@ -1469,7 +1469,7 @@ status_pressure() {
 		# --- Single IP mode ---
 		echo "Pressure Status: $query_ip"
 
-		if [ ! -f "$pressure_file" ] || ! command grep -q "$query_ip" "$pressure_file" 2>/dev/null; then  # grep fails on missing file
+		if [ ! -f "$pressure_file" ] || ! command grep -Fq "$query_ip" "$pressure_file" 2>/dev/null; then  # grep fails on missing file
 			echo "  Score:      0.0"
 			echo "  Status:     no pressure events recorded"
 			return 0

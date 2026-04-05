@@ -618,10 +618,23 @@ ignore_add() {
 }
 
 # ignore_remove install_path entry — remove IP/CIDR from ignore.hosts
-# Returns: 0=removed, 1=not found
+# Validates and normalizes input (symmetric with ignore_add).
+# Returns: 0=removed, 1=not found or invalid
 ignore_remove() {
 	local install_path="$1" entry="$2"
 	local ignore_file="$install_path/ignore.hosts"
+
+	# Validate and normalize (symmetric with ignore_add)
+	local validated
+	if validated=$(validate_ip_any "$entry" 2>/dev/null); then
+		entry="$validated"
+	elif validated=$(validate_cidr "$entry" 2>/dev/null); then
+		local _addr="${validated%/*}" _mask="${validated#*/}"
+		entry=$(ip_to_subnet "$_addr" "$_mask")
+	else
+		echo "error: invalid IP or CIDR '$entry'." >&2
+		return 1
+	fi
 
 	if [ ! -f "$ignore_file" ]; then
 		echo "$entry: not in ignore list" >&2

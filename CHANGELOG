@@ -60,11 +60,17 @@
       ln, cp, mv, rm) use command prefix for CentOS 6 PATH compatibility
 [Fix] --cdn check validates IP address before lookup (consistency with -b/-u/-e)
 [Fix] Unban error message includes hint for firewall-only blocks
+[Fix] ignore_remove: normalize CIDR input to network address before matching,
+      symmetric with ignore_add (10.0.0.5/24 now finds stored 10.0.0.0/24)
+[Fix] tlog CLI version mismatch: TLOG_VERSION 2.0.4 → 2.0.5 to match lib
+[Fix] status_pressure: use grep -Fq for IP presence check to prevent regex
+      interpretation of dot characters in IP addresses
+[Fix] test alert comment: correct field count 12 → 13 (13th field: fail_count)
 
   -- Changes --
 
 [Change] Vendored lib sync: tlog_lib 2.0.5, alert_lib 1.0.6, elog_lib 1.0.5,
-        pkg_lib 1.0.7, geoip_lib 1.0.5
+        pkg_lib 1.0.8, geoip_lib 1.0.5
 [Change] pressure.conf and pressure-country.conf migrated to whitespace
       format; dual-format parsers for backward compat; importconf auto-converts
 [Change] --check shows "no service detected" for rules with log-based PREREQ
