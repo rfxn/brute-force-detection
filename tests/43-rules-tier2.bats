@@ -220,6 +220,9 @@ EOF
 # --- jellyfin ---
 
 @test "jellyfin: auth denied extracts IP" {
+	# stub PREREQ so rule gate passes on systems without jellyfin
+	mkdir -p /usr/bin
+	[ -f /usr/bin/jellyfin ] || { touch /usr/bin/jellyfin; _jf_stub=1; }
 	# create the dated log directory and file for jellyfin's dynamic detection
 	mkdir -p /var/log/jellyfin
 	local log="/var/log/jellyfin/log_20260308.log"
@@ -228,9 +231,12 @@ EOF
 	assert_success
 	assert_output --partial "203.0.113.50"
 	assert_output --partial "1 matches"
+	[ "${_jf_stub:-0}" = "1" ] && rm -f /usr/bin/jellyfin || true
 }
 
 @test "jellyfin: multiple failures aggregate correctly" {
+	mkdir -p /usr/bin
+	[ -f /usr/bin/jellyfin ] || { touch /usr/bin/jellyfin; _jf_stub=1; }
 	mkdir -p /var/log/jellyfin
 	local log="/var/log/jellyfin/log_20260308.log"
 	cat > "$log" <<'EOF'
@@ -241,15 +247,19 @@ EOF
 	run test_rule "$INSTALL_PATH" "jellyfin" "$log"
 	assert_success
 	assert_output --partial "3 matches, 2 unique IPs"
+	[ "${_jf_stub:-0}" = "1" ] && rm -f /usr/bin/jellyfin || true
 }
 
 @test "jellyfin: successful auth not matched" {
+	mkdir -p /usr/bin
+	[ -f /usr/bin/jellyfin ] || { touch /usr/bin/jellyfin; _jf_stub=1; }
 	mkdir -p /var/log/jellyfin
 	local log="/var/log/jellyfin/log_20260308.log"
 	echo '[2026-03-08 10:01:01.123 +00:00] [INF] Authentication request for "admin" has succeeded (IP: "203.0.113.50").' > "$log"
 	run test_rule "$INSTALL_PATH" "jellyfin" "$log"
 	assert_success
 	assert_output --partial "0 matches"
+	[ "${_jf_stub:-0}" = "1" ] && rm -f /usr/bin/jellyfin || true
 }
 
 # --- powerdns ---

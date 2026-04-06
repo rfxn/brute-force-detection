@@ -501,6 +501,11 @@ teardown() {
 # --- detect_run_mode (Merge H) ---
 
 @test "detect_run_mode: cron and unknown modes, single-line output" {
+	# Mock pgrep to return empty — isolates cron/unknown detection from
+	# unpredictable process ancestry in Docker/CI environments
+	pgrep() { return 1; }
+	export -f pgrep
+
 	# --- cron mode: /etc/cron.d/bfd exists ---
 	local _created=0
 	if [ ! -f /etc/cron.d/bfd ]; then
@@ -532,6 +537,7 @@ teardown() {
 	if [ "$_created" -eq 0 ]; then
 		mv /etc/cron.d/bfd.test_backup /etc/cron.d/bfd
 	fi
+	unset -f pgrep
 }
 
 # --- vhead (Merge G) ---
