@@ -32,7 +32,8 @@ etc/bfd/exclude.files           usr/local/bfd/exclude.files
 etc/bfd/ignore.hosts            usr/local/bfd/ignore.hosts
 etc/bfd/cdn-providers.conf      usr/local/bfd/cdn-providers.conf
 # Data files
-usr/share/bfd/ipcountry.dat     usr/local/bfd/ipcountry.dat
+usr/share/bfd/data              usr/local/bfd/data
+usr/share/bfd/data/ipcountry.dat usr/local/bfd/ipcountry.dat
 usr/share/bfd/rules             usr/local/bfd/rules
 # State directories
 var/lib/bfd/tmp                 usr/local/bfd/tmp

@@ -433,7 +433,7 @@ RULEEOF
 	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50"
 	# Create cdn.dat with range covering 1.0.0.0/24 = 16777216..16777471
 	# treatment=ignore should block the IP, but CDN_ENABLE=0 means it is skipped
-	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+	cat > "$DATA_PATH/cdn.dat" <<'EOF'
 16777216 16777471 cloudflare ignore 10
 EOF
 	CDN_ENABLE="0"
@@ -510,7 +510,7 @@ EOF
 	local rules_dir="$TEST_TMPDIR/rules"
 	mkdir -p "$rules_dir"
 	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50"
-	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+	cat > "$DATA_PATH/cdn.dat" <<'EOF'
 16777216 16777471 cloudflare ignore 10
 EOF
 	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
@@ -529,7 +529,7 @@ EOF
 	local rules_dir="$TEST_TMPDIR/rules"
 	mkdir -p "$rules_dir"
 	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50"
-	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+	cat > "$DATA_PATH/cdn.dat" <<'EOF'
 16777216 16777471 cloudflare ignore 10
 EOF
 	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
@@ -549,7 +549,7 @@ EOF
 	mkdir -p "$rules_dir"
 	# IP 1.0.0.50 -> int ~16777266, inside 1.0.0.0/24 range (16777216..16777471)
 	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50"
-	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+	cat > "$DATA_PATH/cdn.dat" <<'EOF'
 16777216 16777471 cloudflare ignore 10
 EOF
 	CDN_ENABLE="1"
@@ -568,7 +568,7 @@ EOF
 	local rules_dir="$TEST_TMPDIR/rules"
 	mkdir -p "$rules_dir"
 	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50"
-	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+	cat > "$DATA_PATH/cdn.dat" <<'EOF'
 16777216 16777471 cloudflare exclude 10
 EOF
 	CDN_ENABLE="1"
@@ -601,7 +601,7 @@ EOF
 	cat >> "$rules_dir/testrule" <<'EOF'
 PRESSURE_WEIGHT="10"
 EOF
-	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+	cat > "$DATA_PATH/cdn.dat" <<'EOF'
 16777216 16777471 cloudflare derate 3
 EOF
 	CDN_ENABLE="1"
@@ -625,7 +625,7 @@ EOF
 	# 10.0.0.50 (167772210) -> fastly exclude
 	# 192.168.1.50 (3232235826) -> no CDN match, should ban normally
 	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50 10.0.0.50 10.0.0.50 10.0.0.50 192.168.1.50 192.168.1.50 192.168.1.50"
-	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+	cat > "$DATA_PATH/cdn.dat" <<'EOF'
 16777216 16777471 cloudflare ignore 10
 167772160 167772415 fastly exclude 10
 EOF
@@ -662,12 +662,12 @@ cloudflare  ignore   10  text  https://example.com/v4  https://example.com/v6
 fastly      exclude  10  text  https://example.com/v4  -
 EOF
 	# Create cdn.dat with ranges for cloudflare and fastly
-	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+	cat > "$DATA_PATH/cdn.dat" <<'EOF'
 16777216 16777471 cloudflare ignore 10
 167772160 167772415 fastly exclude 10
 EOF
 	# Create cdn6.dat with a range for cloudflare
-	cat > "$INSTALL_PATH/cdn6.dat" <<'EOF'
+	cat > "$DATA_PATH/cdn6.dat" <<'EOF'
 2400cb00000000000000000000000000 2400cb00ffffffffffffffffffffffff cloudflare ignore 10
 EOF
 }
@@ -775,7 +775,7 @@ cloudflare  ignore   10  text  https://example.com/v4  -
 aws-cf      derate    5  text  https://example.com/v4  -
 EOF
 	# Create cdn.dat with ranges (recent mtime via touch)
-	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+	cat > "$DATA_PATH/cdn.dat" <<'EOF'
 16777216 16777471 cloudflare ignore 10
 167772160 167772415 aws-cf derate 5
 EOF
@@ -806,7 +806,7 @@ EOF
 	CDN_ENABLE="1"
 	_CDN_ACTIVE=1
 	# Create cdn.dat with range covering 1.0.0.0/24 (16777216..16777471)
-	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+	cat > "$DATA_PATH/cdn.dat" <<'EOF'
 16777216 16777471 cloudflare ignore 10
 EOF
 	# Create pressure.dat and attack.pool with data for 1.0.0.50

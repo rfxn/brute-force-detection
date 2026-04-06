@@ -11,7 +11,7 @@ load 'helpers/bfd-common'
 setup() {
 	bfd_standard_setup
 	# create a small test IP-to-country database (RFC 5737 ranges only)
-	cat > "$INSTALL_PATH/ipcountry.dat" <<'EOF'
+	cat > "$DATA_PATH/ipcountry.dat" <<'EOF'
 # Test IP-to-country database — RFC 5737 documentation ranges only
 # 192.0.2.0-127 = XX (TEST-NET-1 lower half)
 3221225984 3221226111 XX
@@ -42,31 +42,31 @@ teardown() {
 # ============================================================
 
 @test "ip_to_country: finds CN for 192.0.2.128 (upper half)" {
-	run ip_to_country "192.0.2.128" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "192.0.2.128" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "CN"
 }
 
 @test "ip_to_country: finds XX for 192.0.2.1 (lower half)" {
-	run ip_to_country "192.0.2.1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "192.0.2.1" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "XX"
 }
 
 @test "ip_to_country: finds RU for 198.51.100.50" {
-	run ip_to_country "198.51.100.50" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "198.51.100.50" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "RU"
 }
 
 @test "ip_to_country: finds US for 203.0.113.100" {
-	run ip_to_country "203.0.113.100" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "203.0.113.100" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "US"
 }
 
 @test "ip_to_country: returns empty for unknown IP" {
-	run ip_to_country "198.51.100.200" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "198.51.100.200" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output ""
 }
@@ -74,47 +74,47 @@ teardown() {
 @test "ip_to_country: returns CC for IPv6 when db6 present" {
 	# Create a small hex-range IPv6 database
 	# 2001:0db8:: range = 20010db8 00000000 00000000 00000000
-	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+	cat > "$DATA_PATH/ipcountry6.dat" <<'EOF'
 20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
 20010db9000000000000000000000000 20010db9ffffffffffffffffffffffff DE
 EOF
-	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "2001:db8::1" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "JP"
 }
 
 @test "ip_to_country: returns empty for IPv6 when db6 absent" {
 	# No ipcountry6.dat exists
-	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "2001:db8::1" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output ""
 }
 
 @test "ip_to_country: IPv6 abbreviation forms resolve correctly" {
-	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+	cat > "$DATA_PATH/ipcountry6.dat" <<'EOF'
 20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
 EOF
 	# Full form
-	run ip_to_country "2001:0db8:0000:0000:0000:0000:0000:0001" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "2001:0db8:0000:0000:0000:0000:0000:0001" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "JP"
 	# ::compressed
-	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "2001:db8::1" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "JP"
 	# Mixed case
-	run ip_to_country "2001:0DB8::1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "2001:0DB8::1" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "JP"
 }
 
 @test "ip_to_country: old raw-CIDR ipcountry6.dat returns empty (format guard)" {
 	# Simulate old raw-CIDR format (contains colons)
-	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+	cat > "$DATA_PATH/ipcountry6.dat" <<'EOF'
 2001:db8::/32 JP
 2001:db9::/32 DE
 EOF
-	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "2001:db8::1" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output ""
 }
@@ -126,8 +126,8 @@ EOF
 }
 
 @test "ip_to_country: returns empty for empty DB file" {
-	> "$INSTALL_PATH/ipcountry.dat"
-	run ip_to_country "192.0.2.1" "$INSTALL_PATH/ipcountry.dat"
+	> "$DATA_PATH/ipcountry.dat"
+	run ip_to_country "192.0.2.1" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output ""
 }
@@ -178,7 +178,7 @@ EOF
 
 @test "ip_to_country: cache miss populates cache file" {
 	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
-	run ip_to_country "192.0.2.128" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "192.0.2.128" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "CN"
 	# verify cache was populated
@@ -192,7 +192,7 @@ EOF
 	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
 	# cache says ZZ, DB says CN for 192.0.2.128 — cache must win
 	echo "192.0.2.128 ZZ" > "$_COUNTRY_CACHE_FILE"
-	run ip_to_country "192.0.2.128" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "192.0.2.128" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "ZZ"
 	rm -f "$_COUNTRY_CACHE_FILE"
@@ -201,7 +201,7 @@ EOF
 
 @test "ip_to_country: cache stores sentinel for unknown IPs" {
 	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
-	run ip_to_country "198.51.100.200" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "198.51.100.200" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output ""
 	# verify sentinel "-" stored
@@ -214,7 +214,7 @@ EOF
 @test "ip_to_country: cached sentinel returns empty string" {
 	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
 	echo "198.51.100.200 -" > "$_COUNTRY_CACHE_FILE"
-	run ip_to_country "198.51.100.200" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "198.51.100.200" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output ""
 	rm -f "$_COUNTRY_CACHE_FILE"
@@ -223,24 +223,24 @@ EOF
 
 @test "ip_to_country: no cache when _COUNTRY_CACHE_FILE unset" {
 	_COUNTRY_CACHE_FILE=""
-	run ip_to_country "192.0.2.128" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "192.0.2.128" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "CN"
 }
 
 @test "ip_to_country: IPv6 cache hit after first lookup" {
-	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+	cat > "$DATA_PATH/ipcountry6.dat" <<'EOF'
 20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
 EOF
 	_COUNTRY_CACHE_FILE=$(mktemp "$TEST_TMPDIR/cc_cache.XXXXXX")
-	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "2001:db8::1" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "JP"
 	# verify cache was populated with IPv6 entry
 	run grep -c "^2001:db8::1 " "$_COUNTRY_CACHE_FILE"
 	assert_output "1"
 	# second lookup should hit cache
-	run ip_to_country "2001:db8::1" "$INSTALL_PATH/ipcountry.dat"
+	run ip_to_country "2001:db8::1" "$DATA_PATH/ipcountry.dat"
 	assert_success
 	assert_output "JP"
 	rm -f "$_COUNTRY_CACHE_FILE"
@@ -356,22 +356,22 @@ _run_entry_vars_country() {
 }
 
 @test "_batch_ip_to_country: empty db file outputs 'IP -'" {
-	> "$INSTALL_PATH/ipcountry.dat"
+	> "$DATA_PATH/ipcountry.dat"
 	local result
-	result=$(printf '192.0.2.1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	result=$(printf '192.0.2.1\n' | _batch_ip_to_country "$DATA_PATH/ipcountry.dat")
 	[ "$result" = "192.0.2.1 -" ]
 }
 
 @test "_batch_ip_to_country: single IPv4 match returns correct CC" {
 	local result
-	result=$(printf '192.0.2.128\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	result=$(printf '192.0.2.128\n' | _batch_ip_to_country "$DATA_PATH/ipcountry.dat")
 	[ "$result" = "192.0.2.128 CN" ]
 }
 
 @test "_batch_ip_to_country: multiple IPs resolved in one pass" {
 	local result
 	result=$(printf '192.0.2.1\n192.0.2.128\n198.51.100.50\n203.0.113.100\n' \
-		| _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+		| _batch_ip_to_country "$DATA_PATH/ipcountry.dat")
 	echo "$result" | grep -q "192.0.2.1 XX"
 	echo "$result" | grep -q "192.0.2.128 CN"
 	echo "$result" | grep -q "198.51.100.50 RU"
@@ -380,59 +380,59 @@ _run_entry_vars_country() {
 
 @test "_batch_ip_to_country: unknown IP returns dash" {
 	local result
-	result=$(printf '10.0.0.1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	result=$(printf '10.0.0.1\n' | _batch_ip_to_country "$DATA_PATH/ipcountry.dat")
 	[ "$result" = "10.0.0.1 -" ]
 }
 
 @test "_batch_ip_to_country: IPv6 returns dash when db6 absent" {
 	local result
-	result=$(printf '2001:db8::1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	result=$(printf '2001:db8::1\n' | _batch_ip_to_country "$DATA_PATH/ipcountry.dat")
 	[ "$result" = "2001:db8::1 -" ]
 }
 
 @test "_batch_ip_to_country: IPv6 returns CC when db6 present" {
-	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+	cat > "$DATA_PATH/ipcountry6.dat" <<'EOF'
 20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
 EOF
 	local result
-	result=$(printf '2001:db8::1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	result=$(printf '2001:db8::1\n' | _batch_ip_to_country "$DATA_PATH/ipcountry.dat")
 	[ "$result" = "2001:db8::1 JP" ]
 }
 
 @test "_batch_ip_to_country: mixed IPv4+IPv6 returns correct CCs for both" {
-	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+	cat > "$DATA_PATH/ipcountry6.dat" <<'EOF'
 20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
 EOF
 	local result
 	result=$(printf '192.0.2.128\n2001:db8::1\n198.51.100.50\n' \
-		| _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+		| _batch_ip_to_country "$DATA_PATH/ipcountry.dat")
 	echo "$result" | grep -q "192.0.2.128 CN"
 	echo "$result" | grep -q "2001:db8::1 JP"
 	echo "$result" | grep -q "198.51.100.50 RU"
 }
 
 @test "_batch_ip_to_country: old raw-CIDR ipcountry6.dat falls back to dash" {
-	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+	cat > "$DATA_PATH/ipcountry6.dat" <<'EOF'
 2001:db8::/32 JP
 EOF
 	local result
-	result=$(printf '2001:db8::1\n' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	result=$(printf '2001:db8::1\n' | _batch_ip_to_country "$DATA_PATH/ipcountry.dat")
 	[ "$result" = "2001:db8::1 -" ]
 }
 
 @test "_batch_ip_to_country: IPv4-only input with db6 present uses dual-stack path" {
-	cat > "$INSTALL_PATH/ipcountry6.dat" <<'EOF'
+	cat > "$DATA_PATH/ipcountry6.dat" <<'EOF'
 20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
 EOF
 	local result
 	result=$(printf '192.0.2.128\n198.51.100.50\n' \
-		| _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+		| _batch_ip_to_country "$DATA_PATH/ipcountry.dat")
 	echo "$result" | grep -q "192.0.2.128 CN"
 	echo "$result" | grep -q "198.51.100.50 RU"
 }
 
 @test "_batch_ip_to_country: empty input produces no output" {
 	local result
-	result=$(printf '' | _batch_ip_to_country "$INSTALL_PATH/ipcountry.dat")
+	result=$(printf '' | _batch_ip_to_country "$DATA_PATH/ipcountry.dat")
 	[ -z "$result" ]
 }

@@ -11,10 +11,11 @@
 # per-country fallback) and geoip_build_ip6db() for IPv6 (hex-range format).
 #
 # Usage: update-ipcountry.sh [output_file]
-#   output_file defaults to $INSTALL_PATH/ipcountry.dat
+#   output_file defaults to $DATA_PATH/ipcountry.dat
 
 INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
-OUTPUT="${1:-$INSTALL_PATH/ipcountry.dat}"
+DATA_PATH="${DATA_PATH:-$INSTALL_PATH/data}"
+OUTPUT="${1:-$DATA_PATH/ipcountry.dat}"
 OUTPUT6="${OUTPUT%.*}6.${OUTPUT##*.}"
 DL_TIMEOUT="${DL_TIMEOUT:-120}"
 

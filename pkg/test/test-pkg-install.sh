@@ -88,7 +88,8 @@ check_file /etc/bfd/pressure.conf "Config: pressure.conf"
 check_file /etc/bfd/pressure-country.conf "Config: pressure-country.conf"
 check_file /etc/bfd/exclude.files "Config: exclude.files"
 check_file /etc/bfd/ignore.hosts "Config: ignore.hosts"
-check_file /usr/share/bfd/ipcountry.dat "Data: ipcountry.dat"
+check_file /usr/share/bfd/data "Data: data directory"
+check_file /usr/share/bfd/data/ipcountry.dat "Data: ipcountry.dat"
 check_file /usr/share/bfd/rules "Data: rules directory"
 check_file /var/lib/bfd/tmp "State: tmp directory"
 check_file /var/lib/bfd/stats "State: stats directory"
@@ -116,7 +117,8 @@ check_link /usr/local/bfd/pressure.conf /etc/bfd/pressure.conf "Symlink: pressur
 check_link /usr/local/bfd/pressure-country.conf /etc/bfd/pressure-country.conf "Symlink: pressure-country.conf"
 check_link /usr/local/bfd/exclude.files /etc/bfd/exclude.files "Symlink: exclude.files"
 check_link /usr/local/bfd/ignore.hosts /etc/bfd/ignore.hosts "Symlink: ignore.hosts"
-check_link /usr/local/bfd/ipcountry.dat /usr/share/bfd/ipcountry.dat "Symlink: ipcountry.dat"
+check_link /usr/local/bfd/data /usr/share/bfd/data "Symlink: data"
+check_link /usr/local/bfd/ipcountry.dat /usr/share/bfd/data/ipcountry.dat "Symlink: ipcountry.dat"
 check_link /usr/local/bfd/rules /usr/share/bfd/rules "Symlink: rules"
 check_link /usr/local/bfd/tmp /var/lib/bfd/tmp "Symlink: tmp"
 check_link /usr/local/bfd/stats /var/lib/bfd/stats "Symlink: stats"
@@ -159,6 +161,11 @@ if grep -q '/etc/bfd/pressure.conf' /etc/bfd/internals.conf; then
 	pass "PRESSURE_CONF uses FHS path"
 else
 	fail "PRESSURE_CONF still uses \$INSTALL_PATH"
+fi
+if grep -q '/usr/share/bfd/data' /etc/bfd/internals.conf; then
+	pass "DATA_PATH uses FHS path"
+else
+	fail "DATA_PATH still uses \$INSTALL_PATH"
 fi
 echo ""
 

@@ -266,6 +266,20 @@ elif [ -f "$BK_LAST/tmp/events.dat" ]; then
 fi
 command cp -f "$BK_LAST/stats/"* "$INSTALL_PATH/stats/" 2>/dev/null
 
+# migrate data files (ipcountry.dat, cdn.dat, etc.) to data/ subdirectory
+_data_dir="$INSTALL_PATH/data"
+[ -d "$_data_dir" ] || { command mkdir -p "$_data_dir"; command chmod 750 "$_data_dir"; }
+for _df in ipcountry.dat ipcountry6.dat cdn.dat cdn6.dat .last_update; do
+	# From old flat backup (pre-data/ layout)
+	if [ -f "$BK_LAST/$_df" ] && [ ! -f "$_data_dir/$_df" ]; then
+		command cp -f "$BK_LAST/$_df" "$_data_dir/$_df"
+	fi
+	# From new backup (post-data/ layout)
+	if [ -f "$BK_LAST/data/$_df" ] && [ ! -f "$_data_dir/$_df" ]; then
+		command cp -f "$BK_LAST/data/$_df" "$_data_dir/$_df"
+	fi
+done
+
 # preserve journal cursor/timestamp state
 command cp -f "$BK_LAST/tmp/"*.cursor "$INSTALL_PATH/tmp/" 2>/dev/null
 command cp -f "$BK_LAST/tmp/"*.jts "$INSTALL_PATH/tmp/" 2>/dev/null

@@ -46,7 +46,7 @@ install_files(){
 	command cp README.md CHANGELOG COPYING.GPL "$INSPATH"
 
 	# Create runtime directories
-	pkg_create_dirs "750" "$INSPATH/tmp" "$INSPATH/stats"
+	pkg_create_dirs "750" "$INSPATH/tmp" "$INSPATH/stats" "$INSPATH/data"
 
 	# Set permissions: 750 dirs, 640 files, then executable overrides
 	pkg_set_perms "$INSPATH" "750" "640" \

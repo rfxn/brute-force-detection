@@ -298,7 +298,7 @@ INTEOF
 _start_watch() {
 	# create a minimal working install
 	local inst="$TEST_TMPDIR/watch-inst"
-	mkdir -p "$inst/tmp" "$inst/rules" "$inst/stats" "$inst/internals"
+	mkdir -p "$inst/tmp" "$inst/rules" "$inst/stats" "$inst/internals" "$inst/data"
 	cp "$PROJECT_ROOT/files/bfd" "$inst/bfd"
 	cp "$PROJECT_ROOT/files/internals/bfd.lib.sh" "$inst/internals/bfd.lib.sh"
 	chown root "$inst/internals/bfd.lib.sh"
@@ -378,6 +378,7 @@ CNFEOF
 	cat > "$inst/internals/internals.conf" <<INTEOF
 #!/bin/bash
 RULES_PATH="$inst/rules"
+DATA_PATH="$inst/data"
 TLOG_PATH="$inst/tlog"
 TLOG_BASERUN="$inst/tmp"
 ALERT_TEMPLATE_DIR="$inst/alert"

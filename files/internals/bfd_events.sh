@@ -231,7 +231,7 @@ search_ip() {
 
 	# CDN provider annotation (only when CDN active and cdn.dat exists)
 	if [ "${_CDN_ACTIVE:-0}" = "1" ]; then
-		local _cdn_db="$install_path/cdn.dat"
+		local _cdn_db="$DATA_PATH/cdn.dat"
 		if [ -f "$_cdn_db" ] && [ -s "$_cdn_db" ]; then
 			local _cdn_result
 			if _cdn_result=$(_cdn_lookup "$ip" "$_cdn_db"); then

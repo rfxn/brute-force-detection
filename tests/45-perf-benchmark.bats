@@ -156,7 +156,7 @@ _perf_generate_logs() {
 	perf_timeout_check "pressure_dat_gen" "$_group_start" "$_timeout"
 
 	# generate ipcountry data (256 entries covers 10.0.0.x)
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 256
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 256
 	perf_timeout_check "ipcountry_dat_gen" "$_group_start" "$_timeout"
 
 	# create unique IP list (50 IPs)
@@ -182,7 +182,7 @@ _perf_generate_logs() {
 	# batch country lookup
 	timer_start
 	local _cc_out
-	_cc_out=$(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_ip_file")
+	_cc_out=$(_batch_ip_to_country "$DATA_PATH/ipcountry.dat" < "$_ip_file")
 	ms=$(timer_elapsed_ms)
 	local cc_count
 	cc_count=$(echo "$_cc_out" | grep -c . 2>/dev/null || echo 0)
@@ -201,7 +201,7 @@ _perf_generate_logs() {
 	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
 
 	# create ipcountry for check()
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 256
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 256
 
 	# Create 4 mock rules that use _TLOG_PASSTHROUGH
 	create_mock_rule "sshd" "$(printf 'PREREQ=""\nLOG_FILE="%s"\nLOG_TAG="sshd"\n_TLOG_PASSTHROUGH="%s"\nMATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts "sshd.*Failed password for .* from <HOST>")\n' \
@@ -301,7 +301,7 @@ _perf_generate_logs() {
 	perf_timeout_check "pressure_dat_gen" "$_group_start" "$_timeout"
 
 	# generate ipcountry data (2048 entries)
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 2048
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 2048
 	perf_timeout_check "ipcountry_dat_gen" "$_group_start" "$_timeout"
 
 	# create unique IP list (500 IPs)
@@ -328,7 +328,7 @@ _perf_generate_logs() {
 	# batch country lookup
 	timer_start
 	local _cc_out
-	_cc_out=$(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_ip_file")
+	_cc_out=$(_batch_ip_to_country "$DATA_PATH/ipcountry.dat" < "$_ip_file")
 	ms=$(timer_elapsed_ms)
 	local cc_count
 	cc_count=$(echo "$_cc_out" | grep -c . 2>/dev/null || echo 0)
@@ -347,7 +347,7 @@ _perf_generate_logs() {
 	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
 
 	# create ipcountry for check()
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 2048
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 2048
 
 	# Create 4 mock rules
 	create_mock_rule "sshd" "$(printf 'PREREQ=""\nLOG_FILE="%s"\nLOG_TAG="sshd"\n_TLOG_PASSTHROUGH="%s"\nMATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts "sshd.*Failed password for .* from <HOST>")\n' \
@@ -445,7 +445,7 @@ _perf_generate_logs() {
 	perf_timeout_check "pressure_dat_gen" "$_group_start" "$_timeout"
 
 	# generate ipcountry data (8192 entries for broader coverage)
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 8192
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 8192
 	perf_timeout_check "ipcountry_dat_gen" "$_group_start" "$_timeout"
 
 	# create unique IP list (2K IPs)
@@ -472,7 +472,7 @@ _perf_generate_logs() {
 	# batch country lookup
 	timer_start
 	local _cc_out
-	_cc_out=$(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_ip_file")
+	_cc_out=$(_batch_ip_to_country "$DATA_PATH/ipcountry.dat" < "$_ip_file")
 	ms=$(timer_elapsed_ms)
 	local cc_count
 	cc_count=$(echo "$_cc_out" | grep -c . 2>/dev/null || echo 0)
@@ -491,7 +491,7 @@ _perf_generate_logs() {
 	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
 
 	# create ipcountry for check()
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 8192
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 8192
 
 	# Create 4 mock rules
 	create_mock_rule "sshd" "$(printf 'PREREQ=""\nLOG_FILE="%s"\nLOG_TAG="sshd"\n_TLOG_PASSTHROUGH="%s"\nMATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts "sshd.*Failed password for .* from <HOST>")\n' \
@@ -609,7 +609,7 @@ _perf_generate_logs() {
 	_perf_generate_logs "dev" 1000 50 100
 	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
 
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 256
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 256
 
 	# Create 4 mock rules using _TLOG_PASSTHROUGH (tlog path is identical;
 	# only the ban execution path differs between DRY_RUN modes)

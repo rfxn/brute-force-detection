@@ -12,6 +12,8 @@ setup() {
 	bfd_common_setup
 	INSTALL_PATH="$TEST_TMPDIR/bfd"
 	mkdir -p "$INSTALL_PATH"
+	DATA_PATH="$INSTALL_PATH/data"
+	mkdir -p "$DATA_PATH"
 }
 
 teardown() {
@@ -1030,12 +1032,15 @@ EOF
 	EMAIL_REPUTATION_LINKS=""
 	# no ipcountry.dat available
 	local _old_ip="${INSTALL_PATH:-}"
+	local _old_dp="${DATA_PATH:-}"
 	INSTALL_PATH="$TEST_TMPDIR/nonexistent"
+	DATA_PATH="$TEST_TMPDIR/nonexistent/data"
 	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ "$COUNTRY_CODE" = "--" ]
 	[ "$COUNTRY_DISPLAY" = "--" ]
 	INSTALL_PATH="$_old_ip"
+	DATA_PATH="$_old_dp"
 }
 
 @test "_alert_set_entry_vars: COUNTRY_DISPLAY includes full name when geoip_lib loaded" {
@@ -1046,8 +1051,8 @@ EOF
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
 	# create ipcountry.dat with CN mapping for 192.0.2.128
-	mkdir -p "$INSTALL_PATH"
-	cat > "$INSTALL_PATH/ipcountry.dat" <<'EOF'
+	mkdir -p "$DATA_PATH"
+	cat > "$DATA_PATH/ipcountry.dat" <<'EOF'
 3221226112 3221226239 CN
 EOF
 	local line="192.0.2.128|sshd|22|5000|0|ban|0||root|10|300|1|5"

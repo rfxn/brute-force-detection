@@ -659,7 +659,7 @@ show_status() {
 	# CDN providers summary (only when CDN active)
 	if [ "${_CDN_ACTIVE:-0}" = "1" ]; then
 		local _cdn_conf="$install_path/cdn-providers.conf"
-		local _cdn_dat="$install_path/cdn.dat"
+		local _cdn_dat="$DATA_PATH/cdn.dat"
 		local _cdn_auto_label=""
 		[ "${CDN_ENABLE:-auto}" = "auto" ] && _cdn_auto_label=" (auto)"
 		if [ -f "$_cdn_conf" ] && _cdn_load_providers "$_cdn_conf" 2>/dev/null && [ "$_CDN_COUNT" -gt 0 ]; then

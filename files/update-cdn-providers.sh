@@ -15,9 +15,10 @@
 #   conf_file defaults to $INSTALL_PATH/cdn-providers.conf
 
 INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
+DATA_PATH="${DATA_PATH:-$INSTALL_PATH/data}"
 CONF_FILE="${1:-$INSTALL_PATH/cdn-providers.conf}"
-OUTPUT_V4="$INSTALL_PATH/cdn.dat"
-OUTPUT_V6="$INSTALL_PATH/cdn6.dat"
+OUTPUT_V4="$DATA_PATH/cdn.dat"
+OUTPUT_V6="$DATA_PATH/cdn6.dat"
 
 # Source bfd_cdn.sh for compile/fetch functions
 _script_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"

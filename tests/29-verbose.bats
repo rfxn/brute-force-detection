@@ -215,7 +215,7 @@ _make_rule_body() {
 	_check_verbose_setup
 	# create a mock country database with high multiplier for 192.0.2.x
 	# 192.0.2.0 = 3221225984; range covers .0-.255
-	echo "3221225984 3221226239 XX" > "$INSTALL_PATH/ipcountry.dat"
+	echo "3221225984 3221226239 XX" > "$DATA_PATH/ipcountry.dat"
 	echo "XX=30" > "$INSTALL_PATH/pressure-country.conf"
 	create_mock_rule "testrule" "$(_make_rule_body)"
 	run check

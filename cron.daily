@@ -112,7 +112,7 @@ if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
 fi
 
 # Refresh country database if stale (>30 days since last update)
-_dat="$INSTALL_PATH/ipcountry.dat"
+_dat="${DATA_PATH:-$INSTALL_PATH/data}/ipcountry.dat"
 if [ -x "$INSTALL_PATH/update-ipcountry.sh" ] && [ -f "$_dat" ]; then
 	_age=$(( $(date +%s) - $(stat -c %Y "$_dat") ))
 	if [ "$_age" -gt 2592000 ]; then
@@ -121,7 +121,7 @@ if [ -x "$INSTALL_PATH/update-ipcountry.sh" ] && [ -f "$_dat" ]; then
 fi
 
 # Refresh CDN provider database if stale
-_cdn_dat="$INSTALL_PATH/cdn.dat"
+_cdn_dat="${DATA_PATH:-$INSTALL_PATH/data}/cdn.dat"
 _cdn_days="${CDN_UPDATE_DAYS:-7}"
 _cdn_active=0
 case "${CDN_ENABLE:-auto}" in

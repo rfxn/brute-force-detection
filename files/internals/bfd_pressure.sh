@@ -454,8 +454,8 @@ _resolve_cidr_cc() {
 		echo "$cc"
 		return
 	fi
-	if [[ "$ip" == */* ]] && [ -f "$INSTALL_PATH/ipcountry.dat" ]; then
-		cc=$(ip_to_country "${ip%%/*}" "$INSTALL_PATH/ipcountry.dat" 2>/dev/null)  # 2>/dev/null: ipcountry.dat may not exist
+	if [[ "$ip" == */* ]] && [ -f "$DATA_PATH/ipcountry.dat" ]; then
+		cc=$(ip_to_country "${ip%%/*}" "$DATA_PATH/ipcountry.dat" 2>/dev/null)  # 2>/dev/null: ipcountry.dat may not exist
 	fi
 	echo "${cc:---}"
 }

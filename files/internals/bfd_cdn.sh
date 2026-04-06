@@ -707,8 +707,8 @@ cdn_list() {
 		return 0
 	fi
 
-	local db_v4="$install_path/cdn.dat"
-	local db_v6="$install_path/cdn6.dat"
+	local db_v4="$DATA_PATH/cdn.dat"
+	local db_v6="$DATA_PATH/cdn6.dat"
 
 	# Count active providers
 	local active_count="$_CDN_COUNT"
@@ -780,8 +780,8 @@ cdn_list_json() {
 		return 0
 	fi
 
-	local db_v4="$install_path/cdn.dat"
-	local db_v6="$install_path/cdn6.dat"
+	local db_v4="$DATA_PATH/cdn.dat"
+	local db_v6="$DATA_PATH/cdn6.dat"
 
 	echo "["
 	local i _name _treatment _mult _v4_count _v6_count _updated_iso _first=1
@@ -831,8 +831,8 @@ cdn_list_json() {
 cdn_detail() {
 	local install_path="$1" provider="$2"
 
-	local db_v4="$install_path/cdn.dat"
-	local db_v6="$install_path/cdn6.dat"
+	local db_v4="$DATA_PATH/cdn.dat"
+	local db_v6="$DATA_PATH/cdn6.dat"
 
 	# Verify provider exists in config
 	local conf_file="$install_path/cdn-providers.conf"
@@ -906,8 +906,8 @@ cdn_detail() {
 cdn_detail_json() {
 	local install_path="$1" provider="$2"
 
-	local db_v4="$install_path/cdn.dat"
-	local db_v6="$install_path/cdn6.dat"
+	local db_v4="$DATA_PATH/cdn.dat"
+	local db_v6="$DATA_PATH/cdn6.dat"
 
 	# Verify provider exists
 	local conf_file="$install_path/cdn-providers.conf"
@@ -986,9 +986,9 @@ cdn_check_ip() {
 
 	local db_file
 	if [[ "$ip" == *:* ]]; then
-		db_file="$install_path/cdn6.dat"
+		db_file="$DATA_PATH/cdn6.dat"
 	else
-		db_file="$install_path/cdn.dat"
+		db_file="$DATA_PATH/cdn.dat"
 	fi
 
 	local result
@@ -1009,9 +1009,9 @@ cdn_check_ip_json() {
 
 	local db_file
 	if [[ "$ip" == *:* ]]; then
-		db_file="$install_path/cdn6.dat"
+		db_file="$DATA_PATH/cdn6.dat"
 	else
-		db_file="$install_path/cdn.dat"
+		db_file="$DATA_PATH/cdn.dat"
 	fi
 
 	local result
@@ -1055,7 +1055,7 @@ cdn_update() {
 	echo "  config: $conf_file"
 	echo ""
 
-	_cdn_compile_db "$conf_file" "$install_path/cdn.dat" "$install_path/cdn6.dat"
+	_cdn_compile_db "$conf_file" "$DATA_PATH/cdn.dat" "$DATA_PATH/cdn6.dat"
 	local rc=$?
 
 	echo ""

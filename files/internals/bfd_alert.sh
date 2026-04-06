@@ -432,8 +432,8 @@ _alert_set_entry_vars() {
 
 	# country lookup
 	local cc=""
-	if [ -n "${INSTALL_PATH:-}" ] && [ -f "${INSTALL_PATH}/ipcountry.dat" ]; then
-		cc=$(ip_to_country "$host" "$INSTALL_PATH/ipcountry.dat")
+	if [ -n "${DATA_PATH:-}" ] && [ -f "${DATA_PATH}/ipcountry.dat" ]; then
+		cc=$(ip_to_country "$host" "$DATA_PATH/ipcountry.dat")
 	fi
 	export COUNTRY_CODE="${cc:---}"
 	export COUNTRY_FLAG
@@ -667,13 +667,13 @@ _alert_compute_summary() {
 
 	# country breakdown: batch lookup all alert IPs (preserving duplicates for counting)
 	local countries_str=""
-	if [ -n "${INSTALL_PATH:-}" ] && [ -f "${INSTALL_PATH}/ipcountry.dat" ]; then
+	if [ -n "${DATA_PATH:-}" ] && [ -f "${DATA_PATH}/ipcountry.dat" ]; then
 		# extract ALL IPs (one per alert line, including duplicates for per-CC count)
 		local _tmp_ips _batch_out _cc_list=""
 		_tmp_ips=$(mktemp "${ALERT_TMPDIR:-/tmp}/bfd-summary.XXXXXX")
 		awk -F'|' '{print $1}' "$alerts_file" > "$_tmp_ips"
 		# batch lookup: outputs "IP CC" or "IP -" lines
-		_batch_out=$(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_tmp_ips")
+		_batch_out=$(_batch_ip_to_country "$DATA_PATH/ipcountry.dat" < "$_tmp_ips")
 		command rm -f "$_tmp_ips"
 		# extract CC column, replace "-" with "--" for display
 		if [ -n "$_batch_out" ]; then

@@ -77,6 +77,8 @@ bfd_standard_setup() {
 	bfd_common_setup
 	INSTALL_PATH="$TEST_TMPDIR/bfd"
 	mkdir -p "$INSTALL_PATH"
+	DATA_PATH="$INSTALL_PATH/data"
+	mkdir -p "$DATA_PATH"
 	state_init "$INSTALL_PATH"
 	TLOG_BASERUN="$INSTALL_PATH/tmp"
 	BAN_RETRY_COUNT="0"

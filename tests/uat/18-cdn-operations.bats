@@ -59,8 +59,8 @@ teardown_file() {
     local conf="/usr/local/bfd/conf.bfd"
     sed -i 's/^CDN_ENABLE=.*/CDN_ENABLE="1"/' "$conf"
     # Ensure empty CDN databases
-    : > /usr/local/bfd/cdn.dat
-    : > /usr/local/bfd/cdn6.dat
+    : > /usr/local/bfd/data/cdn.dat
+    : > /usr/local/bfd/data/cdn6.dat
     uat_capture "cdn" bfd --cdn check 203.0.113.1
     assert_success
     assert_output --partial "no match"
@@ -70,8 +70,8 @@ teardown_file() {
 @test "UAT: --cdn check --json returns valid JSON" {
     local conf="/usr/local/bfd/conf.bfd"
     sed -i 's/^CDN_ENABLE=.*/CDN_ENABLE="1"/' "$conf"
-    : > /usr/local/bfd/cdn.dat
-    : > /usr/local/bfd/cdn6.dat
+    : > /usr/local/bfd/data/cdn.dat
+    : > /usr/local/bfd/data/cdn6.dat
     uat_capture "cdn" bfd --cdn check 203.0.113.1 --json
     assert_success
     assert_valid_json
