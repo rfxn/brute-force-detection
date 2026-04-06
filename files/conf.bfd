@@ -7,7 +7,7 @@
 #
 
 # =============================================
-# Pressure Model (Detection)
+# Detection (Pressure Model)
 # =============================================
 #
 # BFD uses exponential-decay pressure scoring: each failed login adds
@@ -36,116 +36,6 @@ PRESSURE_TRIP="20"
 # at 1 half-life, pressure is halved; at 2, quartered; etc.
 # shorter = more forgiving; longer = longer memory (default 5 minutes)
 PRESSURE_HALF_LIFE="300"
-
-# =============================================
-# Email Alerts
-# =============================================
-
-# send email alerts when hosts are banned [0 = off, 1 = on]
-EMAIL_ALERTS="0"
-
-# alert recipient; comma-separated for multiple addresses
-EMAIL_ADDRESS="root"
-
-# alert subject line ($HOSTNAME expands at runtime)
-EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
-
-# log lines from the offending service included in each alert and event view; must be > 0
-EMAIL_LOGLINES="5"
-
-# email body format [text = plain text, html = HTML only, both = multipart text+HTML]
-# text uses 'mail' command; html/both require 'sendmail' (falls back to text if missing)
-EMAIL_FORMAT="text"
-
-# email digest mode [cycle = one email per run, timed = accumulate and send on interval]
-EMAIL_DIGEST="cycle"
-
-# digest flush interval in seconds (only used when EMAIL_DIGEST="timed")
-EMAIL_DIGEST_INTERVAL="900"
-
-# IP reputation lookup links included in alerts (comma-separated)
-# available: abuseipdb, shodan, virustotal, ipinfo, greynoise
-EMAIL_REPUTATION_LINKS=""
-
-# --- SMTP Relay (optional — leave empty to use local MTA) ---
-# SMTP relay server URL (e.g., smtps://smtp.gmail.com:465, smtp://relay.example.com:587)
-SMTP_RELAY=""
-# sender address for relay mode (required when SMTP_RELAY is set)
-SMTP_FROM=""
-# SMTP authentication credentials (required when SMTP_RELAY is set)
-SMTP_USER=""
-SMTP_PASS=""
-
-# =============================================
-# Slack Alerts
-# =============================================
-
-# enable Slack alerts [0 = disabled, 1 = enabled]
-SLACK_ALERTS="0"
-
-# delivery mode [webhook = incoming webhook, bot = Bot API + file uploads]
-SLACK_MODE="webhook"
-
-# webhook URL (required when SLACK_MODE="webhook")
-# create at: https://api.slack.com/messaging/webhooks
-SLACK_WEBHOOK_URL=""
-
-# Bot API token (required when SLACK_MODE="bot")
-# create at: https://api.slack.com/apps → Bot User OAuth Token (xoxb-...)
-SLACK_TOKEN=""
-
-# channel for Bot API posts (required when SLACK_MODE="bot")
-# use channel ID (e.g., C01ABCDEF) or #channel-name
-SLACK_CHANNEL=""
-
-# =============================================
-# Telegram Alerts
-# =============================================
-
-# enable Telegram alerts [0 = disabled, 1 = enabled]
-TELEGRAM_ALERTS="0"
-
-# bot token from @BotFather (required when TELEGRAM_ALERTS="1")
-TELEGRAM_BOT_TOKEN=""
-
-# chat/group/channel ID (required when TELEGRAM_ALERTS="1")
-# use @userinfobot or the getUpdates API to find your chat ID
-TELEGRAM_CHAT_ID=""
-
-# =============================================
-# Discord Alerts
-# =============================================
-
-# enable Discord alerts [0 = disabled, 1 = enabled]
-DISCORD_ALERTS="0"
-
-# webhook URL (required when DISCORD_ALERTS="1")
-# create at: Server Settings → Integrations → Webhooks
-DISCORD_WEBHOOK_URL=""
-
-# =============================================
-# Periodic Reports
-# =============================================
-
-# enable periodic threat reports [0 = disabled, 1 = enabled]
-# when enabled, cron.daily triggers reports on configured intervals
-REPORT_ENABLED="0"
-
-# report intervals to generate (comma-separated: daily,weekly,monthly)
-REPORT_INTERVALS="daily"
-
-# delivery channels (comma-separated: email,slack,telegram,discord)
-# empty = use all enabled alert channels above
-REPORT_CHANNELS=""
-
-# report email recipient (defaults to EMAIL_ADDRESS if empty)
-REPORT_EMAIL_ADDRESS=""
-
-# email subject template ({{INTERVAL}} and {{HOSTNAME}} expand at send time)
-REPORT_EMAIL_SUBJECT="BFD {{INTERVAL}} Threat Report for {{HOSTNAME}}"
-
-# maximum IPs to include in report tables (default 25)
-REPORT_TOP_N="25"
 
 # =============================================
 # Banning
@@ -224,27 +114,46 @@ BAN_COMMAND_V6=""
 UNBAN_COMMAND_V6=""
 
 # =============================================
-# Log Paths
+# Email Alerts
 # =============================================
 
-# authentication log (auto-detected: /var/log/auth.log on Debian/Ubuntu)
-AUTH_LOG_PATH="/var/log/secure"
+# send email alerts when hosts are banned [0 = off, 1 = on]
+EMAIL_ALERTS="0"
 
-# system/kernel log (auto-detected: /var/log/syslog on Debian/Ubuntu)
-KERNEL_LOG_PATH="/var/log/messages"
+# alert recipient; comma-separated for multiple addresses
+EMAIL_ADDRESS="root"
 
-# mail log (auto-detected: /var/log/mail.log on Debian/Ubuntu)
-MAIL_LOG_PATH="/var/log/maillog"
+# alert subject line ($HOSTNAME expands at runtime)
+EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
 
-# BFD's own application log (v1.x used /var/log/bfd_log; auto-migrated on upgrade)
-BFD_LOG_PATH="/var/log/bfd/bfd.log"
+# log lines from the offending service included in each alert and event view; must be > 0
+EMAIL_LOGLINES="5"
 
-# log source: auto (file with journal fallback), file (only), journal (only)
-# auto-detection tries log files first, falls back to journalctl if missing
-#LOG_SOURCE="auto"
+# email body format [text = plain text, html = HTML only, both = multipart text+HTML]
+# text uses 'mail' command; html/both require 'sendmail' (falls back to text if missing)
+EMAIL_FORMAT="text"
+
+# email digest mode [cycle = one email per run, timed = accumulate and send on interval]
+EMAIL_DIGEST="cycle"
+
+# digest flush interval in seconds (only used when EMAIL_DIGEST="timed")
+EMAIL_DIGEST_INTERVAL="900"
+
+# IP reputation lookup links included in alerts (comma-separated)
+# available: abuseipdb, shodan, virustotal, ipinfo, greynoise
+EMAIL_REPUTATION_LINKS=""
+
+# --- SMTP Relay (optional — leave empty to use local MTA) ---
+# SMTP relay server URL (e.g., smtps://smtp.gmail.com:465, smtp://relay.example.com:587)
+SMTP_RELAY=""
+# sender address for relay mode (required when SMTP_RELAY is set)
+SMTP_FROM=""
+# SMTP authentication credentials (required when SMTP_RELAY is set)
+SMTP_USER=""
+SMTP_PASS=""
 
 # =============================================
-# Advanced
+# Detection Tuning
 # =============================================
 
 # cross-service aggregate pressure trip point (0 = disabled)
@@ -271,27 +180,74 @@ SCAN_MAX_LINES="50000"
 # journal read timeout in seconds per rule during scan; must be > 0 (default 120)
 SCAN_TIMEOUT="120"
 
-# echo BFD log messages to syslog [0 = off, 1 = on]
-OUTPUT_SYSLOG="1"
+# =============================================
+# Periodic Reports
+# =============================================
 
-# suppress idle (0-event) run-complete messages from syslog [0 = off, 1 = on]
-# when enabled, zero-event cycles are still recorded in BFD_LOG_PATH
-# but do not echo to syslog; cycles with events always log to both
-LOG_IDLE_SUPPRESS="1"
+# enable periodic threat reports [0 = disabled, 1 = enabled]
+# when enabled, cron.daily triggers reports on configured intervals
+REPORT_ENABLED="0"
 
-# log output format [classic = syslog-style, json = one JSON object per line]
-LOG_FORMAT="classic"
+# report intervals to generate (comma-separated: daily,weekly,monthly)
+REPORT_INTERVALS="daily"
 
-# minimum log severity [0 = debug, 1 = info, 2 = warn, 3 = error]
-LOG_LEVEL="1"
+# delivery channels (comma-separated: email,slack,telegram,discord)
+# empty = use all enabled alert channels above
+REPORT_CHANNELS=""
 
-# stale lock detection threshold in seconds (default 300 = 5 minutes)
-# if a lock file is older than this, it is assumed stale and cleared
-#LOCK_FILE_TIMEOUT="300"
+# report email recipient (defaults to EMAIL_ADDRESS if empty)
+REPORT_EMAIL_ADDRESS=""
 
-# ban/unban command retry count with exponential backoff (default 2)
-# set to 0 to disable retries (useful for testing)
-#BAN_RETRY_COUNT="2"
+# email subject template ({{INTERVAL}} and {{HOSTNAME}} expand at send time)
+REPORT_EMAIL_SUBJECT="BFD {{INTERVAL}} Threat Report for {{HOSTNAME}}"
+
+# maximum IPs to include in report tables (default 25)
+REPORT_TOP_N="25"
+
+# =============================================
+# Messaging Alerts
+# =============================================
+
+# --- Slack ---
+
+# enable Slack alerts [0 = disabled, 1 = enabled]
+SLACK_ALERTS="0"
+
+# delivery mode [webhook = incoming webhook, bot = Bot API + file uploads]
+SLACK_MODE="webhook"
+
+# webhook URL (required when SLACK_MODE="webhook")
+# create at: https://api.slack.com/messaging/webhooks
+SLACK_WEBHOOK_URL=""
+
+# Bot API token (required when SLACK_MODE="bot")
+# create at: https://api.slack.com/apps → Bot User OAuth Token (xoxb-...)
+SLACK_TOKEN=""
+
+# channel for Bot API posts (required when SLACK_MODE="bot")
+# use channel ID (e.g., C01ABCDEF) or #channel-name
+SLACK_CHANNEL=""
+
+# --- Telegram ---
+
+# enable Telegram alerts [0 = disabled, 1 = enabled]
+TELEGRAM_ALERTS="0"
+
+# bot token from @BotFather (required when TELEGRAM_ALERTS="1")
+TELEGRAM_BOT_TOKEN=""
+
+# chat/group/channel ID (required when TELEGRAM_ALERTS="1")
+# use @userinfobot or the getUpdates API to find your chat ID
+TELEGRAM_CHAT_ID=""
+
+# --- Discord ---
+
+# enable Discord alerts [0 = disabled, 1 = enabled]
+DISCORD_ALERTS="0"
+
+# webhook URL (required when DISCORD_ALERTS="1")
+# create at: Server Settings → Integrations → Webhooks
+DISCORD_WEBHOOK_URL=""
 
 # =============================================
 # CDN / Trusted Proxy
@@ -316,3 +272,45 @@ APOOL_RETENTION_DAYS="365"
 # maximum attack pool entries (safety cap for high-volume servers)
 # oldest entries are dropped when this limit is reached; 0 = no limit
 APOOL_MAX_LINES="500000"
+
+# =============================================
+# Logging & Output
+# =============================================
+
+# authentication log (auto-detected: /var/log/auth.log on Debian/Ubuntu)
+AUTH_LOG_PATH="/var/log/secure"
+
+# system/kernel log (auto-detected: /var/log/syslog on Debian/Ubuntu)
+KERNEL_LOG_PATH="/var/log/messages"
+
+# mail log (auto-detected: /var/log/mail.log on Debian/Ubuntu)
+MAIL_LOG_PATH="/var/log/maillog"
+
+# BFD's own application log (v1.x used /var/log/bfd_log; auto-migrated on upgrade)
+BFD_LOG_PATH="/var/log/bfd/bfd.log"
+
+# log source: auto (file with journal fallback), file (only), journal (only)
+# auto-detection tries log files first, falls back to journalctl if missing
+#LOG_SOURCE="auto"
+
+# echo BFD log messages to syslog [0 = off, 1 = on]
+OUTPUT_SYSLOG="1"
+
+# suppress idle (0-event) run-complete messages from syslog [0 = off, 1 = on]
+# when enabled, zero-event cycles are still recorded in BFD_LOG_PATH
+# but do not echo to syslog; cycles with events always log to both
+LOG_IDLE_SUPPRESS="1"
+
+# log output format [classic = syslog-style, json = one JSON object per line]
+LOG_FORMAT="classic"
+
+# minimum log severity [0 = debug, 1 = info, 2 = warn, 3 = error]
+LOG_LEVEL="1"
+
+# stale lock detection threshold in seconds (default 300 = 5 minutes)
+# if a lock file is older than this, it is assumed stale and cleared
+#LOCK_FILE_TIMEOUT="300"
+
+# ban/unban command retry count with exponential backoff (default 2)
+# set to 0 to disable retries (useful for testing)
+#BAN_RETRY_COUNT="2"
