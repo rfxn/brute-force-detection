@@ -813,12 +813,22 @@ run_validate_output() {
 	assert_success
 }
 
+@test "validate_config: CDN_ENABLE=auto passes" {
+	run run_validate 'CDN_ENABLE="auto"'
+	assert_success
+}
+
 @test "validate_config: CDN_ENABLE=yes rejects" {
 	run run_validate 'CDN_ENABLE="yes"'
 	assert_failure
 }
 
-@test "validate_config: CDN_ENABLE unset uses default (passes)" {
+@test "validate_config: CDN_ENABLE=true rejects" {
+	run run_validate 'CDN_ENABLE="true"'
+	assert_failure
+}
+
+@test "validate_config: CDN_ENABLE unset uses default auto (passes)" {
 	run run_validate 'unset CDN_ENABLE'
 	assert_success
 }

@@ -656,10 +656,12 @@ show_status() {
 		fi
 	fi
 
-	# CDN providers summary (only when CDN_ENABLE=1)
-	if [ "${CDN_ENABLE:-0}" = "1" ]; then
+	# CDN providers summary (only when CDN active)
+	if [ "${_CDN_ACTIVE:-0}" = "1" ]; then
 		local _cdn_conf="$install_path/cdn-providers.conf"
 		local _cdn_dat="$install_path/cdn.dat"
+		local _cdn_auto_label=""
+		[ "${CDN_ENABLE:-auto}" = "auto" ] && _cdn_auto_label=" (auto)"
 		if [ -f "$_cdn_conf" ] && _cdn_load_providers "$_cdn_conf" 2>/dev/null && [ "$_CDN_COUNT" -gt 0 ]; then
 			# Build treatment summary: "cloudflare: ignore, aws-cf: derate"
 			local _cdn_summary="" _ci
@@ -678,7 +680,7 @@ show_status() {
 					_cdn_age_str=$(_cdn_fmt_ago "$_cdn_mtime")
 				fi
 			fi
-			echo "  CDN providers:  $_CDN_COUNT active ($_cdn_summary) — updated $_cdn_age_str"
+			echo "  CDN providers:  $_CDN_COUNT active${_cdn_auto_label} ($_cdn_summary) — updated $_cdn_age_str"
 		fi
 	fi
 

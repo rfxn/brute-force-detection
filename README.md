@@ -922,9 +922,12 @@ The CDN subsystem fetches provider IP ranges automatically and applies per-provi
 
 ### 8.1 Configuration
 
-Enable in `conf.bfd`:
+CDN is auto-detected by default — just uncomment providers in `cdn-providers.conf`.
+To force on/off, set in `conf.bfd`:
 ```bash
-CDN_ENABLE="1"           # enable CDN IP awareness
+CDN_ENABLE="auto"        # auto-detect from cdn-providers.conf (default)
+CDN_ENABLE="1"           # force on regardless of provider config
+CDN_ENABLE="0"           # force off
 CDN_UPDATE_DAYS="7"      # refresh interval (days); 0 = manual only
 ```
 

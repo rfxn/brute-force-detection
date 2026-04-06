@@ -229,8 +229,8 @@ search_ip() {
 		echo "                  ${_psvc}: ${_pfmt}/${_ptrip}"
 	done <<< "$data"
 
-	# CDN provider annotation (only when CDN_ENABLE=1 and cdn.dat exists)
-	if [ "${CDN_ENABLE:-0}" = "1" ]; then
+	# CDN provider annotation (only when CDN active and cdn.dat exists)
+	if [ "${_CDN_ACTIVE:-0}" = "1" ]; then
 		local _cdn_db="$install_path/cdn.dat"
 		if [ -f "$_cdn_db" ] && [ -s "$_cdn_db" ]; then
 			local _cdn_result

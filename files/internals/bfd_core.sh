@@ -144,7 +144,7 @@ config_init() {
 		unset REPORT_EMAIL_ADDRESS REPORT_EMAIL_SUBJECT REPORT_TOP_N
 		# log + internal overrides
 		unset LOG_IDLE_SUPPRESS SUBNET_ALERT_TOP_N
-		unset CDN_ENABLE CDN_UPDATE_DAYS
+		unset CDN_ENABLE CDN_UPDATE_DAYS _CDN_ACTIVE
 		# alert_lib mapped env vars (set by _bfd_alert_init)
 		unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
 		unset ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
@@ -278,6 +278,21 @@ config_init() {
 
 	# Initialize alert channel config mapping
 	_bfd_alert_init
+
+	# Resolve CDN auto mode once per init
+	_CDN_ACTIVE=0
+	if _cdn_auto_enabled; then
+		_CDN_ACTIVE=1
+	fi
+
+	# First-run safety net: fetch CDN databases if enabled but missing
+	if [ "$_CDN_ACTIVE" = "1" ] && [ ! -f "$INSTALL_PATH/cdn.dat" ] \
+	   && [ ! -f "$INSTALL_PATH/tmp/.cdn_first_fetch" ] \
+	   && [ -x "$INSTALL_PATH/update-cdn-providers.sh" ]; then
+		command touch "$INSTALL_PATH/tmp/.cdn_first_fetch"
+		eout "CDN databases not found, fetching provider ranges" "le"
+		( exec >/dev/null 2>&1; "$INSTALL_PATH/update-cdn-providers.sh" || true ) &
+	fi
 
 	# Re-register journal filters on reload (F-057)
 	if [ "$_reload" = "1" ]; then
@@ -542,7 +557,7 @@ check() {
 
 		# batch CDN lookup: single awk pass over cdn.dat for all unique IPs
 		declare -A _cdn_map  # IP -> "PROVIDER TREATMENT MULT"
-		if [ "${CDN_ENABLE:-0}" = "1" ] && [ -f "$INSTALL_PATH/cdn.dat" ]; then
+		if [ "${_CDN_ACTIVE:-0}" = "1" ] && [ -f "$INSTALL_PATH/cdn.dat" ]; then
 			local _cdn_ip _cdn_provider _cdn_treatment _cdn_mult
 			while read -r _cdn_ip _cdn_provider _cdn_treatment _cdn_mult; do
 				[ -n "$_cdn_ip" ] && _cdn_map[$_cdn_ip]="$_cdn_provider $_cdn_treatment $_cdn_mult"

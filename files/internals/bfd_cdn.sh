@@ -51,6 +51,24 @@ _cdn_info() {
 }
 
 # ---------------------------------------------------------------------------
+# _cdn_auto_enabled — resolve CDN_ENABLE (auto/0/1) to a boolean.
+# Returns: 0 (enabled) or 1 (disabled).
+# "auto" checks cdn-providers.conf for uncommented provider entries.
+# ---------------------------------------------------------------------------
+_cdn_auto_enabled() {
+	case "${CDN_ENABLE:-auto}" in
+		1) return 0 ;;
+		0) return 1 ;;
+		auto)
+			local _conf="${INSTALL_PATH:-/usr/local/bfd}/cdn-providers.conf"
+			[ -f "$_conf" ] && grep -qE '^[^#[:space:]]' "$_conf" && return 0
+			return 1
+			;;
+		*) return 1 ;;
+	esac
+}
+
+# ---------------------------------------------------------------------------
 # Binary discovery at source time — allows env override for testing.
 # ---------------------------------------------------------------------------
 CDN_CURL_BIN="${CDN_CURL_BIN:-$(command -v curl 2>/dev/null || true)}"   # may be absent
@@ -668,8 +686,8 @@ _cdn_fmt_ago() {
 cdn_list() {
 	local install_path="$1"
 
-	if [ "${CDN_ENABLE:-0}" = "0" ]; then
-		echo "CDN providers: disabled (CDN_ENABLE=0)"
+	if ! _cdn_auto_enabled; then
+		echo "CDN providers: disabled (CDN_ENABLE=${CDN_ENABLE:-auto})"
 		return 0
 	fi
 
@@ -751,7 +769,7 @@ cdn_list() {
 cdn_list_json() {
 	local install_path="$1"
 
-	if [ "${CDN_ENABLE:-0}" = "0" ]; then
+	if ! _cdn_auto_enabled; then
 		echo "[]"
 		return 0
 	fi

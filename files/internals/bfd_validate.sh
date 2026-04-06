@@ -531,9 +531,9 @@ validate_config() {
 		[ "$_rc_valid" -eq 0 ] && return "$EXIT_CONFIG_ERROR"
 	fi
 	# CDN config
-	case "${CDN_ENABLE:-0}" in
-		0|1) ;;
-		*) echo "error: CDN_ENABLE must be 0 or 1 (got '${CDN_ENABLE}')." >&2
+	case "${CDN_ENABLE:-auto}" in
+		0|1|auto) ;;
+		*) echo "error: CDN_ENABLE must be auto, 0, or 1 (got '${CDN_ENABLE}')." >&2
 		   return "$EXIT_CONFIG_ERROR" ;;
 	esac
 	if [ -n "${CDN_UPDATE_DAYS:-}" ]; then

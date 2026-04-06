@@ -912,7 +912,9 @@ and applies per-provider treatment (ignore, exclude, or derate) to matching
 source IPs before they enter the detection pipeline.
 .TP
 .B CDN_ENABLE
-Enable CDN/trusted proxy IP awareness: 0 or 1 (default: 0).
+Enable CDN/trusted proxy IP awareness: auto, 0, or 1 (default: auto).
+When set to \fBauto\fR, CDN processing is enabled if cdn\-providers.conf
+contains any uncommented provider entries.
 .TP
 .B CDN_UPDATE_DAYS
 How often to refresh provider IP ranges in days; 0 = never auto-refresh

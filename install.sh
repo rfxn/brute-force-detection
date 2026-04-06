@@ -342,3 +342,23 @@ if [ -x "$INSPATH/update-ipcountry.sh" ]; then
 	( exec >/dev/null 2>&1; "$INSPATH/update-ipcountry.sh" || true ) &  # non-fatal: network may be unavailable
 	disown 2>/dev/null  # safe: may not be available in all shells
 fi
+
+# Non-blocking initial CDN provider database download (runs in background).
+# Only when CDN is effectively enabled: CDN_ENABLE=1 or auto with providers.
+if [ -x "$INSPATH/update-cdn-providers.sh" ]; then
+	_cdn_run=0
+	_cdn_val=$(command awk -F= '/^CDN_ENABLE=/{gsub(/"/, "", $2); print $2; exit}' "$INSPATH/conf.bfd" 2>/dev/null)
+	case "${_cdn_val:-auto}" in
+		1) _cdn_run=1 ;;
+		auto)
+			[ -f "$INSPATH/cdn-providers.conf" ] && \
+				grep -qE '^[^#[:space:]]' "$INSPATH/cdn-providers.conf" && \
+				_cdn_run=1
+			;;
+	esac
+	if [ "$_cdn_run" = "1" ]; then
+		echo "Fetching CDN provider ranges in background..."
+		( exec >/dev/null 2>&1; "$INSPATH/update-cdn-providers.sh" || true ) &  # non-fatal: network may be unavailable
+		disown 2>/dev/null  # safe: may not be available in all shells
+	fi
+fi

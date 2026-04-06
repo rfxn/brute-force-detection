@@ -18,7 +18,7 @@ setup_file() {
 teardown_file() {
     # Restore CDN_ENABLE to default
     local conf="/usr/local/bfd/conf.bfd"
-    sed -i 's/^CDN_ENABLE=.*/CDN_ENABLE="0"/' "$conf"
+    sed -i 's/^CDN_ENABLE=.*/CDN_ENABLE="auto"/' "$conf"
     uat_bfd_reset
 }
 

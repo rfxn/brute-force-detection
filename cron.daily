@@ -123,7 +123,17 @@ fi
 # Refresh CDN provider database if stale
 _cdn_dat="$INSTALL_PATH/cdn.dat"
 _cdn_days="${CDN_UPDATE_DAYS:-7}"
-if [ "${CDN_ENABLE:-0}" = "1" ] && [ -x "$INSTALL_PATH/update-cdn-providers.sh" ] && [ "$_cdn_days" -gt 0 ] 2>/dev/null; then
+_cdn_active=0
+case "${CDN_ENABLE:-auto}" in
+	1) _cdn_active=1 ;;
+	auto)
+		[ -f "$INSTALL_PATH/cdn-providers.conf" ] && \
+			grep -qE '^[^#[:space:]]' "$INSTALL_PATH/cdn-providers.conf" && \
+			_cdn_active=1
+		;;
+esac
+command rm -f "$INSTALL_PATH/tmp/.cdn_first_fetch"
+if [ "$_cdn_active" = "1" ] && [ -x "$INSTALL_PATH/update-cdn-providers.sh" ] && [ "$_cdn_days" -gt 0 ] 2>/dev/null; then
 	if [ -f "$_cdn_dat" ]; then
 		_cdn_age=$(( $(date +%s) - $(stat -c %Y "$_cdn_dat") ))
 		if [ "$_cdn_age" -gt $((_cdn_days * 86400)) ]; then

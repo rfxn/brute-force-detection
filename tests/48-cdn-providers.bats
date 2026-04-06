@@ -400,6 +400,13 @@ _cdn_setup_check_env() {
 	SKIP_ALERT=""
 	EMAIL_ALERTS="0"
 	SUBNET_TRIG="0"
+	# Resolve _CDN_ACTIVE from CDN_ENABLE (mirrors config_init behavior)
+	if [ -z "${_CDN_ACTIVE+x}" ]; then
+		_CDN_ACTIVE=0
+		if _cdn_auto_enabled; then
+			_CDN_ACTIVE=1
+		fi
+	fi
 }
 
 # Helper: create a rule file with given MATCHED_HOSTS
@@ -448,6 +455,91 @@ EOF
 	run check
 	assert_success
 	# IP should be banned normally — missing cdn.dat is no-op
+	assert_output --partial "1 bans executed"
+}
+
+# ============================================================
+# CDN_ENABLE=auto resolution
+# ============================================================
+
+@test "CDN_ENABLE=auto with uncommented providers resolves to active" {
+	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
+cloudflare  ignore  10  text  https://example.com/v4  -
+EOF
+	CDN_ENABLE="auto"
+	_cdn_auto_enabled
+}
+
+@test "CDN_ENABLE=auto with all providers commented resolves to inactive" {
+	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
+# cloudflare  ignore  10  text  https://example.com/v4  -
+# fastly  exclude  10  json  https://example.com/v4  -
+EOF
+	CDN_ENABLE="auto"
+	! _cdn_auto_enabled
+}
+
+@test "CDN_ENABLE=auto with missing conf file resolves to inactive" {
+	command rm -f "$INSTALL_PATH/cdn-providers.conf"
+	CDN_ENABLE="auto"
+	! _cdn_auto_enabled
+}
+
+@test "CDN_ENABLE=auto with empty conf file resolves to inactive" {
+	: > "$INSTALL_PATH/cdn-providers.conf"
+	CDN_ENABLE="auto"
+	! _cdn_auto_enabled
+}
+
+@test "CDN_ENABLE=1 always resolves to active" {
+	: > "$INSTALL_PATH/cdn-providers.conf"
+	CDN_ENABLE="1"
+	_cdn_auto_enabled
+}
+
+@test "CDN_ENABLE=0 always resolves to inactive" {
+	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
+cloudflare  ignore  10  text  https://example.com/v4  -
+EOF
+	CDN_ENABLE="0"
+	! _cdn_auto_enabled
+}
+
+@test "CDN_ENABLE=auto detection pipeline applies CDN treatment when active" {
+	bfd_require_bash42
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50"
+	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+16777216 16777471 cloudflare ignore 10
+EOF
+	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
+cloudflare  ignore  10  text  https://example.com/v4  -
+EOF
+	CDN_ENABLE="auto"
+	_CDN_ACTIVE=1
+	_cdn_setup_check_env "$rules_dir"
+	run check
+	assert_success
+	assert_output --partial "0 bans executed"
+}
+
+@test "CDN_ENABLE=auto detection pipeline skips CDN when inactive" {
+	bfd_require_bash42
+	local rules_dir="$TEST_TMPDIR/rules"
+	mkdir -p "$rules_dir"
+	_cdn_create_rule "$rules_dir" "testrule" "1.0.0.50 1.0.0.50 1.0.0.50"
+	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
+16777216 16777471 cloudflare ignore 10
+EOF
+	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
+#cloudflare  ignore  10  text  https://example.com/v4  -
+EOF
+	CDN_ENABLE="auto"
+	_CDN_ACTIVE=0
+	_cdn_setup_check_env "$rules_dir"
+	run check
+	assert_success
 	assert_output --partial "1 bans executed"
 }
 
@@ -608,6 +700,17 @@ EOF
 	assert_output --partial "CDN_ENABLE=0"
 }
 
+@test "cdn_list: shows disabled with auto label when no providers" {
+	CDN_ENABLE="auto"
+	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
+# all commented
+EOF
+	run cdn_list "$INSTALL_PATH"
+	assert_success
+	assert_output --partial "disabled"
+	assert_output --partial "CDN_ENABLE=auto"
+}
+
 @test "cdn_list_json: outputs valid JSON array" {
 	_cdn_cli_setup
 	run cdn_list_json "$INSTALL_PATH"
@@ -665,6 +768,7 @@ EOF
 @test "show_status includes CDN provider summary when CDN_ENABLE=1" {
 	bfd_require_bash42
 	CDN_ENABLE="1"
+	_CDN_ACTIVE=1
 	# Create cdn-providers.conf with 2 providers
 	cat > "$INSTALL_PATH/cdn-providers.conf" <<'EOF'
 cloudflare  ignore   10  text  https://example.com/v4  -
@@ -689,6 +793,7 @@ EOF
 @test "show_status omits CDN line when CDN_ENABLE=0" {
 	bfd_require_bash42
 	CDN_ENABLE="0"
+	_CDN_ACTIVE=0
 	RULES_PATH="$INSTALL_PATH/rules"
 	mkdir -p "$RULES_PATH"
 	run show_status "$INSTALL_PATH"
@@ -699,6 +804,7 @@ EOF
 @test "search_ip shows CDN match annotation" {
 	bfd_require_bash42
 	CDN_ENABLE="1"
+	_CDN_ACTIVE=1
 	# Create cdn.dat with range covering 1.0.0.0/24 (16777216..16777471)
 	cat > "$INSTALL_PATH/cdn.dat" <<'EOF'
 16777216 16777471 cloudflare ignore 10
