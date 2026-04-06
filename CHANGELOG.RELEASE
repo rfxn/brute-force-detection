@@ -3,7 +3,8 @@
   -- New Features --
 
 [New] CLI subcommand namespaces: bfd ban, bfd ignore, bfd test, bfd cdn,
-      bfd report, bfd status — grouped help and operational clarity
+      bfd report, bfd status — grouped help, bash completion, typo
+      suggestions ("Did you mean?"), and bfd help <topic> routing
 [New] bfd ignore: add/remove/list/check for ignore.hosts management with
       flock safety, CIDR normalization, and containment checking
 [New] bfd status sub-views: lock (PID/age/staleness), cursors (tlog positions),
@@ -22,17 +23,11 @@
 [New] Config validation: REPORT_ENABLED, REPORT_TOP_N, REPORT_CHANNELS checked
       at load time; 8 missing vars added to SIGHUP reload unset block
 [New] install.sh creates /usr/local/sbin/tlog symlink for PATH accessibility
-[New] Documentation: man page CDN/Trusted Proxy and Country Weighting sections,
-      --cdn CLI options, sub-library FILES entries; README redesign with
-      SECURITY.md and CONTRIBUTING.md
-[New] Man page SUBCOMMANDS section with per-group verb documentation
-[New] "Did you mean?" typo suggestions with Levenshtein distance for unknown
-      verbs and commands (threshold 3, matches APF convention)
+[New] Documentation: man page CDN/Trusted Proxy, Country Weighting, and
+      SUBCOMMANDS sections; --cdn CLI options, sub-library FILES entries;
+      README redesign with SECURITY.md and CONTRIBUTING.md
 [New] Color-aware help output: bold section headers respecting NO_COLOR,
       non-terminal, and TERM=dumb
-[New] Bash completion: subcommand nouns (ban, ignore, test, cdn, report,
-      status, help) with per-group verb completions
-[New] help subcommand: bfd help <topic> routes to per-group help
 
   -- Bug Fixes --
 
@@ -52,31 +47,23 @@
       added SYSLOG_FACILITY=10 journal registration (39 of 57 rules now covered)
 [Fix] Temp file hardening: extract_hosts uses $INSTALL_PATH/tmp;
       _check_file_safety handles 4-digit setuid/setgid perms
-[Fix] Ban history search now includes rotated bans.history archives
 [Fix] show_status "Top services" trailing comma when fewer than 3 services
 [Fix] Lock contention message log-file-only when holder is alive
 [Fix] Stale IPv6 GeoIP build dirs cleaned up at update-ipcountry.sh startup
 [Fix] Deep-legacy portability: all bare coreutils (chmod, mkdir, cat, touch,
       ln, cp, mv, rm) use command prefix for CentOS 6 PATH compatibility
-[Fix] --cdn check validates IP address before lookup (consistency with -b/-u/-e)
 [Fix] Unban error message includes hint for firewall-only blocks
-[Fix] ignore_remove: normalize CIDR input to network address before matching,
-      symmetric with ignore_add (10.0.0.5/24 now finds stored 10.0.0.0/24)
 [Fix] tlog CLI version mismatch: TLOG_VERSION 2.0.4 → 2.0.5 to match lib
 [Fix] status_pressure: use grep -Fq for IP presence check to prevent regex
       interpretation of dot characters in IP addresses
-[Fix] test alert comment: correct field count 12 → 13 (13th field: fail_count)
 
   -- Changes --
 
 [Change] Vendored lib sync: tlog_lib 2.0.5, alert_lib 1.0.6, elog_lib 1.0.5,
-[Fix] pkg_lib 1.0.7 → 1.0.8: POSIX herestring compat, ln -sfn symlink safety
         pkg_lib 1.0.8, geoip_lib 1.0.5
+[Fix] pkg_lib 1.0.7 → 1.0.8: POSIX herestring compat, ln -sfn symlink safety
 [Change] pressure.conf and pressure-country.conf migrated to whitespace
       format; dual-format parsers for backward compat; importconf auto-converts
 [Change] --check shows "no service detected" for rules with log-based PREREQ
-[Change] --scan extracted to _run_scan() helper (shared by --scan and test scan)
-[Change] --cdn and --report refactored to call dispatch functions
-[Change] usage_short() rewritten: COMMANDS/SUBCOMMANDS/UTILITIES three-section
-      APF-style layout; legacy flags condensed; 58 lines reduced to 22
-[Change] -h shows full reference; --help opens man page (progressive disclosure)
+[Change] Help output: usage_short() condensed to 22-line three-section layout;
+      -h shows full reference, --help opens man page (progressive disclosure)
