@@ -28,6 +28,12 @@
       README redesign with SECURITY.md and CONTRIBUTING.md
 [New] Color-aware help output: bold section headers respecting NO_COLOR,
       non-terminal, and TERM=dumb
+[New] CDN_ENABLE="auto" mode: auto-detect from cdn-providers.conf (uncommented
+      entries = enabled); first-run background fetch at install; config_init
+      one-shot retry for missing cdn.dat; "0"/"1" still valid overrides
+[New] DATA_PATH variable in internals.conf: data files (ipcountry.dat,
+      ipcountry6.dat, cdn.dat, cdn6.dat, .last_update) moved from
+      $INSTALL_PATH/ root to $INSTALL_PATH/data/ subdirectory
 
   -- Bug Fixes --
 
@@ -50,6 +56,8 @@
 [Fix] show_status "Top services" trailing comma when fewer than 3 services
 [Fix] Lock contention message log-file-only when holder is alive
 [Fix] Stale IPv6 GeoIP build dirs cleaned up at update-ipcountry.sh startup
+[Fix] install.sh: consistent "Updating ... (background)..." format for
+      IP country and CDN provider database fetch messages
 [Fix] Deep-legacy portability: all bare coreutils (chmod, mkdir, cat, touch,
       ln, cp, mv, rm) use command prefix for CentOS 6 PATH compatibility
 [Fix] Unban error message includes hint for firewall-only blocks
@@ -67,6 +75,14 @@
 [Change] --check shows "no service detected" for rules with log-based PREREQ
 [Change] Help output: usage_short() condensed to 22-line three-section layout;
       -h shows full reference, --help opens man page (progressive disclosure)
+[Change] conf.bfd reordered: 12→10 sections grouped by admin workflow
+      priority; Slack/Telegram/Discord combined into Messaging Alerts;
+      Advanced split into Detection Tuning and Logging & Output
+[Change] CDN_ENABLE default "0" → "auto" (no behavior change for fresh
+      installs — all providers ship commented); runtime guards use _CDN_ACTIVE
+[Change] Data file migration: update-ipcountry.sh and update-cdn-providers.sh
+      write to $DATA_PATH; importconf migrates from flat layout on upgrade;
+      RPM/DEB install to /usr/share/bfd/data/ with legacy compat symlinks
 
 2.0.1:
 
