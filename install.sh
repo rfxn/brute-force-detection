@@ -338,7 +338,7 @@ fi
 # background failure from propagating; disown avoids set -e interaction.
 # Subshell exec closes inherited pipe fds to prevent caller hang.
 if [ -x "$INSPATH/update-ipcountry.sh" ]; then
-	echo "Downloading IP country database in background..."
+	echo "  Updating IP country database (background)..."
 	( exec >/dev/null 2>&1; "$INSPATH/update-ipcountry.sh" || true ) &  # non-fatal: network may be unavailable
 	disown 2>/dev/null  # safe: may not be available in all shells
 fi
@@ -357,7 +357,7 @@ if [ -x "$INSPATH/update-cdn-providers.sh" ]; then
 			;;
 	esac
 	if [ "$_cdn_run" = "1" ]; then
-		echo "Fetching CDN provider ranges in background..."
+		echo "  Updating CDN provider ranges (background)..."
 		( exec >/dev/null 2>&1; "$INSPATH/update-cdn-providers.sh" || true ) &  # non-fatal: network may be unavailable
 		disown 2>/dev/null  # safe: may not be available in all shells
 	fi
