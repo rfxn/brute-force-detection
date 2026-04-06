@@ -93,6 +93,9 @@ check_file /usr/share/bfd/data/ipcountry.dat "Data: ipcountry.dat"
 check_file /usr/share/bfd/rules "Data: rules directory"
 check_file /var/lib/bfd/tmp "State: tmp directory"
 check_file /var/lib/bfd/stats "State: stats directory"
+check_file /var/log/bfd "Log: log directory"
+check_perms /var/log/bfd 750 "Log dir perms"
+check_file /usr/lib/bfd/internals/.symlink-manifest "Symlink manifest"
 check_file /etc/cron.d/bfd "Cron: bfd"
 check_file /etc/cron.daily/bfd "Cron: daily"
 check_file /etc/logrotate.d/bfd "Logrotate: bfd"
@@ -123,6 +126,8 @@ check_link /usr/local/bfd/rules /usr/share/bfd/rules "Symlink: rules"
 check_link /usr/local/bfd/tmp /var/lib/bfd/tmp "Symlink: tmp"
 check_link /usr/local/bfd/stats /var/lib/bfd/stats "Symlink: stats"
 check_link /usr/local/sbin/bfd /usr/sbin/bfd "Symlink: /usr/local/sbin/bfd"
+check_link /usr/local/sbin/tlog /usr/lib/bfd/tlog "Symlink: /usr/local/sbin/tlog"
+check_link /usr/local/bfd/internals/.symlink-manifest /usr/lib/bfd/internals/.symlink-manifest "Symlink: .symlink-manifest"
 echo ""
 
 # --- Test 3: internals.conf FHS paths ---
@@ -268,13 +273,13 @@ fi
 # --- Test 10: bfd --version via symlink farm ---
 echo "--- Test 10: bfd execution ---"
 ver_out=$(/usr/local/sbin/bfd --version 2>&1 || true)
-if echo "$ver_out" | grep -q '2\.0\.1'; then
+if echo "$ver_out" | grep -q '2\.0\.2'; then
 	pass "bfd --version via /usr/local/sbin/bfd works"
 else
 	fail "bfd --version output: $ver_out"
 fi
 ver_out2=$(/usr/sbin/bfd --version 2>&1 || true)
-if echo "$ver_out2" | grep -q '2\.0\.1'; then
+if echo "$ver_out2" | grep -q '2\.0\.2'; then
 	pass "bfd --version via /usr/sbin/bfd works"
 else
 	fail "bfd --version via /usr/sbin/bfd output: $ver_out2"

@@ -17,7 +17,7 @@ override_dh_auto_build:
 	    -e 's|\$$DATA_PATH|/usr/share/bfd/data|' \
 	    files/internals.conf.pkg
 	cp files/exclude.files files/exclude.files.pkg
-	sed -i 's|/usr/local/bfd/ignore\.hosts|/etc/bfd/ignore.hosts|g' files/exclude.files.pkg
+	sed -i 's|/usr/local/bfd/ignore\.hosts$$|/etc/bfd/ignore.hosts|' files/exclude.files.pkg
 	cp cron cron.pkg
 	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' cron.pkg
 	cp cron.daily cron.daily.pkg
@@ -27,6 +27,8 @@ override_dh_auto_build:
 	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.service.pkg
 	cp bfd-watch.init bfd-watch.init.pkg
 	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.init.pkg
+	cp files/tlog files/tlog.pkg
+	sed -i 's|BASERUN="$${BASERUN:-/tmp}"|BASERUN="$${BASERUN:-/var/lib/bfd/tmp}"|' files/tlog.pkg
 
 override_dh_auto_install:
 	# Executable
@@ -35,7 +37,7 @@ override_dh_auto_install:
 	install -D -m 644 files/internals/bfd.lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd.lib.sh
 	install -D -m 644 files/internals/tlog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/tlog_lib.sh
 	install -D -m 644 files/internals/elog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/elog_lib.sh
-	install -D -m 755 files/tlog $(CURDIR)/debian/bfd/usr/lib/bfd/tlog
+	install -D -m 755 files/tlog.pkg $(CURDIR)/debian/bfd/usr/lib/bfd/tlog
 	install -D -m 644 files/internals/alert_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/alert_lib.sh
 	install -D -m 644 files/internals/bfd_alert.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_alert.sh
 	install -D -m 644 files/internals/geoip_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/geoip_lib.sh
@@ -76,6 +78,12 @@ override_dh_auto_install:
 	# State directories
 	install -d -m 750 $(CURDIR)/debian/bfd/var/lib/bfd/tmp
 	install -d -m 750 $(CURDIR)/debian/bfd/var/lib/bfd/stats
+	# Log directory
+	install -d -m 750 $(CURDIR)/debian/bfd/var/log/bfd
+	# Symlink manifest for runtime self-healing (pkg_lib v1.0.6)
+	printf '# pkg_lib:symlink-manifest:1\n/usr/local/sbin/bfd\t/usr/sbin/bfd\n/usr/local/sbin/tlog\t/usr/lib/bfd/tlog\n' \
+	    > $(CURDIR)/debian/bfd/usr/lib/bfd/internals/.symlink-manifest
+	chmod 640 $(CURDIR)/debian/bfd/usr/lib/bfd/internals/.symlink-manifest
 	# Systemd units (DEB convention: /lib/systemd/system/)
 	install -D -m 644 bfd.service.pkg $(CURDIR)/debian/bfd/lib/systemd/system/bfd.service
 	install -D -m 644 bfd.timer $(CURDIR)/debian/bfd/lib/systemd/system/bfd.timer
@@ -100,5 +108,5 @@ override_dh_auto_test:
 	# Skip — tests require privileged Docker environment
 
 override_dh_auto_clean:
-	rm -f files/internals.conf.pkg files/exclude.files.pkg
+	rm -f files/internals.conf.pkg files/exclude.files.pkg files/tlog.pkg
 	rm -f cron.pkg cron.daily.pkg bfd.service.pkg bfd-watch.service.pkg bfd-watch.init.pkg

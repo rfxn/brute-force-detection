@@ -11,10 +11,35 @@ case "$1" in
             /etc/bfd/exclude.files /etc/bfd/ignore.hosts 2>/dev/null || true
         # Set permissions on state directories
         chmod 750 /var/lib/bfd/tmp /var/lib/bfd/stats 2>/dev/null || true
+        # Reload systemd if available
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl daemon-reload 2>/dev/null || true
+        fi
         # Run importconf if migrating from install.sh backup
         if [ -d "${LEGACY_PATH}.bk.last" ]; then
             if [ -x /usr/lib/bfd/importconf ]; then
                 INSTALL_PATH="$LEGACY_PATH" /usr/lib/bfd/importconf || true
+            fi
+        fi
+        # Background database downloads (matching install.sh pattern)
+        if [ -x /usr/lib/bfd/update-ipcountry.sh ]; then
+            ( exec >/dev/null 2>&1; /usr/lib/bfd/update-ipcountry.sh || true ) &
+            disown 2>/dev/null || true
+        fi
+        if [ -x /usr/lib/bfd/update-cdn-providers.sh ]; then
+            _cdn_run=0
+            _cdn_val=$(awk -F= '/^CDN_ENABLE=/{gsub(/"/, "", $2); print $2; exit}' /etc/bfd/conf.bfd 2>/dev/null)
+            case "${_cdn_val:-auto}" in
+                1) _cdn_run=1 ;;
+                auto)
+                    [ -f /etc/bfd/cdn-providers.conf ] && \
+                        grep -qE '^[^#[:space:]]' /etc/bfd/cdn-providers.conf && \
+                        _cdn_run=1
+                    ;;
+            esac
+            if [ "$_cdn_run" = "1" ]; then
+                ( exec >/dev/null 2>&1; /usr/lib/bfd/update-cdn-providers.sh || true ) &
+                disown 2>/dev/null || true
             fi
         fi
         ;;

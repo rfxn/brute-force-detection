@@ -58,6 +58,17 @@
 [Fix] Stale IPv6 GeoIP build dirs cleaned up at update-ipcountry.sh startup
 [Fix] install.sh: consistent "Updating ... (background)..." format for
       IP country and CDN provider database fetch messages
+[Fix] RPM/DEB: exclude.files sed anchored to prevent ignore.hosts.local
+      path mismatch (self-ban risk on FHS package installs)
+[Fix] RPM/DEB: tlog BASERUN set to /var/lib/bfd/tmp (was /tmp default)
+[Fix] RPM/DEB: /var/log/bfd/ created at install time for logrotate
+[Fix] RPM/DEB: /usr/local/sbin/tlog symlink for standalone tlog access
+[Fix] RPM/DEB: background ipcountry + CDN database downloads on fresh
+      package install (matching install.sh pattern)
+[Fix] RPM/DEB: cron files marked config(noreplace) to preserve custom
+      schedules on package upgrade
+[Fix] DEB: explicit daemon-reload in postinst before importconf
+[Fix] RPM/DEB: symlink manifest for pkg_fhs_verify_farm() self-healing
 [Fix] Deep-legacy portability: all bare coreutils (chmod, mkdir, cat, touch,
       ln, cp, mv, rm) use command prefix for CentOS 6 PATH compatibility
 [Fix] Unban error message includes hint for firewall-only blocks
