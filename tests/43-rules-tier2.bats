@@ -18,6 +18,11 @@ setup_file() {
 	touch /usr/sbin/ejabberdctl
 	touch /usr/sbin/pdns_server
 	touch /usr/bin/jellyfin
+	# placeholder log so the jellyfin rule's existence gate passes; the
+	# actual fixture content is supplied per-test via _TLOG_PASSTHROUGH
+	# (test_rule's 3rd arg). A shared path here would race in --jobs mode.
+	mkdir -p /var/log/jellyfin
+	touch /var/log/jellyfin/log_20260101.log
 }
 
 teardown_file() {
@@ -220,25 +225,19 @@ EOF
 # --- jellyfin ---
 
 @test "jellyfin: auth denied extracts IP" {
-	# stub PREREQ so rule gate passes on systems without jellyfin
-	mkdir -p /usr/bin
-	[ -f /usr/bin/jellyfin ] || { touch /usr/bin/jellyfin; _jf_stub=1; }
-	# create the dated log directory and file for jellyfin's dynamic detection
-	mkdir -p /var/log/jellyfin
-	local log="/var/log/jellyfin/log_20260308.log"
+	# per-test fixture under TEST_TMPDIR avoids races with sibling jellyfin
+	# tests under bats --jobs (rule's existence gate is satisfied by the
+	# placeholder file created in setup_file)
+	local log="$TEST_TMPDIR/jellyfin.log"
 	echo '[2026-03-08 10:01:01.123 +00:00] [INF] Authentication request for "admin" has been denied (IP: "203.0.113.50").' > "$log"
 	run test_rule "$INSTALL_PATH" "jellyfin" "$log"
 	assert_success
 	assert_output --partial "203.0.113.50"
 	assert_output --partial "1 matches"
-	[ "${_jf_stub:-0}" = "1" ] && rm -f /usr/bin/jellyfin || true
 }
 
 @test "jellyfin: multiple failures aggregate correctly" {
-	mkdir -p /usr/bin
-	[ -f /usr/bin/jellyfin ] || { touch /usr/bin/jellyfin; _jf_stub=1; }
-	mkdir -p /var/log/jellyfin
-	local log="/var/log/jellyfin/log_20260308.log"
+	local log="$TEST_TMPDIR/jellyfin.log"
 	cat > "$log" <<'EOF'
 [2026-03-08 10:01:01.123 +00:00] [INF] Authentication request for "admin" has been denied (IP: "203.0.113.50").
 [2026-03-08 10:01:02.456 +00:00] [INF] Authentication request for "user1" has been denied (IP: "198.51.100.45").
@@ -247,19 +246,14 @@ EOF
 	run test_rule "$INSTALL_PATH" "jellyfin" "$log"
 	assert_success
 	assert_output --partial "3 matches, 2 unique IPs"
-	[ "${_jf_stub:-0}" = "1" ] && rm -f /usr/bin/jellyfin || true
 }
 
 @test "jellyfin: successful auth not matched" {
-	mkdir -p /usr/bin
-	[ -f /usr/bin/jellyfin ] || { touch /usr/bin/jellyfin; _jf_stub=1; }
-	mkdir -p /var/log/jellyfin
-	local log="/var/log/jellyfin/log_20260308.log"
+	local log="$TEST_TMPDIR/jellyfin.log"
 	echo '[2026-03-08 10:01:01.123 +00:00] [INF] Authentication request for "admin" has succeeded (IP: "203.0.113.50").' > "$log"
 	run test_rule "$INSTALL_PATH" "jellyfin" "$log"
 	assert_success
 	assert_output --partial "0 matches"
-	[ "${_jf_stub:-0}" = "1" ] && rm -f /usr/bin/jellyfin || true
 }
 
 # --- powerdns ---

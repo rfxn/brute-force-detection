@@ -80,6 +80,12 @@
 [Fix] tlog CLI version mismatch: TLOG_VERSION 2.0.4 → 2.0.5 to match lib
 [Fix] status_pressure: use grep -Fq for IP presence check to prevent regex
       interpretation of dot characters in IP addresses
+[Fix] tests/43-rules-tier2.bats: jellyfin tests no longer share
+      /var/log/jellyfin/log_20260308.log — race under bats --jobs caused
+      "auth denied" test to read 3 lines from sibling test's fixture and
+      fail with "3 matches" instead of "1 matches". Per-test fixtures now
+      live under TEST_TMPDIR; placeholder log in setup_file satisfies the
+      rule's existence gate
 
   -- Changes --
 
