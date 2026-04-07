@@ -338,6 +338,8 @@ _start_watch() {
 	cp "$PROJECT_ROOT/files/internals/pkg_lib.sh" "$inst/internals/pkg_lib.sh"
 	chmod 640 "$inst/internals/pkg_lib.sh"
 	touch "$inst/exclude.files"
+	touch "$inst/pressure.conf"
+	touch "$inst/pressure-country.conf"
 	mkdir -p "$inst/alert"
 	cp "$PROJECT_ROOT/files/alert/"*.tpl "$inst/alert/"
 
@@ -465,17 +467,26 @@ INTEOF
 		sleep 0.1
 		_waited=$((_waited + 1))
 	done
+	# verify process is still alive before sending SIGHUP
+	kill -0 "$_WATCH_PID" 2>/dev/null || {
+		echo "watch process died before SIGHUP; log:" >&2
+		cat "$_WATCH_INST/tmp/bfd.log" >&2
+		return 1
+	}
 	kill -HUP "$_WATCH_PID"
-	# wait for reload complete message (up to 8s — config reload includes
+	# wait for reload complete message (up to 12s — config reload includes
 	# validate_config() which can be slow under container I/O pressure)
 	_waited=0
-	while [ "$_waited" -lt 80 ] && ! grep -q "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log" 2>/dev/null; do
+	while [ "$_waited" -lt 120 ] && ! grep -q "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log" 2>/dev/null; do
 		sleep 0.1
 		_waited=$((_waited + 1))
 	done
 
-	run grep "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log"
-	assert_success
+	if ! grep -q "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log"; then
+		echo "reload did not complete within 12s; log:" >&2
+		cat "$_WATCH_INST/tmp/bfd.log" >&2
+		return 1
+	fi
 }
 
 # ============================================================
