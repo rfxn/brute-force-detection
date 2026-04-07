@@ -49,7 +49,7 @@ case "$1" in
         # package-to-package upgrades.
         for _orphan in alert data rules tmp stats; do
             if [ -d "$LEGACY_PATH/$_orphan" ] && [ ! -L "$LEGACY_PATH/$_orphan" ]; then
-                rm -rf "$LEGACY_PATH/$_orphan"
+                rm -rf "${LEGACY_PATH:?}/$_orphan"
             fi
         done
         # internals/ is a real dir in BOTH source AND package installs;
@@ -57,7 +57,7 @@ case "$1" in
         if [ -d "$LEGACY_PATH/internals" ] && [ ! -L "$LEGACY_PATH/internals" ] \
            && [ -f "$LEGACY_PATH/internals/bfd.lib.sh" ] \
            && [ ! -L "$LEGACY_PATH/internals/bfd.lib.sh" ]; then
-            rm -rf "$LEGACY_PATH/internals"
+            rm -rf "${LEGACY_PATH:?}/internals"
         fi
         if [ -f "$LEGACY_PATH/ipcountry.dat" ] && [ ! -L "$LEGACY_PATH/ipcountry.dat" ]; then
             rm -f "$LEGACY_PATH/ipcountry.dat"
