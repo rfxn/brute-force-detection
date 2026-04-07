@@ -249,6 +249,28 @@ if [ -f "%{legacy_path}/bfd" ] && [ ! -L "%{legacy_path}/internals/bfd.lib.sh" ]
     # Remove old install — package will lay down new files
     rm -rf "%{legacy_path}"
 fi
+# Defensive: clean up orphaned source-install directories that would collide
+# with package symlinks (alert/, data/, rules/, tmp/, stats/). Triggers when
+# /usr/local/bfd/bfd is missing but stale dirs remain (e.g. partial uninstall,
+# manual binary removal). All five are package symlinks in installed packages,
+# so the `[ ! -L ]` guard protects package-to-package upgrades.
+for _orphan in alert data rules tmp stats; do
+    if [ -d "%{legacy_path}/$_orphan" ] && [ ! -L "%{legacy_path}/$_orphan" ]; then
+        rm -rf "%{legacy_path}/$_orphan"
+    fi
+done
+# internals/ is a real dir in BOTH source AND package installs, so the
+# `[ ! -L ]` check alone isn't enough. Distinguish by checking if bfd.lib.sh
+# inside is a real file (source install) vs symlink (package install).
+if [ -d "%{legacy_path}/internals" ] && [ ! -L "%{legacy_path}/internals" ] \
+   && [ -f "%{legacy_path}/internals/bfd.lib.sh" ] \
+   && [ ! -L "%{legacy_path}/internals/bfd.lib.sh" ]; then
+    rm -rf "%{legacy_path}/internals"
+fi
+# Same defense for ipcountry.dat — install.sh creates as file, package as symlink
+if [ -f "%{legacy_path}/ipcountry.dat" ] && [ ! -L "%{legacy_path}/ipcountry.dat" ]; then
+    rm -f "%{legacy_path}/ipcountry.dat"
+fi
 
 %post
 # Reload systemd if available (before importconf, matching DEB postinst)

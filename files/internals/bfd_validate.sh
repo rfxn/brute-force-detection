@@ -363,19 +363,15 @@ validate_config() {
 		echo "error: LOCK_FILE_TIMEOUT must be a positive integer (got '$LOCK_FILE_TIMEOUT')." >&2
 		return $EXIT_CONFIG_ERROR
 	fi
-	local valid_fw="auto apf csf firewalld ufw nftables iptables route custom"
+	# Use case statement (no IFS dependency) instead of for loop over space-split list
 	if [ -n "${FIREWALL:-}" ]; then
-		local _fw_valid=0 _fw
-		for _fw in $valid_fw; do
-			if [ "$FIREWALL" = "$_fw" ]; then
-				_fw_valid=1
-				break
-			fi
-		done
-		if [ "$_fw_valid" -eq 0 ]; then
-			echo "error: FIREWALL must be one of: $valid_fw (got '$FIREWALL')." >&2
-			return $EXIT_CONFIG_ERROR
-		fi
+		case "$FIREWALL" in
+			auto|apf|csf|firewalld|ufw|nftables|iptables|route|custom) ;;
+			*)
+				echo "error: FIREWALL must be one of: auto apf csf firewalld ufw nftables iptables route custom (got '$FIREWALL')." >&2
+				return $EXIT_CONFIG_ERROR
+				;;
+		esac
 	fi
 	if [ "${FIREWALL:-auto}" = "custom" ] && [ -z "$BAN_COMMAND_TEMPLATE" ]; then
 		echo "error: BAN_COMMAND must not be empty when FIREWALL=custom." >&2
