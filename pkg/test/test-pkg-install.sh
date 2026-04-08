@@ -26,8 +26,10 @@ check_file() {
 check_link() {
 	local link="$1" target="$2" desc="$3"
 	if [ -L "$link" ]; then
+		# readlink -f canonicalizes to absolute path, so the same assertion
+		# works for RPM (absolute symlinks) and DEB (dh_link relative symlinks).
 		local actual
-		actual=$(readlink "$link")
+		actual=$(readlink -f "$link")
 		if [ "$actual" = "$target" ]; then
 			pass "$desc ($link -> $target)"
 		else

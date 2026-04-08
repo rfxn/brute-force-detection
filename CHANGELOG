@@ -1,5 +1,18 @@
 2.0.2:
 
+  [Fix] DEB packaging: /var/log/bfd permissions clobbered by dh_fixperms
+        (normalized all directories to 755, overriding the 750 set in
+        debian/rules). Postinst now restores 750 at install time, matching
+        the existing pattern for /var/lib/bfd/tmp and /var/lib/bfd/stats.
+        Pre-existing since DEB packaging was introduced; exposed when the
+        DEB install smoke test was run for the first time (never wired
+        into CI, only RPM install test was gated).
+  [Fix] pkg/test/test-pkg-install.sh: check_link now uses readlink -f
+        (canonical absolute path) instead of raw readlink. The old
+        comparison only worked for RPM (absolute symlinks); DEB uses
+        relative symlinks per dh_link / Debian policy, which caused every
+        symlink assertion to fail against the absolute-path expectation.
+        Fix works for both package formats.
   [Change] Vendored lib sync: geoip_lib 1.0.5 -> 1.0.6 — restores
            geoip_cc_known() function (regression fix; see canonical
            geoip_lib CHANGELOG for root cause and test coverage).

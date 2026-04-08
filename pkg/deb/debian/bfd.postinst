@@ -9,8 +9,10 @@ case "$1" in
         chmod 640 /etc/bfd/conf.bfd /etc/bfd/internals.conf \
             /etc/bfd/pressure.conf /etc/bfd/pressure-country.conf \
             /etc/bfd/exclude.files /etc/bfd/ignore.hosts 2>/dev/null || true
-        # Set permissions on state directories
-        chmod 750 /var/lib/bfd/tmp /var/lib/bfd/stats 2>/dev/null || true
+        # Set permissions on state and log directories.
+        # dh_fixperms normalizes directory perms to 755, clobbering the
+        # install -d -m 750 done in debian/rules; restore at runtime.
+        chmod 750 /var/lib/bfd/tmp /var/lib/bfd/stats /var/log/bfd 2>/dev/null || true  # non-fatal: dirs may be absent on first install before dh_installdirs
         # Reload systemd if available
         if command -v systemctl >/dev/null 2>&1; then
             systemctl daemon-reload 2>/dev/null || true
