@@ -1,5 +1,12 @@
 2.0.2:
 
+  [Change] Vendored lib sync: geoip_lib 1.0.5 -> 1.0.6 — restores
+           geoip_cc_known() function (regression fix; see canonical
+           geoip_lib CHANGELOG for root cause and test coverage).
+           BFD does not call geoip_cc_known directly — sync is for
+           shared-library discipline (byte-identical vendored copies
+           across consumers).
+
   -- New Features --
 
 [New] CLI subcommand namespaces: bfd ban, bfd ignore, bfd test, bfd cdn,
