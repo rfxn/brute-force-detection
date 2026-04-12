@@ -1,48 +1,5 @@
 2.0.2:
 
-  [Change] tlog wrapper relocated from files/tlog to files/internals/tlog,
-        matching LMD's private-tool layout. The /usr/local/sbin/tlog
-        user-facing symlink is dropped on all install types (RPM, DEB,
-        source). Detection pipeline is unaffected — _rule_tlog() runs
-        in-process; the wrapper binary is a dev/debug convenience only.
-        Migration note: for interactive byte-offset log debugging, invoke
-        /usr/local/bfd/internals/tlog directly or create a user symlink.
-        Eliminates per-sync vendored-lib drift (fallback block in the
-        wrapper is deleted) and the vestigial TLOG_PATH startup gate.
-  [Change] Vendored lib sync: tlog_lib 2.0.5 → 2.0.6, alert_lib 1.0.6 → 1.0.7,
-        elog_lib 1.0.5 → 1.0.6, pkg_lib 1.0.9 → 1.0.10, geoip_lib 1.0.6 → 1.0.7.
-        All five are comment-discipline cascade bumps from canonical — banner
-        separators removed, signature-restatement prose deleted from function
-        headers, prose config catalogues replaced with README cross-references.
-        Zero functional change in any library; load-bearing rationale (TLS
-        posture, symlink-safety, eval-guard validation, pkg_config_merge
-        invariants, SIEM/CEF/GELF contract docs, journal filter contracts,
-        alert dispatch invariants) preserved intact. Byte-identical to canonical:
-        tlog_lib d65158c (v2.0.6), alert_lib 3b66050 (v1.0.7), elog_lib 7a60165
-        (v1.0.6), pkg_lib cdd0814 (v1.0.10), geoip_lib cc9559f (v1.0.7).
-  [Change] tests/infra: batsman 1.4.1 → 1.4.2 — runs-on input for self-hosted
-        runner support (CI workflow only, no test behaviour change).
-
-  [Fix] DEB packaging: /var/log/bfd permissions clobbered by dh_fixperms
-        (normalized all directories to 755, overriding the 750 set in
-        debian/rules). Postinst now restores 750 at install time, matching
-        the existing pattern for /var/lib/bfd/tmp and /var/lib/bfd/stats.
-        Pre-existing since DEB packaging was introduced; exposed when the
-        DEB install smoke test was run for the first time (never wired
-        into CI, only RPM install test was gated).
-  [Fix] pkg/test/test-pkg-install.sh: check_link now uses readlink -f
-        (canonical absolute path) instead of raw readlink. The old
-        comparison only worked for RPM (absolute symlinks); DEB uses
-        relative symlinks per dh_link / Debian policy, which caused every
-        symlink assertion to fail against the absolute-path expectation.
-        Fix works for both package formats.
-  [Change] Vendored lib sync: geoip_lib 1.0.5 -> 1.0.6 — restores
-           geoip_cc_known() function (regression fix; see canonical
-           geoip_lib CHANGELOG for root cause and test coverage).
-           BFD does not call geoip_cc_known directly — sync is for
-           shared-library discipline (byte-identical vendored copies
-           across consumers).
-
   -- New Features --
 
 [New] CLI subcommand namespaces: bfd ban, bfd ignore, bfd test, bfd cdn,
@@ -58,6 +15,15 @@
       binary-search IP range lookup (IPv4/IPv6), cdn-providers.conf with 5
       default providers, bfd --cdn CLI, CDN_ENABLE and CDN_UPDATE_DAYS config;
       cron.daily auto-refresh and --json output support
+[New] CDN_ENABLE="auto" mode: auto-detect from cdn-providers.conf (uncommented
+      entries = enabled); first-run background fetch at install; config_init
+      one-shot retry for missing cdn.dat; default changed from "0" to "auto"
+      (no behavior change for fresh installs — all providers ship commented)
+[New] DATA_PATH variable in internals.conf: data files (ipcountry.dat,
+      ipcountry6.dat, cdn.dat, cdn6.dat, .last_update) moved from
+      $INSTALL_PATH/ root to $INSTALL_PATH/data/ subdirectory; importconf
+      migrates from flat layout on upgrade; RPM/DEB install to
+      /usr/share/bfd/data/ with legacy compat symlinks
 [New] Symlink farm enforcement: sbin symlink manifest + runtime self-healing
       (pkg_lib v1.0.6)
 [New] Structured audit events for ban escalation, manual ban/unban/flush,
@@ -65,23 +31,27 @@
       audit.log added to logrotate
 [New] Config validation: REPORT_ENABLED, REPORT_TOP_N, REPORT_CHANNELS checked
       at load time; 8 missing vars added to SIGHUP reload unset block
-[New] install.sh creates /usr/local/sbin/tlog symlink for PATH accessibility
+[New] Color-aware help output: bold section headers respecting NO_COLOR,
+      non-terminal, and TERM=dumb
 [New] Documentation: man page CDN/Trusted Proxy, Country Weighting, and
       SUBCOMMANDS sections; --cdn CLI options, sub-library FILES entries;
       README redesign with SECURITY.md and CONTRIBUTING.md
-[New] Color-aware help output: bold section headers respecting NO_COLOR,
-      non-terminal, and TERM=dumb
-[New] CDN_ENABLE="auto" mode: auto-detect from cdn-providers.conf (uncommented
-      entries = enabled); first-run background fetch at install; config_init
-      one-shot retry for missing cdn.dat; "0"/"1" still valid overrides
-[New] DATA_PATH variable in internals.conf: data files (ipcountry.dat,
-      ipcountry6.dat, cdn.dat, cdn6.dat, .last_update) moved from
-      $INSTALL_PATH/ root to $INSTALL_PATH/data/ subdirectory
 
   -- Bug Fixes --
 
-[Fix] RPM/DEB package manifests: add 9 sub-libraries + update-cdn-providers.sh;
-      .shellcheckrc and .gitmodules excluded from release tarball
+[Fix] RPM/DEB: exclude.files sed anchored to prevent ignore.hosts.local
+      path mismatch (self-ban risk on FHS package installs)
+[Fix] RPM/DEB: comprehensive packaging fixes — add 9 sub-libraries +
+      update-cdn-providers.sh to manifests; tlog BASERUN set to
+      /var/lib/bfd/tmp; /var/log/bfd/ created at install for logrotate;
+      background ipcountry + CDN database downloads on fresh install; cron
+      files marked config(noreplace); DEB daemon-reload in postinst; symlink
+      manifest for pkg_fhs_verify_farm(); defensive %pre/preinst cleanup for
+      orphaned source-install directories; .shellcheckrc and .gitmodules
+      excluded from release tarball
+[Fix] DEB: /var/log/bfd permissions clobbered by dh_fixperms (normalized to
+      755, wanted 750). Postinst now restores 750, matching the existing
+      pattern for /var/lib/bfd/tmp and /var/lib/bfd/stats
 [Fix] File permissions: lock.utime (creation and heartbeat) and ignore.hosts.local
       consistently set to mode 640
 [Fix] Report: --7d/--30d correctly maps to weekly/monthly interval; top-IPs
@@ -101,50 +71,31 @@
 [Fix] Stale IPv6 GeoIP build dirs cleaned up at update-ipcountry.sh startup
 [Fix] install.sh: consistent "Updating ... (background)..." format for
       IP country and CDN provider database fetch messages
-[Fix] RPM/DEB: exclude.files sed anchored to prevent ignore.hosts.local
-      path mismatch (self-ban risk on FHS package installs)
-[Fix] RPM/DEB: tlog BASERUN set to /var/lib/bfd/tmp (was /tmp default)
-[Fix] RPM/DEB: /var/log/bfd/ created at install time for logrotate
-[Fix] RPM/DEB: /usr/local/sbin/tlog symlink for standalone tlog access
-[Fix] RPM/DEB: background ipcountry + CDN database downloads on fresh
-      package install (matching install.sh pattern)
-[Fix] RPM/DEB: cron files marked config(noreplace) to preserve custom
-      schedules on package upgrade
-[Fix] DEB: explicit daemon-reload in postinst before importconf
-[Fix] RPM/DEB: symlink manifest for pkg_fhs_verify_farm() self-healing
-[Fix] RPM/DEB: defensive %pre/preinst cleanup for orphaned source-install
-      directories (alert/, data/, rules/, tmp/, stats/, internals/, ipcountry.dat)
-      to prevent cpio collision when stale dirs remain after partial uninstall
 [Fix] FIREWALL validation rewritten as case statement (was for-loop over
-      space-split list) — IFS-independent, prevents intermittent CI failures
+      space-split list) — IFS-independent, prevents intermittent failures
 [Fix] Deep-legacy portability: all bare coreutils (chmod, mkdir, cat, touch,
       ln, cp, mv, rm) use command prefix for CentOS 6 PATH compatibility
 [Fix] Unban error message includes hint for firewall-only blocks
-[Fix] tlog CLI version mismatch: TLOG_VERSION 2.0.4 → 2.0.5 to match lib
 [Fix] status_pressure: use grep -Fq for IP presence check to prevent regex
       interpretation of dot characters in IP addresses
-[Fix] tests/43-rules-tier2.bats: jellyfin tests no longer share
-      /var/log/jellyfin/log_20260308.log — race under bats --jobs caused
-      "auth denied" test to read 3 lines from sibling test's fixture and
-      fail with "3 matches" instead of "1 matches". Per-test fixtures now
-      live under TEST_TMPDIR; placeholder log in setup_file satisfies the
-      rule's existence gate
 
   -- Changes --
 
-[Change] Vendored lib sync: tlog_lib 2.0.5, alert_lib 1.0.6, elog_lib 1.0.5,
-        pkg_lib 1.0.8, geoip_lib 1.0.5
-[Fix] pkg_lib 1.0.7 → 1.0.8: POSIX herestring compat, ln -sfn symlink safety
+[Change] tlog wrapper relocated from files/tlog to files/internals/tlog,
+         matching LMD's private-tool layout. The /usr/local/sbin/tlog symlink
+         is dropped on all install types (RPM, DEB, source). For interactive
+         byte-offset log debugging, invoke /usr/local/bfd/internals/tlog
+         directly or create a user symlink
+[Change] Vendored library sync: tlog_lib 2.0.6, alert_lib 1.0.7,
+         elog_lib 1.0.6, pkg_lib 1.0.10, geoip_lib 1.0.7. Includes POSIX
+         herestring compat + ln -sfn symlink safety (pkg_lib), geoip_cc_known
+         regression fix (geoip_lib), and comment-discipline cleanup across
+         all five. Zero functional change
 [Change] pressure.conf and pressure-country.conf migrated to whitespace
-      format; dual-format parsers for backward compat; importconf auto-converts
+         format; dual-format parsers for backward compat; importconf auto-converts
 [Change] --check shows "no service detected" for rules with log-based PREREQ
 [Change] Help output: usage_short() condensed to 22-line three-section layout;
-      -h shows full reference, --help opens man page (progressive disclosure)
-[Change] conf.bfd reordered: 12→10 sections grouped by admin workflow
-      priority; Slack/Telegram/Discord combined into Messaging Alerts;
-      Advanced split into Detection Tuning and Logging & Output
-[Change] CDN_ENABLE default "0" → "auto" (no behavior change for fresh
-      installs — all providers ship commented); runtime guards use _CDN_ACTIVE
-[Change] Data file migration: update-ipcountry.sh and update-cdn-providers.sh
-      write to $DATA_PATH; importconf migrates from flat layout on upgrade;
-      RPM/DEB install to /usr/share/bfd/data/ with legacy compat symlinks
+         -h shows full reference, --help opens man page (progressive disclosure)
+[Change] conf.bfd reordered: 12 to 10 sections grouped by admin workflow
+         priority; Slack/Telegram/Discord combined into Messaging Alerts;
+         Advanced split into Detection Tuning and Logging & Output
