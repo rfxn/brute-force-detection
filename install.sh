@@ -38,6 +38,23 @@ PKG_BACKUP_SYMLINK="bfd.bk.last"
 . ./files/internals/pkg_lib.sh
 
 install_files(){
+	# Legacy cleanup: pre-2.0.2 installs shipped tlog as a user-facing symlink at
+	# $(dirname $BINPATH)/tlog (typically /usr/local/sbin/tlog) pointing at the
+	# top-level $INSPATH/tlog wrapper. 2.0.2 relocates the wrapper under
+	# internals/ and drops the user-facing symlink entirely. Remove only if it's
+	# a symlink pointing at a known-ours target; leave regular files (user data)
+	# or unexpected targets alone.
+	local _legacy_tlog_link _legacy_tlog_target
+	_legacy_tlog_link="$(command dirname "$BINPATH")/tlog"
+	if [ -L "$_legacy_tlog_link" ]; then
+		_legacy_tlog_target="$(command readlink "$_legacy_tlog_link")"
+		case "$_legacy_tlog_target" in
+			"$INSPATH/tlog"|"$INSPATH/internals/tlog")
+				command rm -f "$_legacy_tlog_link"
+				;;
+		esac
+	fi
+
 	# Remove stale install directory (backup already taken by caller)
 	command rm -rf "$INSPATH"
 
@@ -50,7 +67,7 @@ install_files(){
 
 	# Set permissions: 750 dirs, 640 files, then executable overrides
 	pkg_set_perms "$INSPATH" "750" "640" \
-		"bfd" "tlog" "update-ipcountry.sh" "update-cdn-providers.sh"
+		"bfd" "internals/tlog" "update-ipcountry.sh" "update-cdn-providers.sh"
 
 	# Custom template override directory (preserved across upgrades via importconf)
 	[ -d "$INSPATH/alert/custom.d" ] || command mkdir -p "$INSPATH/alert/custom.d"
@@ -65,13 +82,11 @@ install_files(){
 	# CLI symlinks
 	command mkdir -p "$(dirname "$BINPATH")"
 	pkg_symlink "$INSPATH/bfd" "$BINPATH"
-	pkg_symlink "$INSPATH/tlog" "$(dirname "$BINPATH")/tlog"
 
 	# Symlink manifest for runtime self-healing (pkg_lib v1.0.6)
 	{
 		command printf '# pkg_lib:symlink-manifest:1\n'
 		command printf '%s\t%s\n' "$BINPATH" "$INSPATH/bfd"
-		command printf '%s\t%s\n' "$(command dirname "$BINPATH")/tlog" "$INSPATH/tlog"
 	} > "$INSPATH/internals/.symlink-manifest"
 	command chmod 640 "$INSPATH/internals/.symlink-manifest"
 
@@ -135,7 +150,7 @@ install_files(){
 	fi
 
 	# tlog: replace default BASERUN for cursor storage security
-	sed -i "s|BASERUN=\"\${BASERUN:-/tmp}\"|BASERUN=\"\${BASERUN:-$INSPATH/tmp}\"|" "$INSPATH/tlog"
+	sed -i "s|BASERUN=\"\${BASERUN:-/tmp}\"|BASERUN=\"\${BASERUN:-$INSPATH/tmp}\"|" "$INSPATH/internals/tlog"
 
 	# Replace default paths when installing to a custom location
 	if [ "$INSPATH" != "/usr/local/bfd" ]; then
