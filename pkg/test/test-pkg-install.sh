@@ -80,7 +80,7 @@ check_file /usr/lib/bfd/internals/alert_lib.sh "Library: alert_lib.sh"
 check_file /usr/lib/bfd/internals/bfd_alert.sh "Library: bfd_alert.sh"
 check_file /usr/lib/bfd/internals/geoip_lib.sh "Library: geoip_lib.sh"
 check_file /usr/lib/bfd/internals/pkg_lib.sh "Library: pkg_lib.sh"
-check_file /usr/lib/bfd/tlog "Library: tlog"
+check_file /usr/lib/bfd/internals/tlog "Library: internals/tlog"
 check_file /usr/lib/bfd/alert "Library: alert directory"
 check_file /usr/lib/bfd/update-ipcountry.sh "Library: update-ipcountry.sh"
 check_file /usr/lib/bfd/importconf "Library: importconf"
@@ -113,7 +113,7 @@ check_link /usr/local/bfd/internals/bfd_alert.sh /usr/lib/bfd/internals/bfd_aler
 check_link /usr/local/bfd/internals/geoip_lib.sh /usr/lib/bfd/internals/geoip_lib.sh "Symlink: internals/geoip_lib.sh"
 check_link /usr/local/bfd/internals/pkg_lib.sh /usr/lib/bfd/internals/pkg_lib.sh "Symlink: internals/pkg_lib.sh"
 check_link /usr/local/bfd/internals/internals.conf /etc/bfd/internals.conf "Symlink: internals/internals.conf"
-check_link /usr/local/bfd/tlog /usr/lib/bfd/tlog "Symlink: tlog"
+check_link /usr/local/bfd/internals/tlog /usr/lib/bfd/internals/tlog "Symlink: internals/tlog"
 check_link /usr/local/bfd/alert /usr/lib/bfd/alert "Symlink: alert"
 check_link /usr/local/bfd/update-ipcountry.sh /usr/lib/bfd/update-ipcountry.sh "Symlink: update-ipcountry.sh"
 check_link /usr/local/bfd/importconf /usr/lib/bfd/importconf "Symlink: importconf"
@@ -128,7 +128,6 @@ check_link /usr/local/bfd/rules /usr/share/bfd/rules "Symlink: rules"
 check_link /usr/local/bfd/tmp /var/lib/bfd/tmp "Symlink: tmp"
 check_link /usr/local/bfd/stats /var/lib/bfd/stats "Symlink: stats"
 check_link /usr/local/sbin/bfd /usr/sbin/bfd "Symlink: /usr/local/sbin/bfd"
-check_link /usr/local/sbin/tlog /usr/lib/bfd/tlog "Symlink: /usr/local/sbin/tlog"
 check_link /usr/local/bfd/internals/.symlink-manifest /usr/lib/bfd/internals/.symlink-manifest "Symlink: .symlink-manifest"
 echo ""
 
@@ -139,7 +138,7 @@ if grep -q '/usr/share/bfd/rules' /etc/bfd/internals.conf; then
 else
 	fail "RULES_PATH still uses \$INSTALL_PATH"
 fi
-if grep -q '/usr/lib/bfd/tlog' /etc/bfd/internals.conf; then
+if grep -q '/usr/lib/bfd/internals/tlog' /etc/bfd/internals.conf; then
 	pass "TLOG_PATH uses FHS path"
 else
 	fail "TLOG_PATH still uses \$INSTALL_PATH"

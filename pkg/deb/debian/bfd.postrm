@@ -7,7 +7,6 @@ case "$1" in
         # but the directory itself and any runtime-created files remain)
         rm -rf /usr/local/bfd 2>/dev/null || true
         rm -f /usr/local/sbin/bfd 2>/dev/null || true
-        rm -f /usr/local/sbin/tlog 2>/dev/null || true
         if command -v systemctl >/dev/null 2>&1; then
             systemctl daemon-reload 2>/dev/null || true
         fi
@@ -16,7 +15,6 @@ case "$1" in
         # Clean up symlink farm
         rm -rf /usr/local/bfd 2>/dev/null || true
         rm -f /usr/local/sbin/bfd 2>/dev/null || true
-        rm -f /usr/local/sbin/tlog 2>/dev/null || true
         # Remove config directory on purge
         rm -rf /etc/bfd 2>/dev/null || true
         # Remove state

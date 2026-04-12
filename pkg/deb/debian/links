@@ -19,8 +19,8 @@ usr/lib/bfd/internals/bfd_core.sh        usr/local/bfd/internals/bfd_core.sh
 usr/lib/bfd/internals/bfd_cdn.sh         usr/local/bfd/internals/bfd_cdn.sh
 etc/bfd/internals.conf                    usr/local/bfd/internals/internals.conf
 usr/lib/bfd/internals/.symlink-manifest   usr/local/bfd/internals/.symlink-manifest
+usr/lib/bfd/internals/tlog                usr/local/bfd/internals/tlog
 # Top-level executables and directories
-usr/lib/bfd/tlog                usr/local/bfd/tlog
 usr/lib/bfd/alert               usr/local/bfd/alert
 usr/lib/bfd/update-ipcountry.sh usr/local/bfd/update-ipcountry.sh
 usr/lib/bfd/update-cdn-providers.sh usr/local/bfd/update-cdn-providers.sh
@@ -41,4 +41,3 @@ var/lib/bfd/tmp                 usr/local/bfd/tmp
 var/lib/bfd/stats               usr/local/bfd/stats
 # Executable
 usr/sbin/bfd                    usr/local/sbin/bfd
-usr/lib/bfd/tlog                usr/local/sbin/tlog

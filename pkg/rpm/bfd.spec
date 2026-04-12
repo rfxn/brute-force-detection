@@ -47,7 +47,7 @@ and email alerting.
 cp files/internals/internals.conf files/internals.conf.pkg
 sed -i \
     -e 's|\$INSTALL_PATH/rules|/usr/share/bfd/rules|' \
-    -e 's|\$INSTALL_PATH/tlog|/usr/lib/bfd/tlog|' \
+    -e 's|\$INSTALL_PATH/internals/tlog|/usr/lib/bfd/internals/tlog|' \
     -e 's|\$INSTALL_PATH/tmp|/var/lib/bfd/tmp|' \
     -e 's|\$INSTALL_PATH/alert"|/usr/lib/bfd/alert"|' \
     -e 's|\$INSTALL_PATH/exclude\.files|/etc/bfd/exclude.files|' \
@@ -74,7 +74,7 @@ sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.service.pkg
 cp bfd-watch.init bfd-watch.init.pkg
 sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.init.pkg
 
-cp files/tlog files/tlog.pkg
+cp files/internals/tlog files/tlog.pkg
 sed -i 's|BASERUN="${BASERUN:-/tmp}"|BASERUN="${BASERUN:-/var/lib/bfd/tmp}"|' files/tlog.pkg
 
 %install
@@ -87,7 +87,7 @@ install -D -m 755 files/bfd %{buildroot}/usr/sbin/bfd
 install -D -m 644 files/internals/bfd.lib.sh %{buildroot}/usr/lib/bfd/internals/bfd.lib.sh
 install -D -m 644 files/internals/tlog_lib.sh %{buildroot}/usr/lib/bfd/internals/tlog_lib.sh
 install -D -m 644 files/internals/elog_lib.sh %{buildroot}/usr/lib/bfd/internals/elog_lib.sh
-install -D -m 755 files/tlog.pkg %{buildroot}/usr/lib/bfd/tlog
+install -D -m 755 files/tlog.pkg %{buildroot}/usr/lib/bfd/internals/tlog
 install -D -m 644 files/internals/alert_lib.sh %{buildroot}/usr/lib/bfd/internals/alert_lib.sh
 install -D -m 644 files/internals/bfd_alert.sh %{buildroot}/usr/lib/bfd/internals/bfd_alert.sh
 install -D -m 644 files/internals/geoip_lib.sh %{buildroot}/usr/lib/bfd/internals/geoip_lib.sh
@@ -185,7 +185,7 @@ ln -s /usr/lib/bfd/internals/bfd_core.sh %{buildroot}%{legacy_path}/internals/bf
 ln -s /usr/lib/bfd/internals/bfd_cdn.sh %{buildroot}%{legacy_path}/internals/bfd_cdn.sh
 ln -s /etc/bfd/internals.conf %{buildroot}%{legacy_path}/internals/internals.conf
 ln -s /usr/lib/bfd/internals/.symlink-manifest %{buildroot}%{legacy_path}/internals/.symlink-manifest
-ln -s /usr/lib/bfd/tlog %{buildroot}%{legacy_path}/tlog
+ln -s /usr/lib/bfd/internals/tlog %{buildroot}%{legacy_path}/internals/tlog
 ln -s /usr/lib/bfd/alert %{buildroot}%{legacy_path}/alert
 ln -s /usr/lib/bfd/update-ipcountry.sh %{buildroot}%{legacy_path}/update-ipcountry.sh
 ln -s /usr/lib/bfd/update-cdn-providers.sh %{buildroot}%{legacy_path}/update-cdn-providers.sh
@@ -203,14 +203,13 @@ ln -s /var/lib/bfd/tmp %{buildroot}%{legacy_path}/tmp
 ln -s /var/lib/bfd/stats %{buildroot}%{legacy_path}/stats
 
 # Symlink manifest for runtime self-healing (pkg_lib v1.0.6)
-printf '# pkg_lib:symlink-manifest:1\n/usr/local/sbin/bfd\t/usr/sbin/bfd\n/usr/local/sbin/tlog\t/usr/lib/bfd/tlog\n' \
+printf '# pkg_lib:symlink-manifest:1\n/usr/local/sbin/bfd\t/usr/sbin/bfd\n' \
     > %{buildroot}/usr/lib/bfd/internals/.symlink-manifest
 chmod 640 %{buildroot}/usr/lib/bfd/internals/.symlink-manifest
 
-# /usr/local/sbin/bfd -> /usr/sbin/bfd, tlog -> /usr/lib/bfd/tlog
+# /usr/local/sbin/bfd -> /usr/sbin/bfd
 install -d -m 755 %{buildroot}/usr/local/sbin
 ln -s /usr/sbin/bfd %{buildroot}/usr/local/sbin/bfd
-ln -s /usr/lib/bfd/tlog %{buildroot}/usr/local/sbin/tlog
 
 %pre
 # Detect and back up existing install.sh-based installation
@@ -333,7 +332,6 @@ fi
 if [ "$1" = "0" ]; then
     rm -rf %{legacy_path} 2>/dev/null || true
     rm -f /usr/local/sbin/bfd 2>/dev/null || true
-    rm -f /usr/local/sbin/tlog 2>/dev/null || true
     if command -v systemctl >/dev/null 2>&1; then
         systemctl daemon-reload 2>/dev/null || true
     fi
@@ -359,8 +357,8 @@ fi
 /usr/lib/bfd/internals/bfd_diag.sh
 /usr/lib/bfd/internals/bfd_core.sh
 /usr/lib/bfd/internals/bfd_cdn.sh
+/usr/lib/bfd/internals/tlog
 %attr(640,root,root) /usr/lib/bfd/internals/.symlink-manifest
-/usr/lib/bfd/tlog
 /usr/lib/bfd/alert/
 %dir %attr(755,root,root) /usr/lib/bfd/alert/custom.d
 /usr/lib/bfd/update-ipcountry.sh
@@ -411,8 +409,8 @@ fi
 %{legacy_path}/internals/bfd_core.sh
 %{legacy_path}/internals/bfd_cdn.sh
 %{legacy_path}/internals/internals.conf
+%{legacy_path}/internals/tlog
 %{legacy_path}/internals/.symlink-manifest
-%{legacy_path}/tlog
 %{legacy_path}/alert
 %{legacy_path}/update-ipcountry.sh
 %{legacy_path}/update-cdn-providers.sh
@@ -429,7 +427,6 @@ fi
 %{legacy_path}/tmp
 %{legacy_path}/stats
 /usr/local/sbin/bfd
-/usr/local/sbin/tlog
 
 %changelog
 * Sat Apr 05 2026 R-fx Networks <proj@rfxn.com> - 2.0.2-1

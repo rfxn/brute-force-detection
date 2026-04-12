@@ -7,7 +7,7 @@ override_dh_auto_build:
 	cp files/internals/internals.conf files/internals.conf.pkg
 	sed -i \
 	    -e 's|\$$INSTALL_PATH/rules|/usr/share/bfd/rules|' \
-	    -e 's|\$$INSTALL_PATH/tlog|/usr/lib/bfd/tlog|' \
+	    -e 's|\$$INSTALL_PATH/internals/tlog|/usr/lib/bfd/internals/tlog|' \
 	    -e 's|\$$INSTALL_PATH/tmp|/var/lib/bfd/tmp|' \
 	    -e 's|\$$INSTALL_PATH/alert"|/usr/lib/bfd/alert"|' \
 	    -e 's|\$$INSTALL_PATH/exclude\.files|/etc/bfd/exclude.files|' \
@@ -27,7 +27,7 @@ override_dh_auto_build:
 	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.service.pkg
 	cp bfd-watch.init bfd-watch.init.pkg
 	sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.init.pkg
-	cp files/tlog files/tlog.pkg
+	cp files/internals/tlog files/tlog.pkg
 	sed -i 's|BASERUN="$${BASERUN:-/tmp}"|BASERUN="$${BASERUN:-/var/lib/bfd/tmp}"|' files/tlog.pkg
 
 override_dh_auto_install:
@@ -37,7 +37,7 @@ override_dh_auto_install:
 	install -D -m 644 files/internals/bfd.lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd.lib.sh
 	install -D -m 644 files/internals/tlog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/tlog_lib.sh
 	install -D -m 644 files/internals/elog_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/elog_lib.sh
-	install -D -m 755 files/tlog.pkg $(CURDIR)/debian/bfd/usr/lib/bfd/tlog
+	install -D -m 755 files/tlog.pkg $(CURDIR)/debian/bfd/usr/lib/bfd/internals/tlog
 	install -D -m 644 files/internals/alert_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/alert_lib.sh
 	install -D -m 644 files/internals/bfd_alert.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/bfd_alert.sh
 	install -D -m 644 files/internals/geoip_lib.sh $(CURDIR)/debian/bfd/usr/lib/bfd/internals/geoip_lib.sh
@@ -81,7 +81,7 @@ override_dh_auto_install:
 	# Log directory
 	install -d -m 750 $(CURDIR)/debian/bfd/var/log/bfd
 	# Symlink manifest for runtime self-healing (pkg_lib v1.0.6)
-	printf '# pkg_lib:symlink-manifest:1\n/usr/local/sbin/bfd\t/usr/sbin/bfd\n/usr/local/sbin/tlog\t/usr/lib/bfd/tlog\n' \
+	printf '# pkg_lib:symlink-manifest:1\n/usr/local/sbin/bfd\t/usr/sbin/bfd\n' \
 	    > $(CURDIR)/debian/bfd/usr/lib/bfd/internals/.symlink-manifest
 	chmod 640 $(CURDIR)/debian/bfd/usr/lib/bfd/internals/.symlink-manifest
 	# Systemd units (DEB convention: /lib/systemd/system/)
