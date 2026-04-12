@@ -12,11 +12,9 @@ setup() {
 	bfd_standard_setup
 	mkdir -p "$INSTALL_PATH/internals"
 
-	# Create mock executables at install path (targets for symlink repair)
+	# Create mock executable at install path (target for symlink repair)
 	touch "$INSTALL_PATH/bfd"
 	chmod 750 "$INSTALL_PATH/bfd"
-	touch "$INSTALL_PATH/tlog"
-	chmod 750 "$INSTALL_PATH/tlog"
 
 	# Set up BINPATH in test tmpdir (avoid touching real /usr/local/sbin)
 	BINPATH="$TEST_TMPDIR/sbin/bfd"
@@ -24,13 +22,11 @@ setup() {
 
 	# Create symlinks as install.sh would
 	ln -sf "$INSTALL_PATH/bfd" "$BINPATH"
-	ln -sf "$INSTALL_PATH/tlog" "$(dirname "$BINPATH")/tlog"
 
 	# Generate manifest matching test layout
 	{
 		printf '# pkg_lib:symlink-manifest:1\n'
 		printf '%s\t%s\n' "$BINPATH" "$INSTALL_PATH/bfd"
-		printf '%s\t%s\n' "$(dirname "$BINPATH")/tlog" "$INSTALL_PATH/tlog"
 	} > "$INSTALL_PATH/internals/.symlink-manifest"
 	chmod 640 "$INSTALL_PATH/internals/.symlink-manifest"
 }
@@ -53,10 +49,10 @@ teardown() {
 	[ "$header" = "# pkg_lib:symlink-manifest:1" ]
 }
 
-@test "symlink-manifest: manifest has 2 entries" {
+@test "symlink-manifest: manifest has 1 entry" {
 	local count
 	count=$(grep -cve '^\s*$' -e '^\s*#' "$INSTALL_PATH/internals/.symlink-manifest")
-	[ "$count" -eq 2 ]
+	[ "$count" -eq 1 ]
 }
 
 @test "symlink-manifest: manifest entries match installed symlinks" {

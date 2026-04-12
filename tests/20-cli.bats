@@ -556,8 +556,6 @@ teardown() {
 
 @test "pre: succeeds and creates missing directories and log file" {
 	bfd_load_function "pre"
-	TLOG_PATH="$TEST_TMPDIR/tlog"
-	touch "$TLOG_PATH"
 	mkdir -p "$INSTALL_PATH/internals"
 	touch "$INSTALL_PATH/internals/tlog_lib.sh"
 	TLOG_BASERUN="$TEST_TMPDIR/new_baserun"
@@ -575,9 +573,10 @@ teardown() {
 	[ "$perms" = "640" ]
 }
 
-@test "pre: exits with error when TLOG_PATH missing" {
+@test "pre: exits with error when tlog_lib.sh missing" {
 	bfd_load_function "pre"
-	TLOG_PATH="$TEST_TMPDIR/nonexistent_tlog"
+	INSTALL_PATH="$TEST_TMPDIR/empty_install"
+	mkdir -p "$INSTALL_PATH/internals"
 	run pre
 	assert_failure
 	[ "$status" -eq "$EXIT_PREREQ_ERROR" ]

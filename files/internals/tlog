@@ -242,14 +242,6 @@ _SCRIPT_DIR="${0%/*}"
 [[ "$_SCRIPT_DIR" == "$0" ]] && _SCRIPT_DIR="."
 _LIB="${_SCRIPT_DIR}/tlog_lib.sh"
 
-# BFD-specific: wrapper lives at files/tlog, lib lives at files/internals/tlog_lib.sh —
-# canonical tlog_lib does not ship this fallback (colocated layout), so it must be
-# re-applied on every canonical sync until BFD either relocates the wrapper into
-# files/internals/ or canonical grows a generic search path.
-if [[ ! -f "$_LIB" ]]; then
-	_LIB="${_SCRIPT_DIR}/internals/tlog_lib.sh"
-fi
-
 if [[ ! -f "$_LIB" ]]; then
 	echo "tlog: library not found: $_LIB" >&2
 	exit 1

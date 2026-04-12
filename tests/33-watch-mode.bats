@@ -69,7 +69,7 @@ CNFEOF
 	cat > "$INTCNF" <<INTEOF
 #!/bin/bash
 RULES_PATH="$INSTALL_PATH/rules"
-TLOG_PATH="$INSTALL_PATH/tlog"
+TLOG_PATH="$INSTALL_PATH/internals/tlog"
 TLOG_BASERUN="$INSTALL_PATH/tmp"
 ALERT_TEMPLATE_DIR="$INSTALL_PATH/alert"
 ALERT_SPOOL_FILE="$INSTALL_PATH/tmp/.alert_spool"
@@ -204,7 +204,7 @@ INTEOF
 
 	# fallback values should be derived from INSTALL_PATH
 	[ "$RULES_PATH" = "$INSTALL_PATH/rules" ]
-	[ "$TLOG_PATH" = "$INSTALL_PATH/tlog" ]
+	[ "$TLOG_PATH" = "$INSTALL_PATH/internals/tlog" ]
 	[ "$ALERT_TEMPLATE_DIR" = "$INSTALL_PATH/alert" ]
 }
 
@@ -303,8 +303,8 @@ _start_watch() {
 	cp "$PROJECT_ROOT/files/internals/bfd.lib.sh" "$inst/internals/bfd.lib.sh"
 	chown root "$inst/internals/bfd.lib.sh"
 	chmod 640 "$inst/internals/bfd.lib.sh"
-	cp "$PROJECT_ROOT/files/tlog" "$inst/tlog"
-	chmod 750 "$inst/tlog"
+	cp "$PROJECT_ROOT/files/internals/tlog" "$inst/internals/tlog"
+	chmod 750 "$inst/internals/tlog"
 	cp "$PROJECT_ROOT/files/internals/tlog_lib.sh" "$inst/internals/tlog_lib.sh"
 	chmod 750 "$inst/internals/tlog_lib.sh"
 	cp "$PROJECT_ROOT/files/internals/elog_lib.sh" "$inst/internals/elog_lib.sh"
@@ -381,7 +381,7 @@ CNFEOF
 #!/bin/bash
 RULES_PATH="$inst/rules"
 DATA_PATH="$inst/data"
-TLOG_PATH="$inst/tlog"
+TLOG_PATH="$inst/internals/tlog"
 TLOG_BASERUN="$inst/tmp"
 ALERT_TEMPLATE_DIR="$inst/alert"
 ALERT_SPOOL_FILE="$inst/tmp/.alert_spool"

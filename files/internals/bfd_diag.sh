@@ -213,7 +213,7 @@ _hc_rules() {
 _hc_state() {
 	local install_path="$1"
 
-	local tlog="${TLOG_PATH:-$install_path/tlog}"
+	local tlog="${TLOG_PATH:-$install_path/internals/tlog}"
 	if [ -f "$tlog" ] && [ -x "$tlog" ]; then
 		echo "[PASS] tlog: $tlog (executable)"
 		_hc_pass=$((_hc_pass + 1))

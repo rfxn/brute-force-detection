@@ -23,7 +23,7 @@ setup() {
 	BAN_COMMAND_TEMPLATE="/bin/true -d \$ATTACK_HOST"
 	GLOB_PRESSURE_TRIP="$PRESSURE_TRIP"
 	RULES_PATH="$INSTALL_PATH/rules"
-	TLOG_PATH="$INSTALL_PATH/tlog"
+	TLOG_PATH="$INSTALL_PATH/internals/tlog"
 	LOCK_FILE="$INSTALL_PATH/lock.utime"
 
 	# log paths
@@ -32,12 +32,10 @@ setup() {
 	MAIL_LOG_PATH="$TEST_TMPDIR/maillog"
 	touch "$AUTH_LOG_PATH" "$KERNEL_LOG_PATH"
 
-	# create tlog stub
+	# create tlog stub and tlog_lib.sh stub (both under internals/)
+	mkdir -p "$INSTALL_PATH/internals"
 	echo '#!/bin/bash' > "$TLOG_PATH"
 	chmod +x "$TLOG_PATH"
-
-	# create tlog_lib.sh stub
-	mkdir -p "$INSTALL_PATH/internals"
 	touch "$INSTALL_PATH/internals/tlog_lib.sh"
 }
 
@@ -69,7 +67,7 @@ teardown() {
 		BAN_COMMAND_V6_TEMPLATE=''
 		GLOB_PRESSURE_TRIP='15'
 		RULES_PATH='$INSTALL_PATH/rules'
-		TLOG_PATH='$INSTALL_PATH/tlog'
+		TLOG_PATH='$INSTALL_PATH/internals/tlog'
 		LOCK_FILE='$INSTALL_PATH/lock.utime'
 		AUTH_LOG_PATH='$AUTH_LOG_PATH'
 		KERNEL_LOG_PATH='$KERNEL_LOG_PATH'
@@ -255,7 +253,7 @@ EOF
 		BAN_COMMAND_V6_TEMPLATE=''
 		GLOB_PRESSURE_TRIP='15'
 		RULES_PATH='$INSTALL_PATH/rules'
-		TLOG_PATH='$INSTALL_PATH/tlog'
+		TLOG_PATH='$INSTALL_PATH/internals/tlog'
 		LOCK_FILE='$INSTALL_PATH/lock.utime'
 		AUTH_LOG_PATH='$AUTH_LOG_PATH'
 		KERNEL_LOG_PATH='$KERNEL_LOG_PATH'
@@ -345,7 +343,7 @@ EOF
 		BAN_COMMAND_V6_TEMPLATE=''
 		GLOB_PRESSURE_TRIP='15'
 		RULES_PATH='$INSTALL_PATH/rules'
-		TLOG_PATH='$INSTALL_PATH/tlog'
+		TLOG_PATH='$INSTALL_PATH/internals/tlog'
 		LOCK_FILE='$INSTALL_PATH/lock.utime'
 		AUTH_LOG_PATH='$AUTH_LOG_PATH'
 		KERNEL_LOG_PATH='$KERNEL_LOG_PATH'
@@ -405,7 +403,7 @@ EOF
 		BAN_COMMAND_V6_TEMPLATE=''
 		GLOB_PRESSURE_TRIP='15'
 		RULES_PATH='$INSTALL_PATH/rules'
-		TLOG_PATH='$INSTALL_PATH/tlog'
+		TLOG_PATH='$INSTALL_PATH/internals/tlog'
 		LOCK_FILE='$INSTALL_PATH/lock.utime'
 		AUTH_LOG_PATH='$AUTH_LOG_PATH'
 		KERNEL_LOG_PATH='$KERNEL_LOG_PATH'

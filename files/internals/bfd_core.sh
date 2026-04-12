@@ -180,7 +180,7 @@ config_init() {
 
 	# Fallbacks for internals.conf variables
 	RULES_PATH="${RULES_PATH:-$INSTALL_PATH/rules}"
-	TLOG_PATH="${TLOG_PATH:-$INSTALL_PATH/tlog}"
+	TLOG_PATH="${TLOG_PATH:-$INSTALL_PATH/internals/tlog}"
 	TLOG_BASERUN="${TLOG_BASERUN:-$INSTALL_PATH/tmp}"
 	ALERT_TEMPLATE_DIR="${ALERT_TEMPLATE_DIR:-$INSTALL_PATH/alert}"
 	ALERT_SPOOL_FILE="${ALERT_SPOOL_FILE:-$INSTALL_PATH/tmp/.alert_spool}"
@@ -305,10 +305,6 @@ config_init() {
 }
 
 pre() {
-if [ ! -f "$TLOG_PATH" ]; then
-	elog error "could not locate \$TLOG_PATH, aborting."
-	exit "$EXIT_PREREQ_ERROR"
-fi
 if [ ! -f "$INSTALL_PATH/internals/tlog_lib.sh" ]; then
 	elog error "could not locate tlog_lib.sh, aborting."
 	exit "$EXIT_PREREQ_ERROR"
