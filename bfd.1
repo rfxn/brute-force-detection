@@ -1248,8 +1248,9 @@ IPv4 IP-to-country lookup database (integer-range format).
 IPv6 IP-to-country lookup database (hex-range format). Built by
 .BR update-ipcountry.sh .
 .TP
-.I /usr/local/bfd/tlog
-Track log \(em byte-offset log reader CLI wrapper.
+.I /usr/local/bfd/internals/tlog
+Track log \(em byte-offset log reader CLI wrapper. Private internal tool;
+no user-facing symlink.
 .TP
 .I /usr/local/bfd/update-ipcountry.sh
 Script to download per-country CIDR zones (ipverse.net/ipdeny.com cascade) and

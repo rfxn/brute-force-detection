@@ -1,5 +1,14 @@
 2.0.2:
 
+  [Change] tlog wrapper relocated from files/tlog to files/internals/tlog,
+        matching LMD's private-tool layout. The /usr/local/sbin/tlog
+        user-facing symlink is dropped on all install types (RPM, DEB,
+        source). Detection pipeline is unaffected — _rule_tlog() runs
+        in-process; the wrapper binary is a dev/debug convenience only.
+        Migration note: for interactive byte-offset log debugging, invoke
+        /usr/local/bfd/internals/tlog directly or create a user symlink.
+        Eliminates per-sync vendored-lib drift (fallback block in the
+        wrapper is deleted) and the vestigial TLOG_PATH startup gate.
   [Change] Vendored lib sync: tlog_lib 2.0.5 → 2.0.6, alert_lib 1.0.6 → 1.0.7,
         elog_lib 1.0.5 → 1.0.6, pkg_lib 1.0.9 → 1.0.10, geoip_lib 1.0.6 → 1.0.7.
         All five are comment-discipline cascade bumps from canonical — banner
