@@ -97,8 +97,6 @@ _fw_csf_status() {
 }
 
 # --- firewalld backend (runtime-only rich rules, no --permanent) ---
-_fw_firewalld_setup() { :; }
-
 _fw_firewalld_ban() {
 	local host="$1" family="ipv4"
 	[[ "$host" == *:* ]] && family="ipv6"
@@ -118,8 +116,6 @@ _fw_firewalld_status() {
 }
 
 # --- UFW backend ---
-_fw_ufw_setup() { :; }
-
 _fw_ufw_ban() {
 	local host="$1"
 	# try with comment marker for identification; fall back for old UFW (<0.35)
@@ -278,8 +274,6 @@ _fw_route_status() {
 }
 
 # --- custom backend (backward-compatible eval of BAN_COMMAND templates) ---
-_fw_custom_setup() { :; }
-
 _fw_custom_exec() {
 	local action="$1" host="$2" mod="$3" raw_ports="$4"
 	local ports
@@ -330,12 +324,9 @@ fw_setup() {
 	case "$_FW_BACKEND" in
 		apf)       _fw_apf_setup ;;
 		csf)       _fw_csf_setup ;;
-		firewalld) _fw_firewalld_setup ;;
-		ufw)       _fw_ufw_setup ;;
 		nftables)  _fw_nftables_setup ;;
 		iptables)  _fw_iptables_setup ;;
 		route)     _fw_route_setup ;;
-		custom)    _fw_custom_setup ;;
 	esac
 }
 

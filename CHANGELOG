@@ -81,6 +81,10 @@
 
   -- Changes --
 
+[Change] Dead code cleanup: remove empty firewall setup hooks
+         (_fw_firewalld_setup, _fw_ufw_setup, _fw_custom_setup) and their
+         fw_setup() dispatch arms. These backends need no init; removing
+         the noop stubs drops 3 function defs with zero behavior change
 [Change] tlog wrapper relocated from files/tlog to files/internals/tlog,
          matching LMD's private-tool layout. The /usr/local/sbin/tlog symlink
          is dropped on all install types (RPM, DEB, source). For interactive
