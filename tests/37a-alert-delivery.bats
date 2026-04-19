@@ -351,7 +351,7 @@ MOCK
 # send_alerts integration (new pipeline)
 # ===================================================================
 
-@test "send_alerts integration: single entry text format calls mail" {
+@test "send_alerts integration: single entry text format calls mail (summary subject)" {
 	_setup_mock_mail
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_FORMAT="text"
@@ -360,14 +360,31 @@ MOCK
 	send_alerts "$af" "BFD Alert" "50"
 	[ -f "$MAIL_LOG" ]
 	run grep "MAIL_CALL:" "$MAIL_LOG"
-	assert_output --partial "BFD Alert"
+	# summary subject format: "[BFD] ban · sshd · 192.0.2.1 · <hostname> · permanent"
+	assert_output --partial "[BFD] ban"
+	assert_output --partial "192.0.2.1"
 }
 
-@test "send_alerts integration: multi entry subject has ban count" {
+@test "send_alerts integration: multi entry subject — summary joins services and count" {
 	_setup_mock_mail
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_FORMAT="text"
 	local af="$TEST_TMPDIR/alerts_multi"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
+	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2|5" >> "$af"
+	send_alerts "$af" "BFD Alert" "50"
+	run grep "MAIL_CALL:" "$MAIL_LOG"
+	assert_output --partial "[BFD] 2 bans"
+	assert_output --partial "dovecot"
+	assert_output --partial "sshd"
+}
+
+@test "send_alerts integration: legacy subject style preserves (N bans) suffix" {
+	EMAIL_SUBJECT_STYLE="legacy"
+	_setup_mock_mail
+	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
+	EMAIL_FORMAT="text"
+	local af="$TEST_TMPDIR/alerts_legacy_multi"
 	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2|5" >> "$af"
 	send_alerts "$af" "BFD Alert" "50"
@@ -671,7 +688,8 @@ MOCK
 	[ -f "$CURL_LOG.msg" ]
 	run grep "^From: alerts@example.com" "$CURL_LOG.msg"
 	assert_success
-	run grep "^Subject: BFD Alert" "$CURL_LOG.msg"
+	# summary-style subject: "[BFD] ban · sshd · 192.0.2.1 · <host> · permanent"
+	run grep "^Subject: \[BFD\]" "$CURL_LOG.msg"
 	assert_success
 	# message has multipart MIME structure (relay always builds full MIME)
 	run grep "multipart/alternative" "$CURL_LOG.msg"

@@ -1,12 +1,7 @@
---- Ban {{ENTRY_NUM}} of {{ENTRY_TOTAL}} ------------------------------------------
+{{ENTRY_SEPARATOR}}  when:      {{TIMESTAMP}}
+  host:      {{HOST_LINE}}
+  rule:      {{SERVICE_LINE}}
+  action:    {{ACTION_LINE}}{{ESCALATION_LINE}}{{HISTORY_LINE}}
+  why:       {{WHY_LINE_1}}
+             {{WHY_LINE_2}}{{REPUTATION_SECTION_TEXT}}{{SOURCE_LOGS_SECTION_TEXT}}
 
-  Host:        {{HOST}} ({{HOST_VERSION}}) {{COUNTRY_DISPLAY}}
-  Service:     {{SERVICE}} ({{PORTS}})
-  Pressure:    {{FAIL_COUNT_DISPLAY}} failed logins = +{{PRESSURE_CONTRIB}} this scan
-               {{PRESSURE}} accumulated pressure * trips at {{PRESSURE_TRIP}} * weight {{WEIGHT}} * half-life {{HALF_LIFE_FMT}}
-  Ban:         {{BAN_TYPE}}{{BAN_DURATION_DETAIL}}
-{{HISTORY_LINE}}
-{{ESCALATION_LINE}}
-  Command:     {{BAN_COMMAND}}
-{{REPUTATION_SECTION_TEXT}}
-{{SOURCE_LOGS_SECTION_TEXT}}

@@ -87,8 +87,8 @@ teardown() {
 	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	run _alert_render_text "$af" "$ALERT_TEMPLATE_DIR" "50"
 	assert_success
-	# shipped templates render normally
-	assert_output --partial "BFD Alert for"
+	# shipped templates render normally (format C header: "[BFD] <host> · ...")
+	assert_output --partial "[BFD]"
 }
 
 @test "_alert_render_html: mixed custom.d and default templates render correctly" {

@@ -603,48 +603,36 @@ EOF
 	export ALERT_COUNT="3"
 	run _alert_tpl_render "${PROJECT_ROOT}/files/alert/text.header.tpl"
 	assert_success
-	assert_output --partial "BFD Alert for web01.example.com"
-	assert_output --partial "2026-03-04 14:22:31 GMT -0600"
+	assert_output --partial "[BFD] web01.example.com"
+	assert_output --partial "2026-03-04 14:22:31 -0600"
 	assert_output --partial "3 host(s) banned"
 }
 
 @test "template render: text.entry.tpl smoke test" {
-	export HOST="192.0.2.1"
-	export HOST_VERSION="IPv4"
-	export COUNTRY_CODE="US"
-	export COUNTRY_DISPLAY="United States (US)"
-	export SERVICE="sshd"
-	export PORTS="22"
-	export PRESSURE="85"
-	export PRESSURE_TRIP="100"
-	export PRESSURE_PCT="85"
-	export PRESSURE_BAR="[=================   ] 85%"
-	export WEIGHT="10"
-	export FAIL_COUNT="7"
-	export FAIL_COUNT_DISPLAY="7"
-	export PRESSURE_CONTRIB="70"
-	export HALF_LIFE_FMT="30m"
-	export BAN_TYPE="temporary"
-	export BAN_DURATION_DETAIL=" (10m), expires 2026-03-04 14:32:31"
-	export BAN_COMMAND="/sbin/iptables -I INPUT -s 192.0.2.1 -j DROP"
-	export ENTRY_NUM="1"
-	export ENTRY_TOTAL="3"
-	export HISTORY_LINE="  History:     2 prior bans"
+	export TIMESTAMP="2026-03-04 14:22:31"
+	export HOST_LINE="192.0.2.1  IPv4  US  United States"
+	export SERVICE_LINE="sshd  port 22"
+	export ACTION_LINE="apf · temporary 10m · expires 2026-03-04 14:32:31"
+	export WHY_LINE_1="7 failed logins this scan"
+	export WHY_LINE_2="pressure 85  (trip 100 · weight 10 · half-life 30m)"
+	export ENTRY_SEPARATOR="──── ban 1 of 3 ────"
+	export HISTORY_LINE="  history:   2 prior bans"
 	export ESCALATION_LINE=""
 	export REPUTATION_SECTION_TEXT=""
 	export SOURCE_LOGS_SECTION_TEXT=""
 	run _alert_tpl_render "${PROJECT_ROOT}/files/alert/text.entry.tpl"
 	assert_success
-	assert_output --partial "Ban 1 of 3"
-	assert_output --partial "Host:        192.0.2.1 (IPv4) United States (US)"
-	assert_output --partial "Service:     sshd (22)"
-	assert_output --partial "7 failed logins = +70 this scan"
-	assert_output --partial "85 accumulated pressure"
-	assert_output --partial "trips at 100"
+	assert_output --partial "ban 1 of 3"
+	assert_output --partial "192.0.2.1  IPv4  US  United States"
+	assert_output --partial "sshd  port 22"
+	assert_output --partial "apf · temporary 10m"
+	assert_output --partial "7 failed logins this scan"
+	assert_output --partial "pressure 85"
+	assert_output --partial "trip 100"
 	assert_output --partial "weight 10"
-	assert_output --partial "Ban:         temporary (10m)"
-	assert_output --partial "History:     2 prior bans"
-	assert_output --partial "Command:"
+	assert_output --partial "half-life 30m"
+	assert_output --partial "history:"
+	assert_output --partial "2 prior bans"
 }
 
 @test "template render: text.summary.tpl smoke test" {
@@ -659,10 +647,10 @@ EOF
 	export SUMMARY_REPEAT_PCT="40"
 	run _alert_tpl_render "${PROJECT_ROOT}/files/alert/text.summary.tpl"
 	assert_success
-	assert_output --partial "Summary"
-	assert_output --partial "5 (3 unique IPs)"
+	assert_output --partial "summary"
+	assert_output --partial "5 bans (3 unique IPs)"
 	assert_output --partial "sshd, dovecot"
-	assert_output --partial "3 temporary, 1 escalated, 1 permanent"
+	assert_output --partial "3 temporary · 1 escalated · 1 permanent"
 	assert_output --partial "2 of 5 (40%)"
 }
 
@@ -670,8 +658,7 @@ EOF
 	export BFD_VERSION="2.0.1"
 	run _alert_tpl_render "${PROJECT_ROOT}/files/alert/text.footer.tpl"
 	assert_success
-	assert_output --partial "BFD (Brute Force Detection) 2.0.1"
-	assert_output --partial "bfd@rfxn.com"
+	assert_output --partial "bfd 2.0.1"
 	assert_output --partial "rfxn.com/projects/brute-force-detection"
 }
 
@@ -979,7 +966,7 @@ EOF
 	EMAIL_REPUTATION_LINKS="abuseipdb,ipinfo"
 	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
-	[[ "$REPUTATION_SECTION_TEXT" == *"Reputation:"* ]]
+	[[ "$REPUTATION_SECTION_TEXT" == *"lookup:"* ]]
 	[[ "$REPUTATION_SECTION_TEXT" == *"AbuseIPDB"* ]]
 	[[ "$REPUTATION_SECTION_HTML" == *"Reputation"* ]]
 }
@@ -1019,7 +1006,7 @@ EOF
 	echo "Jan  1 00:00:01 host sshd: Failed password from 192.0.2.1" > "$logfile"
 	local line="192.0.2.1|sshd|22|5000|0|ban|0|${logfile}|root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
-	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Source logs from"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"logs from"* ]]
 	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Failed password"* ]]
 	[[ "$SOURCE_LOGS_SECTION_HTML" == *"Failed password"* ]]
 }
@@ -1149,7 +1136,7 @@ EOF
 # _alert_render_text
 # ===================================================================
 
-@test "_alert_render_text: renders single entry email" {
+@test "_alert_render_text: renders single entry email (format C)" {
 	V="2.0.1"
 	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
 	_FW_BACKEND="custom"
@@ -1161,24 +1148,29 @@ EOF
 	run _alert_render_text "$af" "${PROJECT_ROOT}/files/alert"
 	assert_success
 	# header
-	assert_output --partial "BFD Alert for"
+	assert_output --partial "[BFD]"
 	assert_output --partial "1 host(s) banned"
-	# entry
-	assert_output --partial "Ban 1 of 1"
+	# entry: no "ban N of N" when entry_total == 1
+	refute_output --partial "ban 1 of 1"
 	assert_output --partial "192.0.2.1"
 	assert_output --partial "sshd"
+	# lowercase format-C labels
+	assert_output --partial "  host:"
+	assert_output --partial "  rule:"
+	assert_output --partial "  action:"
+	assert_output --partial "  why:"
 	# footer
-	assert_output --partial "BFD (Brute Force Detection) 2.0.1"
+	assert_output --partial "bfd 2.0.1"
 	assert_output --partial "rfxn.com/projects/brute-force-detection"
-	# pressure formula chain in A-1 format
-	assert_output --partial "5 failed logins = +15 this scan"
-	assert_output --partial "accumulated pressure"
+	# pressure math still exposed
+	assert_output --partial "5 failed logins this scan"
+	assert_output --partial "trip"
 	assert_output --partial "weight 3"
 	# no summary for single entry
-	refute_output --partial "Summary"
+	refute_output --partial "summary"
 }
 
-@test "_alert_render_text: renders multi-entry with summary" {
+@test "_alert_render_text: renders multi-entry with summary (format C)" {
 	V="2.0.1"
 	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
 	_FW_BACKEND="custom"
@@ -1193,10 +1185,10 @@ EOF
 	run _alert_render_text "$af" "${PROJECT_ROOT}/files/alert"
 	assert_success
 	assert_output --partial "2 host(s) banned"
-	assert_output --partial "Ban 1 of 2"
-	assert_output --partial "Ban 2 of 2"
-	assert_output --partial "Summary"
-	assert_output --partial "Total bans:"
+	assert_output --partial "ban 1 of 2"
+	assert_output --partial "ban 2 of 2"
+	assert_output --partial "summary"
+	assert_output --partial "total:"
 }
 
 @test "_alert_render_text: returns 1 for empty alerts" {

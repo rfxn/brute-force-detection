@@ -428,6 +428,12 @@ validate_config() {
 		echo "error: EMAIL_FORMAT must be text, html, or both (got '${EMAIL_FORMAT:-}')." >&2
 		return $EXIT_CONFIG_ERROR
 	fi
+	# EMAIL_SUBJECT_STYLE: must be "summary" or "legacy"
+	local _es="${EMAIL_SUBJECT_STYLE:-summary}"
+	if [ "$_es" != "summary" ] && [ "$_es" != "legacy" ]; then
+		echo "error: EMAIL_SUBJECT_STYLE must be summary or legacy (got '${EMAIL_SUBJECT_STYLE:-}')." >&2
+		return $EXIT_CONFIG_ERROR
+	fi
 	# EMAIL_DIGEST: must be "cycle" or "timed"
 	local _ed="${EMAIL_DIGEST:-cycle}"
 	if [ "$_ed" != "cycle" ] && [ "$_ed" != "timed" ]; then

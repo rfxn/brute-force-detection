@@ -72,7 +72,7 @@ _create_sidecar() {
 
 	local line="192.0.2.0/24|sshd|all|47000|0|ban|0|(multiple)|root|5|300|1|47"
 	_alert_set_entry_vars "$line" 1 1
-	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Contributing hosts"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"hosts (3 IPs from 192.0.2.0/24)"* ]]
 	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"192.0.2.12"* ]]
 	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"192.0.2.88"* ]]
 	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"192.0.2.201"* ]]
@@ -202,7 +202,7 @@ _create_sidecar() {
 	# total_pressure_raw = 3+3+2+1+1 = 10, field 4 = 10000 -> PRESSURE = "10.0"
 	[ "$PRESSURE" = "10.0" ]
 	# contributing hosts table populated
-	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Contributing hosts"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"hosts (4 IPs from 10.0.0.0/24)"* ]]
 	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"10.0.0.1"* ]]
 	# SUBNET_HOSTS_SECTION populated for messaging (JSON-escaped)
 	[[ "$SUBNET_HOSTS_SECTION" == *"10.0.0.1"* ]]

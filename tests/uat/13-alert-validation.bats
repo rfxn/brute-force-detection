@@ -73,22 +73,25 @@ teardown_file() {
 @test "UAT: alert text format has expected structure" {
     run _bfd_alert_render "$_ALERTS_FILE"
     assert_success
-    # Header section
-    assert_output --partial "BFD Alert"
-    # Entry fields
-    assert_output --partial "Host:"
-    assert_output --partial "Service:"
-    assert_output --partial "Pressure:"
+    # Header section (format C: "[BFD] <host> · <timestamp> <tz>")
+    assert_output --partial "[BFD]"
+    # Entry fields (lowercase labels)
+    assert_output --partial "  host:"
+    assert_output --partial "  rule:"
+    assert_output --partial "  action:"
+    assert_output --partial "  why:"
     # Footer
-    assert_output --partial "Brute Force Detection"
+    assert_output --partial "bfd "
+    assert_output --partial "rfxn.com/projects/brute-force-detection"
 }
 
 # bats test_tags=uat,uat:alert-validation
 @test "UAT: alert includes ban type information" {
     run _bfd_alert_render "$_ALERTS_FILE"
     assert_success
-    # expiry=0 in our synthetic entry means permanent ban
-    assert_output --partial "Permanent"
+    # expiry=0 in our synthetic entry means permanent ban — surfaced in action: line
+    assert_output --partial "action:"
+    assert_output --partial "permanent"
 }
 
 # bats test_tags=uat,uat:alert-validation

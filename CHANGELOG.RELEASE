@@ -2,6 +2,14 @@
 
   -- New Features --
 
+[New] Text email alerts: format C redesign — dense key:value layout with
+      lowercase labels (when/host/rule/action/why/logs), subject-line-first
+      dynamic header "[BFD] <verb> · <svc> · <host> (<CC>) · <hostname> ·
+      <severity>" for single bans and "[BFD] <N> bans · <services> · <host>"
+      for multi-ban digests. ESCALATED permanent bans and subnet/C-class
+      bans are called out explicitly in both subject and body. Adds
+      EMAIL_SUBJECT_STYLE config (summary|legacy) — set "legacy" to keep
+      EMAIL_SUBJECT verbatim with "(N bans)" suffix for multi-ban digests
 [New] CLI subcommand namespaces: bfd ban, bfd ignore, bfd test, bfd cdn,
       bfd report, bfd status — grouped help, bash completion, typo
       suggestions ("Did you mean?"), and bfd help <topic> routing

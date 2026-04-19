@@ -124,7 +124,14 @@ EMAIL_ALERTS="0"
 EMAIL_ADDRESS="root"
 
 # alert subject line ($HOSTNAME expands at runtime)
+# only used when EMAIL_SUBJECT_STYLE="legacy"; summary style builds the subject dynamically
 EMAIL_SUBJECT="Brute Force Warning for $HOSTNAME"
+
+# subject construction style
+#   summary = dense dynamic subject; single: "[BFD] ban · sshd · 1.2.3.4 (CN) · host · temp 10m"
+#             multi:  "[BFD] 3 bans · sshd, dovecot · host"; escalated/subnet bans flagged inline
+#   legacy  = use EMAIL_SUBJECT verbatim; append " (N bans)" for multi-ban alerts
+EMAIL_SUBJECT_STYLE="summary"
 
 # log lines from the offending service included in each alert and event view; must be > 0
 EMAIL_LOGLINES="5"

@@ -603,7 +603,30 @@ Enable email alerts: 0 or 1 (default: 0).
 Alert recipient; comma-separated for multiple (default: root).
 .TP
 .B EMAIL_SUBJECT
-Alert subject line; $HOSTNAME expands at runtime.
+Alert subject line; $HOSTNAME expands at runtime. Only used when
+.B EMAIL_SUBJECT_STYLE=legacy;
+the default
+.B summary
+style builds the subject dynamically.
+.TP
+.B EMAIL_SUBJECT_STYLE
+Subject construction style:
+.B summary
+(default) produces a dense per-ban line such as
+.I "[BFD] ban · sshd · 1.2.3.4 (CN) · host · temp 10m"
+for single bans and
+.I "[BFD] 3 bans · sshd, dovecot · host"
+for multi-ban digests, with
+.I ESCALATED
+and
+.I subnet
+verbs flagged inline.
+.B legacy
+uses
+.B EMAIL_SUBJECT
+verbatim and appends
+.I " (N bans)"
+for multi-ban alerts.
 .TP
 .B EMAIL_LOGLINES
 Log lines from the offending service included in each alert and events

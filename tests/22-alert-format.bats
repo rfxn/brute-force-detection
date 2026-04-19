@@ -185,7 +185,7 @@ MOCK
 	[ ! -f "$mail_log" ]
 }
 
-@test "send_alerts: single entry sends one mail with unchanged subject" {
+@test "send_alerts: summary subject — single ban emits dense dynamic line" {
 	local af="$TEST_TMPDIR/alerts_one"
 	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
 	local mail_log="$TEST_TMPDIR/mail_calls"
@@ -193,7 +193,51 @@ MOCK
 	_setup_mock_mail_log
 	send_alerts "$af" "$EMAIL_SUBJECT" "50"
 	[ -f "$mail_log" ]
-	# subject should NOT have "(N bans)" suffix
+	run grep "CALL:" "$mail_log"
+	# permanent ban (expiry=0), normal action → "[BFD] ban · sshd · 192.0.2.1 · testhost · permanent"
+	assert_output --partial "[BFD] ban"
+	assert_output --partial "sshd"
+	assert_output --partial "192.0.2.1"
+	assert_output --partial "testhost"
+	assert_output --partial "permanent"
+	refute_output --partial "Brute Force Warning"
+	refute_output --partial "bans)"
+}
+
+@test "send_alerts: summary subject — escalated ban flags ESCALATED verb" {
+	local af="$TEST_TMPDIR/alerts_esc"
+	echo "192.0.2.5|sshd|22|5000|0|escalate|3|/dev/null|root|5|300|3|5" > "$af"
+	local mail_log="$TEST_TMPDIR/mail_calls"
+	export MAIL_LOG="$mail_log"
+	_setup_mock_mail_log
+	send_alerts "$af" "$EMAIL_SUBJECT" "50"
+	run grep "CALL:" "$mail_log"
+	assert_output --partial "[BFD] ESCALATED"
+	assert_output --partial "192.0.2.5"
+	assert_output --partial "permanent"
+}
+
+@test "send_alerts: summary subject — subnet ban uses subnet verb" {
+	local af="$TEST_TMPDIR/alerts_cidr"
+	echo "1.2.3.0/24|sshd|22|5000|0|ban|0|(multiple)|root|5|300|3|5" > "$af"
+	local mail_log="$TEST_TMPDIR/mail_calls"
+	export MAIL_LOG="$mail_log"
+	_setup_mock_mail_log
+	send_alerts "$af" "$EMAIL_SUBJECT" "50"
+	run grep "CALL:" "$mail_log"
+	assert_output --partial "[BFD] subnet"
+	assert_output --partial "1.2.3.0/24"
+}
+
+@test "send_alerts: legacy subject style preserves EMAIL_SUBJECT verbatim (single)" {
+	EMAIL_SUBJECT_STYLE="legacy"
+	local af="$TEST_TMPDIR/alerts_legacy"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
+	local mail_log="$TEST_TMPDIR/mail_calls"
+	export MAIL_LOG="$mail_log"
+	_setup_mock_mail_log
+	send_alerts "$af" "$EMAIL_SUBJECT" "50"
+	[ -f "$mail_log" ]
 	run grep "CALL:" "$mail_log"
 	assert_output --partial "Brute Force Warning for testhost"
 	refute_output --partial "bans)"
@@ -643,13 +687,13 @@ SC
 
 	# first pass (simulating text render)
 	_alert_set_entry_vars "$line" 1 1
-	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Contributing hosts"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"hosts (2 IPs from 192.168.1.0/24)"* ]]
 	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"192.168.1.5"* ]]
 	[ "$SUBNET_IP_COUNT" = "2" ]
 
 	# second pass (simulating HTML render) — sidecar must still be readable
 	_alert_set_entry_vars "$line" 1 1
-	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Contributing hosts"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"hosts (2 IPs from 192.168.1.0/24)"* ]]
 	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"192.168.1.9"* ]]
 	[ "$SUBNET_IP_COUNT" = "2" ]
 

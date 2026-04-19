@@ -381,12 +381,16 @@ _alert_set_entry_vars() {
 	BAN_TYPE_COLOR=$(_alert_ban_type_color "$action" "$expiry")
 
 	# history and escalation lines (pre-computed with label or empty)
+	# Text variants lead with LF when non-empty so templates can sit them
+	# on a content-adjacent line without producing a blank line when empty.
+	# HTML rows remain the original structured rows consumed by html.entry.tpl.
 	local esc_after="${BAN_ESCALATE_AFTER:-${BAN_PERMANENT_AFTER:-0}}"
 	local esc_window="${BAN_ESCALATE_WINDOW:-${BAN_PERMANENT_WINDOW:-86400}}"
 	if [ "${esc_after:-0}" -gt 0 ] && [ "${recent:-0}" -gt 0 ]; then
 		local _esc_dur
 		_esc_dur=$(format_duration "$esc_window")
-		HISTORY_LINE="  History:     $recent previous ban(s) in $_esc_dur (permanent at $esc_after)"
+		HISTORY_LINE="
+  history:   $recent previous ban(s) in $_esc_dur (permanent at $esc_after)"
 		export HISTORY_LINE
 		HISTORY_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 16px;color:#71717a;vertical-align:top;">History</td>\n<td style="padding:4px 16px;color:#09090b;">%s previous ban(s) in %s (permanent at %s)</td>\n</tr>' \
 			"$recent" "$_esc_dur" "$esc_after")
@@ -397,12 +401,14 @@ _alert_set_entry_vars() {
 	fi
 
 	if [ "$action" = "escalate" ]; then
-		export ESCALATION_LINE="  Escalation:  permanent after $esc_after offenses"
+		export ESCALATION_LINE="
+  escalate:  permanent after $esc_after offenses"
 		export ESCALATION_ROW_HTML
 		ESCALATION_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 16px;color:#71717a;vertical-align:top;">Escalation</td>\n<td style="padding:4px 16px;color:#dc2626;font-weight:bold;">Permanent after %s offenses</td>\n</tr>' \
 			"$esc_after")
 	elif [ "${BAN_ESCALATION:-none}" != "none" ] && [ "${recent:-0}" -gt 0 ]; then
-		export ESCALATION_LINE="  Escalation:  ${BAN_ESCALATION}, step $((recent + 1))"
+		export ESCALATION_LINE="
+  escalate:  ${BAN_ESCALATION}, step $((recent + 1))"
 		export ESCALATION_ROW_HTML
 		ESCALATION_ROW_HTML=$(printf '<tr>\n<td style="padding:4px 16px;color:#71717a;vertical-align:top;">Escalation</td>\n<td style="padding:4px 16px;color:#09090b;">%s, step %s</td>\n</tr>' \
 			"${BAN_ESCALATION}" "$((recent + 1))")
@@ -466,6 +472,63 @@ _alert_set_entry_vars() {
 	export COUNTRY_DISPLAY_TG
 	COUNTRY_DISPLAY_TG=$(_alert_telegram_escape "$COUNTRY_DISPLAY")
 
+	# --- Format C (text email) per-entry lines ---
+	# Dense one-line values consumed by text.entry.tpl; html.entry.tpl still reads
+	# the original HOST/SERVICE/PORTS/BAN_TYPE/etc. fields directly.
+	local _backend="${_FW_BACKEND:-custom}"
+
+	# HOST_LINE: "<host>  <IPv4|IPv6>  <CC>  <Country>"  (country omitted when unavailable)
+	if [ -n "$cc" ] && [ "$COUNTRY_DISPLAY" != "$cc" ] && [ "$COUNTRY_DISPLAY" != "--" ]; then
+		# COUNTRY_DISPLAY is "Country (CC)" — split back to raw name for lighter style
+		local _cc_name_only="${COUNTRY_DISPLAY% (*)}"
+		export HOST_LINE="${host}  ${HOST_VERSION}  ${cc}  ${_cc_name_only}"
+	elif [ -n "$cc" ]; then
+		export HOST_LINE="${host}  ${HOST_VERSION}  ${cc}"
+	else
+		export HOST_LINE="${host}  ${HOST_VERSION}"
+	fi
+
+	# SERVICE_LINE: "<service>  <ports-display>"
+	export SERVICE_LINE="${mod}  ${PORTS}"
+
+	# ACTION_LINE: "<backend> · <type>[ · expires <ts>][ (escalated after N offenses)]"
+	local _action_line
+	if [ "$action" = "escalate" ]; then
+		_action_line="${_backend} · permanent (escalated after ${esc_after} offenses)"
+	elif [ "$expiry" = "0" ]; then
+		_action_line="${_backend} · permanent"
+	else
+		# BAN_DURATION_DETAIL already carries " (<dur>), expires <ts>"; rework into ·-separated form
+		local _dur_only _exp_only
+		_dur_only="${BAN_DURATION_DETAIL# (}"
+		_dur_only="${_dur_only%%)*}"
+		_exp_only="${BAN_DURATION_DETAIL#*expires }"
+		_action_line="${_backend} · temporary ${_dur_only} · expires ${_exp_only}"
+	fi
+	export ACTION_LINE="$_action_line"
+
+	# WHY_LINE_1 / WHY_LINE_2: failure count + pressure math
+	if [ -n "${SUBNET_IP_COUNT:-}" ]; then
+		# FAIL_COUNT_DISPLAY already formatted as "<N> across <M> IPs" by subnet branch
+		export WHY_LINE_1="${FAIL_COUNT_DISPLAY} failures this scan"
+	else
+		local _verb="failed logins"
+		[ "${FAIL_COUNT_DISPLAY}" = "1" ] && _verb="failed login"
+		export WHY_LINE_1="${FAIL_COUNT_DISPLAY} ${_verb} this scan"
+	fi
+	export WHY_LINE_2="pressure ${PRESSURE}  (trip ${PRESSURE_TRIP} · weight ${WEIGHT} · half-life ${HALF_LIFE_FMT})"
+
+	# ENTRY_SEPARATOR: heading between entries in multi-ban output. Non-empty values
+	# end with LF so the substitution leaves no blank line when empty (N=1). The
+	# prior entry's trailing blank line handles spacing, so the separator itself
+	# is single-line regardless of position.
+	if [ "$entry_total" -le 1 ]; then
+		export ENTRY_SEPARATOR=""
+	else
+		export ENTRY_SEPARATOR="──── ban ${entry_num} of ${entry_total} ────
+"
+	fi
+
 	# reputation links
 	local rep_config="${EMAIL_REPUTATION_LINKS:-}"
 	if [ -n "$rep_config" ]; then
@@ -473,7 +536,8 @@ _alert_set_entry_vars() {
 		export REPUTATION_SECTION_TEXT=""
 		export REPUTATION_SECTION_HTML=""
 		if [ -n "$REPUTATION_LINKS_TEXT" ]; then
-			REPUTATION_SECTION_TEXT="  Reputation:
+			REPUTATION_SECTION_TEXT="
+  lookup:
 $REPUTATION_LINKS_TEXT"
 			export REPUTATION_SECTION_TEXT
 			local _esc_html="$REPUTATION_LINKS_HTML"
@@ -499,10 +563,12 @@ $REPUTATION_LINKS_TEXT"
 			indented_logs=$(echo "$raw_logs" | sed 's/^/    /')
 			# shellcheck disable=SC2089  # single quotes are literal output, not shell quoting
 			if [ "$entry_total" -gt 1 ]; then
-				SOURCE_LOGS_SECTION_TEXT="  Source logs from '${mod}' [${host}]:
+				SOURCE_LOGS_SECTION_TEXT="
+  logs from '${mod}' [${host}]:
 ${indented_logs}"
 			else
-				SOURCE_LOGS_SECTION_TEXT="  Source logs from '${mod}':
+				SOURCE_LOGS_SECTION_TEXT="
+  logs from '${mod}':
 ${indented_logs}"
 			fi
 			# shellcheck disable=SC2090  # variable contains literal quotes for template output
@@ -529,9 +595,10 @@ ${indented_logs}"
 			export SUBNET_IP_COUNT="$_hdr_uc"
 			export FAIL_COUNT_DISPLAY="${_fc} across ${_hdr_uc} IPs"
 
-			# build contributing hosts text table
+			# build contributing hosts text table (leading LF: blank-line separator)
 			local _hosts_text _hosts_html _hosts_msg _overflow="" _line_data
-			_hosts_text="  Contributing hosts (${_hdr_uc} IPs from ${host}):"
+			_hosts_text="
+  hosts (${_hdr_uc} IPs from ${host}):"
 			# shellcheck disable=SC2089  # variable contains HTML with literal quotes, not shell quoting
 			_hosts_html='<tr><td colspan="2" style="padding:8px 16px;"><div style="background-color:#f4f4f5;border:1px solid #d4d4d8;border-radius:6px;padding:10px;font-family:'"'"'Courier New'"'"',Courier,monospace;font-size:11px;color:#09090b;">'
 			_hosts_html="${_hosts_html}<strong>Contributing hosts (${_hdr_uc} IPs from ${host}):</strong><br>"
@@ -582,7 +649,8 @@ ${indented_logs}"
 			# passes (text, HTML, messaging) need the file intact (F-A04)
 		else
 			# sidecar missing (race, cleanup) — static fallback
-			SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (distributed subnet ban)"
+			SOURCE_LOGS_SECTION_TEXT="
+  logs:      not available (distributed subnet ban)"
 			export SOURCE_LOGS_SECTION_TEXT
 			# shellcheck disable=SC2089  # variable contains HTML with literal quotes, not shell quoting
 			SOURCE_LOGS_SECTION_HTML='<tr><td colspan="2" style="padding:8px 16px;color:#71717a;font-style:italic;">Source logs not available (distributed subnet ban)</td></tr>'
@@ -591,7 +659,8 @@ ${indented_logs}"
 		fi
 	elif [ -z "$lp" ] || [ ! -f "${lp:-/dev/null}" ]; then
 		# journal-based logs: no log file path available
-		SOURCE_LOGS_SECTION_TEXT="  Source logs: not available (logs via systemd journal)"
+		SOURCE_LOGS_SECTION_TEXT="
+  logs:      not available (logs via systemd journal)"
 		export SOURCE_LOGS_SECTION_TEXT
 		# shellcheck disable=SC2089  # variable contains HTML with literal quotes, not shell quoting
 		SOURCE_LOGS_SECTION_HTML='<tr><td colspan="2" style="padding:8px 16px;color:#71717a;font-style:italic;">Source logs not available (systemd journal)</td></tr>'
@@ -686,6 +755,86 @@ _alert_compute_summary() {
 		fi
 	fi
 	export SUMMARY_COUNTRIES="${countries_str:---}"
+}
+
+# _bfd_alert_subject alerts_file fallback_subject — build the outgoing Subject: header
+# Honors EMAIL_SUBJECT_STYLE (summary|legacy). Summary mode builds a dense,
+# scan-friendly line from the alerts file; legacy mode preserves the v1-era
+# "<subject> (N bans)" behavior for users who have customized EMAIL_SUBJECT.
+#
+# Single-ban summary: "[BFD] <verb> · <svc> · <host>[ (CC)] · <hostname> · <sev>"
+# Multi-ban summary:  "[BFD] <N> bans[ (k ESCALATED)] · <services> · <hostname>"
+_bfd_alert_subject() {
+	local alerts_file="$1" fallback="${2:-BFD Alert}"
+	local style="${EMAIL_SUBJECT_STYLE:-summary}"
+
+	local count
+	count=$(wc -l < "$alerts_file")
+	[ "$count" -le 0 ] && count=1
+
+	if [ "$style" = "legacy" ]; then
+		if [ "$count" -gt 1 ]; then
+			printf '%s (%d bans)' "$fallback" "$count"
+		else
+			printf '%s' "$fallback"
+		fi
+		return 0
+	fi
+
+	# summary mode
+	local hn="${HOSTNAME:-$(hostname)}"
+
+	if [ "$count" -eq 1 ]; then
+		local s_host s_mod s_ports s_press s_expiry s_action _rest
+		# shellcheck disable=SC2034 # s_ports/s_press: positional placeholders for fields 3 & 4
+		IFS='|' read -r s_host s_mod s_ports s_press s_expiry s_action _rest < "$alerts_file"
+
+		local verb="ban" sev="permanent"
+		if [ "$s_action" = "escalate" ]; then
+			verb="ESCALATED"
+			sev="permanent"
+		elif [[ "$s_host" == */* ]]; then
+			verb="subnet"
+		fi
+		if [ "$s_action" != "escalate" ] && [ "$s_expiry" != "0" ]; then
+			local _dur=$(( s_expiry - $(date +%s) ))
+			[ "$_dur" -lt 0 ] && _dur=0
+			sev="temp $(format_duration "$_dur")"
+		fi
+
+		local cc=""
+		if [ -n "${DATA_PATH:-}" ] && [ -f "${DATA_PATH}/ipcountry.dat" ]; then
+			# subnet CIDR "1.2.3.0/24" — strip mask for geoip lookup
+			local _lookup_ip="${s_host%%/*}"
+			cc=$(ip_to_country "$_lookup_ip" "$DATA_PATH/ipcountry.dat" 2>/dev/null || true)  # optional enrichment: geoip lookup failure is non-fatal
+		fi
+		local cc_suffix=""
+		[ -n "$cc" ] && cc_suffix=" (${cc})"
+
+		printf '[BFD] %s · %s · %s%s · %s · %s' \
+			"$verb" "$s_mod" "$s_host" "$cc_suffix" "$hn" "$sev"
+		return 0
+	fi
+
+	# multi-ban: unique services (alphabetical, capped) + escalation count
+	local svcs_raw svcs_total
+	svcs_raw=$(awk -F'|' '{print $2}' "$alerts_file" | sort -u)
+	svcs_total=$(echo "$svcs_raw" | wc -l)
+	local svcs
+	if [ "$svcs_total" -le 3 ]; then
+		svcs=$(echo "$svcs_raw" | paste -sd ',' - | sed 's/,/, /g')
+	else
+		local first3
+		first3=$(echo "$svcs_raw" | head -3 | paste -sd ',' - | sed 's/,/, /g')
+		svcs="${first3} +$((svcs_total - 3))m"
+	fi
+
+	local esc_cnt
+	esc_cnt=$(awk -F'|' '$6 == "escalate"' "$alerts_file" | wc -l)
+	local esc_suffix=""
+	[ "$esc_cnt" -gt 0 ] && esc_suffix=" (${esc_cnt} ESCALATED)"
+
+	printf '[BFD] %d bans%s · %s · %s' "$count" "$esc_suffix" "$svcs" "$hn"
 }
 
 # ---------------------------------------------------------------------------
@@ -1053,11 +1202,10 @@ send_alerts() {
 		local alert_count
 		alert_count=$(wc -l < "$recip_file")
 
-		# augment subject for multi-ban
-		local mail_subject="$subject"
-		if [ "$alert_count" -gt 1 ]; then
-			mail_subject="$subject ($alert_count bans)"
-		fi
+		# build subject: summary mode (default) produces a dynamic dense line;
+		# legacy mode preserves "<subject> (N bans)" for users on custom EMAIL_SUBJECT
+		local mail_subject
+		mail_subject=$(_bfd_alert_subject "$recip_file" "$subject")
 
 		# render text body
 		local text_file=""
