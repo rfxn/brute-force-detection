@@ -13,9 +13,6 @@ bfd_load_function _apool_ban_status
 bfd_load_function _apool_awk
 bfd_load_function _apool_report_json
 bfd_load_function _apool_report_csv
-bfd_load_function _apool_service_summary_awk
-bfd_load_function _apool_service_summary_json
-bfd_load_function _apool_service_summary_csv
 bfd_load_function _apool_summary_awk
 bfd_load_function _apool_summary_json
 bfd_load_function _apool_summary_csv
@@ -138,31 +135,6 @@ teardown() {
 	assert_output --partial "192.0.2.1"
 }
 
-# --- _apool_service_summary_json ---
-
-@test "_apool_service_summary_json: formats service breakdown" {
-	local pool="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 sshd" >> "$pool"
-	echo "1001 192.0.2.2 sshd" >> "$pool"
-	echo "1002 192.0.2.1 dovecot" >> "$pool"
-	run _apool_service_summary_json "$pool"
-	assert_success
-	assert_output --partial '"service": "sshd"'
-	assert_output --partial '"count": 2'
-	assert_output --partial '"unique_ips": 2'
-}
-
-# --- _apool_service_summary_csv ---
-
-@test "_apool_service_summary_csv: header and data" {
-	local pool="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 sshd" >> "$pool"
-	run _apool_service_summary_csv "$pool"
-	assert_success
-	assert_output --partial "service,count,unique_ips"
-	assert_output --partial "sshd,1,1"
-}
-
 # --- apool_list_json ---
 
 @test "apool_list_json: empty pool returns empty JSON object" {
@@ -197,6 +169,14 @@ teardown() {
 }
 
 # --- apool_list_csv ---
+
+@test "apool_list_csv: empty pool returns empty output" {
+	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
+	> "$APOOL_LIST"
+	run apool_list_csv
+	assert_success
+	assert_output ""
+}
 
 @test "apool_list_csv: sections labeled with summary" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"

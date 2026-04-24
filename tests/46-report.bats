@@ -309,3 +309,64 @@ teardown() {
 	assert_success
 	assert_output --partial "Monthly Threat Report"
 }
+
+# --- F-A09: text table column count ---
+
+@test "format_top_ips: text table data rows include FIRST and LAST timestamp columns" {
+	bfd_require_bash42
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	APOOL_LIST="$pool"
+	local now
+	now=$(date +%s)
+	echo "$((now - 100)) 192.0.2.1 sshd 1 CN ban 600 22 15000 service" >> "$pool"
+	echo "$((now - 200)) 192.0.2.2 dovecot 1 RU ban 600 143 12000 service" >> "$pool"
+	echo "$((now - 300)) 192.0.2.1 sshd 1 CN observed 0 22 8000 service" >> "$pool"
+
+	_report_init "daily"
+	_report_format_top_ips "$pool" "$_RPT_CUTOFF" 25
+
+	# Header must contain FIRST and LAST columns
+	echo "$REPORT_TOP_IPS_TEXT" | head -1 | grep -q "FIRST"
+	echo "$REPORT_TOP_IPS_TEXT" | head -1 | grep -q "LAST"
+
+	# Data rows must contain formatted timestamps (MM/DD/YY HH:MM:SS pattern)
+	# _fmt_ts produces %D %H:%M:%S format, e.g., "03/18/26 14:30:00"
+	local ts_re='[0-9][0-9]/[0-9][0-9]/[0-9][0-9]'
+	local data_rows
+	data_rows=$(echo "$REPORT_TOP_IPS_TEXT" | tail -n +2)
+	[ -n "$data_rows" ]
+	local line
+	while IFS= read -r line; do
+		[ -z "$line" ] && continue
+		# Each data row must have at least one timestamp pattern
+		echo "$line" | grep -qE "$ts_re"
+	done <<< "$data_rows"
+}
+
+# --- F-A05: JSON-escaped brief vars ---
+
+@test "format_top_ips: REPORT_TOP_IPS_BRIEF_JSON escapes newlines" {
+	bfd_require_bash42
+	local pool="$INSTALL_PATH/stats/attack.pool"
+	APOOL_LIST="$pool"
+	local now
+	now=$(date +%s)
+	# Two IPs to produce multi-line brief
+	echo "$((now - 100)) 192.0.2.1 sshd 1 CN ban 600 22 15000 service" >> "$pool"
+	echo "$((now - 200)) 192.0.2.2 dovecot 1 RU ban 600 143 12000 service" >> "$pool"
+
+	_report_init "daily"
+	_report_format_top_ips "$pool" "$_RPT_CUTOFF" 25
+
+	# BRIEF should contain literal newlines (multi-line: wc -l >= 2)
+	local line_count
+	line_count=$(printf '%s\n' "$REPORT_TOP_IPS_BRIEF" | wc -l)
+	[ "$line_count" -ge 2 ]
+
+	# BRIEF_JSON should be a single line (no literal newlines)
+	line_count=$(printf '%s\n' "$REPORT_TOP_IPS_BRIEF_JSON" | wc -l)
+	[ "$line_count" -eq 1 ]
+
+	# BRIEF_JSON should contain the literal two-char sequence \n
+	[[ "$REPORT_TOP_IPS_BRIEF_JSON" == *'\n'* ]]
+}

@@ -25,8 +25,8 @@ teardown() {
 	[ "$output" -ge 1 ]
 }
 
-@test "install-paths: files/tlog does not contain /usr/local/bfd" {
-	run grep -c '/usr/local/bfd' "$PROJECT_ROOT/files/tlog"
+@test "install-paths: files/internals/tlog does not contain /usr/local/bfd" {
+	run grep -c '/usr/local/bfd' "$PROJECT_ROOT/files/internals/tlog"
 	assert_failure
 }
 

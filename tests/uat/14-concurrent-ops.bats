@@ -7,6 +7,7 @@
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load '../helpers/uat-bfd'
+load '../helpers/assert-bfd'
 load '../infra/lib/uat-helpers'
 
 setup_file() {
@@ -28,9 +29,8 @@ teardown_file() {
     assert_failure
     assert_output --partial "already banned"
     # Verify only one entry in bans.active for this IP
-    local count
-    count=$(grep -c "192.0.2.90" /usr/local/bfd/tmp/bans.active)
-    [ "$count" -eq 1 ]
+    assert_banned 192.0.2.90
+    assert_ban_count 1
 }
 
 # bats test_tags=uat,uat:concurrent-ops
@@ -38,19 +38,15 @@ teardown_file() {
     uat_bfd_reset
     run bfd -b 192.0.2.91 sshd
     assert_success
-    # Verify banned
-    run grep -c 192.0.2.91 /usr/local/bfd/tmp/bans.active
-    assert_success
+    assert_banned 192.0.2.91
     # Unban
     run bfd -u 192.0.2.91
     assert_success
-    # Verify clean — IP should not be in bans.active
-    run grep -c 192.0.2.91 /usr/local/bfd/tmp/bans.active
-    assert_failure
+    refute_banned 192.0.2.91
 }
 
 # bats test_tags=uat,uat:concurrent-ops
-@test "UAT: rapid ban-unban-ban sequence produces single active entry" {
+@test "UAT: sequential ban-unban-reban produces single active entry" {
     uat_bfd_reset
     run bfd -b 192.0.2.92 sshd
     assert_success
@@ -58,10 +54,8 @@ teardown_file() {
     assert_success
     run bfd -b 192.0.2.92 sshd
     assert_success
-    # Should have exactly one active entry
-    local count
-    count=$(grep -c "192.0.2.92" /usr/local/bfd/tmp/bans.active)
-    [ "$count" -eq 1 ]
+    assert_banned 192.0.2.92
+    assert_ban_count 1
 }
 
 # bats test_tags=uat,uat:concurrent-ops
@@ -80,16 +74,8 @@ teardown_file() {
     assert_failure
     run bfd -b 192.0.2.95 sshd
     assert_failure
-    # Count total lines — should be exactly 3 (one per IP)
-    local total_lines
-    total_lines=$(wc -l < /usr/local/bfd/tmp/bans.active)
-    [ "$total_lines" -eq 3 ]
-    # Verify each IP appears exactly once
-    local c93 c94 c95
-    c93=$(grep -c "192.0.2.93" /usr/local/bfd/tmp/bans.active)
-    c94=$(grep -c "192.0.2.94" /usr/local/bfd/tmp/bans.active)
-    c95=$(grep -c "192.0.2.95" /usr/local/bfd/tmp/bans.active)
-    [ "$c93" -eq 1 ]
-    [ "$c94" -eq 1 ]
-    [ "$c95" -eq 1 ]
+    assert_ban_count 3
+    assert_banned 192.0.2.93
+    assert_banned 192.0.2.94
+    assert_banned 192.0.2.95
 }

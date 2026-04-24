@@ -39,11 +39,15 @@ $(BUILDDIR)/$(TARBALL):
 	    cd $(PROJDIR) && \
 	    tar czf $(BUILDDIR)/$(TARBALL) \
 	        --transform 's,^\./,$(NAME)-$(VERSION)/,' \
-	        --exclude='.git' --exclude='audit-output' \
-	        --exclude='PRESSURE.md' --exclude='.claude' \
+	        --exclude='.git' --exclude='tests' \
+	        --exclude='pkg' --exclude='docs' \
+	        --exclude='audit-output' --exclude='.github' \
+	        --exclude='.rdf' --exclude='.claude' \
 	        --exclude='CLAUDE.md' --exclude='PLAN*.md' \
 	        --exclude='AUDIT.md' --exclude='MEMORY.md' \
-	        --exclude='pkg/build' \
+	        --exclude='REGR.md' --exclude='PRESSURE.md' \
+	        --exclude='.dockerignore' --exclude='.gitattributes' \
+	        --exclude='.gitmodules' --exclude='.shellcheckrc' \
 	        . ; \
 	fi
 

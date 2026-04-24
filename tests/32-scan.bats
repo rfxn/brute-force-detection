@@ -25,7 +25,8 @@ teardown() {
 
 # --- tlog_read_full ---
 
-@test "tlog_read_full: outputs entire file when max_lines=0" {
+@test "tlog_read_full: max_lines variants (full, last-N, exceeds-file)" {
+	# max_lines=0: outputs entire file
 	local logfile="$TEST_TMPDIR/test.log"
 	printf "line1\nline2\nline3\n" > "$logfile"
 	run tlog_read_full "$logfile" "0"
@@ -33,19 +34,15 @@ teardown() {
 	assert_line --index 0 "line1"
 	assert_line --index 1 "line2"
 	assert_line --index 2 "line3"
-}
 
-@test "tlog_read_full: outputs last N lines when max_lines > 0" {
-	local logfile="$TEST_TMPDIR/test.log"
+	# max_lines > 0: outputs last N lines
 	printf "line1\nline2\nline3\nline4\nline5\n" > "$logfile"
 	run tlog_read_full "$logfile" "2"
 	assert_success
 	assert_line --index 0 "line4"
 	assert_line --index 1 "line5"
-}
 
-@test "tlog_read_full: outputs all lines when max_lines exceeds file" {
-	local logfile="$TEST_TMPDIR/test.log"
+	# max_lines > file length: outputs all lines
 	printf "line1\nline2\n" > "$logfile"
 	run tlog_read_full "$logfile" "100"
 	assert_success
@@ -137,9 +134,11 @@ ${log2}|tag2"
 
 # --- _rule_tlog scan mode ---
 
-@test "_rule_tlog: scan mode outputs full file" {
+@test "_rule_tlog: scan mode full file and SCAN_MAX_LINES limit" {
 	TLOG_BASERUN="$INSTALL_PATH/tmp"
 	_SCAN_MODE="1"
+
+	# SCAN_MAX_LINES=0: outputs full file
 	SCAN_MAX_LINES="0"
 	local logfile="$TEST_TMPDIR/scan.log"
 	printf "alpha\nbeta\ngamma\n" > "$logfile"
@@ -148,18 +147,14 @@ ${log2}|tag2"
 	assert_line --index 0 "alpha"
 	assert_line --index 1 "beta"
 	assert_line --index 2 "gamma"
-	_SCAN_MODE=""
-}
 
-@test "_rule_tlog: scan mode respects SCAN_MAX_LINES" {
-	TLOG_BASERUN="$INSTALL_PATH/tmp"
-	_SCAN_MODE="1"
+	# SCAN_MAX_LINES=1: outputs only last line
 	SCAN_MAX_LINES="1"
-	local logfile="$TEST_TMPDIR/scan.log"
 	printf "line1\nline2\nline3\n" > "$logfile"
 	run _rule_tlog "$logfile" "scan_rt2"
 	assert_success
 	assert_output "line3"
+
 	_SCAN_MODE=""
 }
 
@@ -229,18 +224,17 @@ _setup_scan_check() {
 	_SCAN_LOG_PAIRS=""
 }
 
-@test "check: scan mode summary says 'scan complete'" {
+@test "check: summary prefix reflects scan vs normal mode" {
 	local rules_dir="$TEST_TMPDIR/rules"
 	mkdir -p "$rules_dir"
+
+	# scan mode: "scan complete:"
 	_setup_scan_check "$rules_dir"
 	run check
 	assert_success
 	assert_output --partial "scan complete:"
-}
 
-@test "check: normal mode summary says 'run complete'" {
-	local rules_dir="$TEST_TMPDIR/rules"
-	mkdir -p "$rules_dir"
+	# normal mode: "run complete:"
 	_setup_scan_check "$rules_dir"
 	_SCAN_MODE=""
 	run check
@@ -387,34 +381,32 @@ EOF
 
 # --- cursor advancement integration ---
 
-@test "scan: cursors advanced after non-dry-run" {
+@test "scan: cursor advancement and next normal tlog_read handoff" {
+	# cursor advanced after non-dry-run
 	local logfile="$TEST_TMPDIR/cursor_test.log"
 	printf "1234567890" > "$logfile"
 	local log_pairs="${logfile}|cursor_svc"
 	DRY_RUN="0"
 	tlog_advance_cursors "$TLOG_BASERUN" "$log_pairs"
-	# cursor file should have file size
 	[ -f "$TLOG_BASERUN/cursor_svc" ]
 	local sz
 	sz=$(cat "$TLOG_BASERUN/cursor_svc")
 	[ "$sz" = "10" ]
-}
 
-@test "scan: next normal tlog_read starts from advanced cursor" {
-	local logfile="$TEST_TMPDIR/handoff.log"
-	printf "existing content\n" > "$logfile"
-	# advance cursor to current size (simulating post-scan)
+	# next normal tlog_read starts from advanced cursor
+	local handoff_log="$TEST_TMPDIR/handoff.log"
+	printf "existing content\n" > "$handoff_log"
 	local fsize
-	fsize=$(stat -c %s "$logfile")
+	fsize=$(stat -c %s "$handoff_log")
 	echo "$fsize" > "$TLOG_BASERUN/handoff_tag"
-	# now normal tlog_read should output nothing (no new content)
-	run tlog_read "$logfile" "handoff_tag" "$TLOG_BASERUN"
+	# tlog_read should output nothing (no new content past cursor)
+	run tlog_read "$handoff_log" "handoff_tag" "$TLOG_BASERUN"
 	assert_success
 	assert_output ""
 	# append new content
-	printf "new line\n" >> "$logfile"
-	# now tlog_read should output only new content
-	run tlog_read "$logfile" "handoff_tag" "$TLOG_BASERUN"
+	printf "new line\n" >> "$handoff_log"
+	# tlog_read should output only new content
+	run tlog_read "$handoff_log" "handoff_tag" "$TLOG_BASERUN"
 	assert_success
 	assert_output "new line"
 }
@@ -424,77 +416,68 @@ EOF
 # loop at line 675 and --scan dispatch at line 754) because invoking the full
 # CLI requires an installed environment with root, config, and firewall setup.
 
-@test "CLI: --max-lines= is extracted by pre-processing" {
-	# Simulate the pre-processing logic
+@test "CLI: --max-lines= and --scan-timeout= extracted by pre-processing" {
+	# --max-lines= extraction
 	local _CLI_SCAN_MAX_LINES=""
 	local _arg="--max-lines=100"
 	case "$_arg" in
 		--max-lines=*) _CLI_SCAN_MAX_LINES="${_arg#--max-lines=}" ;;
 	esac
 	[ "$_CLI_SCAN_MAX_LINES" = "100" ]
-}
 
-@test "CLI: --scan-timeout= is extracted by pre-processing" {
+	# --scan-timeout= extraction
 	local _CLI_SCAN_TIMEOUT=""
-	local _arg="--scan-timeout=60"
+	_arg="--scan-timeout=60"
 	case "$_arg" in
 		--scan-timeout=*) _CLI_SCAN_TIMEOUT="${_arg#--scan-timeout=}" ;;
 	esac
 	[ "$_CLI_SCAN_TIMEOUT" = "60" ]
 }
 
-@test "CLI: SCAN_MAX_LINES validation rejects non-integer" {
-	# mirrors bfd:769 — non-integer must fail the regex match
+@test "CLI: scan var validation (accept/reject integer, zero, non-integer)" {
 	local int_p='^[0-9]+$'
+
+	# SCAN_MAX_LINES: rejects non-integer
 	local val="abc"
 	! [[ "$val" =~ $int_p ]]
-}
 
-@test "CLI: SCAN_MAX_LINES validation accepts zero" {
-	local int_p='^[0-9]+$'
-	local val="0"
+	# SCAN_MAX_LINES: accepts zero
+	val="0"
 	[[ "$val" =~ $int_p ]]
-}
 
-@test "CLI: SCAN_TIMEOUT validation rejects zero" {
-	# mirrors bfd:773 — zero matches the regex but must be rejected as non-positive
-	local int_p='^[0-9]+$'
-	local val="0"
-	# the actual validation: ! regex-match OR equals-zero → reject
+	# SCAN_TIMEOUT: rejects zero (matches regex but must be non-positive)
+	val="0"
 	if ! [[ "$val" =~ $int_p ]] || [ "$val" -eq 0 ]; then
 		true  # correctly rejected
 	else
 		false  # should not reach here
 	fi
-}
 
-@test "CLI: SCAN_TIMEOUT validation accepts positive integer" {
-	local int_p='^[0-9]+$'
-	local val="120"
+	# SCAN_TIMEOUT: accepts positive integer
+	val="120"
 	[[ "$val" =~ $int_p ]] && [ "$val" -gt 0 ]
 }
 
-@test "CLI: --scan sub-arg -d sets DRY_RUN" {
+@test "CLI: --scan sub-args (-d, --dryrun, rule name)" {
+	# -d sets DRY_RUN
 	local DRY_RUN=0
 	local _s2="-d"
 	case "$_s2" in
 		-d|--dryrun) DRY_RUN=1 ;;
 	esac
 	[ "$DRY_RUN" = "1" ]
-}
 
-@test "CLI: --scan sub-arg --dryrun sets DRY_RUN" {
-	local DRY_RUN=0
-	local _s2="--dryrun"
+	# --dryrun sets DRY_RUN
+	DRY_RUN=0
+	_s2="--dryrun"
 	case "$_s2" in
 		-d|--dryrun) DRY_RUN=1 ;;
 	esac
 	[ "$DRY_RUN" = "1" ]
-}
 
-@test "CLI: --scan sub-arg non-flag sets _SCAN_RULE" {
+	# non-flag sets _SCAN_RULE
 	local _SCAN_RULE=""
-	local _s2="sshd"
+	_s2="sshd"
 	case "$_s2" in
 		-d|--dryrun) ;;
 		"") ;;
@@ -504,7 +487,8 @@ EOF
 	[ "$_SCAN_RULE" = "sshd" ]
 }
 
-@test "CLI: --scan RULE -d sets both _SCAN_RULE and DRY_RUN" {
+@test "CLI: --scan RULE -d and -d RULE both set _SCAN_RULE and DRY_RUN" {
+	# --scan RULE -d: rule first, then flag
 	local _SCAN_RULE="" DRY_RUN=0
 	local _s2="sshd" _s3="-d"
 	case "$_s2" in
@@ -521,11 +505,10 @@ EOF
 	esac
 	[ "$_SCAN_RULE" = "sshd" ]
 	[ "$DRY_RUN" = "1" ]
-}
 
-@test "CLI: --scan -d RULE sets both _SCAN_RULE and DRY_RUN" {
-	local _SCAN_RULE="" DRY_RUN=0
-	local _s2="-d" _s3="sshd"
+	# --scan -d RULE: flag first, then rule
+	_SCAN_RULE="" DRY_RUN=0
+	_s2="-d" _s3="sshd"
 	case "$_s2" in
 		-d|--dryrun) DRY_RUN=1 ;;
 		"") ;;
@@ -542,13 +525,12 @@ EOF
 	[ "$DRY_RUN" = "1" ]
 }
 
-@test "CLI: --scan defaults applied when CLI overrides absent" {
-	# Simulate: no CLI override, config has defaults
+@test "CLI: scan defaults retained when absent; --max-lines= overrides config" {
+	# defaults applied when CLI overrides absent
 	local _CLI_SCAN_MAX_LINES=""
 	local _CLI_SCAN_TIMEOUT=""
 	SCAN_MAX_LINES="50000"  # from conf.bfd
 	SCAN_TIMEOUT="120"       # from conf.bfd
-	# apply defaults (mimics --scan case logic)
 	if [ -n "$_CLI_SCAN_MAX_LINES" ]; then
 		SCAN_MAX_LINES="$_CLI_SCAN_MAX_LINES"
 	else
@@ -561,10 +543,9 @@ EOF
 	fi
 	[ "$SCAN_MAX_LINES" = "50000" ]
 	[ "$SCAN_TIMEOUT" = "120" ]
-}
 
-@test "CLI: --max-lines= overrides config default" {
-	local _CLI_SCAN_MAX_LINES="200"
+	# --max-lines= overrides config default
+	_CLI_SCAN_MAX_LINES="200"
 	SCAN_MAX_LINES="50000"
 	if [ -n "$_CLI_SCAN_MAX_LINES" ]; then
 		SCAN_MAX_LINES="$_CLI_SCAN_MAX_LINES"
@@ -652,16 +633,13 @@ _setup_validate_config() {
 
 # --- show_config scan vars ---
 
-@test "show_config: SCAN_MAX_LINES is in whitelist" {
-	SCAN_MAX_LINES="50000"
-	run show_config "SCAN_MAX_LINES"
-	assert_success
-	assert_output "50000"
-}
-
-@test "show_config: SCAN_TIMEOUT is in whitelist" {
-	SCAN_TIMEOUT="120"
-	run show_config "SCAN_TIMEOUT"
-	assert_success
-	assert_output "120"
+@test "show_config: scan variables are in whitelist" {
+	local var val
+	for var in SCAN_MAX_LINES SCAN_TIMEOUT; do
+		eval "$var=12345"
+		run show_config "$var"
+		assert_success
+		assert_output "12345"
+		unset "$var"
+	done
 }

@@ -1,8 +1,7 @@
 #!/usr/bin/env bats
 #
 # Tests for enhanced attack summary — Phase 13D
-# Tests _apool_report() ban status, _apool_service_summary(),
-# and _apool_ban_status()
+# Tests _apool_report() ban status and _apool_ban_status()
 #
 
 load '/usr/local/lib/bats/bats-support/load'
@@ -13,8 +12,6 @@ load 'helpers/bfd-common'
 bfd_load_function _apool_awk
 bfd_load_function _apool_report
 bfd_load_function _apool_ban_status
-bfd_load_function _apool_service_summary_awk
-bfd_load_function _apool_service_summary
 bfd_load_function _apool_summary_awk
 bfd_load_function _apool_summary
 bfd_load_function _apool_service_dual_awk
@@ -28,55 +25,6 @@ setup() {
 
 teardown() {
 	bfd_teardown
-}
-
-# --- per-service breakdown ---
-
-@test "service summary: counts correct" {
-	local pool="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 sshd" >> "$pool"
-	echo "1001 192.0.2.1 sshd" >> "$pool"
-	echo "1002 192.0.2.2 sshd" >> "$pool"
-	echo "1003 192.0.2.1 dovecot" >> "$pool"
-	run _apool_service_summary "$pool"
-	assert_success
-	assert_output --partial "sshd"
-	assert_output --partial "dovecot"
-}
-
-@test "service summary: unique IP count correct" {
-	local pool="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 sshd" >> "$pool"
-	echo "1001 192.0.2.1 sshd" >> "$pool"
-	echo "1002 192.0.2.2 sshd" >> "$pool"
-	echo "1003 192.0.2.3 dovecot" >> "$pool"
-	run _apool_service_summary "$pool"
-	assert_success
-	# sshd: 3 events, 2 unique IPs; dovecot: 1 event, 1 unique IP
-	# output is table-formatted; check the data content
-	assert_output --partial "Per-service threat breakdown"
-	assert_output --partial "UNIQUE_IPS"
-}
-
-@test "service summary: multiple services sorted by count" {
-	local pool="$INSTALL_PATH/stats/attack.pool"
-	echo "1000 192.0.2.1 dovecot" >> "$pool"
-	echo "1001 192.0.2.1 sshd" >> "$pool"
-	echo "1002 192.0.2.2 sshd" >> "$pool"
-	echo "1003 192.0.2.3 sshd" >> "$pool"
-	run _apool_service_summary "$pool"
-	assert_success
-	# sshd has 3 events (sorted first), dovecot has 1
-	assert_output --partial "sshd"
-	assert_output --partial "dovecot"
-}
-
-@test "service summary: empty pool produces no output" {
-	local pool="$INSTALL_PATH/stats/attack.pool"
-	# pool exists but is empty
-	run _apool_service_summary "$pool"
-	assert_success
-	refute_output --partial "Per-service"
 }
 
 # --- ban status ---
@@ -196,13 +144,6 @@ teardown() {
 }
 
 # --- apool_list() orchestrator ---
-
-@test "apool_list: empty pool produces no crash" {
-	APOOL_LIST="$INSTALL_PATH/stats/attack.pool"
-	> "$APOOL_LIST"
-	run apool_list
-	assert_success
-}
 
 @test "apool_list: absent pool file prints no-data message" {
 	APOOL_LIST="$INSTALL_PATH/stats/attack.pool.nonexistent"

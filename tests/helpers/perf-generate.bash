@@ -103,12 +103,11 @@ generate_sshd_log() {
 		mpad = ": RSA SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8 ED25519 SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU"
 		npad = ": RSA SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8 ED25519 SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU"
 		thresh = int(lines * ratio / 100)
-		for (i = 0; i < lines; i++) {
+		for (i = 1; i <= lines; i++) {
 			idx = i % uips
 			o2 = int(idx / 65536) % 256
 			o3 = int(idx / 256) % 256
 			o4 = idx % 256
-			if (o4 == 0) o4 = 1
 			ip = "10." o2 "." o3 "." o4
 			pid = 10000 + i
 			if (i < thresh) {
@@ -155,12 +154,11 @@ generate_mod_sec_log() {
 		npad = npad " X-Content-Type-Options: nosniff [hostname \"app.example.com\"]"
 		npad = npad " [uri \"/api/v2/health\"] [unique_id \"YWJjZGVmZ2hpamtsbW5vcHFy\"]"
 		thresh = int(lines * ratio / 100)
-		for (i = 0; i < lines; i++) {
+		for (i = 1; i <= lines; i++) {
 			idx = i % uips
 			o2 = int(idx / 65536) % 256
 			o3 = int(idx / 256) % 256
 			o4 = idx % 256
-			if (o4 == 0) o4 = 1
 			ip = "10." o2 "." o3 "." o4
 			pid = 10000 + i
 			if (i < thresh) {
@@ -193,12 +191,11 @@ generate_postfix_log() {
 		npad = npad " (TLS: TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits) key-exchange X25519 server-signature RSA-PSS (2048 bits))"
 		npad = npad " queue_id=4Y8KzR6Lptz3vGN"
 		thresh = int(lines * ratio / 100)
-		for (i = 0; i < lines; i++) {
+		for (i = 1; i <= lines; i++) {
 			idx = i % uips
 			o2 = int(idx / 65536) % 256
 			o3 = int(idx / 256) % 256
 			o4 = idx % 256
-			if (o4 == 0) o4 = 1
 			ip = "10." o2 "." o3 "." o4
 			pid = 10000 + i
 			if (i < thresh) {
@@ -230,12 +227,11 @@ generate_dovecot_log() {
 		npad = ", TLS: TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits), session=<abc123def456ghi789jkl0+mno1>"
 		npad = npad ", client_id=thunderbird/115.6.0, local_port=993, orig_client=proxy"
 		thresh = int(lines * ratio / 100)
-		for (i = 0; i < lines; i++) {
+		for (i = 1; i <= lines; i++) {
 			idx = i % uips
 			o2 = int(idx / 65536) % 256
 			o3 = int(idx / 256) % 256
 			o4 = idx % 256
-			if (o4 == 0) o4 = 1
 			ip = "10." o2 "." o3 "." o4
 			pid = 10000 + i
 			if (i < thresh) {
@@ -263,12 +259,11 @@ generate_pressure_dat() {
 	local output_file="$1" entry_count="$2" now="$3"
 	awk -v entries="$entry_count" -v now="$now" 'BEGIN {
 		split("sshd,dovecot,postfix,mod_sec", mods, ",")
-		for (i = 0; i < entries; i++) {
+		for (i = 1; i <= entries; i++) {
 			idx = i % 500
 			o2 = int(idx / 65536) % 256
 			o3 = int(idx / 256) % 256
 			o4 = idx % 256
-			if (o4 == 0) o4 = 1
 			ip = "10." o2 "." o3 "." o4
 			ts = now - (i % 300)
 			mod = mods[(i % 4) + 1]

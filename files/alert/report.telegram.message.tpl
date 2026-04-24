@@ -3,7 +3,7 @@ _{{HOSTNAME}}_ \| {{REPORT_WINDOW}}
 
 *{{REPORT_UNIQUE_IPS}}* unique IPs \. *{{REPORT_TOTAL_EVENTS}}* events \. *{{REPORT_TOTAL_BANS}}* bans
 Active bans: {{REPORT_ACTIVE_BANS}}
-Trend: {{REPORT_TREND_LABEL}}
+Trend: {{REPORT_TREND_LABEL_TG}}
 
 *Top threats:*
 {{REPORT_TOP_IPS_BRIEF}}

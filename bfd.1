@@ -1,9 +1,9 @@
-.\" Brute Force Detection 2.0.1 man page
+.\" Brute Force Detection 2.0.2 man page
 .\" Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
 .\" Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
 .\" Licensed under the GNU General Public License v2
 .\"
-.TH BFD 1 "2026-03-17" "BFD 2.0.1" "Brute Force Detection"
+.TH BFD 1 "2026-04-03" "BFD 2.0.2" "Brute Force Detection"
 .SH NAME
 bfd \- brute force detection and IP banning
 .SH SYNOPSIS
@@ -60,6 +60,27 @@ bfd \- brute force detection and IP banning
 .RB [ \-\-24h | \-\-7d | \-\-30d ]
 .RB [ \-\-active ]
 .RB [ \-V | \-\-verbose ]
+.br
+.B bfd
+.B \-\-cdn
+.RI [ PROVIDER | update | check
+.IR IP ]
+.br
+.B bfd ban
+.RI [ add | remove | list | flush | history ]
+.RI [ args... ]
+.br
+.B bfd ignore
+.RI [ add | remove | list | check ]
+.RI [ args... ]
+.br
+.B bfd test
+.RI [ rule | pattern | alert | scan ]
+.RI [ args... ]
+.br
+.B bfd
+.RI { cdn | report | status }
+.RI [ args... ]
 .br
 .B bfd
 .RB [ \-v ]
@@ -134,6 +155,9 @@ Remove all temporary (non-permanent) bans.
 .TP
 .B \-\-flush\-all
 Remove all bans (temporary and permanent).
+.PP
+See also:
+.BR "bfd ban" .
 .SS Scan Mode
 .TP
 .BI \-\-scan " \fR[" RULE \fR] " \fR[" \-d \fR]
@@ -335,6 +359,9 @@ The subject line is prefixed with
 .B [TEST]
 to distinguish from real alerts.
 Bypasses digest mode to always send immediately.
+.PP
+See also:
+.BR "bfd test" .
 .SS Output Modifiers
 .TP
 .B \-\-json
@@ -385,6 +412,28 @@ ban execution details, per-unban information, detection method in
 status, and binary paths in health check.
 Silenced by
 .BR \-q .
+.SS CDN / Trusted Proxy
+.TP
+.B \-\-cdn
+List all configured CDN providers with active/inactive status and CIDR counts.
+.TP
+.BI \-\-cdn " PROVIDER"
+Show the compiled CIDR ranges for a specific provider.
+.TP
+.B \-\-cdn update
+Fetch and compile IP ranges for all enabled CDN providers.
+Ranges are downloaded from the URLs configured in
+.BR cdn\-providers.conf .
+.TP
+.BI "\-\-cdn check " IP
+Check whether an IP address matches any CDN provider's compiled ranges.
+.PP
+Combine with
+.B \-\-json
+for structured output.
+.PP
+See also:
+.BR "bfd cdn" .
 .SS General
 .TP
 .BR \-v ", " \-\-version
@@ -395,10 +444,134 @@ Display full usage help with grouped options and examples.
 When
 .B bfd
 is run with no arguments, a short summary of common commands is shown instead.
+.SH SUBCOMMANDS
+BFD supports grouped subcommand syntax alongside traditional flag-based
+invocation.
+Each subcommand group accepts
+.B \-\-help
+or
+.B \-h
+to display its verb list.
+.SS "bfd ban"
+.TP
+.BI "bfd ban add " "IP \fR[" SERVICE \fR]
+Manually ban an IP address (permanent).
+Equivalent to
+.BR "bfd \-b" .
+.TP
+.BI "bfd ban remove " IP
+Remove a ban.
+Equivalent to
+.BR "bfd \-u" .
+.TP
+.B "bfd ban list"
+List active bans.
+Equivalent to
+.BR "bfd \-l" .
+.TP
+.BI "bfd ban flush " "temp\fR|\fPall"
+Flush temporary or all bans.
+Equivalent to
+.B \-\-flush\-temp
+/
+.BR \-\-flush\-all .
+.TP
+.BI "bfd ban history " \fR[ IP \fR]
+Query ban history across current and rotated
+.B bans.history
+archives.
+Supports
+.BR \-\-24h ", " \-\-7d ", " \-\-30d
+time windows,
+.BR \-\-limit= \fIN\fR,
+and
+.BR \-\-json " / " \-\-csv
+output.
+.SS "bfd ignore"
+.TP
+.BI "bfd ignore add " "IP\fR|\fPCIDR \fR[" COMMENT \fR]
+Add an IP address or CIDR to the ignore list.
+CIDR entries are normalized to the network address (e.g., 10.0.0.5/8
+becomes 10.0.0.0/8).
+Validates input and rejects duplicates.
+.TP
+.BI "bfd ignore remove " IP\fR|\fPCIDR
+Remove an entry from the ignore list.
+.TP
+.B "bfd ignore list"
+Display all ignore list entries (skips comments and blank lines).
+.TP
+.BI "bfd ignore check " IP
+Check whether an IP is ignored, by exact match or CIDR containment.
+Returns exit code 0 if ignored, 1 if not.
+.SS "bfd test"
+.TP
+.BI "bfd test rule " "RULE \fR[" FILE \fR| \fB\- \fR]
+Test a rule's patterns against its configured log file, a specific file, or stdin.
+Equivalent to
+.BR "bfd \-T" .
+.TP
+.BI "bfd test pattern " "PATTERN \fR[" FILE \fR| \fB\- \fR]
+Test a raw
+.I <HOST>
+pattern.
+Equivalent to
+.BR \-\-test\-pattern .
+.TP
+.BI "bfd test alert " TYPE
+Send a test alert.
+Equivalent to
+.BR \-\-test\-alert .
+.TP
+.BI "bfd test scan " "\fR[" RULE \fR] " \fR[" \-d \fR]
+Full-log scan.
+Equivalent to
+.BR \-\-scan .
+.SS "bfd cdn"
+CDN/trusted proxy management.
+Equivalent to the
+.B \-\-cdn
+flag variants; see
+.B CDN / Trusted Proxy
+in OPTIONS above.
+.SS "bfd report"
+.TP
+.BI "bfd report " "\fR[" daily \fR| weekly \fR| monthly \fR]
+Generate and deliver a periodic threat report.
+Equivalent to
+.BR \-\-report .
+.SS "bfd status"
+.TP
+.B "bfd status"
+Operational status overview.
+Equivalent to
+.BR "bfd \-S" .
+.TP
+.BI "bfd status " SERVICE
+Service-specific status.
+Equivalent to
+.BR "bfd \-S " \fISERVICE\fR .
+.TP
+.B "bfd status lock"
+Display lock state: holder PID, age, and staleness relative to
+.BR LOCK_FILE_TIMEOUT .
+.TP
+.B "bfd status cursors"
+Display tlog cursor file positions and ages.
+Shows byte offset and last update time for each cursor file.
+.TP
+.B "bfd status pool"
+Display attack pool statistics: total events, unique IPs, age range,
+and top 5 IPs by event count.
+.TP
+.BI "bfd status pressure " \fR[ IP \fR]
+Display current pressure scores with exponential decay.
+Without an IP argument, shows the top 10 IPs by score.
+With an IP argument, shows per-service breakdown and threshold status.
 .SH CONFIGURATION
 Configuration is in
 .BR conf.bfd ,
-organized into eleven sections.
+organized into fourteen sections.
 The file is sourced as bash; all values are shell variables.
 Additional tuning variables with sensible defaults
 .RB ( LOG_SOURCE ", " LOCK_FILE_TIMEOUT ", " BAN_RETRY_COUNT ", " OUTPUT_SYSLOG_FILE )
@@ -430,7 +603,30 @@ Enable email alerts: 0 or 1 (default: 0).
 Alert recipient; comma-separated for multiple (default: root).
 .TP
 .B EMAIL_SUBJECT
-Alert subject line; $HOSTNAME expands at runtime.
+Alert subject line; $HOSTNAME expands at runtime. Only used when
+.B EMAIL_SUBJECT_STYLE=legacy;
+the default
+.B summary
+style builds the subject dynamically.
+.TP
+.B EMAIL_SUBJECT_STYLE
+Subject construction style:
+.B summary
+(default) produces a dense per-ban line such as
+.I "[BFD] ban · sshd · 1.2.3.4 (CN) · host · temp 10m"
+for single bans and
+.I "[BFD] 3 bans · sshd, dovecot · host"
+for multi-ban digests, with
+.I ESCALATED
+and
+.I subnet
+verbs flagged inline.
+.B legacy
+uses
+.B EMAIL_SUBJECT
+verbatim and appends
+.I " (N bans)"
+for multi-ban alerts.
 .TP
 .B EMAIL_LOGLINES
 Log lines from the offending service included in each alert and events
@@ -732,6 +928,63 @@ are expanded at send time.
 .TP
 .B REPORT_TOP_N
 Maximum IPs to include in report tables (default: 25).
+.SS "CDN / Trusted Proxy"
+When enabled, BFD loads
+.B cdn\-providers.conf
+and applies per-provider treatment (ignore, exclude, or derate) to matching
+source IPs before they enter the detection pipeline.
+.TP
+.B CDN_ENABLE
+Enable CDN/trusted proxy IP awareness: auto, 0, or 1 (default: auto).
+When set to \fBauto\fR, CDN processing is enabled if cdn\-providers.conf
+contains any uncommented provider entries.
+.TP
+.B CDN_UPDATE_DAYS
+How often to refresh provider IP ranges in days; 0 = never auto-refresh
+(default: 7).
+.PP
+Provider configuration is in
+.BR cdn\-providers.conf .
+Each line defines a provider with fields:
+.BR NAME ", " TREATMENT ", " MULT ", " FORMAT ", " URL_V4 ", " URL_V6 .
+.PP
+Treatment modes:
+.B ignore
+(pre-filter, invisible to detection),
+.B exclude
+(visible in logs, never banned), or
+.B derate
+(reduced pressure via multiplier).
+Lines beginning with
+.B #
+are inactive; uncomment to enable a provider.
+Five providers are pre-configured: Cloudflare, AWS CloudFront, Fastly,
+Google Cloud, and Akamai.
+.SS "Country Weighting"
+Per-country pressure multipliers adjust detection sensitivity based on
+geographic origin.
+Activation is automatic when
+.B pressure\-country.conf
+contains uncommented entries.
+.PP
+.B pressure\-country.conf
+format: one entry per line,
+.IR "CC N" ,
+where
+.I CC
+is a two-letter ISO 3166-1 country code and
+.I N
+is the weight multiplied by 10 (e.g., 15 = 1.5\(mu).
+Legacy
+.I CC=N
+format is also accepted for backward compatibility.
+.PP
+Country lookup uses
+.B ipcountry.dat
+(IPv4 integer-range format) and
+.B ipcountry6.dat
+(IPv6 hex-range format), rebuilt by
+.BR update\-ipcountry.sh .
 .SH ALERT TEMPLATES
 Alert messages are rendered from customizable template partials in the
 .B alert/
@@ -859,9 +1112,9 @@ in the rule file for per-rule override.
 .B pressure.conf
 \(em centralized per-rule overrides without editing rule files.
 Format:
-.IR rule_name ": PRESSURE_WEIGHT=" N ": PRESSURE_TRIP=" N .
+.IR rule_name "  weight=" N "  trip=" N .
 Also supports
-.BR SKIP_ALERT " and " RULE_EMAIL .
+.BR skip_alert " and " rule_email .
 .IP 3.
 .B conf.bfd
 \(em global
@@ -949,7 +1202,8 @@ GeoIP metadata library \(em country names, continent mapping, CIDR download
 (sourced by bfd.lib.sh).
 .TP
 .I /usr/local/bfd/internals/pkg_lib.sh
-Packaging utility library (sourced by install.sh and uninstall.sh).
+Packaging utility library for symlink farm verification (sourced at runtime
+by bfd.lib.sh, and by install.sh and uninstall.sh).
 .TP
 .I /usr/local/bfd/internals/bfd_report.sh
 Periodic threat report functions \(em data collection, rendering, and delivery
@@ -958,8 +1212,51 @@ Periodic threat report functions \(em data collection, rendering, and delivery
 .I /usr/local/bfd/internals/internals.conf
 Internal/derived variables.
 .TP
+.I /usr/local/bfd/internals/bfd_core.sh
+Orchestration \(em bfd_run(), config_init(), main loop, watch mode core
+(sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_validate.sh
+Validation functions \(em IP, host, config, file safety checks
+(sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_fw.sh
+Firewall backend functions \(em iptables, nftables, APF, CSF, firewalld, UFW, route
+(sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_state.sh
+State I/O and ban execution functions (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_pressure.sh
+Pressure model and rule infrastructure functions (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_detect.sh
+Detection pipeline functions (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_events.sh
+Event and attack pool functions (sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_diag.sh
+Diagnostic functions \(em format_duration, spec deviation, status
+(sourced by bfd.lib.sh).
+.TP
+.I /usr/local/bfd/internals/bfd_cdn.sh
+CDN/trusted proxy functions \(em provider loading, IP matching, range compilation
+(sourced by bfd.lib.sh).
+.TP
 .I /usr/local/bfd/conf.bfd
 User configuration.
+.TP
+.I /usr/local/bfd/cdn\-providers.conf
+CDN/trusted proxy provider definitions (name, treatment, multiplier, URLs).
+Five providers pre-configured; uncomment to enable.
+.TP
+.I /usr/local/bfd/update\-cdn\-providers.sh
+Script to fetch and compile CDN provider IP ranges from configured URLs.
+Run automatically when
+.B CDN_UPDATE_DAYS
+interval elapses; also invoked via
+.BR "bfd \-\-cdn update" .
 .TP
 .I /usr/local/bfd/pressure.conf
 Per-rule pressure weight and trip overrides.
@@ -967,15 +1264,16 @@ Per-rule pressure weight and trip overrides.
 .I /usr/local/bfd/pressure-country.conf
 Country pressure multiplier table (active when entries are uncommented).
 .TP
-.I /usr/local/bfd/ipcountry.dat
+.I /usr/local/bfd/data/ipcountry.dat
 IPv4 IP-to-country lookup database (integer-range format).
 .TP
-.I /usr/local/bfd/ipcountry6.dat
+.I /usr/local/bfd/data/ipcountry6.dat
 IPv6 IP-to-country lookup database (hex-range format). Built by
 .BR update-ipcountry.sh .
 .TP
-.I /usr/local/bfd/tlog
-Track log \(em byte-offset log reader CLI wrapper.
+.I /usr/local/bfd/internals/tlog
+Track log \(em byte-offset log reader CLI wrapper. Private internal tool;
+no user-facing symlink.
 .TP
 .I /usr/local/bfd/update-ipcountry.sh
 Script to download per-country CIDR zones (ipverse.net/ipdeny.com cascade) and
@@ -1054,7 +1352,8 @@ to merge configuration and preserve state.
 .B importconf
 migrates: user configuration (conf.bfd values), legacy variable name
 translations (TRIG \(-> PRESSURE_TRIP, BAN_DURATION \(-> BAN_TTL, etc.),
-per\-rule overrides (thresholds.conf \(-> pressure.conf), firewall backend
+per\-rule overrides (pressure.conf, auto\-converting old colon format to
+whitespace format), firewall backend
 detection, ban state (bans.active, bans.history, pressure.dat), attack pool
 (attack.pool), log tracking state (tlog byte\-offsets, journal cursors),
 user\-customized alert template partials, and ignore lists.

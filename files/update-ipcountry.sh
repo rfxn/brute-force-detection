@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+# Brute Force Detection 2.0.2 <bfd@rfxn.com>
 # Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
 # This program may be freely redistributed under the terms of the GNU GPL
@@ -11,10 +11,11 @@
 # per-country fallback) and geoip_build_ip6db() for IPv6 (hex-range format).
 #
 # Usage: update-ipcountry.sh [output_file]
-#   output_file defaults to $INSTALL_PATH/ipcountry.dat
+#   output_file defaults to $DATA_PATH/ipcountry.dat
 
 INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
-OUTPUT="${1:-$INSTALL_PATH/ipcountry.dat}"
+DATA_PATH="${DATA_PATH:-$INSTALL_PATH/data}"
+OUTPUT="${1:-$DATA_PATH/ipcountry.dat}"
 OUTPUT6="${OUTPUT%.*}6.${OUTPUT##*.}"
 DL_TIMEOUT="${DL_TIMEOUT:-120}"
 
@@ -31,6 +32,17 @@ fi
 # Export download timeout for geoip_lib
 export GEOIP_DL_TIMEOUT="$DL_TIMEOUT"
 
+# Clean stale IPv6 build directories from prior interrupted runs.
+# geoip_build_ip6db creates tmpdir="${OUTPUT6}.build6-XXXXXX"; if the
+# script is interrupted (SIGKILL, OOM), the directory is orphaned.
+for _stale in "${OUTPUT6}".build6-*; do
+	[ -d "$_stale" ] || continue
+	_stale_age=$(( $(date +%s) - $(stat -c %Y "$_stale" 2>/dev/null || echo 0) ))
+	if [ "$_stale_age" -gt 3600 ]; then
+		command rm -rf "$_stale"
+	fi
+done
+
 # ---------------------------------------------------------------------------
 # IPv4: use geoip_build_ipdb (bulk tarball + per-country fallback)
 # ---------------------------------------------------------------------------
@@ -40,7 +52,7 @@ if ! geoip_build_ipdb "$OUTPUT" 1000; then
 	echo "error: IPv4 database build failed. Aborting."
 	exit 1
 fi
-chmod 640 "$OUTPUT"
+command chmod 640 "$OUTPUT"
 echo "Updated $OUTPUT ($_GEOIP_BUILD_COUNT countries, $_GEOIP_BUILD_RANGES IPv4 ranges, $_GEOIP_BUILD_FAIL failed)."
 
 # ---------------------------------------------------------------------------
@@ -48,7 +60,7 @@ echo "Updated $OUTPUT ($_GEOIP_BUILD_COUNT countries, $_GEOIP_BUILD_RANGES IPv4 
 # ---------------------------------------------------------------------------
 echo "Building IPv6 country database..."
 if geoip_build_ip6db "$OUTPUT6" 500; then
-	chmod 640 "$OUTPUT6"
+	command chmod 640 "$OUTPUT6"
 	echo "Updated $OUTPUT6 ($_GEOIP_BUILD6_COUNT countries, $_GEOIP_BUILD6_RANGES IPv6 ranges, $_GEOIP_BUILD6_FAIL failed)."
 else
 	echo "warning: IPv6 database build failed (non-fatal)."

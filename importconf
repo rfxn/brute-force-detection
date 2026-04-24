@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Brute Force Detection 2.0.1 importconf <bfd@rfxn.com>
+# Brute Force Detection 2.0.2 importconf <bfd@rfxn.com>
 ###
 # Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
@@ -21,7 +21,6 @@
 ###
 #
 INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
-LOG_IDLE_SUPPRESS="${LOG_IDLE_SUPPRESS:-1}"
 
 # BK_LAST is set by install.sh via pkg_backup_path(); fall back to legacy
 # symlink name for manual invocation or pre-pkg_lib upgrades
@@ -59,12 +58,12 @@ new_int="$INSTALL_PATH/internals/internals.conf"
 # internals.conf has the internal variables)
 old_combined=$(mktemp "$INSTALL_PATH/tmp/.importconf.XXXXXX")
 trap 'command rm -f "$old_combined" "$new_conf.tmp" "$new_int.tmp"' EXIT INT TERM  # cleanup temp files on exit
-cat "$old_conf" > "$old_combined"
+command cat "$old_conf" > "$old_combined"
 # support both new (internals/) and old (flat) backup layouts
 if [ -f "$BK_LAST/internals/internals.conf" ]; then
-	cat "$BK_LAST/internals/internals.conf" >> "$old_combined"
+	command cat "$BK_LAST/internals/internals.conf" >> "$old_combined"
 elif [ -f "$BK_LAST/internals.conf" ]; then
-	cat "$BK_LAST/internals.conf" >> "$old_combined"
+	command cat "$BK_LAST/internals.conf" >> "$old_combined"
 fi
 
 # merge conf.bfd — overlay old user values onto new config template
@@ -168,63 +167,42 @@ fi
 # migrate per-rule overrides to pressure.conf
 new_press="$INSTALL_PATH/pressure.conf"
 if [ -f "$BK_LAST/pressure.conf" ]; then
-	# already has pressure.conf — preserve it
-	command cp -f "$BK_LAST/pressure.conf" "$new_press"
-	# rename rule entries for rules that changed names (modsec -> mod_sec)
-	if grep -q '^modsec:' "$new_press" 2>/dev/null; then
-		sed -i 's/^modsec:/mod_sec:/' "$new_press"
+	# detect old colon-delimited format and convert
+	if grep -qE '^[a-z_-]+:PRESSURE_' "$BK_LAST/pressure.conf" 2>/dev/null; then  # 2>/dev/null: grep may fail on unreadable file
+		awk '/^#/ || /^$/ { print; next }
+		{
+			n = index($0, ":")
+			if (n > 0) {
+				rule = substr($0, 1, n-1)
+				rest = substr($0, n+1)
+			} else { print; next }
+			if (rule == "") { print; next }
+			out = rule
+			np = split(rest, pairs, ":")
+			for (i = 1; i <= np; i++) {
+				eq = index(pairs[i], "=")
+				if (eq > 0) {
+					k = substr(pairs[i], 1, eq-1)
+					v = substr(pairs[i], eq+1)
+					if (k == "PRESSURE_WEIGHT") out = out "  weight=" v
+					else if (k == "PRESSURE_TRIP" || k == "TRIG") out = out "  trip=" v
+					else if (k == "SKIP_ALERT") out = out "  skip_alert=" v
+					else if (k == "RULE_EMAIL") out = out "  rule_email=" v
+				}
+			}
+			print out
+		}' "$BK_LAST/pressure.conf" > "$new_press"
+		echo "  Migrated pressure.conf from colon to whitespace format."
+	else
+		command cp -f "$BK_LAST/pressure.conf" "$new_press"
+		echo "  Preserved pressure.conf from previous install."
 	fi
-	echo "  Preserved pressure.conf from previous install."
-elif [ -f "$BK_LAST/thresholds.conf" ]; then
-	# translate thresholds.conf TRIG entries → pressure.conf PRESSURE_TRIP entries
-	_migrated=0
-	while IFS=: read -r _rule_name _rest; do
-		[ -z "$_rule_name" ] && continue
-		# skip comments
-		case "$_rule_name" in \#*) continue ;; esac
-		# extract TRIG value
-		_old_trig=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^TRIG=/){sub(/^TRIG=/,"",$i); print $i; exit}}}')
-		[[ "$_old_trig" =~ ^[0-9]+$ ]] || _old_trig=""
-		if [ -n "$_old_trig" ] && [ "$_old_trig" -gt 200 ]; then
-			_old_trig=200
-		fi
-		if [ -n "$_old_trig" ] && [ -f "$new_press" ]; then
-			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
-				# update existing entry — replace or add PRESSURE_TRIP
-				if grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then
-					sed -i "s|^\(${_rule_name}:.*PRESSURE_TRIP=\)[^:]*|\1${_old_trig}|" "$new_press"
-				else
-					sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:PRESSURE_TRIP=${_old_trig}|" "$new_press"
-				fi
-			else
-				echo "${_rule_name}:PRESSURE_TRIP=${_old_trig}" >> "$new_press"
-			fi
-			_migrated=$((_migrated + 1))
-		fi
-		# extract SKIP_ALERT value
-		_skip=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^SKIP_ALERT=/){sub(/^SKIP_ALERT=/,"",$i); print $i; exit}}}')
-		[[ "$_skip" =~ ^[01]$ ]] || _skip=""
-		if [ -n "$_skip" ] && [ -f "$new_press" ]; then
-			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null && \
-			   ! grep -q "^${_rule_name}:.*SKIP_ALERT=" "$new_press" 2>/dev/null; then
-				sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:SKIP_ALERT=${_skip}|" "$new_press"
-			fi
-		fi
-		# extract RULE_EMAIL value
-		_email=$(echo "$_rest" | awk -F: '{for(i=1;i<=NF;i++){if($i ~ /^RULE_EMAIL=/){sub(/^RULE_EMAIL=/,"",$i); print $i; exit}}}')
-		[[ "$_email" =~ ^[a-zA-Z0-9@._+,-]+$ ]] || _email=""
-		if [ -n "$_email" ] && [ -f "$new_press" ]; then
-			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null && \
-			   ! grep -q "^${_rule_name}:.*RULE_EMAIL=" "$new_press" 2>/dev/null; then
-				sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:RULE_EMAIL=${_email}|" "$new_press"
-			fi
-		fi
-	done < "$BK_LAST/thresholds.conf"
-	if [ "$_migrated" -gt 0 ]; then
-		echo "  Migrated $_migrated per-rule thresholds from thresholds.conf to pressure.conf."
+	# rename rule entries for rules that changed names (modsec -> mod_sec)
+	if grep -qE '^modsec[[:space:]:]' "$new_press" 2>/dev/null; then  # 2>/dev/null: grep may fail on unreadable file
+		sed -i 's/^modsec\([[:space:]:]\)/mod_sec\1/' "$new_press"
 	fi
 elif [ -f "$new_press" ] && [ -d "$BK_LAST/rules" ]; then
-	# pre-thresholds upgrade: extract uncommented TRIG/PRESSURE values from old rules
+	# pre-pressure.conf upgrade: extract uncommented TRIG/PRESSURE values from old rules
 	_migrated=0
 	for _rule_file in "$BK_LAST/rules"/*; do
 		[ ! -f "$_rule_file" ] && continue
@@ -237,28 +215,41 @@ elif [ -f "$new_press" ] && [ -d "$BK_LAST/rules" ]; then
 			if [ "$_old_trig" -gt 200 ]; then
 				_old_trig=200
 			fi
-			if grep -q "^${_rule_name}:" "$new_press" 2>/dev/null; then
-				# replace or add PRESSURE_TRIP from old rule TRIG
-				if grep -q "^${_rule_name}:.*PRESSURE_TRIP=" "$new_press" 2>/dev/null; then
-					sed -i "s|^\(${_rule_name}:.*PRESSURE_TRIP=\)[^:]*|\1${_old_trig}|" "$new_press"
+			if grep -qE "^${_rule_name}[[:space:]]" "$new_press" 2>/dev/null; then
+				# replace or add trip= from old rule TRIG
+				if grep -qE "^${_rule_name}[[:space:]].*trip=" "$new_press" 2>/dev/null; then
+					sed -i "s|^\(${_rule_name}.*trip=\)[^[:space:]]*|\1${_old_trig}|" "$new_press"
 				else
-					sed -i "s|^${_rule_name}:\(.*\)|${_rule_name}:\1:PRESSURE_TRIP=${_old_trig}|" "$new_press"
+					sed -i "s|^\(${_rule_name}[[:space:]].*\)|\1  trip=${_old_trig}|" "$new_press"
 				fi
 			else
-				echo "${_rule_name}:PRESSURE_TRIP=${_old_trig}" >> "$new_press"
+				echo "${_rule_name}  trip=${_old_trig}" >> "$new_press"
 			fi
 			_migrated=$((_migrated + 1))
 		fi
 	done
 	if [ "$_migrated" -gt 0 ]; then
-		echo "  Migrated $_migrated per-rule thresholds to pressure.conf."
+		echo "  Migrated $_migrated per-rule overrides to pressure.conf."
 	fi
 fi
 
 # preserve user's country pressure multiplier customizations
 if [ -f "$BK_LAST/pressure-country.conf" ]; then
-	command cp -f "$BK_LAST/pressure-country.conf" "$INSTALL_PATH/pressure-country.conf"
-	echo "  Preserved pressure-country.conf from previous install."
+	# detect old CC=MULT format and convert to whitespace-delimited CC MULT
+	if grep -qE '^[A-Z]{2}=' "$BK_LAST/pressure-country.conf" 2>/dev/null; then  # 2>/dev/null: grep may fail on unreadable file
+		awk -F= '/^#/||/^$/{print;next}{print $1, $2}' \
+			"$BK_LAST/pressure-country.conf" > "$INSTALL_PATH/pressure-country.conf"
+		echo "  Migrated pressure-country.conf from CC=MULT to CC MULT format."
+	else
+		command cp -f "$BK_LAST/pressure-country.conf" "$INSTALL_PATH/pressure-country.conf"
+		echo "  Preserved pressure-country.conf from previous install."
+	fi
+fi
+
+# preserve user's CDN provider configuration
+if [ -f "$BK_LAST/cdn-providers.conf" ]; then
+	command cp -f "$BK_LAST/cdn-providers.conf" "$INSTALL_PATH/cdn-providers.conf"
+	echo "  Preserved cdn-providers.conf from previous install."
 fi
 
 # preserve user's ignore lists
@@ -274,6 +265,20 @@ elif [ -f "$BK_LAST/tmp/events.dat" ]; then
 	command cp -f "$BK_LAST/tmp/events.dat" "$INSTALL_PATH/tmp/pressure.dat" 2>/dev/null
 fi
 command cp -f "$BK_LAST/stats/"* "$INSTALL_PATH/stats/" 2>/dev/null
+
+# migrate data files (ipcountry.dat, cdn.dat, etc.) to data/ subdirectory
+_data_dir="$INSTALL_PATH/data"
+[ -d "$_data_dir" ] || { command mkdir -p "$_data_dir"; command chmod 750 "$_data_dir"; }
+for _df in ipcountry.dat ipcountry6.dat cdn.dat cdn6.dat .last_update; do
+	# From old flat backup (pre-data/ layout)
+	if [ -f "$BK_LAST/$_df" ] && [ ! -f "$_data_dir/$_df" ]; then
+		command cp -f "$BK_LAST/$_df" "$_data_dir/$_df"
+	fi
+	# From new backup (post-data/ layout)
+	if [ -f "$BK_LAST/data/$_df" ] && [ ! -f "$_data_dir/$_df" ]; then
+		command cp -f "$BK_LAST/data/$_df" "$_data_dir/$_df"
+	fi
+done
 
 # preserve journal cursor/timestamp state
 command cp -f "$BK_LAST/tmp/"*.cursor "$INSTALL_PATH/tmp/" 2>/dev/null
@@ -293,14 +298,14 @@ done
 
 # preserve custom.d/ template overrides from backup
 if [ -d "$BK_LAST/alert/custom.d" ] && [ -d "$INSTALL_PATH/alert" ]; then
-	mkdir -p "$INSTALL_PATH/alert/custom.d"
-	chmod 750 "$INSTALL_PATH/alert/custom.d"
+	command mkdir -p "$INSTALL_PATH/alert/custom.d"
+	command chmod 750 "$INSTALL_PATH/alert/custom.d"
 	_custom_tpl=0
 	for _old_custom in "$BK_LAST/alert/custom.d"/*.tpl; do
 		[ -f "$_old_custom" ] || continue
 		_tpl_name="${_old_custom##*/}"
 		command cp -f "$_old_custom" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
-		chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+		command chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
 		_custom_tpl=$((_custom_tpl + 1))
 	done
 	if [ "$_custom_tpl" -gt 0 ]; then
@@ -318,10 +323,10 @@ if [ -d "$BK_LAST/alert" ] && [ ! -d "$BK_LAST/alert/custom.d" ]; then
 		_new_tpl="$INSTALL_PATH/alert/$_tpl_name"
 		# only migrate if old template differs from new shipped version
 		if [ -f "$_new_tpl" ] && ! cmp -s "$_old_tpl" "$_new_tpl"; then
-			mkdir -p "$INSTALL_PATH/alert/custom.d"
-			chmod 750 "$INSTALL_PATH/alert/custom.d"
+			command mkdir -p "$INSTALL_PATH/alert/custom.d"
+			command chmod 750 "$INSTALL_PATH/alert/custom.d"
 			command cp -f "$_old_tpl" "$INSTALL_PATH/alert/custom.d/$_tpl_name"
-			chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
+			command chmod 640 "$INSTALL_PATH/alert/custom.d/$_tpl_name"
 			_migrated_tpl=$((_migrated_tpl + 1))
 		fi
 	done
@@ -351,7 +356,7 @@ if [ -d "$BK_LAST/rules" ]; then
 			*" $_rule_name "*) continue ;;
 		esac
 		command cp -f "$_old_rule" "$INSTALL_PATH/rules/$_rule_name"
-		chmod 640 "$INSTALL_PATH/rules/$_rule_name"
+		command chmod 640 "$INSTALL_PATH/rules/$_rule_name"
 		_custom_rules=$((_custom_rules + 1))
 	done
 	if [ "$_custom_rules" -gt 0 ]; then

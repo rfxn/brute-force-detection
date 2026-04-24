@@ -346,24 +346,12 @@ run_validate_output() {
 
 # --- BAN_ESCALATION ---
 
-@test "validate_config: BAN_ESCALATION=none passes" {
-	run run_validate 'BAN_ESCALATION="none"'
-	assert_success
-}
-
-@test "validate_config: BAN_ESCALATION=linear passes" {
-	run run_validate 'BAN_ESCALATION="linear"'
-	assert_success
-}
-
-@test "validate_config: BAN_ESCALATION=double passes" {
-	run run_validate 'BAN_ESCALATION="double"'
-	assert_success
-}
-
-@test "validate_config: BAN_ESCALATION=exponential accepted (backward compat)" {
-	run run_validate 'BAN_ESCALATION="exponential"'
-	assert_success
+@test "validate_config: BAN_ESCALATION accepts all valid values" {
+	local val
+	for val in none linear double exponential; do
+		run run_validate "BAN_ESCALATION=\"$val\""
+		assert_success
+	done
 }
 
 @test "validate_config: BAN_ESCALATION=bogus rejects" {
@@ -647,19 +635,12 @@ run_validate_output() {
 
 # --- EMAIL_FORMAT ---
 
-@test "validate_config: EMAIL_FORMAT=text passes" {
-	run run_validate 'EMAIL_FORMAT="text"'
-	assert_success
-}
-
-@test "validate_config: EMAIL_FORMAT=html passes" {
-	run run_validate 'EMAIL_FORMAT="html"'
-	assert_success
-}
-
-@test "validate_config: EMAIL_FORMAT=both passes" {
-	run run_validate 'EMAIL_FORMAT="both"'
-	assert_success
+@test "validate_config: EMAIL_FORMAT accepts all valid values" {
+	local val
+	for val in text html both; do
+		run run_validate "EMAIL_FORMAT=\"$val\""
+		assert_success
+	done
 }
 
 @test "validate_config: EMAIL_FORMAT=invalid rejects" {
@@ -765,6 +746,119 @@ run_validate_output() {
 }
 
 # --- show_config ---
+
+# --- REPORT_ENABLED ---
+
+@test "validate_config: REPORT_ENABLED=0 passes" {
+	run run_validate 'REPORT_ENABLED="0"'
+	assert_success
+}
+
+@test "validate_config: REPORT_ENABLED=1 passes" {
+	run run_validate 'REPORT_ENABLED="1"'
+	assert_success
+}
+
+@test "validate_config: REPORT_ENABLED=yes rejects" {
+	run run_validate 'REPORT_ENABLED="yes"'
+	assert_failure
+}
+
+@test "validate_config: REPORT_ENABLED unset uses default (passes)" {
+	run run_validate 'unset REPORT_ENABLED'
+	assert_success
+}
+
+# --- REPORT_TOP_N ---
+
+@test "validate_config: REPORT_TOP_N=10 passes" {
+	run run_validate 'REPORT_TOP_N="10"'
+	assert_success
+}
+
+@test "validate_config: REPORT_TOP_N=abc rejects" {
+	run run_validate 'REPORT_TOP_N="abc"'
+	assert_failure
+}
+
+@test "validate_config: REPORT_TOP_N=0 rejects" {
+	run run_validate 'REPORT_TOP_N="0"'
+	assert_failure
+}
+
+@test "validate_config: REPORT_TOP_N=-1 rejects" {
+	run run_validate 'REPORT_TOP_N="-1"'
+	assert_failure
+}
+
+@test "validate_config: REPORT_TOP_N unset passes (optional)" {
+	run run_validate 'unset REPORT_TOP_N'
+	assert_success
+}
+
+@test "validate_config: REPORT_TOP_N empty passes (optional)" {
+	run run_validate 'REPORT_TOP_N=""'
+	assert_success
+}
+
+# --- CDN_ENABLE ---
+
+@test "validate_config: CDN_ENABLE=0 passes" {
+	run run_validate 'CDN_ENABLE="0"'
+	assert_success
+}
+
+@test "validate_config: CDN_ENABLE=1 passes" {
+	run run_validate 'CDN_ENABLE="1"'
+	assert_success
+}
+
+@test "validate_config: CDN_ENABLE=auto passes" {
+	run run_validate 'CDN_ENABLE="auto"'
+	assert_success
+}
+
+@test "validate_config: CDN_ENABLE=yes rejects" {
+	run run_validate 'CDN_ENABLE="yes"'
+	assert_failure
+}
+
+@test "validate_config: CDN_ENABLE=true rejects" {
+	run run_validate 'CDN_ENABLE="true"'
+	assert_failure
+}
+
+@test "validate_config: CDN_ENABLE unset uses default auto (passes)" {
+	run run_validate 'unset CDN_ENABLE'
+	assert_success
+}
+
+# --- CDN_UPDATE_DAYS ---
+
+@test "validate_config: CDN_UPDATE_DAYS=7 passes" {
+	run run_validate 'CDN_UPDATE_DAYS="7"'
+	assert_success
+}
+
+@test "validate_config: CDN_UPDATE_DAYS=0 passes" {
+	run run_validate 'CDN_UPDATE_DAYS="0"'
+	assert_success
+}
+
+@test "validate_config: CDN_UPDATE_DAYS=abc rejects" {
+	run run_validate 'CDN_UPDATE_DAYS="abc"'
+	assert_failure
+}
+
+@test "validate_config: CDN_UPDATE_DAYS unset passes (optional)" {
+	run run_validate 'unset CDN_UPDATE_DAYS'
+	assert_success
+}
+
+@test "validate_config: CDN_UPDATE_DAYS empty passes (optional)" {
+	run run_validate 'CDN_UPDATE_DAYS=""'
+	assert_success
+}
 
 @test "show_config: EMAIL_FORMAT returns value" {
 	EMAIL_FORMAT="both"

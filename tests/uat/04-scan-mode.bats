@@ -5,6 +5,7 @@
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load '../helpers/uat-bfd'
+load '../helpers/assert-bfd'
 load '../infra/lib/uat-helpers'
 
 setup_file() {
@@ -37,8 +38,7 @@ teardown_file() {
     uat_bfd_clear_cursors
     uat_capture "scan-mode" bfd --scan
     assert_success
-    run grep -c 192.0.2.30 /usr/local/bfd/tmp/bans.active
-    assert_success
+    assert_banned 192.0.2.30
 }
 
 # bats test_tags=uat,uat:scan-mode

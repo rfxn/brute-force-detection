@@ -41,6 +41,27 @@ case "$1" in
             # Remove old install — package will lay down new files
             rm -rf "$LEGACY_PATH"
         fi
+        # Defensive: clean up orphaned source-install directories that would
+        # collide with package symlinks (alert/, data/, rules/, tmp/, stats/).
+        # Triggers when /usr/local/bfd/bfd is missing but stale dirs remain
+        # (e.g. partial uninstall, manual binary removal). All five are package
+        # symlinks in installed packages, so the `[ ! -L ]` guard protects
+        # package-to-package upgrades.
+        for _orphan in alert data rules tmp stats; do
+            if [ -d "$LEGACY_PATH/$_orphan" ] && [ ! -L "$LEGACY_PATH/$_orphan" ]; then
+                rm -rf "${LEGACY_PATH:?}/$_orphan"
+            fi
+        done
+        # internals/ is a real dir in BOTH source AND package installs;
+        # distinguish by bfd.lib.sh being a real file (source) vs symlink (pkg)
+        if [ -d "$LEGACY_PATH/internals" ] && [ ! -L "$LEGACY_PATH/internals" ] \
+           && [ -f "$LEGACY_PATH/internals/bfd.lib.sh" ] \
+           && [ ! -L "$LEGACY_PATH/internals/bfd.lib.sh" ]; then
+            rm -rf "${LEGACY_PATH:?}/internals"
+        fi
+        if [ -f "$LEGACY_PATH/ipcountry.dat" ] && [ ! -L "$LEGACY_PATH/ipcountry.dat" ]; then
+            rm -f "$LEGACY_PATH/ipcountry.dat"
+        fi
         ;;
 esac
 

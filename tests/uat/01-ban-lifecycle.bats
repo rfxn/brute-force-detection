@@ -5,6 +5,7 @@
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load '../helpers/uat-bfd'
+load '../helpers/assert-bfd'
 load '../infra/lib/uat-helpers'
 
 setup_file() {
@@ -26,8 +27,7 @@ teardown_file() {
 
 # bats test_tags=uat,uat:ban-lifecycle
 @test "UAT: banned IP recorded in bans.active" {
-    run grep -c 192.0.2.1 /usr/local/bfd/tmp/bans.active
-    assert_success
+    assert_banned 192.0.2.1
 }
 
 # bats test_tags=uat,uat:ban-lifecycle
@@ -45,9 +45,9 @@ teardown_file() {
 
 # bats test_tags=uat,uat:ban-lifecycle
 @test "UAT: status shows active ban count" {
+    assert_ban_count 1
     uat_capture "ban-lifecycle" bfd -S
     assert_success
-    assert_output --partial "1"
 }
 
 # bats test_tags=uat,uat:ban-lifecycle
@@ -73,28 +73,24 @@ teardown_file() {
 
 # bats test_tags=uat,uat:ban-lifecycle
 @test "UAT: unbanned IP removed from bans.active" {
-    run grep -c 192.0.2.1 /usr/local/bfd/tmp/bans.active
-    assert_failure
+    refute_banned 192.0.2.1
 }
 
 # bats test_tags=uat,uat:ban-lifecycle
 @test "UAT: other IP still banned after first unban" {
-    run grep -c 192.0.2.2 /usr/local/bfd/tmp/bans.active
-    assert_success
+    assert_banned 192.0.2.2
 }
 
 # bats test_tags=uat,uat:ban-lifecycle
 @test "UAT: re-ban previously unbanned IP" {
     uat_capture "ban-lifecycle" bfd -b 192.0.2.1 sshd
     assert_success
-    run grep -c 192.0.2.1 /usr/local/bfd/tmp/bans.active
-    assert_success
+    assert_banned 192.0.2.1
 }
 
 # bats test_tags=uat,uat:ban-lifecycle
 @test "UAT: unban all via flush" {
     run bfd --flush-all
     assert_success
-    run wc -l < /usr/local/bfd/tmp/bans.active
-    assert_output "0"
+    assert_ban_count 0
 }

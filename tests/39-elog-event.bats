@@ -147,3 +147,127 @@ teardown() {
 	# audit log should have zero
 	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 0 ]
 }
+
+# --- Expanded event type coverage ---
+
+@test "elog_event: block_escalated records escalation with IP and mod" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "block_escalated" "warn" "{sshd} 192.0.2.1 escalated to permanent ban" \
+		"ip=192.0.2.1" "mod=sshd" "recent_bans=5"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"type":"block_escalated"' "$ELOG_AUDIT_FILE"
+	grep -q '"ip":"192.0.2.1"' "$ELOG_AUDIT_FILE"
+	grep -q '"recent_bans":"5"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: block_added with source=cli for manual ban" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "block_added" "warn" "{manual} manual ban 192.0.2.1 via CLI" \
+		"ip=192.0.2.1" "mod=manual" "source=cli" "ports=all"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"source":"cli"' "$ELOG_AUDIT_FILE"
+	grep -q '"type":"block_added"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: block_removed with source=cli for manual unban" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "block_removed" "info" "{sshd} manual unban 192.0.2.1 via CLI" \
+		"ip=192.0.2.1" "mod=sshd" "source=cli"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"source":"cli"' "$ELOG_AUDIT_FILE"
+	grep -q '"type":"block_removed"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: block_removed with count and mode for flush" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "block_removed" "warn" "flush: 3 bans removed (mode=all)" \
+		"count=3" "mode=all" "source=cli"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"count":"3"' "$ELOG_AUDIT_FILE"
+	grep -q '"mode":"all"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: alert_sent for email delivery" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "alert_sent" "info" "email alert delivered" \
+		"channel=email" "recipient=admin@example.com" "count=2" "format=text"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"type":"alert_sent"' "$ELOG_AUDIT_FILE"
+	grep -q '"channel":"email"' "$ELOG_AUDIT_FILE"
+	grep -q '"recipient":"admin@example.com"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: alert_failed for email delivery failure" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "alert_failed" "error" "email alert delivery failed" \
+		"channel=email" "recipient=admin@example.com" "count=1"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"type":"alert_failed"' "$ELOG_AUDIT_FILE"
+	grep -q '"level":"error"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: alert_sent for messaging channel" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "alert_sent" "info" "messaging alert delivered" \
+		"channel=slack" "count=1"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"channel":"slack"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: threat_detected for pressure trip" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "threat_detected" "warn" "{sshd} pressure trip for 192.0.2.1" \
+		"ip=192.0.2.1" "mod=sshd" "pressure=25000" "trip=20000" "trip_type=service"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"type":"threat_detected"' "$ELOG_AUDIT_FILE"
+	grep -q '"pressure":"25000"' "$ELOG_AUDIT_FILE"
+	grep -q '"trip_type":"service"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: threat_detected for distributed attack" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "threat_detected" "warn" "{sshd} distributed attack from 192.0.2.0/24" \
+		"subnet=192.0.2.0/24" "mod=sshd" "unique_ips=5" "trip_type=subnet"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"subnet":"192.0.2.0/24"' "$ELOG_AUDIT_FILE"
+	grep -q '"trip_type":"subnet"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: threat_detected for CDN exclude" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "threat_detected" "info" "{sshd} CDN exclude for 192.0.2.1" \
+		"ip=192.0.2.1" "mod=sshd" "cdn_provider=cloudflare" "cdn_treatment=exclude"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"cdn_provider":"cloudflare"' "$ELOG_AUDIT_FILE"
+	grep -q '"cdn_treatment":"exclude"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: scan_started and scan_completed bracket a cycle" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "scan_started" "info" "detection cycle started"
+	elog_event "scan_completed" "info" "detection cycle completed" \
+		"active_rules=12" "events=45" "bans=3" "elapsed=2"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 2 ]
+	grep -q '"type":"scan_started"' "$ELOG_AUDIT_FILE"
+	grep -q '"type":"scan_completed"' "$ELOG_AUDIT_FILE"
+	grep -q '"bans":"3"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: alert_sent for digest flush with mode=digest" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "alert_sent" "info" "digest flush completed" \
+		"channel=email" "count=5" "mode=digest"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"type":"alert_sent"' "$ELOG_AUDIT_FILE"
+	grep -q '"mode":"digest"' "$ELOG_AUDIT_FILE"
+	grep -q '"count":"5"' "$ELOG_AUDIT_FILE"
+}
+
+@test "elog_event: alert_failed for messaging channel (telegram)" {
+	: > "$ELOG_AUDIT_FILE"
+	elog_event "alert_failed" "error" "messaging alert delivery failed" \
+		"channel=telegram" "count=2"
+	[ "$(wc -l < "$ELOG_AUDIT_FILE")" -eq 1 ]
+	grep -q '"channel":"telegram"' "$ELOG_AUDIT_FILE"
+	grep -q '"type":"alert_failed"' "$ELOG_AUDIT_FILE"
+}

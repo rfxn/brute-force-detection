@@ -4,6 +4,8 @@ load 'helpers/bfd-common'
 
 setup() {
 	bfd_common_setup
+	INSTALL_PATH="$TEST_TMPDIR/bfd"
+	mkdir -p "$INSTALL_PATH/tmp"
 	IGNOREREGEX=""
 }
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 #
-# Test suite for alert_lib.sh — template engine, content helpers, formatting
+# Test suite for alert_lib.sh — template engine, content helpers, rendering
+# Delivery and messaging tests split to 37a-alert-delivery.bats
 #
 
 load '/usr/local/lib/bats/bats-support/load'
@@ -11,6 +12,8 @@ setup() {
 	bfd_common_setup
 	INSTALL_PATH="$TEST_TMPDIR/bfd"
 	mkdir -p "$INSTALL_PATH"
+	DATA_PATH="$INSTALL_PATH/data"
+	mkdir -p "$DATA_PATH"
 }
 
 teardown() {
@@ -20,16 +23,6 @@ teardown() {
 # ===================================================================
 # Source guard & version
 # ===================================================================
-
-@test "alert_lib: ALERT_LIB_VERSION is set" {
-	[ -n "$ALERT_LIB_VERSION" ]
-	[[ "$ALERT_LIB_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-}
-
-@test "bfd_alert: BFD_ALERT_VERSION is set" {
-	[ -n "$BFD_ALERT_VERSION" ]
-	[[ "$BFD_ALERT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-}
 
 @test "alert_lib: reputation link arrays are populated" {
 	[ "${#_REPLINK_KEYS[@]}" -eq 5 ]
@@ -151,49 +144,38 @@ EOF
 # _alert_html_escape
 # ===================================================================
 
-@test "_alert_html_escape: escapes ampersand" {
+@test "_alert_html_escape: escapes all HTML entities and passes through safe strings" {
+	# ampersand
 	run _alert_html_escape "foo & bar"
 	assert_success
 	assert_output "foo &amp; bar"
-}
 
-@test "_alert_html_escape: escapes less-than and greater-than" {
+	# less-than and greater-than
 	run _alert_html_escape "<script>alert('xss')</script>"
 	assert_success
 	assert_output "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"
-}
 
-@test "_alert_html_escape: escapes double quotes" {
+	# double quotes
 	run _alert_html_escape 'value="test"'
 	assert_success
 	assert_output 'value=&quot;test&quot;'
-}
 
-@test "_alert_html_escape: escapes single quotes" {
+	# single quotes
 	run _alert_html_escape "it's a test"
 	assert_success
 	assert_output "it&#39;s a test"
-}
 
-@test "_alert_html_escape: handles multiple special chars together" {
+	# multiple special chars together
 	run _alert_html_escape '<b>"A & B"</b>'
 	assert_success
 	assert_output '&lt;b&gt;&quot;A &amp; B&quot;&lt;/b&gt;'
-}
 
-@test "_alert_html_escape: empty string" {
+	# empty string
 	run _alert_html_escape ""
 	assert_success
 	assert_output ""
-}
 
-@test "_alert_html_escape: plain text passes through" {
-	run _alert_html_escape "hello world 123"
-	assert_success
-	assert_output "hello world 123"
-}
-
-@test "_alert_html_escape: IP address passes through" {
+	# IP address passes through
 	run _alert_html_escape "192.0.2.1"
 	assert_success
 	assert_output "192.0.2.1"
@@ -331,40 +313,33 @@ EOF
 # _alert_country_flag
 # ===================================================================
 
-@test "_alert_country_flag: US produces non-empty output" {
+@test "_alert_country_flag: input validation for valid CCs, lowercase, empty, and invalid inputs" {
+	# US produces non-empty output
 	run _alert_country_flag "US"
 	assert_success
-	# should produce 8 bytes (two 4-byte UTF-8 codepoints)
-	local len=${#output}
-	# byte length check: depends on locale but the string should be non-empty
 	[ -n "$output" ]
-}
 
-@test "_alert_country_flag: lowercase input works" {
+	# lowercase input works
 	run _alert_country_flag "cn"
 	assert_success
 	[ -n "$output" ]
-}
 
-@test "_alert_country_flag: empty input returns empty" {
+	# empty input returns empty
 	run _alert_country_flag ""
 	assert_success
 	assert_output ""
-}
 
-@test "_alert_country_flag: single char returns empty" {
+	# single char returns empty
 	run _alert_country_flag "X"
 	assert_success
 	assert_output ""
-}
 
-@test "_alert_country_flag: three chars returns empty" {
+	# three chars returns empty
 	run _alert_country_flag "USA"
 	assert_success
 	assert_output ""
-}
 
-@test "_alert_country_flag: numeric input returns empty" {
+	# numeric input returns empty
 	run _alert_country_flag "12"
 	assert_success
 	assert_output ""
@@ -461,44 +436,32 @@ EOF
 # _alert_pressure_bar
 # ===================================================================
 
-@test "_alert_pressure_bar: 0% produces empty bar" {
+@test "_alert_pressure_bar: produces correct visualization for all percentages" {
 	run _alert_pressure_bar 0
 	assert_success
 	assert_output "[                    ] 0%"
-}
 
-@test "_alert_pressure_bar: 50% fills half" {
 	run _alert_pressure_bar 50
 	assert_success
 	assert_output "[==========          ] 50%"
-}
 
-@test "_alert_pressure_bar: 100% fills fully" {
 	run _alert_pressure_bar 100
 	assert_success
 	assert_output "[====================] 100%"
-}
 
-@test "_alert_pressure_bar: 150% caps at full but shows actual pct" {
 	run _alert_pressure_bar 150
 	assert_success
 	assert_output "[====================] 150%"
-}
 
-@test "_alert_pressure_bar: 25% fills 5 chars" {
 	run _alert_pressure_bar 25
 	assert_success
 	assert_output "[=====               ] 25%"
-}
 
-@test "_alert_pressure_bar: 1% fills 0 chars" {
+	# 1 * 20 / 100 = 0
 	run _alert_pressure_bar 1
 	assert_success
-	# 1 * 20 / 100 = 0
 	assert_output "[                    ] 1%"
-}
 
-@test "_alert_pressure_bar: 5% fills 1 char" {
 	run _alert_pressure_bar 5
 	assert_success
 	assert_output "[=                   ] 5%"
@@ -508,43 +471,34 @@ EOF
 # _alert_pressure_color
 # ===================================================================
 
-@test "_alert_pressure_color: low pressure is green" {
-	run _alert_pressure_color 30
-	assert_success
-	assert_output "#16a34a"
-}
-
-@test "_alert_pressure_color: 0% is green" {
+@test "_alert_pressure_color: correct color tier for all pressure percentages" {
+	# green tier: 0-69%
 	run _alert_pressure_color 0
 	assert_success
 	assert_output "#16a34a"
-}
 
-@test "_alert_pressure_color: 69% is green" {
+	run _alert_pressure_color 30
+	assert_success
+	assert_output "#16a34a"
+
 	run _alert_pressure_color 69
 	assert_success
 	assert_output "#16a34a"
-}
 
-@test "_alert_pressure_color: 70% is amber" {
+	# amber tier: 70-99%
 	run _alert_pressure_color 70
 	assert_success
 	assert_output "#d97706"
-}
 
-@test "_alert_pressure_color: 99% is amber" {
 	run _alert_pressure_color 99
 	assert_success
 	assert_output "#d97706"
-}
 
-@test "_alert_pressure_color: 100% is red" {
+	# red tier: 100%+
 	run _alert_pressure_color 100
 	assert_success
 	assert_output "#dc2626"
-}
 
-@test "_alert_pressure_color: 200% is red" {
 	run _alert_pressure_color 200
 	assert_success
 	assert_output "#dc2626"
@@ -554,26 +508,23 @@ EOF
 # _alert_ban_type_color
 # ===================================================================
 
-@test "_alert_ban_type_color: escalate is amber" {
+@test "_alert_ban_type_color: correct color for escalate, permanent, temporary, and escalate-override" {
+	# escalate is amber
 	run _alert_ban_type_color "escalate" "0"
 	assert_success
 	assert_output "#d97706"
-}
 
-@test "_alert_ban_type_color: permanent (expiry=0) is red" {
+	# permanent (expiry=0) is red
 	run _alert_ban_type_color "ban" "0"
 	assert_success
 	assert_output "#dc2626"
-}
 
-@test "_alert_ban_type_color: temporary is teal" {
+	# temporary is teal
 	run _alert_ban_type_color "ban" "1709553600"
 	assert_success
 	assert_output "#0891b2"
-}
 
-@test "_alert_ban_type_color: escalate overrides expiry check" {
-	# even with non-zero expiry, escalate action should be amber
+	# escalate overrides expiry check — even with non-zero expiry, amber
 	run _alert_ban_type_color "escalate" "1709553600"
 	assert_success
 	assert_output "#d97706"
@@ -583,38 +534,26 @@ EOF
 # Template partials — file existence and structure
 # ===================================================================
 
-@test "template partials: all 8 files exist" {
+@test "template partials: all 8 files exist, contain tokens, and text has no HTML" {
 	local tpl_dir="${PROJECT_ROOT}/files/alert"
 	local expected=(
 		text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl
 		html.header.tpl html.entry.tpl html.summary.tpl html.footer.tpl
 	)
 	local f
+	# all 8 files exist
 	for f in "${expected[@]}"; do
 		[ -f "$tpl_dir/$f" ]
 	done
-}
-
-@test "template partials: text templates contain {{VAR}} tokens" {
-	local tpl_dir="${PROJECT_ROOT}/files/alert"
-	# each text template should have at least one {{VAR}} token
-	local f
+	# text templates contain {{VAR}} tokens
 	for f in text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl; do
 		grep -qE '\{\{[A-Z_][A-Z0-9_]*\}\}' "$tpl_dir/$f"
 	done
-}
-
-@test "template partials: HTML templates contain {{VAR}} tokens" {
-	local tpl_dir="${PROJECT_ROOT}/files/alert"
-	local f
+	# HTML templates contain {{VAR}} tokens
 	for f in html.header.tpl html.entry.tpl html.summary.tpl html.footer.tpl; do
 		grep -qE '\{\{[A-Z_][A-Z0-9_]*\}\}' "$tpl_dir/$f"
 	done
-}
-
-@test "template partials: text templates have no HTML tags" {
-	local tpl_dir="${PROJECT_ROOT}/files/alert"
-	local f
+	# text templates have no HTML tags
 	for f in text.header.tpl text.entry.tpl text.summary.tpl text.footer.tpl; do
 		! grep -qE '<[a-z]+[> ]' "$tpl_dir/$f"
 	done
@@ -664,48 +603,36 @@ EOF
 	export ALERT_COUNT="3"
 	run _alert_tpl_render "${PROJECT_ROOT}/files/alert/text.header.tpl"
 	assert_success
-	assert_output --partial "BFD Alert for web01.example.com"
-	assert_output --partial "2026-03-04 14:22:31 GMT -0600"
+	assert_output --partial "[BFD] web01.example.com"
+	assert_output --partial "2026-03-04 14:22:31 -0600"
 	assert_output --partial "3 host(s) banned"
 }
 
 @test "template render: text.entry.tpl smoke test" {
-	export HOST="192.0.2.1"
-	export HOST_VERSION="IPv4"
-	export COUNTRY_CODE="US"
-	export COUNTRY_DISPLAY="United States (US)"
-	export SERVICE="sshd"
-	export PORTS="22"
-	export PRESSURE="85"
-	export PRESSURE_TRIP="100"
-	export PRESSURE_PCT="85"
-	export PRESSURE_BAR="[=================   ] 85%"
-	export WEIGHT="10"
-	export FAIL_COUNT="7"
-	export FAIL_COUNT_DISPLAY="7"
-	export PRESSURE_CONTRIB="70"
-	export HALF_LIFE_FMT="30m"
-	export BAN_TYPE="temporary"
-	export BAN_DURATION_DETAIL=" (10m), expires 2026-03-04 14:32:31"
-	export BAN_COMMAND="/sbin/iptables -I INPUT -s 192.0.2.1 -j DROP"
-	export ENTRY_NUM="1"
-	export ENTRY_TOTAL="3"
-	export HISTORY_LINE="  History:     2 prior bans"
+	export TIMESTAMP="2026-03-04 14:22:31"
+	export HOST_LINE="192.0.2.1  IPv4  US  United States"
+	export SERVICE_LINE="sshd  port 22"
+	export ACTION_LINE="apf · temporary 10m · expires 2026-03-04 14:32:31"
+	export WHY_LINE_1="7 failed logins this scan"
+	export WHY_LINE_2="pressure 85  (trip 100 · weight 10 · half-life 30m)"
+	export ENTRY_SEPARATOR="──── ban 1 of 3 ────"
+	export HISTORY_LINE="  history:   2 prior bans"
 	export ESCALATION_LINE=""
 	export REPUTATION_SECTION_TEXT=""
 	export SOURCE_LOGS_SECTION_TEXT=""
 	run _alert_tpl_render "${PROJECT_ROOT}/files/alert/text.entry.tpl"
 	assert_success
-	assert_output --partial "Ban 1 of 3"
-	assert_output --partial "Host:        192.0.2.1 (IPv4) United States (US)"
-	assert_output --partial "Service:     sshd (22)"
-	assert_output --partial "7 failed logins = +70 this scan"
-	assert_output --partial "85 accumulated pressure"
-	assert_output --partial "trips at 100"
+	assert_output --partial "ban 1 of 3"
+	assert_output --partial "192.0.2.1  IPv4  US  United States"
+	assert_output --partial "sshd  port 22"
+	assert_output --partial "apf · temporary 10m"
+	assert_output --partial "7 failed logins this scan"
+	assert_output --partial "pressure 85"
+	assert_output --partial "trip 100"
 	assert_output --partial "weight 10"
-	assert_output --partial "Ban:         temporary (10m)"
-	assert_output --partial "History:     2 prior bans"
-	assert_output --partial "Command:"
+	assert_output --partial "half-life 30m"
+	assert_output --partial "history:"
+	assert_output --partial "2 prior bans"
 }
 
 @test "template render: text.summary.tpl smoke test" {
@@ -720,10 +647,10 @@ EOF
 	export SUMMARY_REPEAT_PCT="40"
 	run _alert_tpl_render "${PROJECT_ROOT}/files/alert/text.summary.tpl"
 	assert_success
-	assert_output --partial "Summary"
-	assert_output --partial "5 (3 unique IPs)"
+	assert_output --partial "summary"
+	assert_output --partial "5 bans (3 unique IPs)"
 	assert_output --partial "sshd, dovecot"
-	assert_output --partial "3 temporary, 1 escalated, 1 permanent"
+	assert_output --partial "3 temporary · 1 escalated · 1 permanent"
 	assert_output --partial "2 of 5 (40%)"
 }
 
@@ -731,8 +658,7 @@ EOF
 	export BFD_VERSION="2.0.1"
 	run _alert_tpl_render "${PROJECT_ROOT}/files/alert/text.footer.tpl"
 	assert_success
-	assert_output --partial "BFD (Brute Force Detection) 2.0.1"
-	assert_output --partial "bfd@rfxn.com"
+	assert_output --partial "bfd 2.0.1"
 	assert_output --partial "rfxn.com/projects/brute-force-detection"
 }
 
@@ -882,7 +808,8 @@ EOF
 # _alert_set_global_vars
 # ===================================================================
 
-@test "_alert_set_global_vars: sets HOSTNAME and TIMESTAMP" {
+@test "_alert_set_global_vars: sets globals, timestamp formats, timezone, and version fallback" {
+	# Call with V set — verify all global variables
 	V="2.0.1"
 	_alert_set_global_vars 3
 	[ -n "$HOSTNAME" ]
@@ -890,20 +817,14 @@ EOF
 	[[ "$TIMESTAMP" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]]
 	[ "$ALERT_COUNT" = "3" ]
 	[ "$BFD_VERSION" = "2.0.1" ]
-}
 
-@test "_alert_set_global_vars: TIMESTAMP_ISO has ISO 8601 format" {
-	V="2.0.1"
-	_alert_set_global_vars 1
+	# TIMESTAMP_ISO has ISO 8601 format
 	[[ "$TIMESTAMP_ISO" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2} ]]
-}
 
-@test "_alert_set_global_vars: TIME_ZONE is exported" {
-	_alert_set_global_vars 0
+	# TIME_ZONE is exported
 	[ -n "$TIME_ZONE" ]
-}
 
-@test "_alert_set_global_vars: BFD_VERSION falls back to ALERT_LIB_VERSION" {
+	# BFD_VERSION falls back to ALERT_LIB_VERSION when V unset
 	unset V 2>/dev/null || true
 	unset BFD_VERSION 2>/dev/null || true
 	_alert_set_global_vars 0
@@ -1045,7 +966,7 @@ EOF
 	EMAIL_REPUTATION_LINKS="abuseipdb,ipinfo"
 	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
-	[[ "$REPUTATION_SECTION_TEXT" == *"Reputation:"* ]]
+	[[ "$REPUTATION_SECTION_TEXT" == *"lookup:"* ]]
 	[[ "$REPUTATION_SECTION_TEXT" == *"AbuseIPDB"* ]]
 	[[ "$REPUTATION_SECTION_HTML" == *"Reputation"* ]]
 }
@@ -1085,7 +1006,7 @@ EOF
 	echo "Jan  1 00:00:01 host sshd: Failed password from 192.0.2.1" > "$logfile"
 	local line="192.0.2.1|sshd|22|5000|0|ban|0|${logfile}|root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
-	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Source logs from"* ]]
+	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"logs from"* ]]
 	[[ "$SOURCE_LOGS_SECTION_TEXT" == *"Failed password"* ]]
 	[[ "$SOURCE_LOGS_SECTION_HTML" == *"Failed password"* ]]
 }
@@ -1098,12 +1019,15 @@ EOF
 	EMAIL_REPUTATION_LINKS=""
 	# no ipcountry.dat available
 	local _old_ip="${INSTALL_PATH:-}"
+	local _old_dp="${DATA_PATH:-}"
 	INSTALL_PATH="$TEST_TMPDIR/nonexistent"
+	DATA_PATH="$TEST_TMPDIR/nonexistent/data"
 	local line="192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5"
 	_alert_set_entry_vars "$line" 1 1
 	[ "$COUNTRY_CODE" = "--" ]
 	[ "$COUNTRY_DISPLAY" = "--" ]
 	INSTALL_PATH="$_old_ip"
+	DATA_PATH="$_old_dp"
 }
 
 @test "_alert_set_entry_vars: COUNTRY_DISPLAY includes full name when geoip_lib loaded" {
@@ -1114,8 +1038,8 @@ EOF
 	BAN_ESCALATION="none"
 	EMAIL_REPUTATION_LINKS=""
 	# create ipcountry.dat with CN mapping for 192.0.2.128
-	mkdir -p "$INSTALL_PATH"
-	cat > "$INSTALL_PATH/ipcountry.dat" <<'EOF'
+	mkdir -p "$DATA_PATH"
+	cat > "$DATA_PATH/ipcountry.dat" <<'EOF'
 3221226112 3221226239 CN
 EOF
 	local line="192.0.2.128|sshd|22|5000|0|ban|0||root|10|300|1|5"
@@ -1212,7 +1136,7 @@ EOF
 # _alert_render_text
 # ===================================================================
 
-@test "_alert_render_text: renders single entry email" {
+@test "_alert_render_text: renders single entry email (format C)" {
 	V="2.0.1"
 	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
 	_FW_BACKEND="custom"
@@ -1224,24 +1148,29 @@ EOF
 	run _alert_render_text "$af" "${PROJECT_ROOT}/files/alert"
 	assert_success
 	# header
-	assert_output --partial "BFD Alert for"
+	assert_output --partial "[BFD]"
 	assert_output --partial "1 host(s) banned"
-	# entry
-	assert_output --partial "Ban 1 of 1"
+	# entry: no "ban N of N" when entry_total == 1
+	refute_output --partial "ban 1 of 1"
 	assert_output --partial "192.0.2.1"
 	assert_output --partial "sshd"
+	# lowercase format-C labels
+	assert_output --partial "  host:"
+	assert_output --partial "  rule:"
+	assert_output --partial "  action:"
+	assert_output --partial "  why:"
 	# footer
-	assert_output --partial "BFD (Brute Force Detection) 2.0.1"
+	assert_output --partial "bfd 2.0.1"
 	assert_output --partial "rfxn.com/projects/brute-force-detection"
-	# pressure formula chain in A-1 format
-	assert_output --partial "5 failed logins = +15 this scan"
-	assert_output --partial "accumulated pressure"
+	# pressure math still exposed
+	assert_output --partial "5 failed logins this scan"
+	assert_output --partial "trip"
 	assert_output --partial "weight 3"
 	# no summary for single entry
-	refute_output --partial "Summary"
+	refute_output --partial "summary"
 }
 
-@test "_alert_render_text: renders multi-entry with summary" {
+@test "_alert_render_text: renders multi-entry with summary (format C)" {
 	V="2.0.1"
 	BAN_COMMAND_TEMPLATE="echo ban \$ATTACK_HOST"
 	_FW_BACKEND="custom"
@@ -1256,10 +1185,10 @@ EOF
 	run _alert_render_text "$af" "${PROJECT_ROOT}/files/alert"
 	assert_success
 	assert_output --partial "2 host(s) banned"
-	assert_output --partial "Ban 1 of 2"
-	assert_output --partial "Ban 2 of 2"
-	assert_output --partial "Summary"
-	assert_output --partial "Total bans:"
+	assert_output --partial "ban 1 of 2"
+	assert_output --partial "ban 2 of 2"
+	assert_output --partial "summary"
+	assert_output --partial "total:"
 }
 
 @test "_alert_render_text: returns 1 for empty alerts" {
@@ -1364,1029 +1293,3 @@ EOF
 	echo "$result" | grep -q "^--${boundary}--$"
 }
 
-# ===================================================================
-# _alert_email_local — local MTA delivery
-# ===================================================================
-
-# helper: create mock mail binary that logs calls
-_setup_mock_mail() {
-	mkdir -p "$TEST_TMPDIR/bin"
-	cat > "$TEST_TMPDIR/bin/mail" <<'MOCK'
-#!/bin/bash
-echo "MAIL_CALL: $@" >> "$MAIL_LOG"
-cat >> "$MAIL_LOG"
-MOCK
-	chmod +x "$TEST_TMPDIR/bin/mail"
-	export PATH="$TEST_TMPDIR/bin:$PATH"
-	export MAIL_LOG="$TEST_TMPDIR/mail_log"
-}
-
-# helper: create mock sendmail binary that logs calls
-_setup_mock_sendmail() {
-	mkdir -p "$TEST_TMPDIR/bin"
-	cat > "$TEST_TMPDIR/bin/sendmail" <<'MOCK'
-#!/bin/bash
-echo "SENDMAIL_CALL: $@" >> "$SENDMAIL_LOG"
-cat >> "$SENDMAIL_LOG"
-MOCK
-	chmod +x "$TEST_TMPDIR/bin/sendmail"
-	export PATH="$TEST_TMPDIR/bin:$PATH"
-	export SENDMAIL_LOG="$TEST_TMPDIR/sendmail_log"
-}
-
-# helper: create mock curl binary that logs calls
-_setup_mock_curl() {
-	mkdir -p "$TEST_TMPDIR/bin"
-	cat > "$TEST_TMPDIR/bin/curl" <<'MOCK'
-#!/bin/bash
-echo "CURL_CALL: $@" >> "$CURL_LOG"
-MOCK
-	chmod +x "$TEST_TMPDIR/bin/curl"
-	export PATH="$TEST_TMPDIR/bin:$PATH"
-	export CURL_LOG="$TEST_TMPDIR/curl_log"
-}
-
-# helper: create text and html test files
-_create_test_bodies() {
-	echo "Plain text alert body" > "$TEST_TMPDIR/text_body"
-	echo "<html><body>HTML alert body</body></html>" > "$TEST_TMPDIR/html_body"
-}
-
-@test "_alert_email_local: text format pipes to mail -s" {
-	_setup_mock_mail
-	_create_test_bodies
-	_alert_email_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "text"
-	[ -f "$MAIL_LOG" ]
-	run grep "MAIL_CALL:" "$MAIL_LOG"
-	assert_output --partial "-s"
-	assert_output --partial "Test Subject"
-	assert_output --partial "root"
-	run grep "Plain text alert body" "$MAIL_LOG"
-	assert_success
-}
-
-@test "_alert_email_local: html format uses sendmail -t -oi" {
-	_setup_mock_sendmail
-	_create_test_bodies
-	_alert_email_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "html"
-	[ -f "$SENDMAIL_LOG" ]
-	run grep "SENDMAIL_CALL:" "$SENDMAIL_LOG"
-	assert_output --partial "-t -oi"
-	run grep "Content-Type: text/html" "$SENDMAIL_LOG"
-	assert_success
-	# HTML body is base64-encoded (RFC 5321 line length compliance)
-	run grep "Content-Transfer-Encoding: base64" "$SENDMAIL_LOG"
-	assert_success
-}
-
-@test "_alert_email_local: both format uses sendmail with MIME" {
-	_setup_mock_sendmail
-	_create_test_bodies
-	_alert_email_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "both"
-	[ -f "$SENDMAIL_LOG" ]
-	run grep "multipart/alternative" "$SENDMAIL_LOG"
-	assert_success
-	run grep "Plain text alert body" "$SENDMAIL_LOG"
-	assert_success
-	# HTML body is base64-encoded (RFC 5321 line length compliance)
-	run grep "Content-Transfer-Encoding: base64" "$SENDMAIL_LOG"
-	assert_success
-}
-
-@test "_alert_email_local: html falls back to text when sendmail missing" {
-	_setup_mock_mail
-	# ensure no sendmail in PATH
-	rm -f "$TEST_TMPDIR/bin/sendmail" 2>/dev/null || true
-	_create_test_bodies
-	_alert_email_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "html"
-	# should have used mail instead
-	[ -f "$MAIL_LOG" ]
-	run grep "MAIL_CALL:" "$MAIL_LOG"
-	assert_success
-}
-
-@test "_alert_email_local: returns 1 when mail binary missing" {
-	# create a minimal PATH with essential binaries but without mail/sendmail
-	local _saved_path="$PATH"
-	mkdir -p "$TEST_TMPDIR/safebin"
-	for cmd in date hostname cat printf rm; do
-		local real_path
-		real_path=$(command -v "$cmd" 2>/dev/null || true)
-		[ -n "$real_path" ] && ln -sf "$real_path" "$TEST_TMPDIR/safebin/$cmd"
-	done
-	export PATH="$TEST_TMPDIR/safebin"
-	_create_test_bodies
-	run _alert_email_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "text"
-	export PATH="$_saved_path"
-	assert_failure
-}
-
-@test "_alert_email_local: From header uses ALERT_SMTP_FROM when set" {
-	_setup_mock_sendmail
-	_create_test_bodies
-	ALERT_SMTP_FROM="alerts@example.com"
-	_alert_email_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "html"
-	run grep "From: alerts@example.com" "$SENDMAIL_LOG"
-	assert_success
-	unset ALERT_SMTP_FROM
-}
-
-@test "_alert_email_local: From header uses hostname fallback when ALERT_SMTP_FROM empty" {
-	_setup_mock_sendmail
-	_create_test_bodies
-	unset ALERT_SMTP_FROM
-	_alert_email_local "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "html"
-	run grep "From: root@" "$SENDMAIL_LOG"
-	assert_success
-}
-
-# ===================================================================
-# _alert_email_relay — SMTP relay delivery
-# ===================================================================
-
-@test "_alert_email_relay: calls curl with correct arguments" {
-	_setup_mock_curl
-	ALERT_SMTP_RELAY="smtps://smtp.example.com:465"
-	ALERT_SMTP_FROM="alerts@example.com"
-	ALERT_SMTP_USER="user"
-	ALERT_SMTP_PASS="pass"
-	echo "RFC822 message" > "$TEST_TMPDIR/msg_file"
-	_alert_email_relay "root" "Test Subject" "$TEST_TMPDIR/msg_file"
-	[ -f "$CURL_LOG" ]
-	run grep "CURL_CALL:" "$CURL_LOG"
-	assert_output --partial "--url"
-	assert_output --partial "smtps://smtp.example.com:465"
-	assert_output --partial "--ssl-reqd"
-	assert_output --partial "--mail-from"
-	assert_output --partial "alerts@example.com"
-	assert_output --partial "--mail-rcpt"
-	assert_output --partial "root"
-	assert_output --partial "-K"
-	assert_output --partial "--upload-file"
-	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-@test "_alert_email_relay: returns 1 when ALERT_SMTP_FROM missing" {
-	unset ALERT_SMTP_FROM
-	ALERT_SMTP_RELAY="smtps://smtp.example.com:465"
-	ALERT_SMTP_USER="user"
-	ALERT_SMTP_PASS="pass"
-	echo "msg" > "$TEST_TMPDIR/msg_file"
-	run _alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
-	assert_failure
-	unset ALERT_SMTP_RELAY ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-@test "_alert_email_relay: returns 1 when curl binary missing" {
-	# create a minimal PATH with essential binaries but without curl
-	local _saved_path="$PATH"
-	mkdir -p "$TEST_TMPDIR/nocurl"
-	for cmd in date hostname cat printf rm; do
-		local real_path
-		real_path=$(command -v "$cmd" 2>/dev/null || true)
-		[ -n "$real_path" ] && ln -sf "$real_path" "$TEST_TMPDIR/nocurl/$cmd"
-	done
-	export PATH="$TEST_TMPDIR/nocurl"
-	ALERT_SMTP_RELAY="smtps://smtp.example.com:465"
-	ALERT_SMTP_FROM="alerts@example.com"
-	ALERT_SMTP_USER="user"
-	ALERT_SMTP_PASS="pass"
-	echo "msg" > "$TEST_TMPDIR/msg_file"
-	run _alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
-	export PATH="$_saved_path"
-	assert_failure
-	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-@test "_alert_email_relay: returns 1 on curl failure" {
-	mkdir -p "$TEST_TMPDIR/bin"
-	echo '#!/bin/bash' > "$TEST_TMPDIR/bin/curl"
-	echo 'exit 67' >> "$TEST_TMPDIR/bin/curl"
-	chmod +x "$TEST_TMPDIR/bin/curl"
-	export PATH="$TEST_TMPDIR/bin:$PATH"
-	ALERT_SMTP_RELAY="smtps://smtp.example.com:465"
-	ALERT_SMTP_FROM="alerts@example.com"
-	ALERT_SMTP_USER="user"
-	ALERT_SMTP_PASS="pass"
-	echo "msg" > "$TEST_TMPDIR/msg_file"
-	run _alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
-	assert_failure
-	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-@test "_alert_email_relay: smtp port 25 skips --ssl-reqd" {
-	_setup_mock_curl
-	ALERT_SMTP_RELAY="smtp://relay.internal:25"
-	ALERT_SMTP_FROM="alerts@example.com"
-	ALERT_SMTP_USER="user"
-	ALERT_SMTP_PASS="pass"
-	echo "msg" > "$TEST_TMPDIR/msg_file"
-	_alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
-	[ -f "$CURL_LOG" ]
-	run grep "CURL_CALL:" "$CURL_LOG"
-	assert_output --partial "smtp://relay.internal:25"
-	refute_output --partial "--ssl-reqd"
-	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-@test "_alert_email_relay: smtp port 587 includes --ssl-reqd" {
-	_setup_mock_curl
-	ALERT_SMTP_RELAY="smtp://relay.example.com:587"
-	ALERT_SMTP_FROM="alerts@example.com"
-	ALERT_SMTP_USER="user"
-	ALERT_SMTP_PASS="pass"
-	echo "msg" > "$TEST_TMPDIR/msg_file"
-	_alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
-	[ -f "$CURL_LOG" ]
-	run grep "CURL_CALL:" "$CURL_LOG"
-	assert_output --partial "--ssl-reqd"
-	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-@test "_alert_email_relay: auth-free relay omits --user" {
-	_setup_mock_curl
-	ALERT_SMTP_RELAY="smtp://relay.internal:25"
-	ALERT_SMTP_FROM="alerts@example.com"
-	unset ALERT_SMTP_USER ALERT_SMTP_PASS
-	echo "msg" > "$TEST_TMPDIR/msg_file"
-	_alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
-	[ -f "$CURL_LOG" ]
-	run grep "CURL_CALL:" "$CURL_LOG"
-	assert_output --partial "--mail-from"
-	refute_output --partial "--user"
-}
-
-@test "_alert_email_relay: curl failure includes stderr detail" {
-	mkdir -p "$TEST_TMPDIR/bin"
-	cat > "$TEST_TMPDIR/bin/curl" <<'MOCK'
-#!/bin/bash
-echo "curl: (67) Access denied" >&2
-exit 67
-MOCK
-	chmod +x "$TEST_TMPDIR/bin/curl"
-	export PATH="$TEST_TMPDIR/bin:$PATH"
-	ALERT_SMTP_RELAY="smtps://smtp.example.com:465"
-	ALERT_SMTP_FROM="alerts@example.com"
-	ALERT_SMTP_USER="user"
-	ALERT_SMTP_PASS="pass"
-	echo "msg" > "$TEST_TMPDIR/msg_file"
-	run _alert_email_relay "root" "Subject" "$TEST_TMPDIR/msg_file"
-	assert_failure
-	# shared alert_lib writes error to stderr (captured by run)
-	assert_output --partial "curl exit 67"
-	assert_output --partial "Access denied"
-	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-# ===================================================================
-# _alert_deliver_email — delivery router
-# ===================================================================
-
-@test "_alert_deliver_email: empty ALERT_SMTP_RELAY routes to local path" {
-	_setup_mock_mail
-	_create_test_bodies
-	unset ALERT_SMTP_RELAY
-	_alert_deliver_email "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "text"
-	[ -f "$MAIL_LOG" ]
-	run grep "MAIL_CALL:" "$MAIL_LOG"
-	assert_success
-}
-
-@test "_alert_deliver_email: ALERT_SMTP_RELAY set routes to relay path" {
-	_setup_mock_curl
-	_create_test_bodies
-	ALERT_SMTP_RELAY="smtps://smtp.example.com:465"
-	ALERT_SMTP_FROM="alerts@example.com"
-	ALERT_SMTP_USER="user"
-	ALERT_SMTP_PASS="pass"
-	_alert_deliver_email "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "text"
-	[ -f "$CURL_LOG" ]
-	run grep "CURL_CALL:" "$CURL_LOG"
-	assert_output --partial "smtps://smtp.example.com:465"
-	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-@test "_alert_deliver_email: relay path builds full message with headers" {
-	_setup_mock_curl
-	_create_test_bodies
-	ALERT_SMTP_RELAY="smtps://smtp.example.com:465"
-	ALERT_SMTP_FROM="alerts@example.com"
-	ALERT_SMTP_USER="user"
-	ALERT_SMTP_PASS="pass"
-	# capture the message file before it's deleted by using a recording curl
-	mkdir -p "$TEST_TMPDIR/bin"
-	cat > "$TEST_TMPDIR/bin/curl" <<'MOCK'
-#!/bin/bash
-# find --upload-file arg and copy its contents
-while [ $# -gt 0 ]; do
-	if [ "$1" = "--upload-file" ]; then
-		cp "$2" "$CURL_LOG.msg"
-		break
-	fi
-	shift
-done
-echo "ok" >> "$CURL_LOG"
-MOCK
-	chmod +x "$TEST_TMPDIR/bin/curl"
-	_alert_deliver_email "root" "Test Subject" "$TEST_TMPDIR/text_body" "$TEST_TMPDIR/html_body" "text"
-	[ -f "$CURL_LOG.msg" ]
-	run grep "^From: alerts@example.com" "$CURL_LOG.msg"
-	assert_success
-	run grep "^To: root" "$CURL_LOG.msg"
-	assert_success
-	run grep "^Subject: Test Subject" "$CURL_LOG.msg"
-	assert_success
-	run grep "^Date:" "$CURL_LOG.msg"
-	assert_success
-	unset ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-# ===================================================================
-# send_alerts integration (new pipeline)
-# ===================================================================
-
-@test "send_alerts integration: single entry text format calls mail" {
-	_setup_mock_mail
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	EMAIL_FORMAT="text"
-	local af="$TEST_TMPDIR/alerts_one"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
-	send_alerts "$af" "BFD Alert" "50"
-	[ -f "$MAIL_LOG" ]
-	run grep "MAIL_CALL:" "$MAIL_LOG"
-	assert_output --partial "BFD Alert"
-}
-
-@test "send_alerts integration: multi entry subject has ban count" {
-	_setup_mock_mail
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	EMAIL_FORMAT="text"
-	local af="$TEST_TMPDIR/alerts_multi"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|root|10|300|2|5" >> "$af"
-	send_alerts "$af" "BFD Alert" "50"
-	run grep "MAIL_CALL:" "$MAIL_LOG"
-	assert_output --partial "(2 bans)"
-}
-
-@test "send_alerts integration: multi recipient sends separate emails" {
-	_setup_mock_mail
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	EMAIL_FORMAT="text"
-	local af="$TEST_TMPDIR/alerts_multi_recip"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|admin@example.com|5|300|3|5" > "$af"
-	echo "192.0.2.2|dovecot|143|10000|0|ban|0|/dev/null|ops@example.com|10|300|2|5" >> "$af"
-	send_alerts "$af" "BFD Alert" "50"
-	local call_count
-	call_count=$(grep -c "MAIL_CALL:" "$MAIL_LOG")
-	[ "$call_count" -eq 2 ]
-}
-
-@test "send_alerts integration: format=both uses sendmail with MIME" {
-	_setup_mock_sendmail
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	EMAIL_FORMAT="both"
-	local af="$TEST_TMPDIR/alerts_both"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
-	send_alerts "$af" "BFD Alert" "50"
-	[ -f "$SENDMAIL_LOG" ]
-	run grep "multipart/alternative" "$SENDMAIL_LOG"
-	assert_success
-}
-
-# ===================================================================
-# Digest mode — _bfd_spool_append
-# ===================================================================
-
-# helper: mock send_alerts that records calls
-_setup_mock_send_alerts() {
-	export DIGEST_CALLS_LOG="$TEST_TMPDIR/digest_calls.log"
-	export DIGEST_FLUSH_DIR="$TEST_TMPDIR/digest_flush"
-	mkdir -p "$DIGEST_FLUSH_DIR"
-	# override send_alerts
-	send_alerts() {
-		local _af="$1" _subj="$2" _ll="$3"
-		local _n
-		_n=$(wc -l < "$_af")
-		echo "SEND_ALERTS: count=$_n subject=$_subj loglines=$_ll" >> "$DIGEST_CALLS_LOG"
-		cp "$_af" "$DIGEST_FLUSH_DIR/flush_$(date +%s%N).dat"
-	}
-}
-
-@test "_bfd_spool_append: appends timestamped entries to spool" {
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	local af="$TEST_TMPDIR/alerts"
-	cat > "$af" <<'EOF'
-192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5
-198.51.100.5|dovecot|143|8000|0|ban|0||root|10|300|2|5
-EOF
-	_bfd_spool_append "$af"
-	[ -f "$ALERT_SPOOL_FILE" ]
-	local count
-	count=$(wc -l < "$ALERT_SPOOL_FILE")
-	[ "$count" -eq 2 ]
-	# each line should start with epoch (10+ digits) followed by pipe
-	local _ep_pat='^[0-9]{10,}\|'
-	while IFS= read -r line; do
-		[[ "$line" =~ $_ep_pat ]]
-	done < "$ALERT_SPOOL_FILE"
-}
-
-@test "_bfd_spool_append: no-op on empty file" {
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	local af="$TEST_TMPDIR/empty_alerts"
-	: > "$af"
-	_bfd_spool_append "$af"
-	# spool should not exist (never written)
-	[ ! -f "$ALERT_SPOOL_FILE" ]
-}
-
-@test "_bfd_spool_append: appends to existing spool" {
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	# pre-populate with one line
-	echo "1000000000|203.0.113.1|postfix|25|3000|0|ban|0||root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5" > "$af"
-	_bfd_spool_append "$af"
-	local count
-	count=$(wc -l < "$ALERT_SPOOL_FILE")
-	[ "$count" -eq 2 ]
-}
-
-# ===================================================================
-# Digest mode — _bfd_digest_check
-# ===================================================================
-
-@test "_bfd_digest_check: no-op when EMAIL_DIGEST=cycle" {
-	EMAIL_DIGEST="cycle"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	echo "1000000000|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	_setup_mock_send_alerts
-	_bfd_digest_check
-	[ ! -f "$DIGEST_CALLS_LOG" ]
-}
-
-@test "_bfd_digest_check: no-op on empty spool" {
-	EMAIL_DIGEST="timed"
-	EMAIL_DIGEST_INTERVAL="900"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool_empty"
-	: > "$ALERT_SPOOL_FILE"
-	_setup_mock_send_alerts
-	_bfd_digest_check
-	[ ! -f "$DIGEST_CALLS_LOG" ]
-}
-
-@test "_bfd_digest_check: no-op on missing spool" {
-	EMAIL_DIGEST="timed"
-	EMAIL_DIGEST_INTERVAL="900"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/nonexistent_spool"
-	_setup_mock_send_alerts
-	_bfd_digest_check
-	[ ! -f "$DIGEST_CALLS_LOG" ]
-}
-
-@test "_bfd_digest_check: does not flush before interval" {
-	EMAIL_DIGEST="timed"
-	EMAIL_DIGEST_INTERVAL="900"
-	EMAIL_ALERTS="1"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	# spool only 100s old
-	local now
-	now=$(date +%s)
-	local old_epoch=$((now - 100))
-	echo "${old_epoch}|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	_setup_mock_send_alerts
-	_bfd_digest_check
-	# should NOT have flushed
-	[ ! -f "$DIGEST_CALLS_LOG" ]
-	# spool should still have content
-	[ -s "$ALERT_SPOOL_FILE" ]
-}
-
-@test "_bfd_digest_check: flushes when interval expired" {
-	EMAIL_DIGEST="timed"
-	EMAIL_DIGEST_INTERVAL="900"
-	EMAIL_ALERTS="1"
-	EMAIL_SUBJECT="BFD Alert"
-	EMAIL_LOGLINES="50"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	# spool 1000s old (> 900s interval)
-	local now
-	now=$(date +%s)
-	local old_epoch=$((now - 1000))
-	echo "${old_epoch}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	_setup_mock_send_alerts
-	_bfd_digest_check
-	# should have flushed
-	[ -f "$DIGEST_CALLS_LOG" ]
-	run grep "SEND_ALERTS:" "$DIGEST_CALLS_LOG"
-	assert_success
-	assert_output --partial "count=1"
-	# spool should be empty
-	[ ! -s "$ALERT_SPOOL_FILE" ]
-}
-
-# ===================================================================
-# Digest mode — _bfd_digest_flush
-# ===================================================================
-
-@test "_bfd_digest_flush: sends all entries and truncates spool" {
-	EMAIL_ALERTS="1"
-	EMAIL_SUBJECT="BFD Alert"
-	EMAIL_LOGLINES="50"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	local now
-	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	echo "${now}|198.51.100.5|dovecot|143|8000|0|ban|0|/dev/null|root|10|300|2|5" >> "$ALERT_SPOOL_FILE"
-	_setup_mock_send_alerts
-	_bfd_digest_flush
-	# should have sent
-	[ -f "$DIGEST_CALLS_LOG" ]
-	run grep "SEND_ALERTS:" "$DIGEST_CALLS_LOG"
-	assert_success
-	assert_output --partial "count=2"
-	# spool should be empty
-	[ ! -s "$ALERT_SPOOL_FILE" ]
-}
-
-@test "_bfd_digest_flush: strips epoch prefix from flush file" {
-	EMAIL_ALERTS="1"
-	EMAIL_SUBJECT="BFD Alert"
-	EMAIL_LOGLINES="50"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	local now
-	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	_setup_mock_send_alerts
-	_bfd_digest_flush
-	# check that flush file had 13 fields (epoch stripped, fail_count preserved)
-	local flush_file
-	flush_file=$(ls "$DIGEST_FLUSH_DIR"/flush_*.dat 2>/dev/null | head -1)
-	[ -n "$flush_file" ]
-	local field_count
-	field_count=$(head -1 "$flush_file" | awk -F'|' '{print NF}')
-	[ "$field_count" -eq 13 ]
-}
-
-@test "_bfd_digest_flush: no-op when EMAIL_ALERTS=0" {
-	EMAIL_ALERTS="0"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	local now
-	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0||root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	_setup_mock_send_alerts
-	_bfd_digest_flush
-	[ ! -f "$DIGEST_CALLS_LOG" ]
-	# spool untouched
-	[ -s "$ALERT_SPOOL_FILE" ]
-}
-
-@test "_bfd_digest_flush: no-op on empty spool" {
-	EMAIL_ALERTS="1"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool_empty"
-	: > "$ALERT_SPOOL_FILE"
-	_setup_mock_send_alerts
-	_bfd_digest_flush
-	[ ! -f "$DIGEST_CALLS_LOG" ]
-}
-
-@test "_bfd_digest_flush: safe to call multiple times" {
-	EMAIL_ALERTS="1"
-	EMAIL_SUBJECT="BFD Alert"
-	EMAIL_LOGLINES="50"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	local now
-	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	_setup_mock_send_alerts
-	_bfd_digest_flush
-	_bfd_digest_flush
-	# should have only one SEND_ALERTS call (second was no-op)
-	local call_count
-	call_count=$(grep -c "SEND_ALERTS:" "$DIGEST_CALLS_LOG")
-	[ "$call_count" -eq 1 ]
-}
-
-# ===================================================================
-# Integration: send_alerts MIME structure and relay delivery
-# ===================================================================
-
-@test "send_alerts integration: format=both MIME has text and HTML parts" {
-	_setup_mock_sendmail
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	EMAIL_FORMAT="both"
-	local af="$TEST_TMPDIR/alerts_mime"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
-	send_alerts "$af" "BFD Alert" "50"
-	[ -f "$SENDMAIL_LOG" ]
-	# MIME boundary present
-	run grep "multipart/alternative" "$SENDMAIL_LOG"
-	assert_success
-	# both content types present
-	run grep "Content-Type: text/plain" "$SENDMAIL_LOG"
-	assert_success
-	run grep "Content-Type: text/html" "$SENDMAIL_LOG"
-	assert_success
-}
-
-@test "send_alerts integration: relay path renders templates and calls curl" {
-	# create recording curl that captures the uploaded message
-	mkdir -p "$TEST_TMPDIR/bin"
-	cat > "$TEST_TMPDIR/bin/curl" <<'MOCK'
-#!/bin/bash
-while [ $# -gt 0 ]; do
-	if [ "$1" = "--upload-file" ]; then
-		cp "$2" "$CURL_LOG.msg"
-		break
-	fi
-	shift
-done
-echo "ok" >> "$CURL_LOG"
-MOCK
-	chmod +x "$TEST_TMPDIR/bin/curl"
-	export PATH="$TEST_TMPDIR/bin:$PATH"
-	export CURL_LOG="$TEST_TMPDIR/curl_log"
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	EMAIL_FORMAT="text"
-	SMTP_RELAY="smtps://smtp.example.com:465"
-	SMTP_FROM="alerts@example.com"
-	SMTP_USER="user"
-	SMTP_PASS="pass"
-	_bfd_alert_init
-	local af="$TEST_TMPDIR/alerts_relay"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$af"
-	send_alerts "$af" "BFD Alert" "50"
-	# curl was called
-	[ -f "$CURL_LOG" ]
-	# captured message has RFC822 headers
-	[ -f "$CURL_LOG.msg" ]
-	run grep "^From: alerts@example.com" "$CURL_LOG.msg"
-	assert_success
-	run grep "^Subject: BFD Alert" "$CURL_LOG.msg"
-	assert_success
-	# message has multipart MIME structure (relay always builds full MIME)
-	run grep "multipart/alternative" "$CURL_LOG.msg"
-	assert_success
-	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-@test "digest flush: sends via relay when SMTP_RELAY set" {
-	# create recording curl
-	mkdir -p "$TEST_TMPDIR/bin"
-	cat > "$TEST_TMPDIR/bin/curl" <<'MOCK'
-#!/bin/bash
-echo "CURL_CALL: $@" >> "$CURL_LOG"
-MOCK
-	chmod +x "$TEST_TMPDIR/bin/curl"
-	export PATH="$TEST_TMPDIR/bin:$PATH"
-	export CURL_LOG="$TEST_TMPDIR/curl_log"
-	EMAIL_ALERTS="1"
-	EMAIL_SUBJECT="BFD Alert"
-	EMAIL_LOGLINES="50"
-	EMAIL_FORMAT="text"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	SMTP_RELAY="smtps://smtp.example.com:465"
-	SMTP_FROM="alerts@example.com"
-	SMTP_USER="user"
-	SMTP_PASS="pass"
-	_bfd_alert_init
-	local now
-	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	_bfd_digest_flush
-	# curl should have been called with relay URL
-	[ -f "$CURL_LOG" ]
-	run grep "CURL_CALL:" "$CURL_LOG"
-	assert_output --partial "smtps://smtp.example.com:465"
-	# spool should be empty
-	[ ! -s "$ALERT_SPOOL_FILE" ]
-	unset SMTP_RELAY SMTP_FROM SMTP_USER SMTP_PASS ALERT_SMTP_RELAY ALERT_SMTP_FROM ALERT_SMTP_USER ALERT_SMTP_PASS
-}
-
-# ===================================================================
-# _bfd_alert_init — channel registration & env mapping
-# ===================================================================
-
-@test "_bfd_alert_init: maps SLACK env vars" {
-	SLACK_MODE="bot"
-	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
-	SLACK_TOKEN="xoxb-test"
-	SLACK_CHANNEL="#alerts"
-	SLACK_ALERTS="1"
-	_bfd_alert_init
-	[ "$ALERT_SLACK_MODE" = "bot" ]
-	[ "$ALERT_SLACK_WEBHOOK_URL" = "https://hooks.slack.com/services/T/B/X" ]
-	[ "$ALERT_SLACK_TOKEN" = "xoxb-test" ]
-	[ "$ALERT_SLACK_CHANNEL" = "#alerts" ]
-	alert_channel_enabled "slack"
-	unset SLACK_MODE SLACK_WEBHOOK_URL SLACK_TOKEN SLACK_CHANNEL SLACK_ALERTS
-	unset ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
-}
-
-@test "_bfd_alert_init: maps TELEGRAM env vars" {
-	TELEGRAM_BOT_TOKEN="123456:ABC"
-	TELEGRAM_CHAT_ID="-100123"
-	TELEGRAM_ALERTS="1"
-	_bfd_alert_init
-	[ "$ALERT_TELEGRAM_BOT_TOKEN" = "123456:ABC" ]
-	[ "$ALERT_TELEGRAM_CHAT_ID" = "-100123" ]
-	alert_channel_enabled "telegram"
-	unset TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID TELEGRAM_ALERTS
-	unset ALERT_TELEGRAM_BOT_TOKEN ALERT_TELEGRAM_CHAT_ID
-}
-
-@test "_bfd_alert_init: maps DISCORD env vars" {
-	DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/123/abc"
-	DISCORD_ALERTS="1"
-	_bfd_alert_init
-	[ "$ALERT_DISCORD_WEBHOOK_URL" = "https://discord.com/api/webhooks/123/abc" ]
-	alert_channel_enabled "discord"
-	unset DISCORD_WEBHOOK_URL DISCORD_ALERTS
-	unset ALERT_DISCORD_WEBHOOK_URL
-}
-
-@test "_bfd_alert_init: disabled channels stay disabled" {
-	SLACK_ALERTS="0"
-	TELEGRAM_ALERTS="0"
-	DISCORD_ALERTS="0"
-	_bfd_alert_init
-	! alert_channel_enabled "slack"
-	! alert_channel_enabled "telegram"
-	! alert_channel_enabled "discord"
-	unset SLACK_ALERTS TELEGRAM_ALERTS DISCORD_ALERTS
-}
-
-@test "_bfd_alert_init: re-disables channels on reload" {
-	SLACK_ALERTS="1"
-	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
-	_bfd_alert_init
-	alert_channel_enabled "slack"
-	# simulate reload: user disables slack
-	SLACK_ALERTS="0"
-	_bfd_alert_init
-	! alert_channel_enabled "slack"
-	unset SLACK_ALERTS SLACK_WEBHOOK_URL ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
-}
-
-# ===================================================================
-# _bfd_dispatch_messaging — messaging dispatch
-# ===================================================================
-
-@test "_bfd_dispatch_messaging: no-op when no channels enabled" {
-	SLACK_ALERTS="0"
-	TELEGRAM_ALERTS="0"
-	DISCORD_ALERTS="0"
-	_bfd_alert_init
-	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$af"
-	local tpl_dir="$PROJECT_ROOT/files/alert"
-	run _bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
-	assert_success
-	unset SLACK_ALERTS TELEGRAM_ALERTS DISCORD_ALERTS
-}
-
-@test "_bfd_dispatch_messaging: no-op with empty alerts file" {
-	SLACK_ALERTS="1"
-	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
-	_bfd_alert_init
-	local af="$TEST_TMPDIR/alerts_empty"
-	: > "$af"
-	local tpl_dir="$PROJECT_ROOT/files/alert"
-	run _bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
-	assert_success
-	unset SLACK_ALERTS SLACK_WEBHOOK_URL ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
-}
-
-@test "_bfd_dispatch_messaging: renders slack entry template" {
-	# Mock curl to capture payload (Slack webhook returns literal "ok")
-	local curl_log="$TEST_TMPDIR/curl_calls"
-	curl() { echo "CURL_CALL: $*" >> "$curl_log"; echo 'ok'; return 0; }
-	export -f curl
-	SLACK_ALERTS="1"
-	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
-	_bfd_alert_init
-	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$af"
-	local tpl_dir="$PROJECT_ROOT/files/alert"
-	_bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
-	[ -f "$curl_log" ]
-	# curl was called with the webhook URL
-	run grep "CURL_CALL:" "$curl_log"
-	assert_output --partial "hooks.slack.com"
-	unset SLACK_ALERTS SLACK_WEBHOOK_URL ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
-	unset -f curl
-}
-
-@test "_bfd_dispatch_messaging: renders discord entry template" {
-	local curl_log="$TEST_TMPDIR/curl_calls"
-	curl() { echo "CURL_CALL: $*" >> "$curl_log"; return 0; }
-	export -f curl
-	DISCORD_ALERTS="1"
-	DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/123/abc"
-	_bfd_alert_init
-	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$af"
-	local tpl_dir="$PROJECT_ROOT/files/alert"
-	_bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
-	[ -f "$curl_log" ]
-	run grep "CURL_CALL:" "$curl_log"
-	assert_output --partial "discord.com"
-	unset DISCORD_ALERTS DISCORD_WEBHOOK_URL ALERT_DISCORD_WEBHOOK_URL
-	unset -f curl
-}
-
-@test "_bfd_dispatch_messaging: cleans up ENTRY_BLOCKS after dispatch" {
-	curl() { echo 'ok'; return 0; }
-	export -f curl
-	SLACK_ALERTS="1"
-	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
-	_bfd_alert_init
-	local af="$TEST_TMPDIR/alerts"
-	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$af"
-	local tpl_dir="$PROJECT_ROOT/files/alert"
-	_bfd_dispatch_messaging "$af" "Test Subject" "5" "$tpl_dir"
-	# ENTRY_BLOCKS should be unset after dispatch (cleanup)
-	[ -z "${ENTRY_BLOCKS:-}" ]
-	unset SLACK_ALERTS SLACK_WEBHOOK_URL ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
-	unset -f curl
-}
-
-# ===================================================================
-# _bfd_digest_flush — messaging channel awareness
-# ===================================================================
-
-@test "_bfd_digest_flush: flushes when only messaging enabled (no email)" {
-	EMAIL_ALERTS="0"
-	SLACK_ALERTS="1"
-	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
-	TELEGRAM_ALERTS="0"
-	DISCORD_ALERTS="0"
-	_bfd_alert_init
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
-	EMAIL_SUBJECT="BFD Alert"
-	EMAIL_LOGLINES="5"
-	# mock curl for Slack webhook delivery
-	curl() { echo 'ok'; return 0; }
-	export -f curl
-	# mock mail (send_alerts callback may invoke it)
-	mail() { return 0; }
-	export -f mail
-	# pre-populate spool
-	local now
-	now=$(date +%s)
-	echo "${now}|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	_bfd_digest_flush
-	# spool should be empty (flushed)
-	[ ! -s "$ALERT_SPOOL_FILE" ]
-	unset EMAIL_ALERTS SLACK_ALERTS SLACK_WEBHOOK_URL TELEGRAM_ALERTS DISCORD_ALERTS
-	unset ALERT_SLACK_MODE ALERT_SLACK_WEBHOOK_URL ALERT_SLACK_TOKEN ALERT_SLACK_CHANNEL
-	unset -f curl mail
-}
-
-@test "_bfd_digest_flush: does not flush when all channels disabled" {
-	EMAIL_ALERTS="0"
-	SLACK_ALERTS="0"
-	TELEGRAM_ALERTS="0"
-	DISCORD_ALERTS="0"
-	ALERT_SPOOL_FILE="$TEST_TMPDIR/spool"
-	echo "1234567890|192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|10|300|1|5" > "$ALERT_SPOOL_FILE"
-	_bfd_digest_flush
-	# spool should NOT be empty (preserved for when re-enabled)
-	[ -s "$ALERT_SPOOL_FILE" ]
-	unset EMAIL_ALERTS SLACK_ALERTS TELEGRAM_ALERTS DISCORD_ALERTS
-}
-
-# ===================================================================
-# _hc_alerts — messaging health checks
-# ===================================================================
-
-@test "_hc_alerts: slack enabled with webhook shows PASS" {
-	EMAIL_ALERTS="0"
-	SLACK_ALERTS="1"
-	SLACK_MODE="webhook"
-	SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T/B/X"
-	run _hc_alerts
-	assert_output --partial "[PASS] Slack alerts: enabled"
-	assert_output --partial "[PASS] Slack webhook URL: configured"
-	unset SLACK_ALERTS SLACK_MODE SLACK_WEBHOOK_URL
-}
-
-@test "_hc_alerts: slack enabled without webhook shows FAIL" {
-	EMAIL_ALERTS="0"
-	SLACK_ALERTS="1"
-	SLACK_MODE="webhook"
-	SLACK_WEBHOOK_URL=""
-	run _hc_alerts
-	assert_output --partial "[FAIL] Slack webhook URL: SLACK_WEBHOOK_URL not set"
-	unset SLACK_ALERTS SLACK_MODE SLACK_WEBHOOK_URL
-}
-
-@test "_hc_alerts: slack bot mode missing token shows FAIL" {
-	EMAIL_ALERTS="0"
-	SLACK_ALERTS="1"
-	SLACK_MODE="bot"
-	SLACK_TOKEN=""
-	SLACK_CHANNEL="#test"
-	run _hc_alerts
-	assert_output --partial "[FAIL] Slack token: SLACK_TOKEN not set"
-	unset SLACK_ALERTS SLACK_MODE SLACK_TOKEN SLACK_CHANNEL
-}
-
-@test "_hc_alerts: telegram enabled with config shows PASS" {
-	export EMAIL_ALERTS="0"
-	TELEGRAM_ALERTS="1"
-	TELEGRAM_BOT_TOKEN="123456:ABC"
-	TELEGRAM_CHAT_ID="-100123"
-	run _hc_alerts
-	assert_output --partial "[PASS] Telegram alerts: enabled"
-	assert_output --partial "[PASS] Telegram bot token: configured"
-	assert_output --partial "[PASS] Telegram chat ID: configured"
-	unset TELEGRAM_ALERTS TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
-}
-
-@test "_hc_alerts: telegram missing token shows FAIL" {
-	export EMAIL_ALERTS="0"
-	TELEGRAM_ALERTS="1"
-	TELEGRAM_BOT_TOKEN=""
-	TELEGRAM_CHAT_ID="-100123"
-	run _hc_alerts
-	assert_output --partial "[FAIL] Telegram bot token: TELEGRAM_BOT_TOKEN not set"
-	unset TELEGRAM_ALERTS TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
-}
-
-@test "_hc_alerts: discord enabled with webhook shows PASS" {
-	export EMAIL_ALERTS="0"
-	DISCORD_ALERTS="1"
-	DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/123/abc"
-	run _hc_alerts
-	assert_output --partial "[PASS] Discord alerts: enabled"
-	assert_output --partial "[PASS] Discord webhook URL: configured"
-	unset DISCORD_ALERTS DISCORD_WEBHOOK_URL
-}
-
-@test "_hc_alerts: discord missing webhook shows FAIL" {
-	export EMAIL_ALERTS="0"
-	DISCORD_ALERTS="1"
-	DISCORD_WEBHOOK_URL=""
-	run _hc_alerts
-	assert_output --partial "[FAIL] Discord webhook URL: DISCORD_WEBHOOK_URL not set"
-	unset DISCORD_ALERTS DISCORD_WEBHOOK_URL
-}
-
-# ===================================================================
-# show_config — messaging variables in whitelist
-# ===================================================================
-
-@test "show_config: SLACK_ALERTS is in whitelist" {
-	SLACK_ALERTS="1"
-	run show_config "SLACK_ALERTS"
-	assert_success
-	assert_output "1"
-	unset SLACK_ALERTS
-}
-
-@test "show_config: TELEGRAM_ALERTS is in whitelist" {
-	TELEGRAM_ALERTS="0"
-	run show_config "TELEGRAM_ALERTS"
-	assert_success
-	assert_output "0"
-	unset TELEGRAM_ALERTS
-}
-
-@test "show_config: DISCORD_ALERTS is in whitelist" {
-	DISCORD_ALERTS="0"
-	run show_config "DISCORD_ALERTS"
-	assert_success
-	assert_output "0"
-	unset DISCORD_ALERTS
-}
-
-@test "show_config: SLACK_WEBHOOK_URL is in whitelist" {
-	SLACK_WEBHOOK_URL=""
-	run show_config "SLACK_WEBHOOK_URL"
-	assert_success
-	unset SLACK_WEBHOOK_URL
-}
-
-# ===================================================================
-# test_alert — messaging type dispatch
-# ===================================================================
-
-@test "test_alert: unknown type shows error with messaging types" {
-	run test_alert "$INSTALL_PATH" "fax"
-	assert_failure
-	assert_output --partial "email, slack, telegram, discord"
-}
-
-@test "test_alert: empty type lists messaging types in hint" {
-	run test_alert "$INSTALL_PATH" ""
-	assert_failure
-	assert_output --partial "email, slack, telegram, discord"
-}

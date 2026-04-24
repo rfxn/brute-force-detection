@@ -77,6 +77,8 @@ bfd_standard_setup() {
 	bfd_common_setup
 	INSTALL_PATH="$TEST_TMPDIR/bfd"
 	mkdir -p "$INSTALL_PATH"
+	DATA_PATH="$INSTALL_PATH/data"
+	mkdir -p "$DATA_PATH"
 	state_init "$INSTALL_PATH"
 	TLOG_BASERUN="$INSTALL_PATH/tmp"
 	BAN_RETRY_COUNT="0"
@@ -109,10 +111,21 @@ bfd_standard_setup() {
 
 # bfd_load_function: extract and eval a single function from a source file.
 # Usage: bfd_load_function "func_name" [source_file]
-# Default source: $PROJECT_ROOT/files/bfd
+# Default source: $PROJECT_ROOT/files/bfd, with fallback to bfd_core.sh
 bfd_load_function() {
 	local func="$1" src="${2:-$PROJECT_ROOT/files/bfd}"
-	eval "$(awk "/^${func}\\(\\)/ { p=1 } p { print; if (/^\\}\$/) exit }" "$src")"
+	local extracted
+	extracted="$(awk "/^${func}\\(\\)/ { p=1 } p { print; if (/^\\}\$/) exit }" "$src")"
+	# fallback: if not found in default source, try sub-libraries
+	if [ -z "$extracted" ] && [ "$src" = "$PROJECT_ROOT/files/bfd" ]; then
+		local _fallback
+		for _fallback in bfd_core.sh bfd_cdn.sh; do
+			extracted="$(awk "/^${func}\\(\\)/ { p=1 } p { print; if (/^\\}\$/) exit }" \
+				"$PROJECT_ROOT/files/internals/$_fallback")"
+			[ -n "$extracted" ] && break
+		done
+	fi
+	eval "$extracted"
 }
 
 # bfd_teardown: cleanup test environment

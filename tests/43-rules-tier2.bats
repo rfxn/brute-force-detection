@@ -8,6 +8,29 @@ load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load 'helpers/bfd-common'
 
+# create/remove mock PREREQ binaries at file level to avoid race with
+# BATS --jobs parallel test-gathering phase (per-test teardown rm races
+# with the next test's setup touch on shared /usr paths)
+setup_file() {
+	mkdir -p /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin /opt/jellyfin
+	touch /usr/sbin/sogod
+	touch /usr/bin/freeswitch
+	touch /usr/sbin/ejabberdctl
+	touch /usr/sbin/pdns_server
+	touch /usr/bin/jellyfin
+	# placeholder log so the jellyfin rule's existence gate passes; the
+	# actual fixture content is supplied per-test via _TLOG_PASSTHROUGH
+	# (test_rule's 3rd arg). A shared path here would race in --jobs mode.
+	mkdir -p /var/log/jellyfin
+	touch /var/log/jellyfin/log_20260101.log
+}
+
+teardown_file() {
+	rm -f /usr/sbin/sogod /usr/bin/freeswitch /usr/sbin/ejabberdctl \
+		/usr/sbin/pdns_server /usr/bin/jellyfin
+	rm -rf /var/log/jellyfin
+}
+
 setup() {
 	bfd_standard_setup
 	GLOB_PRESSURE_TRIP="15"
@@ -19,14 +42,6 @@ setup() {
 	# drupal rule uses KERNEL_LOG_PATH as PREREQ — set and create mock
 	KERNEL_LOG_PATH="$TEST_TMPDIR/syslog"
 	touch "$KERNEL_LOG_PATH"
-
-	# create mock PREREQ binaries so rule if-guards pass
-	mkdir -p /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin /opt/jellyfin
-	touch /usr/sbin/sogod
-	touch /usr/bin/freeswitch
-	touch /usr/sbin/ejabberdctl
-	touch /usr/sbin/pdns_server
-	touch /usr/bin/jellyfin
 
 	# copy rule files from project source
 	cp "$PROJECT_ROOT/files/rules/sogo" "$RULES_PATH/"
@@ -44,11 +59,6 @@ setup() {
 }
 
 teardown() {
-	# clean up mock PREREQ binaries
-	rm -f /usr/sbin/sogod /usr/bin/freeswitch /usr/sbin/ejabberdctl \
-		/usr/sbin/pdns_server /usr/bin/jellyfin
-	# clean up jellyfin log directory (created outside TEST_TMPDIR)
-	rm -rf /var/log/jellyfin
 	bfd_teardown
 }
 
@@ -215,9 +225,10 @@ EOF
 # --- jellyfin ---
 
 @test "jellyfin: auth denied extracts IP" {
-	# create the dated log directory and file for jellyfin's dynamic detection
-	mkdir -p /var/log/jellyfin
-	local log="/var/log/jellyfin/log_20260308.log"
+	# per-test fixture under TEST_TMPDIR avoids races with sibling jellyfin
+	# tests under bats --jobs (rule's existence gate is satisfied by the
+	# placeholder file created in setup_file)
+	local log="$TEST_TMPDIR/jellyfin.log"
 	echo '[2026-03-08 10:01:01.123 +00:00] [INF] Authentication request for "admin" has been denied (IP: "203.0.113.50").' > "$log"
 	run test_rule "$INSTALL_PATH" "jellyfin" "$log"
 	assert_success
@@ -226,8 +237,7 @@ EOF
 }
 
 @test "jellyfin: multiple failures aggregate correctly" {
-	mkdir -p /var/log/jellyfin
-	local log="/var/log/jellyfin/log_20260308.log"
+	local log="$TEST_TMPDIR/jellyfin.log"
 	cat > "$log" <<'EOF'
 [2026-03-08 10:01:01.123 +00:00] [INF] Authentication request for "admin" has been denied (IP: "203.0.113.50").
 [2026-03-08 10:01:02.456 +00:00] [INF] Authentication request for "user1" has been denied (IP: "198.51.100.45").
@@ -239,8 +249,7 @@ EOF
 }
 
 @test "jellyfin: successful auth not matched" {
-	mkdir -p /var/log/jellyfin
-	local log="/var/log/jellyfin/log_20260308.log"
+	local log="$TEST_TMPDIR/jellyfin.log"
 	echo '[2026-03-08 10:01:01.123 +00:00] [INF] Authentication request for "admin" has succeeded (IP: "203.0.113.50").' > "$log"
 	run test_rule "$INSTALL_PATH" "jellyfin" "$log"
 	assert_success

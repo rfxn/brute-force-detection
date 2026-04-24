@@ -1,5 +1,5 @@
 #!/bin/bash
-# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+# Brute Force Detection 2.0.2 <bfd@rfxn.com>
 ###
 # Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
@@ -26,10 +26,10 @@ INSTALL_PATH="${INSTALL_PATH:-/usr/local/bfd}"
 _int_conf="$INSTALL_PATH/internals/internals.conf"
 if [ -f "$_int_conf" ]; then
 	_int_owner=$(stat -L -c '%u' "$_int_conf" 2>/dev/null)
-	_int_perms=$(stat -L -c '%a' "$_int_conf" 2>/dev/null)
+	_int_perms=$(stat -L -c '%04a' "$_int_conf" 2>/dev/null)
 	if [ "${_int_owner:-}" = "0" ] && \
-	   [ "$(( ${_int_perms:1:1} & 2 ))" -eq 0 ] 2>/dev/null && \
-	   [ "$(( ${_int_perms: -1} & 2 ))" -eq 0 ] 2>/dev/null; then
+	   [ "$(( ${_int_perms:2:1} & 2 ))" -eq 0 ] 2>/dev/null && \
+	   [ "$(( ${_int_perms:3:1} & 2 ))" -eq 0 ] 2>/dev/null; then
 		# shellcheck disable=SC1090
 		. "$_int_conf"
 	fi
@@ -38,7 +38,7 @@ LOCK_FILE="${LOCK_FILE:-$INSTALL_PATH/lock.utime}"
 
 # check if bfd is actively running (mkdir-based lock used by bfd/watch)
 if [ -d "$LOCK_FILE.lk" ]; then
-	_lock_pid=$(cat "$LOCK_FILE.lk/pid" 2>/dev/null)
+	_lock_pid=$(command cat "$LOCK_FILE.lk/pid" 2>/dev/null)
 	if [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null; then
 		exit 0
 	fi
@@ -48,10 +48,10 @@ fi
 if [ -f "$INSTALL_PATH/conf.bfd" ]; then
 	# Validate root-owned and not group/world-writable before sourcing (SF-001)
 	_cfg_owner=$(stat -L -c '%u' "$INSTALL_PATH/conf.bfd" 2>/dev/null)
-	_cfg_perms=$(stat -L -c '%a' "$INSTALL_PATH/conf.bfd" 2>/dev/null)
+	_cfg_perms=$(stat -L -c '%04a' "$INSTALL_PATH/conf.bfd" 2>/dev/null)
 	if [ "${_cfg_owner:-}" = "0" ] && \
-	   [ "$(( ${_cfg_perms:1:1} & 2 ))" -eq 0 ] 2>/dev/null && \
-	   [ "$(( ${_cfg_perms: -1} & 2 ))" -eq 0 ] 2>/dev/null; then
+	   [ "$(( ${_cfg_perms:2:1} & 2 ))" -eq 0 ] 2>/dev/null && \
+	   [ "$(( ${_cfg_perms:3:1} & 2 ))" -eq 0 ] 2>/dev/null; then
 		# shellcheck disable=SC1090,SC1091
 		. "$INSTALL_PATH/conf.bfd"
 	fi
@@ -81,11 +81,11 @@ if find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' -type f \
 	(
 		flock -x 201
 		find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' \
-			-type f -exec cat {} + >> "$pool_file"
+			-type f -exec cat {} + >> "$pool_file"  # bare cat: find -exec uses execvp, not bash (command builtin unavailable)
 		find "$INSTALL_PATH/stats" -maxdepth 1 -name 'attack.pool.*' \
 			-type f -delete
 		sort -n "$pool_file" > "$pool_file.new"
-		cat "$pool_file.new" > "$pool_file"
+		command cat "$pool_file.new" > "$pool_file"
 		command rm -f "$pool_file.new"
 	) 201>>"$pool_file"
 fi
@@ -106,17 +106,42 @@ if [ -f "$pool_file" ] && [ -s "$pool_file" ]; then
 		else
 			command cp "$pool_file" "$pool_file.new"
 		fi
-		cat "$pool_file.new" > "$pool_file"
+		command cat "$pool_file.new" > "$pool_file"
 		command rm -f "$pool_file.new"
 	) 201>>"$pool_file"
 fi
 
 # Refresh country database if stale (>30 days since last update)
-_dat="$INSTALL_PATH/ipcountry.dat"
+_dat="${DATA_PATH:-$INSTALL_PATH/data}/ipcountry.dat"
 if [ -x "$INSTALL_PATH/update-ipcountry.sh" ] && [ -f "$_dat" ]; then
 	_age=$(( $(date +%s) - $(stat -c %Y "$_dat") ))
 	if [ "$_age" -gt 2592000 ]; then
 		"$INSTALL_PATH/update-ipcountry.sh" >/dev/null 2>&1 || true  # non-fatal: network may be unavailable
+	fi
+fi
+
+# Refresh CDN provider database if stale
+_cdn_dat="${DATA_PATH:-$INSTALL_PATH/data}/cdn.dat"
+_cdn_days="${CDN_UPDATE_DAYS:-7}"
+_cdn_active=0
+case "${CDN_ENABLE:-auto}" in
+	1) _cdn_active=1 ;;
+	auto)
+		[ -f "$INSTALL_PATH/cdn-providers.conf" ] && \
+			grep -qE '^[^#[:space:]]' "$INSTALL_PATH/cdn-providers.conf" && \
+			_cdn_active=1
+		;;
+esac
+command rm -f "$INSTALL_PATH/tmp/.cdn_first_fetch"
+if [ "$_cdn_active" = "1" ] && [ -x "$INSTALL_PATH/update-cdn-providers.sh" ] && [ "$_cdn_days" -gt 0 ] 2>/dev/null; then
+	if [ -f "$_cdn_dat" ]; then
+		_cdn_age=$(( $(date +%s) - $(stat -c %Y "$_cdn_dat") ))
+		if [ "$_cdn_age" -gt $((_cdn_days * 86400)) ]; then
+			"$INSTALL_PATH/update-cdn-providers.sh" >/dev/null 2>&1 || true  # non-fatal: network may be unavailable
+		fi
+	else
+		# first run: no database yet, fetch now
+		"$INSTALL_PATH/update-cdn-providers.sh" >/dev/null 2>&1 || true  # non-fatal: network may be unavailable
 	fi
 fi
 

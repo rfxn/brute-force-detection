@@ -21,14 +21,14 @@
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": "*Top threats:*\n{{REPORT_TOP_IPS_BRIEF}}"
+				"text": "*Top threats:*\n{{REPORT_TOP_IPS_BRIEF_JSON}}"
 			}
 		},
 		{
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": "*Services:*\n{{REPORT_SERVICES_BRIEF}}"
+				"text": "*Services:*\n{{REPORT_SERVICES_BRIEF_JSON}}"
 			}
 		},
 		{

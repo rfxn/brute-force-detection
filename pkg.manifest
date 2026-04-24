@@ -2,7 +2,7 @@
 # Used by pkg_lib's manifest-driven generator to produce RPM/DEB/Docker/CI artifacts.
 
 PKG_NAME="bfd"
-PKG_VERSION="2.0.1"
+PKG_VERSION="2.0.2"
 PKG_SUMMARY="Modular brute force detection and blocking system for Linux"
 PKG_DESCRIPTION="BFD is a bash-based intrusion detection system that monitors auth logs \
 for brute-force login attempts across 47+ services (SSH, FTP, SMTP, POP3, IMAP, HTTP, \

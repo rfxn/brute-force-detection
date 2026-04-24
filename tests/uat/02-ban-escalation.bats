@@ -5,6 +5,7 @@
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load '../helpers/uat-bfd'
+load '../helpers/assert-bfd'
 load '../infra/lib/uat-helpers'
 
 setup_file() {
@@ -48,23 +49,43 @@ teardown_file() {
     run grep -c 192.0.2.10 /usr/local/bfd/tmp/bans.history
     assert_success
     # Should have at least 2 entries (from ban + unban + re-ban)
-    local count
-    count=$(grep -c 192.0.2.10 /usr/local/bfd/tmp/bans.history)
-    [ "$count" -ge 2 ]
+    [ "$output" -ge 2 ]
 }
 
 # bats test_tags=uat,uat:ban-escalation
-@test "UAT: flush-temp removes temp bans" {
-    # Add a second IP so we can verify selective flush
-    run bfd -b 192.0.2.11 sshd
+@test "UAT: flush-temp removes temp bans but preserves permanent" {
+    # Clean slate for this test — need both a temp and permanent ban
+    uat_bfd_reset
+    local conf="/usr/local/bfd/conf.bfd"
+    sed -i 's/^BAN_TTL=.*/BAN_TTL="600"/' "$conf"
+
+    # Create a temp ban via detection (detection respects BAN_TTL)
+    uat_bfd_inject_failures "192.0.2.13" 30
+    uat_bfd_clear_cursors
+    run bfd -s
+    assert_success
+    assert_banned 192.0.2.13
+    # Verify it is actually temporary (expiry > 0)
+    local expiry
+    expiry=$(awk '$3 == "192.0.2.13" { print $2 }' /usr/local/bfd/tmp/bans.active)
+    [ "$expiry" -gt 0 ]
+
+    # Create a permanent ban via manual ban (bfd -b always permanent)
+    run bfd -b 192.0.2.14 sshd
+    assert_success
+    assert_banned 192.0.2.14
+
+    run bfd --flush-temp
     assert_success
 
+    # Temp ban should be gone, permanent should survive
+    refute_banned 192.0.2.13
+    assert_banned 192.0.2.14
+}
+
+# bats test_tags=uat,uat:ban-escalation
+@test "UAT: flush-all removes all bans including permanent" {
     run bfd --flush-all
     assert_success
-}
-
-# bats test_tags=uat,uat:ban-escalation
-@test "UAT: bans.active empty after flush" {
-    run wc -l < /usr/local/bfd/tmp/bans.active
-    assert_output "0"
+    assert_ban_count 0
 }

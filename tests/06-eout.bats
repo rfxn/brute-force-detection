@@ -39,12 +39,6 @@ teardown() {
 	[ "$(wc -l < "$BFD_LOG_PATH")" -eq 0 ]
 }
 
-@test "eout: le flag writes to BFD_LOG_PATH" {
-	: > "$BFD_LOG_PATH"
-	eout "logged message" "le" > /dev/null
-	[ "$(wc -l < "$BFD_LOG_PATH")" -eq 1 ]
-}
-
 @test "eout: log file contains the message" {
 	: > "$BFD_LOG_PATH"
 	eout "logged message" "le" > /dev/null

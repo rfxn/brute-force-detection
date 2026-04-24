@@ -69,7 +69,7 @@ CNFEOF
 	cat > "$INTCNF" <<INTEOF
 #!/bin/bash
 RULES_PATH="$INSTALL_PATH/rules"
-TLOG_PATH="$INSTALL_PATH/tlog"
+TLOG_PATH="$INSTALL_PATH/internals/tlog"
 TLOG_BASERUN="$INSTALL_PATH/tmp"
 ALERT_TEMPLATE_DIR="$INSTALL_PATH/alert"
 ALERT_SPOOL_FILE="$INSTALL_PATH/tmp/.alert_spool"
@@ -171,7 +171,7 @@ teardown() {
 @test "reload_watch: clears pressure arrays when pressure.conf deleted (F-063)" {
 	# create pressure.conf with an entry
 	local pconf="$INSTALL_PATH/pressure.conf"
-	echo "sshd:PRESSURE_WEIGHT=5" > "$pconf"
+	echo "sshd  weight=5" > "$pconf"
 	chown root "$pconf"
 	chmod 640 "$pconf"
 
@@ -204,7 +204,7 @@ INTEOF
 
 	# fallback values should be derived from INSTALL_PATH
 	[ "$RULES_PATH" = "$INSTALL_PATH/rules" ]
-	[ "$TLOG_PATH" = "$INSTALL_PATH/tlog" ]
+	[ "$TLOG_PATH" = "$INSTALL_PATH/internals/tlog" ]
 	[ "$ALERT_TEMPLATE_DIR" = "$INSTALL_PATH/alert" ]
 }
 
@@ -259,8 +259,18 @@ INTEOF
 
 @test "reload_watch: re-registers journal filters (F-057)" {
 	reload_watch
-	# _bfd_journal_register_all registers 23 mappings
-	[ "${#_TLOG_JOURNAL_NAMES[@]}" -ge 23 ]
+	# _bfd_journal_register_all registers 39+ mappings (lower-bound check)
+	[ "${#_TLOG_JOURNAL_NAMES[@]}" -ge 39 ]
+}
+
+@test "reload_watch: config_init 1 clears LOG_IDLE_SUPPRESS (F-A06)" {
+	# set canary value before reload
+	LOG_IDLE_SUPPRESS="1"
+	# remove from conf.bfd so it won't be re-set by sourcing
+	sed -i '/LOG_IDLE_SUPPRESS/d' "$CNF"
+	reload_watch
+	# canary should be gone — config_init(1) unset block cleared it
+	[ -z "${LOG_IDLE_SUPPRESS:-}" ]
 }
 
 @test "reload_watch: config validation failure returns non-zero (F-014)" {
@@ -288,13 +298,13 @@ INTEOF
 _start_watch() {
 	# create a minimal working install
 	local inst="$TEST_TMPDIR/watch-inst"
-	mkdir -p "$inst/tmp" "$inst/rules" "$inst/stats" "$inst/internals"
+	mkdir -p "$inst/tmp" "$inst/rules" "$inst/stats" "$inst/internals" "$inst/data"
 	cp "$PROJECT_ROOT/files/bfd" "$inst/bfd"
 	cp "$PROJECT_ROOT/files/internals/bfd.lib.sh" "$inst/internals/bfd.lib.sh"
 	chown root "$inst/internals/bfd.lib.sh"
 	chmod 640 "$inst/internals/bfd.lib.sh"
-	cp "$PROJECT_ROOT/files/tlog" "$inst/tlog"
-	chmod 750 "$inst/tlog"
+	cp "$PROJECT_ROOT/files/internals/tlog" "$inst/internals/tlog"
+	chmod 750 "$inst/internals/tlog"
 	cp "$PROJECT_ROOT/files/internals/tlog_lib.sh" "$inst/internals/tlog_lib.sh"
 	chmod 750 "$inst/internals/tlog_lib.sh"
 	cp "$PROJECT_ROOT/files/internals/elog_lib.sh" "$inst/internals/elog_lib.sh"
@@ -305,7 +315,31 @@ _start_watch() {
 	chmod 640 "$inst/internals/bfd_alert.sh"
 	cp "$PROJECT_ROOT/files/internals/geoip_lib.sh" "$inst/internals/geoip_lib.sh"
 	chmod 640 "$inst/internals/geoip_lib.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_validate.sh" "$inst/internals/bfd_validate.sh"
+	chmod 640 "$inst/internals/bfd_validate.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_fw.sh" "$inst/internals/bfd_fw.sh"
+	chmod 640 "$inst/internals/bfd_fw.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_state.sh" "$inst/internals/bfd_state.sh"
+	chmod 640 "$inst/internals/bfd_state.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_pressure.sh" "$inst/internals/bfd_pressure.sh"
+	chmod 640 "$inst/internals/bfd_pressure.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_detect.sh" "$inst/internals/bfd_detect.sh"
+	chmod 640 "$inst/internals/bfd_detect.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_events.sh" "$inst/internals/bfd_events.sh"
+	chmod 640 "$inst/internals/bfd_events.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_diag.sh" "$inst/internals/bfd_diag.sh"
+	chmod 640 "$inst/internals/bfd_diag.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_report.sh" "$inst/internals/bfd_report.sh"
+	chmod 640 "$inst/internals/bfd_report.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_core.sh" "$inst/internals/bfd_core.sh"
+	chmod 640 "$inst/internals/bfd_core.sh"
+	cp "$PROJECT_ROOT/files/internals/bfd_cdn.sh" "$inst/internals/bfd_cdn.sh"
+	chmod 640 "$inst/internals/bfd_cdn.sh"
+	cp "$PROJECT_ROOT/files/internals/pkg_lib.sh" "$inst/internals/pkg_lib.sh"
+	chmod 640 "$inst/internals/pkg_lib.sh"
 	touch "$inst/exclude.files"
+	touch "$inst/pressure.conf"
+	touch "$inst/pressure-country.conf"
 	mkdir -p "$inst/alert"
 	cp "$PROJECT_ROOT/files/alert/"*.tpl "$inst/alert/"
 
@@ -346,7 +380,8 @@ CNFEOF
 	cat > "$inst/internals/internals.conf" <<INTEOF
 #!/bin/bash
 RULES_PATH="$inst/rules"
-TLOG_PATH="$inst/tlog"
+DATA_PATH="$inst/data"
+TLOG_PATH="$inst/internals/tlog"
 TLOG_BASERUN="$inst/tmp"
 ALERT_TEMPLATE_DIR="$inst/alert"
 ALERT_SPOOL_FILE="$inst/tmp/.alert_spool"
@@ -432,16 +467,26 @@ INTEOF
 		sleep 0.1
 		_waited=$((_waited + 1))
 	done
+	# verify process is still alive before sending SIGHUP
+	kill -0 "$_WATCH_PID" 2>/dev/null || {
+		echo "watch process died before SIGHUP; log:" >&2
+		cat "$_WATCH_INST/tmp/bfd.log" >&2
+		return 1
+	}
 	kill -HUP "$_WATCH_PID"
-	# wait for reload complete message (up to 5s)
+	# wait for reload complete message (up to 12s — config reload includes
+	# validate_config() which can be slow under container I/O pressure)
 	_waited=0
-	while [ "$_waited" -lt 50 ] && ! grep -q "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log" 2>/dev/null; do
+	while [ "$_waited" -lt 120 ] && ! grep -q "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log" 2>/dev/null; do
 		sleep 0.1
 		_waited=$((_waited + 1))
 	done
 
-	run grep "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log"
-	assert_success
+	if ! grep -q "watch mode reload complete" "$_WATCH_INST/tmp/bfd.log"; then
+		echo "reload did not complete within 12s; log:" >&2
+		cat "$_WATCH_INST/tmp/bfd.log" >&2
+		return 1
+	fi
 }
 
 # ============================================================

@@ -5,6 +5,7 @@
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load '../helpers/uat-bfd'
+load '../helpers/assert-bfd'
 load '../infra/lib/uat-helpers'
 
 setup_file() {
@@ -33,8 +34,7 @@ teardown_file() {
     run bfd -s
     assert_success
     # Ignored IP should NOT appear in bans.active
-    run grep -c 192.0.2.40 /usr/local/bfd/tmp/bans.active
-    assert_failure
+    refute_banned 192.0.2.40
 }
 
 # bats test_tags=uat,uat:ignore-lists
@@ -43,6 +43,5 @@ teardown_file() {
     uat_bfd_clear_cursors
     run bfd -s
     assert_success
-    run grep -c 192.0.2.41 /usr/local/bfd/tmp/bans.active
-    assert_success
+    assert_banned 192.0.2.41
 }

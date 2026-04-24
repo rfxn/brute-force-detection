@@ -206,7 +206,7 @@ _load_all_cc_codes() {
 
 @test "cron.daily: skips refresh when ipcountry.dat is fresh" {
 	# Create a fresh ipcountry.dat (just touched, mtime = now)
-	touch "$INSTALL_PATH/ipcountry.dat"
+	touch "$DATA_PATH/ipcountry.dat"
 	# Create a mock update script that writes a marker
 	cat > "$INSTALL_PATH/update-ipcountry.sh" << 'SCRIPT'
 #!/bin/bash
@@ -215,7 +215,7 @@ SCRIPT
 	chmod +x "$INSTALL_PATH/update-ipcountry.sh"
 
 	# Run the staleness check logic directly
-	_dat="$INSTALL_PATH/ipcountry.dat"
+	_dat="$DATA_PATH/ipcountry.dat"
 	_age=$(( $(date +%s) - $(stat -c %Y "$_dat") ))
 	# Fresh file: age should be < 2592000
 	[ "$_age" -lt 2592000 ]
@@ -225,8 +225,8 @@ SCRIPT
 
 @test "cron.daily: triggers refresh when ipcountry.dat is stale" {
 	# Create a stale ipcountry.dat (mtime = 31 days ago)
-	touch "$INSTALL_PATH/ipcountry.dat"
-	touch -d "31 days ago" "$INSTALL_PATH/ipcountry.dat"
+	touch "$DATA_PATH/ipcountry.dat"
+	touch -d "31 days ago" "$DATA_PATH/ipcountry.dat"
 	# Create a mock update script that writes a marker
 	cat > "$INSTALL_PATH/update-ipcountry.sh" << 'SCRIPT'
 #!/bin/bash
@@ -235,7 +235,7 @@ SCRIPT
 	chmod +x "$INSTALL_PATH/update-ipcountry.sh"
 
 	# Run the staleness check logic
-	_dat="$INSTALL_PATH/ipcountry.dat"
+	_dat="$DATA_PATH/ipcountry.dat"
 	_age=$(( $(date +%s) - $(stat -c %Y "$_dat") ))
 	if [ "$_age" -gt 2592000 ]; then
 		INSTALL_PATH="$INSTALL_PATH" "$INSTALL_PATH/update-ipcountry.sh" >/dev/null 2>&1 || true
@@ -244,10 +244,10 @@ SCRIPT
 }
 
 @test "cron.daily: skips refresh when update-ipcountry.sh missing" {
-	touch "$INSTALL_PATH/ipcountry.dat"
-	touch -d "31 days ago" "$INSTALL_PATH/ipcountry.dat"
+	touch "$DATA_PATH/ipcountry.dat"
+	touch -d "31 days ago" "$DATA_PATH/ipcountry.dat"
 	# No update-ipcountry.sh exists
-	_dat="$INSTALL_PATH/ipcountry.dat"
+	_dat="$DATA_PATH/ipcountry.dat"
 	if [ -x "$INSTALL_PATH/update-ipcountry.sh" ] && [ -f "$_dat" ]; then
 		_age=$(( $(date +%s) - $(stat -c %Y "$_dat") ))
 		if [ "$_age" -gt 2592000 ]; then
@@ -265,7 +265,7 @@ echo "UPDATED" > "${INSTALL_PATH}/tmp/.update-ran"
 SCRIPT
 	chmod +x "$INSTALL_PATH/update-ipcountry.sh"
 
-	_dat="$INSTALL_PATH/ipcountry.dat"
+	_dat="$DATA_PATH/ipcountry.dat"
 	if [ -x "$INSTALL_PATH/update-ipcountry.sh" ] && [ -f "$_dat" ]; then
 		_age=$(( $(date +%s) - $(stat -c %Y "$_dat") ))
 		if [ "$_age" -gt 2592000 ]; then

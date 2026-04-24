@@ -1,0 +1,18 @@
+# Exclude dev-only artifacts from release archives (git archive, GitHub downloads)
+tests/              export-ignore
+pkg/                export-ignore
+docs/               export-ignore
+audit-output/       export-ignore
+.github/            export-ignore
+.rdf/               export-ignore
+.claude/            export-ignore
+CLAUDE.md           export-ignore
+PLAN*.md            export-ignore
+AUDIT.md            export-ignore
+MEMORY.md           export-ignore
+REGR.md             export-ignore
+PRESSURE.md         export-ignore
+.dockerignore       export-ignore
+.gitattributes      export-ignore
+.gitmodules         export-ignore
+.shellcheckrc       export-ignore

@@ -1,5 +1,5 @@
 %define name    bfd
-%define version 2.0.1
+%define version 2.0.2
 %define release 1%{?dist}
 
 # Legacy install path used by install.sh — symlink farm target
@@ -47,17 +47,18 @@ and email alerting.
 cp files/internals/internals.conf files/internals.conf.pkg
 sed -i \
     -e 's|\$INSTALL_PATH/rules|/usr/share/bfd/rules|' \
-    -e 's|\$INSTALL_PATH/tlog|/usr/lib/bfd/tlog|' \
+    -e 's|\$INSTALL_PATH/internals/tlog|/usr/lib/bfd/internals/tlog|' \
     -e 's|\$INSTALL_PATH/tmp|/var/lib/bfd/tmp|' \
     -e 's|\$INSTALL_PATH/alert"|/usr/lib/bfd/alert"|' \
     -e 's|\$INSTALL_PATH/exclude\.files|/etc/bfd/exclude.files|' \
     -e 's|\$INSTALL_PATH/lock\.utime|/var/lib/bfd/lock.utime|' \
     -e 's|\$INSTALL_PATH/pressure\.conf|/etc/bfd/pressure.conf|' \
-    -e 's|\$INSTALL_PATH/thresholds\.conf|/etc/bfd/thresholds.conf|' \
+    -e 's|\${DATA_PATH:-\$INSTALL_PATH/data}|/usr/share/bfd/data|' \
+    -e 's|\$DATA_PATH|/usr/share/bfd/data|' \
     files/internals.conf.pkg
 
 cp files/exclude.files files/exclude.files.pkg
-sed -i 's|/usr/local/bfd/ignore\.hosts|/etc/bfd/ignore.hosts|g' files/exclude.files.pkg
+sed -i 's|/usr/local/bfd/ignore\.hosts$|/etc/bfd/ignore.hosts|' files/exclude.files.pkg
 
 cp cron cron.pkg
 sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' cron.pkg
@@ -73,6 +74,9 @@ sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.service.pkg
 cp bfd-watch.init bfd-watch.init.pkg
 sed -i 's|/usr/local/sbin/bfd|/usr/sbin/bfd|g' bfd-watch.init.pkg
 
+cp files/internals/tlog files/tlog.pkg
+sed -i 's|BASERUN="${BASERUN:-/tmp}"|BASERUN="${BASERUN:-/var/lib/bfd/tmp}"|' files/tlog.pkg
+
 %install
 rm -rf %{buildroot}
 
@@ -83,18 +87,28 @@ install -D -m 755 files/bfd %{buildroot}/usr/sbin/bfd
 install -D -m 644 files/internals/bfd.lib.sh %{buildroot}/usr/lib/bfd/internals/bfd.lib.sh
 install -D -m 644 files/internals/tlog_lib.sh %{buildroot}/usr/lib/bfd/internals/tlog_lib.sh
 install -D -m 644 files/internals/elog_lib.sh %{buildroot}/usr/lib/bfd/internals/elog_lib.sh
-install -D -m 755 files/tlog %{buildroot}/usr/lib/bfd/tlog
+install -D -m 755 files/tlog.pkg %{buildroot}/usr/lib/bfd/internals/tlog
 install -D -m 644 files/internals/alert_lib.sh %{buildroot}/usr/lib/bfd/internals/alert_lib.sh
 install -D -m 644 files/internals/bfd_alert.sh %{buildroot}/usr/lib/bfd/internals/bfd_alert.sh
 install -D -m 644 files/internals/geoip_lib.sh %{buildroot}/usr/lib/bfd/internals/geoip_lib.sh
 install -D -m 644 files/internals/pkg_lib.sh %{buildroot}/usr/lib/bfd/internals/pkg_lib.sh
 install -D -m 644 files/internals/bfd_report.sh %{buildroot}/usr/lib/bfd/internals/bfd_report.sh
+install -D -m 644 files/internals/bfd_validate.sh %{buildroot}/usr/lib/bfd/internals/bfd_validate.sh
+install -D -m 644 files/internals/bfd_fw.sh %{buildroot}/usr/lib/bfd/internals/bfd_fw.sh
+install -D -m 644 files/internals/bfd_state.sh %{buildroot}/usr/lib/bfd/internals/bfd_state.sh
+install -D -m 644 files/internals/bfd_pressure.sh %{buildroot}/usr/lib/bfd/internals/bfd_pressure.sh
+install -D -m 644 files/internals/bfd_detect.sh %{buildroot}/usr/lib/bfd/internals/bfd_detect.sh
+install -D -m 644 files/internals/bfd_events.sh %{buildroot}/usr/lib/bfd/internals/bfd_events.sh
+install -D -m 644 files/internals/bfd_diag.sh %{buildroot}/usr/lib/bfd/internals/bfd_diag.sh
+install -D -m 644 files/internals/bfd_core.sh %{buildroot}/usr/lib/bfd/internals/bfd_core.sh
+install -D -m 644 files/internals/bfd_cdn.sh %{buildroot}/usr/lib/bfd/internals/bfd_cdn.sh
 install -d -m 755 %{buildroot}/usr/lib/bfd/alert
 for tpl in files/alert/*.tpl; do
     install -m 644 "$tpl" %{buildroot}/usr/lib/bfd/alert/
 done
 install -d -m 755 %{buildroot}/usr/lib/bfd/alert/custom.d
 install -D -m 755 files/update-ipcountry.sh %{buildroot}/usr/lib/bfd/update-ipcountry.sh
+install -D -m 755 files/update-cdn-providers.sh %{buildroot}/usr/lib/bfd/update-cdn-providers.sh
 install -D -m 755 importconf %{buildroot}/usr/lib/bfd/importconf
 
 # Config files (noreplace)
@@ -104,9 +118,11 @@ install -D -m 640 files/pressure.conf %{buildroot}/etc/bfd/pressure.conf
 install -D -m 640 files/pressure-country.conf %{buildroot}/etc/bfd/pressure-country.conf
 install -D -m 640 files/exclude.files.pkg %{buildroot}/etc/bfd/exclude.files
 install -D -m 640 files/ignore.hosts %{buildroot}/etc/bfd/ignore.hosts
+install -D -m 640 files/cdn-providers.conf %{buildroot}/etc/bfd/cdn-providers.conf
 
 # Data files
-install -D -m 644 files/ipcountry.dat %{buildroot}/usr/share/bfd/ipcountry.dat
+install -d -m 755 %{buildroot}/usr/share/bfd/data
+install -D -m 644 files/data/ipcountry.dat %{buildroot}/usr/share/bfd/data/ipcountry.dat
 install -d -m 755 %{buildroot}/usr/share/bfd/rules
 for rule in files/rules/*; do
     install -m 644 "$rule" %{buildroot}/usr/share/bfd/rules/
@@ -115,6 +131,9 @@ done
 # State directories
 install -d -m 750 %{buildroot}/var/lib/bfd/tmp
 install -d -m 750 %{buildroot}/var/lib/bfd/stats
+
+# Log directory
+install -d -m 750 %{buildroot}/var/log/bfd
 
 # Systemd units
 install -D -m 644 bfd.service.pkg %{buildroot}/usr/lib/systemd/system/bfd.service
@@ -155,20 +174,38 @@ ln -s /usr/lib/bfd/internals/bfd_alert.sh %{buildroot}%{legacy_path}/internals/b
 ln -s /usr/lib/bfd/internals/geoip_lib.sh %{buildroot}%{legacy_path}/internals/geoip_lib.sh
 ln -s /usr/lib/bfd/internals/pkg_lib.sh %{buildroot}%{legacy_path}/internals/pkg_lib.sh
 ln -s /usr/lib/bfd/internals/bfd_report.sh %{buildroot}%{legacy_path}/internals/bfd_report.sh
+ln -s /usr/lib/bfd/internals/bfd_validate.sh %{buildroot}%{legacy_path}/internals/bfd_validate.sh
+ln -s /usr/lib/bfd/internals/bfd_fw.sh %{buildroot}%{legacy_path}/internals/bfd_fw.sh
+ln -s /usr/lib/bfd/internals/bfd_state.sh %{buildroot}%{legacy_path}/internals/bfd_state.sh
+ln -s /usr/lib/bfd/internals/bfd_pressure.sh %{buildroot}%{legacy_path}/internals/bfd_pressure.sh
+ln -s /usr/lib/bfd/internals/bfd_detect.sh %{buildroot}%{legacy_path}/internals/bfd_detect.sh
+ln -s /usr/lib/bfd/internals/bfd_events.sh %{buildroot}%{legacy_path}/internals/bfd_events.sh
+ln -s /usr/lib/bfd/internals/bfd_diag.sh %{buildroot}%{legacy_path}/internals/bfd_diag.sh
+ln -s /usr/lib/bfd/internals/bfd_core.sh %{buildroot}%{legacy_path}/internals/bfd_core.sh
+ln -s /usr/lib/bfd/internals/bfd_cdn.sh %{buildroot}%{legacy_path}/internals/bfd_cdn.sh
 ln -s /etc/bfd/internals.conf %{buildroot}%{legacy_path}/internals/internals.conf
-ln -s /usr/lib/bfd/tlog %{buildroot}%{legacy_path}/tlog
+ln -s /usr/lib/bfd/internals/.symlink-manifest %{buildroot}%{legacy_path}/internals/.symlink-manifest
+ln -s /usr/lib/bfd/internals/tlog %{buildroot}%{legacy_path}/internals/tlog
 ln -s /usr/lib/bfd/alert %{buildroot}%{legacy_path}/alert
 ln -s /usr/lib/bfd/update-ipcountry.sh %{buildroot}%{legacy_path}/update-ipcountry.sh
+ln -s /usr/lib/bfd/update-cdn-providers.sh %{buildroot}%{legacy_path}/update-cdn-providers.sh
 ln -s /usr/lib/bfd/importconf %{buildroot}%{legacy_path}/importconf
 ln -s /etc/bfd/conf.bfd %{buildroot}%{legacy_path}/conf.bfd
 ln -s /etc/bfd/pressure.conf %{buildroot}%{legacy_path}/pressure.conf
 ln -s /etc/bfd/pressure-country.conf %{buildroot}%{legacy_path}/pressure-country.conf
 ln -s /etc/bfd/exclude.files %{buildroot}%{legacy_path}/exclude.files
 ln -s /etc/bfd/ignore.hosts %{buildroot}%{legacy_path}/ignore.hosts
-ln -s /usr/share/bfd/ipcountry.dat %{buildroot}%{legacy_path}/ipcountry.dat
+ln -s /etc/bfd/cdn-providers.conf %{buildroot}%{legacy_path}/cdn-providers.conf
+ln -s /usr/share/bfd/data %{buildroot}%{legacy_path}/data
+ln -s /usr/share/bfd/data/ipcountry.dat %{buildroot}%{legacy_path}/ipcountry.dat
 ln -s /usr/share/bfd/rules %{buildroot}%{legacy_path}/rules
 ln -s /var/lib/bfd/tmp %{buildroot}%{legacy_path}/tmp
 ln -s /var/lib/bfd/stats %{buildroot}%{legacy_path}/stats
+
+# Symlink manifest for runtime self-healing (pkg_lib v1.0.6)
+printf '# pkg_lib:symlink-manifest:1\n/usr/local/sbin/bfd\t/usr/sbin/bfd\n' \
+    > %{buildroot}/usr/lib/bfd/internals/.symlink-manifest
+chmod 640 %{buildroot}/usr/lib/bfd/internals/.symlink-manifest
 
 # /usr/local/sbin/bfd -> /usr/sbin/bfd
 install -d -m 755 %{buildroot}/usr/local/sbin
@@ -211,17 +248,60 @@ if [ -f "%{legacy_path}/bfd" ] && [ ! -L "%{legacy_path}/internals/bfd.lib.sh" ]
     # Remove old install — package will lay down new files
     rm -rf "%{legacy_path}"
 fi
+# Defensive: clean up orphaned source-install directories that would collide
+# with package symlinks (alert/, data/, rules/, tmp/, stats/). Triggers when
+# /usr/local/bfd/bfd is missing but stale dirs remain (e.g. partial uninstall,
+# manual binary removal). All five are package symlinks in installed packages,
+# so the `[ ! -L ]` guard protects package-to-package upgrades.
+for _orphan in alert data rules tmp stats; do
+    if [ -d "%{legacy_path}/$_orphan" ] && [ ! -L "%{legacy_path}/$_orphan" ]; then
+        rm -rf "%{legacy_path}/$_orphan"
+    fi
+done
+# internals/ is a real dir in BOTH source AND package installs, so the
+# `[ ! -L ]` check alone isn't enough. Distinguish by checking if bfd.lib.sh
+# inside is a real file (source install) vs symlink (package install).
+if [ -d "%{legacy_path}/internals" ] && [ ! -L "%{legacy_path}/internals" ] \
+   && [ -f "%{legacy_path}/internals/bfd.lib.sh" ] \
+   && [ ! -L "%{legacy_path}/internals/bfd.lib.sh" ]; then
+    rm -rf "%{legacy_path}/internals"
+fi
+# Same defense for ipcountry.dat — install.sh creates as file, package as symlink
+if [ -f "%{legacy_path}/ipcountry.dat" ] && [ ! -L "%{legacy_path}/ipcountry.dat" ]; then
+    rm -f "%{legacy_path}/ipcountry.dat"
+fi
 
 %post
+# Reload systemd if available (before importconf, matching DEB postinst)
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload 2>/dev/null || true
+fi
 # Run importconf if migrating from install.sh backup
 if [ -d "%{legacy_path}.bk.last" ]; then
     if [ -x /usr/lib/bfd/importconf ]; then
         INSTALL_PATH="%{legacy_path}" /usr/lib/bfd/importconf || true
     fi
 fi
-# Reload systemd if available
-if command -v systemctl >/dev/null 2>&1; then
-    systemctl daemon-reload 2>/dev/null || true
+# Background database downloads (matching install.sh pattern)
+if [ -x /usr/lib/bfd/update-ipcountry.sh ]; then
+    ( exec >/dev/null 2>&1; /usr/lib/bfd/update-ipcountry.sh || true ) &
+    disown 2>/dev/null || true
+fi
+if [ -x /usr/lib/bfd/update-cdn-providers.sh ]; then
+    _cdn_run=0
+    _cdn_val=$(awk -F= '/^CDN_ENABLE=/{gsub(/"/, "", $2); print $2; exit}' /etc/bfd/conf.bfd 2>/dev/null)
+    case "${_cdn_val:-auto}" in
+        1) _cdn_run=1 ;;
+        auto)
+            [ -f /etc/bfd/cdn-providers.conf ] && \
+                grep -qE '^[^#[:space:]]' /etc/bfd/cdn-providers.conf && \
+                _cdn_run=1
+            ;;
+    esac
+    if [ "$_cdn_run" = "1" ]; then
+        ( exec >/dev/null 2>&1; /usr/lib/bfd/update-cdn-providers.sh || true ) &
+        disown 2>/dev/null || true
+    fi
 fi
 
 %preun
@@ -268,10 +348,21 @@ fi
 /usr/lib/bfd/internals/geoip_lib.sh
 /usr/lib/bfd/internals/pkg_lib.sh
 /usr/lib/bfd/internals/bfd_report.sh
-/usr/lib/bfd/tlog
+/usr/lib/bfd/internals/bfd_validate.sh
+/usr/lib/bfd/internals/bfd_fw.sh
+/usr/lib/bfd/internals/bfd_state.sh
+/usr/lib/bfd/internals/bfd_pressure.sh
+/usr/lib/bfd/internals/bfd_detect.sh
+/usr/lib/bfd/internals/bfd_events.sh
+/usr/lib/bfd/internals/bfd_diag.sh
+/usr/lib/bfd/internals/bfd_core.sh
+/usr/lib/bfd/internals/bfd_cdn.sh
+/usr/lib/bfd/internals/tlog
+%attr(640,root,root) /usr/lib/bfd/internals/.symlink-manifest
 /usr/lib/bfd/alert/
 %dir %attr(755,root,root) /usr/lib/bfd/alert/custom.d
 /usr/lib/bfd/update-ipcountry.sh
+/usr/lib/bfd/update-cdn-providers.sh
 /usr/lib/bfd/importconf
 %config(noreplace) /etc/bfd/conf.bfd
 %config(noreplace) /etc/bfd/internals.conf
@@ -279,7 +370,9 @@ fi
 %config(noreplace) /etc/bfd/pressure-country.conf
 %config(noreplace) /etc/bfd/exclude.files
 %config(noreplace) /etc/bfd/ignore.hosts
-/usr/share/bfd/ipcountry.dat
+%config(noreplace) /etc/bfd/cdn-providers.conf
+%dir %attr(755,root,root) /usr/share/bfd/data
+/usr/share/bfd/data/ipcountry.dat
 /usr/share/bfd/rules/
 /usr/share/man/man1/bfd.1*
 /usr/share/bash-completion/completions/bfd
@@ -291,11 +384,12 @@ fi
 %if 0%{?el7}
 /etc/init.d/bfd-watch
 %endif
-/etc/cron.d/bfd
-/etc/cron.daily/bfd
+%config(noreplace) /etc/cron.d/bfd
+%config(noreplace) /etc/cron.daily/bfd
 /etc/logrotate.d/bfd
 %dir %attr(750,root,root) /var/lib/bfd/tmp
 %dir %attr(750,root,root) /var/lib/bfd/stats
+%dir %attr(750,root,root) /var/log/bfd
 # Symlink farm
 %{legacy_path}/internals/bfd.lib.sh
 %{legacy_path}/internals/tlog_lib.sh
@@ -305,16 +399,29 @@ fi
 %{legacy_path}/internals/geoip_lib.sh
 %{legacy_path}/internals/pkg_lib.sh
 %{legacy_path}/internals/bfd_report.sh
+%{legacy_path}/internals/bfd_validate.sh
+%{legacy_path}/internals/bfd_fw.sh
+%{legacy_path}/internals/bfd_state.sh
+%{legacy_path}/internals/bfd_pressure.sh
+%{legacy_path}/internals/bfd_detect.sh
+%{legacy_path}/internals/bfd_events.sh
+%{legacy_path}/internals/bfd_diag.sh
+%{legacy_path}/internals/bfd_core.sh
+%{legacy_path}/internals/bfd_cdn.sh
 %{legacy_path}/internals/internals.conf
-%{legacy_path}/tlog
+%{legacy_path}/internals/tlog
+%{legacy_path}/internals/.symlink-manifest
 %{legacy_path}/alert
 %{legacy_path}/update-ipcountry.sh
+%{legacy_path}/update-cdn-providers.sh
 %{legacy_path}/importconf
 %{legacy_path}/conf.bfd
 %{legacy_path}/pressure.conf
 %{legacy_path}/pressure-country.conf
 %{legacy_path}/exclude.files
 %{legacy_path}/ignore.hosts
+%{legacy_path}/cdn-providers.conf
+%{legacy_path}/data
 %{legacy_path}/ipcountry.dat
 %{legacy_path}/rules
 %{legacy_path}/tmp
@@ -322,6 +429,20 @@ fi
 /usr/local/sbin/bfd
 
 %changelog
+* Sat Apr 05 2026 R-fx Networks <proj@rfxn.com> - 2.0.2-1
+- CLI subcommand namespaces: ban, ignore, test, cdn, report, status
+- Ignore list management: add/remove/list/check with flock and CIDR support
+- Status sub-views: lock, cursors, pool, pressure
+- Bash completion with per-group verb expansion and typo suggestions
+- CDN/trusted proxy subsystem with ignore/exclude/derate treatment modes
+- Structured audit events (26 call sites) and audit.log logrotate
+- Symlink farm enforcement with sbin symlink manifest
+- Pressure config migrated to whitespace format with dual-format parsers
+- Deep-legacy portability: all coreutils use command prefix (CentOS 6)
+- Man page CDN, country weighting, SUBCOMMANDS, and sub-library documentation
+- Ban history search includes rotated archives
+- pam_generic journal fallback for rsyslog-less systems
+
 * Thu Feb 26 2026 R-fx Networks <proj@rfxn.com> - 2.0.1-1
 - Initial RPM package with FHS layout and symlink farm
 - Pressure model with exponential-decay scoring

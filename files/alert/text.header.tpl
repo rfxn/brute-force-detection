@@ -1,5 +1,3 @@
-BFD Alert for {{HOSTNAME}} ({{TIMESTAMP}} GMT {{TIME_ZONE}})
-===============================================================
-
-{{ALERT_COUNT}} host(s) banned.
+[BFD] {{HOSTNAME}} · {{TIMESTAMP}} {{TIME_ZONE}}
+{{ALERT_COUNT}} host(s) banned this scan.
 

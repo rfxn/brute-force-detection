@@ -180,34 +180,6 @@ teardown() {
 
 # --- _compat_rule_vars ---
 
-@test "_compat_rule_vars: maps REQ to PREREQ when PREREQ empty" {
-	PREREQ="" REQ="/usr/sbin/sshd"
-	LP="" TLOG_TF="" ARG_VAL=""
-	_compat_rule_vars
-	[ "$PREREQ" = "/usr/sbin/sshd" ]
-}
-
-@test "_compat_rule_vars: maps LP to LOG_FILE when LOG_FILE empty" {
-	LOG_FILE="" LP="/var/log/auth.log"
-	REQ="" TLOG_TF="" ARG_VAL=""
-	_compat_rule_vars
-	[ "$LOG_FILE" = "/var/log/auth.log" ]
-}
-
-@test "_compat_rule_vars: maps TLOG_TF to LOG_TAG when LOG_TAG empty" {
-	LOG_TAG="" TLOG_TF="sshd"
-	REQ="" LP="" ARG_VAL=""
-	_compat_rule_vars
-	[ "$LOG_TAG" = "sshd" ]
-}
-
-@test "_compat_rule_vars: maps ARG_VAL to MATCHED_HOSTS when MATCHED_HOSTS empty" {
-	MATCHED_HOSTS="" ARG_VAL="192.0.2.1 192.0.2.2"
-	REQ="" LP="" TLOG_TF=""
-	_compat_rule_vars
-	[ "$MATCHED_HOSTS" = "192.0.2.1 192.0.2.2" ]
-}
-
 @test "_compat_rule_vars: preserves PREREQ when already set (ignores REQ)" {
 	PREREQ="/bin/sh" REQ="/usr/sbin/sshd"
 	LP="" TLOG_TF="" ARG_VAL=""

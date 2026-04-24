@@ -11,8 +11,11 @@ PRESSURE_TRIP="40"
 # uncomment to route alerts for this rule to a different address
 # RULE_EMAIL=""
 
-# file must exist for rule to be active
-PREREQ="$AUTH_LOG_PATH"
+# PAM is a library, not a single service — no binary to check. Use the
+# universal PAM fallback config as existence test. The auth log file may not
+# exist on journald-only systems (RHEL 10+, Ubuntu minimal); _rule_tlog
+# handles the journal fallback when LOG_FILE is missing.
+PREREQ="/etc/pam.d/other"
 
 if [ -f "$PREREQ" ]; then
 	LOG_FILE="$AUTH_LOG_PATH"

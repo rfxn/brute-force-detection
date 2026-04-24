@@ -156,14 +156,14 @@ _perf_generate_logs() {
 	perf_timeout_check "pressure_dat_gen" "$_group_start" "$_timeout"
 
 	# generate ipcountry data (256 entries covers 10.0.0.x)
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 256
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 256
 	perf_timeout_check "ipcountry_dat_gen" "$_group_start" "$_timeout"
 
 	# create unique IP list (50 IPs)
 	local _ip_file="$INSTALL_PATH/tmp/perf_ips.txt"
 	awk -v n=50 'BEGIN {
-		for (i = 0; i < n; i++) {
-			o4 = i % 256; if (o4 == 0) o4 = 1
+		for (i = 1; i <= n; i++) {
+			o4 = i % 256
 			print "10.0.0." o4
 		}
 	}' /dev/null > "$_ip_file"
@@ -182,7 +182,7 @@ _perf_generate_logs() {
 	# batch country lookup
 	timer_start
 	local _cc_out
-	_cc_out=$(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_ip_file")
+	_cc_out=$(_batch_ip_to_country "$DATA_PATH/ipcountry.dat" < "$_ip_file")
 	ms=$(timer_elapsed_ms)
 	local cc_count
 	cc_count=$(echo "$_cc_out" | grep -c . 2>/dev/null || echo 0)
@@ -201,7 +201,7 @@ _perf_generate_logs() {
 	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
 
 	# create ipcountry for check()
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 256
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 256
 
 	# Create 4 mock rules that use _TLOG_PASSTHROUGH
 	create_mock_rule "sshd" "$(printf 'PREREQ=""\nLOG_FILE="%s"\nLOG_TAG="sshd"\n_TLOG_PASSTHROUGH="%s"\nMATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts "sshd.*Failed password for .* from <HOST>")\n' \
@@ -301,15 +301,15 @@ _perf_generate_logs() {
 	perf_timeout_check "pressure_dat_gen" "$_group_start" "$_timeout"
 
 	# generate ipcountry data (2048 entries)
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 2048
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 2048
 	perf_timeout_check "ipcountry_dat_gen" "$_group_start" "$_timeout"
 
 	# create unique IP list (500 IPs)
 	local _ip_file="$INSTALL_PATH/tmp/perf_ips.txt"
 	awk -v n=500 'BEGIN {
-		for (i = 0; i < n; i++) {
+		for (i = 1; i <= n; i++) {
 			o3 = int(i / 256) % 256
-			o4 = i % 256; if (o4 == 0) o4 = 1
+			o4 = i % 256
 			print "10.0." o3 "." o4
 		}
 	}' /dev/null > "$_ip_file"
@@ -328,7 +328,7 @@ _perf_generate_logs() {
 	# batch country lookup
 	timer_start
 	local _cc_out
-	_cc_out=$(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_ip_file")
+	_cc_out=$(_batch_ip_to_country "$DATA_PATH/ipcountry.dat" < "$_ip_file")
 	ms=$(timer_elapsed_ms)
 	local cc_count
 	cc_count=$(echo "$_cc_out" | grep -c . 2>/dev/null || echo 0)
@@ -347,7 +347,7 @@ _perf_generate_logs() {
 	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
 
 	# create ipcountry for check()
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 2048
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 2048
 
 	# Create 4 mock rules
 	create_mock_rule "sshd" "$(printf 'PREREQ=""\nLOG_FILE="%s"\nLOG_TAG="sshd"\n_TLOG_PASSTHROUGH="%s"\nMATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts "sshd.*Failed password for .* from <HOST>")\n' \
@@ -445,15 +445,15 @@ _perf_generate_logs() {
 	perf_timeout_check "pressure_dat_gen" "$_group_start" "$_timeout"
 
 	# generate ipcountry data (8192 entries for broader coverage)
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 8192
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 8192
 	perf_timeout_check "ipcountry_dat_gen" "$_group_start" "$_timeout"
 
 	# create unique IP list (2K IPs)
 	local _ip_file="$INSTALL_PATH/tmp/perf_ips.txt"
 	awk -v n=2000 'BEGIN {
-		for (i = 0; i < n; i++) {
+		for (i = 1; i <= n; i++) {
 			o3 = int(i / 256) % 256
-			o4 = i % 256; if (o4 == 0) o4 = 1
+			o4 = i % 256
 			print "10.0." o3 "." o4
 		}
 	}' /dev/null > "$_ip_file"
@@ -472,7 +472,7 @@ _perf_generate_logs() {
 	# batch country lookup
 	timer_start
 	local _cc_out
-	_cc_out=$(_batch_ip_to_country "$INSTALL_PATH/ipcountry.dat" < "$_ip_file")
+	_cc_out=$(_batch_ip_to_country "$DATA_PATH/ipcountry.dat" < "$_ip_file")
 	ms=$(timer_elapsed_ms)
 	local cc_count
 	cc_count=$(echo "$_cc_out" | grep -c . 2>/dev/null || echo 0)
@@ -491,7 +491,7 @@ _perf_generate_logs() {
 	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
 
 	# create ipcountry for check()
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 8192
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 8192
 
 	# Create 4 mock rules
 	create_mock_rule "sshd" "$(printf 'PREREQ=""\nLOG_FILE="%s"\nLOG_TAG="sshd"\n_TLOG_PASSTHROUGH="%s"\nMATCHED_HOSTS=$(_rule_tlog "$LOG_FILE" "$LOG_TAG" | extract_hosts "sshd.*Failed password for .* from <HOST>")\n' \
@@ -523,19 +523,19 @@ _perf_generate_logs() {
 #  Documents where BFD's operating modes diverge in performance.
 # ============================================================
 
-@test "perf: deviation -- scan vs standard tlog path (sshd, 2K lines)" {
+@test "perf: deviation -- scan vs standard tlog path + TLOG_FLOCK overhead (sshd, 2K lines)" {
 	local _timeout=30
 	local _group_start
 	_group_start=$(date +%s)
 
-	# Generate 2K sshd log (100% match for consistent extraction)
+	# Generate 2K sshd log once (shared across all measurements)
 	local _log_file="$INSTALL_PATH/tmp/perf_dev_sshd.log"
 	generate_sshd_log 2000 200 100 > "$_log_file"
 	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
 
 	LOG_SOURCE="file"
 
-	# --- Scan mode: _rule_tlog → tlog_read_full ---
+	# --- Scan mode: _rule_tlog -> tlog_read_full ---
 	_SCAN_MODE=1
 	_TLOG_PASSTHROUGH=""
 	timer_start
@@ -549,7 +549,7 @@ _perf_generate_logs() {
 	kpi_report "deviation.scan.sshd" "$scan_count lines in ${ms_scan}ms" ""
 	perf_timeout_check "scan_path" "$_group_start" "$_timeout"
 
-	# --- Standard mode: _rule_tlog → tlog_read (TLOG_FIRST_RUN=full) ---
+	# --- Standard mode (no flock): _rule_tlog -> tlog_read (TLOG_FIRST_RUN=full) ---
 	_SCAN_MODE=""
 	TLOG_FIRST_RUN="full"
 	TLOG_FLOCK=0
@@ -565,47 +565,14 @@ _perf_generate_logs() {
 	kpi_report "deviation.standard.sshd" "$std_count lines in ${ms_std}ms" ""
 	perf_timeout_check "standard_path" "$_group_start" "$_timeout"
 
-	# --- Delta ---
+	# --- Scan vs Standard delta ---
 	local delta=0
 	if [ "$ms_scan" -gt 0 ]; then
 		delta=$(( (ms_std - ms_scan) * 100 / (ms_scan + 1) ))
 	fi
 	kpi_report "deviation.scan_vs_standard" "scan=${ms_scan}ms standard=${ms_std}ms" "(${delta}% overhead)"
 
-	# cleanup
-	TLOG_FIRST_RUN="skip"
-}
-
-@test "perf: deviation -- TLOG_FLOCK overhead (sshd, 2K lines)" {
-	local _timeout=30
-	local _group_start
-	_group_start=$(date +%s)
-
-	# Generate 2K sshd log
-	local _log_file="$INSTALL_PATH/tmp/perf_dev_flock.log"
-	generate_sshd_log 2000 200 100 > "$_log_file"
-	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
-
-	LOG_SOURCE="file"
-	_SCAN_MODE=""
-	_TLOG_PASSTHROUGH=""
-	TLOG_FIRST_RUN="full"
-
-	# --- Without flock ---
-	TLOG_FLOCK=0
-	command rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
-	timer_start
-	local noflock_out
-	noflock_out=$(_rule_tlog "$_log_file" "sshd" | extract_hosts \
-		"sshd.*Failed password for .* from <HOST>")
-	local ms_noflock
-	ms_noflock=$(timer_elapsed_ms)
-	local noflock_count
-	noflock_count=$(echo "$noflock_out" | grep -c . 2>/dev/null || echo 0)
-	kpi_report "deviation.flock_off.sshd" "$noflock_count lines in ${ms_noflock}ms" ""
-	perf_timeout_check "flock_off" "$_group_start" "$_timeout"
-
-	# --- With flock ---
+	# --- Standard mode with flock (TLOG_FLOCK=1) ---
 	TLOG_FLOCK=1
 	command rm -f "$TLOG_BASERUN/sshd" "$TLOG_BASERUN/sshd.lock"
 	timer_start
@@ -619,12 +586,14 @@ _perf_generate_logs() {
 	kpi_report "deviation.flock_on.sshd" "$flock_count lines in ${ms_flock}ms" ""
 	perf_timeout_check "flock_on" "$_group_start" "$_timeout"
 
-	# --- Delta ---
-	local delta=0
-	if [ "$ms_noflock" -gt 0 ]; then
-		delta=$(( (ms_flock - ms_noflock) * 100 / (ms_noflock + 1) ))
+	# --- TLOG_FLOCK delta (no-flock from standard path above vs flock) ---
+	# ms_std is the no-flock baseline (TLOG_FLOCK=0 standard path)
+	kpi_report "deviation.flock_off.sshd" "$std_count lines in ${ms_std}ms" ""
+	delta=0
+	if [ "$ms_std" -gt 0 ]; then
+		delta=$(( (ms_flock - ms_std) * 100 / (ms_std + 1) ))
 	fi
-	kpi_report "deviation.tlog_flock" "off=${ms_noflock}ms on=${ms_flock}ms" "(${delta}% overhead)"
+	kpi_report "deviation.tlog_flock" "off=${ms_std}ms on=${ms_flock}ms" "(${delta}% overhead)"
 
 	# cleanup
 	TLOG_FIRST_RUN="skip"
@@ -640,7 +609,7 @@ _perf_generate_logs() {
 	_perf_generate_logs "dev" 1000 50 100
 	perf_timeout_check "log_generation" "$_group_start" "$_timeout"
 
-	generate_ipcountry_dat "$INSTALL_PATH/ipcountry.dat" 256
+	generate_ipcountry_dat "$DATA_PATH/ipcountry.dat" 256
 
 	# Create 4 mock rules using _TLOG_PASSTHROUGH (tlog path is identical;
 	# only the ban execution path differs between DRY_RUN modes)

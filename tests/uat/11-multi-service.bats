@@ -6,6 +6,7 @@
 load '/usr/local/lib/bats/bats-support/load'
 load '/usr/local/lib/bats/bats-assert/load'
 load '../helpers/uat-bfd'
+load '../helpers/assert-bfd'
 load '../infra/lib/uat-helpers'
 
 setup_file() {
@@ -70,9 +71,8 @@ teardown_file() {
     uat_bfd_clear_cursors
     uat_capture "multi-service" bfd -s
     assert_success
-    # At minimum sshd IP should be banned (dovecot/postfix depend on rule activation)
-    run grep -c 192.0.2.80 /usr/local/bfd/tmp/bans.active
-    assert_success
+    # sshd IP must be banned; dovecot/postfix depend on rule activation in container
+    assert_banned 192.0.2.80
 }
 
 # bats test_tags=uat,uat:multi-service

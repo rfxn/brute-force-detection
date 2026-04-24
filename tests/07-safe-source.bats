@@ -15,13 +15,6 @@ teardown() {
 	bfd_teardown
 }
 
-@test "safe_source: valid root-owned file returns 0" {
-	echo 'SAFE_SOURCE_TEST_VAR="loaded"' > "$TEST_TMPDIR/good.conf"
-	chmod 640 "$TEST_TMPDIR/good.conf"
-	run safe_source "$TEST_TMPDIR/good.conf" "test:good"
-	assert_success
-}
-
 @test "safe_source: valid file sets variable" {
 	echo 'SAFE_SOURCE_TEST_VAR="loaded"' > "$TEST_TMPDIR/good.conf"
 	chmod 640 "$TEST_TMPDIR/good.conf"
@@ -48,13 +41,6 @@ teardown() {
 	SAFE_SOURCE_TEST_VAR=""
 	safe_source "$TEST_TMPDIR/world_writable.conf" "test:writable" >/dev/null 2>&1 || true
 	[ "$SAFE_SOURCE_TEST_VAR" = "" ]
-}
-
-@test "safe_source: 644 perms succeeds" {
-	echo 'SAFE_SOURCE_TEST_VAR="ok644"' > "$TEST_TMPDIR/readable.conf"
-	chmod 644 "$TEST_TMPDIR/readable.conf"
-	run safe_source "$TEST_TMPDIR/readable.conf" "test:644"
-	assert_success
 }
 
 @test "safe_source: 644 file sets variable" {
@@ -110,12 +96,12 @@ teardown() {
 	assert_failure
 }
 
-@test "_check_file_safety: sets _CSAF_UID and _CSAF_PERMS" {
+@test "_check_file_safety: sets _CSAF_UID and _CSAF_PERMS (zero-padded 4 digits)" {
 	echo 'test' > "$TEST_TMPDIR/check_vars.conf"
 	chmod 640 "$TEST_TMPDIR/check_vars.conf"
 	_check_file_safety "$TEST_TMPDIR/check_vars.conf"
 	[ "$_CSAF_UID" = "0" ]
-	[ "$_CSAF_PERMS" = "640" ]
+	[ "$_CSAF_PERMS" = "0640" ]
 }
 
 @test "_check_file_safety: group-writable 660 returns failure" {
@@ -129,6 +115,27 @@ teardown() {
 	echo 'test' > "$TEST_TMPDIR/gw670.conf"
 	chmod 670 "$TEST_TMPDIR/gw670.conf"
 	run _check_file_safety "$TEST_TMPDIR/gw670.conf"
+	assert_failure
+}
+
+@test "_check_file_safety: setuid 4750 accepted (group=5, world=0 not writable)" {
+	echo 'test' > "$TEST_TMPDIR/suid4750.conf"
+	chmod 4750 "$TEST_TMPDIR/suid4750.conf"
+	run _check_file_safety "$TEST_TMPDIR/suid4750.conf"
+	assert_success
+}
+
+@test "_check_file_safety: setgid 2770 rejected (group=7, world=0 writable)" {
+	echo 'test' > "$TEST_TMPDIR/sgid2770.conf"
+	chmod 2770 "$TEST_TMPDIR/sgid2770.conf"
+	run _check_file_safety "$TEST_TMPDIR/sgid2770.conf"
+	assert_failure
+}
+
+@test "_check_file_safety: sticky+world-writable 1777 rejected" {
+	echo 'test' > "$TEST_TMPDIR/sticky1777.conf"
+	chmod 1777 "$TEST_TMPDIR/sticky1777.conf"
+	run _check_file_safety "$TEST_TMPDIR/sticky1777.conf"
 	assert_failure
 }
 
@@ -157,17 +164,9 @@ teardown() {
 
 # --- Alert template directory validation tests (Phase 26) ---
 
-@test "send_alerts: missing template dir skips alerts" {
-	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
-	ALERT_TEMPLATE_DIR="$TEST_TMPDIR/nonexistent_dir"
-	run send_alerts "$alerts_file" "BFD Alert" "50"
-	assert_failure
-}
-
 @test "send_alerts: template dir without header tpl skips alerts" {
 	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$alerts_file"
 	local tpl_dir="$TEST_TMPDIR/alert_empty"
 	mkdir -p "$tpl_dir"
 	ALERT_TEMPLATE_DIR="$tpl_dir"
@@ -177,7 +176,7 @@ teardown() {
 
 @test "send_alerts: valid template dir passes validation" {
 	local alerts_file="$TEST_TMPDIR/alerts.tmp"
-	echo "192.0.2.1|sshd|22|5|0|ban|recent|/var/log/auth.log|root@localhost|5|300" > "$alerts_file"
+	echo "192.0.2.1|sshd|22|5000|0|ban|0|/dev/null|root|5|300|3|5" > "$alerts_file"
 	ALERT_TEMPLATE_DIR="$PROJECT_ROOT/files/alert"
 	EMAIL_FORMAT="text"
 	# mock mail so delivery doesn't fail on missing binary

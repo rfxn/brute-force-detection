@@ -12,12 +12,12 @@
 				},
 				{
 					"name": "Top Threats",
-					"value": "{{REPORT_TOP_IPS_BRIEF}}",
+					"value": "{{REPORT_TOP_IPS_BRIEF_JSON}}",
 					"inline": false
 				},
 				{
 					"name": "Services",
-					"value": "{{REPORT_SERVICES_BRIEF}}",
+					"value": "{{REPORT_SERVICES_BRIEF_JSON}}",
 					"inline": false
 				}
 			],

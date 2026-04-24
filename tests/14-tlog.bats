@@ -9,7 +9,7 @@ load 'helpers/bfd-common'
 
 setup() {
 	bfd_common_setup
-	TLOG="$PROJECT_ROOT/files/tlog"
+	TLOG="$PROJECT_ROOT/files/internals/tlog"
 	export BASERUN="$TEST_TMPDIR/tracking"
 	mkdir -p "$BASERUN"
 }

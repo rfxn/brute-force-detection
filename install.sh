@@ -1,5 +1,5 @@
 #!/bin/bash
-# Brute Force Detection 2.0.1 <bfd@rfxn.com>
+# Brute Force Detection 2.0.2 <bfd@rfxn.com>
 ###
 # Copyright (C) 1999-2026, R-fx Networks <proj@rfxn.com>
 # Copyright (C) 2026, Ryan MacDonald <ryan@rfxn.com>
@@ -20,11 +20,11 @@
 ###
 #
 set -eu
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 INSPATH="${INSTALL_PATH:-/usr/local/bfd}"
 BINPATH="${BIN_PATH:-/usr/local/sbin/bfd}"
-VER="2.0.1"
+VER="2.0.2"
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "error: install.sh must be run as root."
@@ -38,6 +38,23 @@ PKG_BACKUP_SYMLINK="bfd.bk.last"
 . ./files/internals/pkg_lib.sh
 
 install_files(){
+	# Legacy cleanup: pre-2.0.2 installs shipped tlog as a user-facing symlink at
+	# $(dirname $BINPATH)/tlog (typically /usr/local/sbin/tlog) pointing at the
+	# top-level $INSPATH/tlog wrapper. 2.0.2 relocates the wrapper under
+	# internals/ and drops the user-facing symlink entirely. Remove only if it's
+	# a symlink pointing at a known-ours target; leave regular files (user data)
+	# or unexpected targets alone.
+	local _legacy_tlog_link _legacy_tlog_target
+	_legacy_tlog_link="$(command dirname "$BINPATH")/tlog"
+	if [ -L "$_legacy_tlog_link" ]; then
+		_legacy_tlog_target="$(command readlink "$_legacy_tlog_link")"
+		case "$_legacy_tlog_target" in
+			"$INSPATH/tlog"|"$INSPATH/internals/tlog")
+				command rm -f "$_legacy_tlog_link"
+				;;
+		esac
+	fi
+
 	# Remove stale install directory (backup already taken by caller)
 	command rm -rf "$INSPATH"
 
@@ -46,25 +63,32 @@ install_files(){
 	command cp README.md CHANGELOG COPYING.GPL "$INSPATH"
 
 	# Create runtime directories
-	pkg_create_dirs "750" "$INSPATH/tmp" "$INSPATH/stats"
+	pkg_create_dirs "750" "$INSPATH/tmp" "$INSPATH/stats" "$INSPATH/data"
 
 	# Set permissions: 750 dirs, 640 files, then executable overrides
 	pkg_set_perms "$INSPATH" "750" "640" \
-		"bfd" "tlog" "update-ipcountry.sh"
+		"bfd" "internals/tlog" "update-ipcountry.sh" "update-cdn-providers.sh"
 
 	# Custom template override directory (preserved across upgrades via importconf)
-	[ -d "$INSPATH/alert/custom.d" ] || mkdir -p "$INSPATH/alert/custom.d"
-	chmod 750 "$INSPATH/alert/custom.d"
+	[ -d "$INSPATH/alert/custom.d" ] || command mkdir -p "$INSPATH/alert/custom.d"
+	command chmod 750 "$INSPATH/alert/custom.d"
 
 	# Install uninstall.sh into install path
 	if [ -f "uninstall.sh" ]; then
 		command cp uninstall.sh "$INSPATH/"
-		chmod 750 "$INSPATH/uninstall.sh"
+		command chmod 750 "$INSPATH/uninstall.sh"
 	fi
 
-	# CLI symlink
-	mkdir -p "$(dirname "$BINPATH")"
+	# CLI symlinks
+	command mkdir -p "$(dirname "$BINPATH")"
 	pkg_symlink "$INSPATH/bfd" "$BINPATH"
+
+	# Symlink manifest for runtime self-healing (pkg_lib v1.0.6)
+	{
+		command printf '# pkg_lib:symlink-manifest:1\n'
+		command printf '%s\t%s\n' "$BINPATH" "$INSPATH/bfd"
+	} > "$INSPATH/internals/.symlink-manifest"
+	command chmod 640 "$INSPATH/internals/.symlink-manifest"
 
 	# Logrotate configuration
 	pkg_logrotate_install "logrotate.d.bfd" "bfd"
@@ -126,7 +150,7 @@ install_files(){
 	fi
 
 	# tlog: replace default BASERUN for cursor storage security
-	sed -i "s|BASERUN=\"\${BASERUN:-/tmp}\"|BASERUN=\"\${BASERUN:-$INSPATH/tmp}\"|" "$INSPATH/tlog"
+	sed -i "s|BASERUN=\"\${BASERUN:-/tmp}\"|BASERUN=\"\${BASERUN:-$INSPATH/tmp}\"|" "$INSPATH/internals/tlog"
 
 	# Replace default paths when installing to a custom location
 	if [ "$INSPATH" != "/usr/local/bfd" ]; then
@@ -134,7 +158,8 @@ install_files(){
 			"$INSPATH/bfd" "$INSPATH/internals/bfd.lib.sh" \
 			"$INSPATH/internals/internals.conf" \
 			"$INSPATH/exclude.files" \
-			"$INSPATH/update-ipcountry.sh" /etc/cron.daily/bfd
+			"$INSPATH/update-ipcountry.sh" \
+			"$INSPATH/update-cdn-providers.sh" /etc/cron.daily/bfd
 	fi
 	if [ "$BINPATH" != "/usr/local/sbin/bfd" ]; then
 		pkg_sed_replace "/usr/local/sbin/bfd" "$BINPATH" /etc/cron.d/bfd
@@ -183,7 +208,7 @@ _stop_services(){
 		if [ -n "$_initdir" ]; then
 			local _pid=""
 			if [ -f /var/run/bfd-watch.pid ]; then
-				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true  # pidfile may not exist or be empty
+				_pid=$(command cat /var/run/bfd-watch.pid 2>/dev/null) || true  # pidfile may not exist or be empty
 			fi
 			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
 				echo -n "Stopping bfd-watch... "
@@ -223,7 +248,7 @@ _enable_services(){
 		done
 		if [ -n "$_initdir" ]; then
 			if [ -f /var/run/bfd-watch.pid ]; then
-				_pid=$(cat /var/run/bfd-watch.pid 2>/dev/null) || true  # pidfile may not exist or be empty
+				_pid=$(command cat /var/run/bfd-watch.pid 2>/dev/null) || true  # pidfile may not exist or be empty
 			fi
 			if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
 				echo -n "Starting bfd-watch... "
@@ -328,7 +353,27 @@ fi
 # background failure from propagating; disown avoids set -e interaction.
 # Subshell exec closes inherited pipe fds to prevent caller hang.
 if [ -x "$INSPATH/update-ipcountry.sh" ]; then
-	echo "Downloading IP country database in background..."
+	echo "  Updating IP country database (background)..."
 	( exec >/dev/null 2>&1; "$INSPATH/update-ipcountry.sh" || true ) &  # non-fatal: network may be unavailable
 	disown 2>/dev/null  # safe: may not be available in all shells
+fi
+
+# Non-blocking initial CDN provider database download (runs in background).
+# Only when CDN is effectively enabled: CDN_ENABLE=1 or auto with providers.
+if [ -x "$INSPATH/update-cdn-providers.sh" ]; then
+	_cdn_run=0
+	_cdn_val=$(command awk -F= '/^CDN_ENABLE=/{gsub(/"/, "", $2); print $2; exit}' "$INSPATH/conf.bfd" 2>/dev/null)
+	case "${_cdn_val:-auto}" in
+		1) _cdn_run=1 ;;
+		auto)
+			[ -f "$INSPATH/cdn-providers.conf" ] && \
+				grep -qE '^[^#[:space:]]' "$INSPATH/cdn-providers.conf" && \
+				_cdn_run=1
+			;;
+	esac
+	if [ "$_cdn_run" = "1" ]; then
+		echo "  Updating CDN provider ranges (background)..."
+		( exec >/dev/null 2>&1; "$INSPATH/update-cdn-providers.sh" || true ) &  # non-fatal: network may be unavailable
+		disown 2>/dev/null  # safe: may not be available in all shells
+	fi
 fi
